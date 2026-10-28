@@ -62,7 +62,8 @@ export function invitationForwardedMessage(
  */
 export function createGuestInviteController(
   event: Accessor<CalendarEvent>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  forwardEnabled: Accessor<boolean>
 ) {
   const [editorOpen, setEditorOpen] = createSignal(false);
   const [forwardEditorOpen, setForwardEditorOpen] = createSignal(false);
@@ -108,7 +109,7 @@ export function createGuestInviteController(
    */
   const canForward = () => {
     const current = event();
-    if (!enabled() || current.isCancelled) return false;
+    if (!forwardEnabled() || current.isCancelled) return false;
     if (canForwardInvitation(current)) return true;
     return (
       refusal() !== undefined &&

@@ -16,10 +16,15 @@ vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
+  useCalendarInvitationForwardFlag: () => () => true,
 }));
 vi.mock('@app/features/calendar/hooks/create-guest-invite-controller', () => ({
-  createGuestInviteController: (_event: unknown, enabled: () => boolean) => {
-    mocks.controllerEnabled = enabled;
+  createGuestInviteController: (
+    _event: unknown,
+    _enabled: () => boolean,
+    forwardEnabled: () => boolean
+  ) => {
+    mocks.controllerEnabled = forwardEnabled;
     return { canForward: () => mocks.canForward };
   },
 }));
@@ -103,8 +108,8 @@ it('offers Forward invitation beside the guests of an event the viewer cannot in
   expect(
     screen.getByRole('button', { name: 'Forward invitation' })
   ).toBeTruthy();
-  // The forward follows the guest-invites flag, like Add guests.
-  expect(mocks.controllerEnabled?.()).toBe(false);
+  // The forward follows its own flag.
+  expect(mocks.controllerEnabled?.()).toBe(true);
 });
 
 it('offers no forward while composing a new event', () => {

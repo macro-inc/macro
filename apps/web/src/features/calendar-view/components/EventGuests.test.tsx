@@ -162,11 +162,16 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
   };
 }
 
-function renderGuests(current: CalendarEvent, invitesEnabled = true) {
+function renderGuests(
+  current: CalendarEvent,
+  invitesEnabled = true,
+  forwardEnabled = true
+) {
   render(() => {
     const invites = createGuestInviteController(
       () => current,
-      () => invitesEnabled
+      () => invitesEnabled,
+      () => forwardEnabled
     );
     return (
       <EventGuests event={current} invites={invites} closeDetails={vi.fn()} />
@@ -330,7 +335,11 @@ describe('adding guests from event details', () => {
   it('switches to the explanation once the organizer turns inviting off', () => {
     const [current, setCurrent] = createSignal(event());
     render(() => {
-      const invites = createGuestInviteController(current, () => true);
+      const invites = createGuestInviteController(
+        current,
+        () => true,
+        () => true
+      );
       return (
         <EventGuests
           event={current()}
@@ -452,7 +461,7 @@ describe('adding guests from event details', () => {
   });
 
   it('keeps today’s guest actions while guest invites are off', () => {
-    renderGuests(event(), false);
+    renderGuests(event(), false, false);
 
     expect(
       screen.getByRole('button', { name: 'Copy guest emails' })
@@ -588,7 +597,7 @@ describe('forwarding the invitation from event details', () => {
     expect(options.actions).toBeUndefined();
   });
 
-  it('offers nothing on a snapshot, a cancelled event, or while guest invites are off', () => {
+  it('offers nothing on a snapshot, a cancelled event, or while forwarding is off', () => {
     renderGuests(
       event({
         isSnapshot: true,
@@ -606,11 +615,19 @@ describe('forwarding the invitation from event details', () => {
     ).toBeNull();
     cleanup();
 
-    renderGuests(event({ viewerCan: CANNOT_INVITE }), false);
+    renderGuests(event({ viewerCan: CANNOT_INVITE }), true, false);
     expect(
       screen.queryByRole('button', { name: 'Forward invitation' })
     ).toBeNull();
     expect(screen.getByText(RESTRICTED)).toBeTruthy();
+  });
+
+  it('forwards whether or not guest invites are on, since it adds no guests', () => {
+    renderGuests(event({ viewerCan: CANNOT_INVITE }), false, true);
+    expect(
+      screen.getByRole('button', { name: 'Forward invitation' })
+    ).toBeTruthy();
+    expect(screen.getByText(`${RESTRICTED} ${FORWARD_INSTEAD}`)).toBeTruthy();
   });
 
   it('offers nothing on a team projection or a read-only copy', () => {

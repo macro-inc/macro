@@ -48,6 +48,7 @@ vi.mock('@app/features/calendar/hooks/create-guest-invite-controller', () => ({
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
+  useCalendarInvitationForwardFlag: () => () => false,
   useCalendarMeetingNotesFlag: () => () => true,
 }));
 // The sections have their own tests; exercise the overlay's actions and

@@ -118,6 +118,8 @@ interface UseEventEditorProps {
    * when omitted.
    */
   guestInvitesEnabled?: Accessor<boolean>;
+  /** Whether a guest who cannot add guests may forward the invitation. */
+  invitationForwardEnabled?: Accessor<boolean>;
   /**
    * The edited event as the calendar now holds it. The lock on its details
    * follows this copy, so a guest whose organizer stops letting guests
@@ -206,7 +208,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     const reason = event && guestInvitesRestrictedReason(event);
     if (!reason) return undefined;
-    return (props.guestInvitesEnabled?.() ?? false) &&
+    return (props.invitationForwardEnabled?.() ?? false) &&
       canForwardInvitation(event)
       ? `${reason} ${FORWARD_INVITATION_INSTEAD}`
       : reason;

@@ -5,7 +5,10 @@ import {
   type EventEditorInitialValues,
 } from '@app/features/calendar/components/composer/event-form-model';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
-import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import {
+  useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -23,9 +26,14 @@ import { type Accessor, createMemo, onMount, Show } from 'solid-js';
  */
 function EditorForwardInvitation(props: {
   event: CalendarEvent;
-  enabled: Accessor<boolean>;
+  guestInvitesEnabled: Accessor<boolean>;
+  forwardEnabled: Accessor<boolean>;
 }) {
-  const invites = createGuestInviteController(() => props.event, props.enabled);
+  const invites = createGuestInviteController(
+    () => props.event,
+    props.guestInvitesEnabled,
+    props.forwardEnabled
+  );
   return (
     <Show when={invites.canForward()}>
       <EventForwardInvitationAction event={props.event} invites={invites} />
@@ -75,10 +83,12 @@ function EventComposerContent(
   const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const invitationForwardEnabled = useCalendarInvitationForwardFlag();
   const editor = useEventEditor({
     event: () => props.event,
     macroCallsEnabled,
     guestInvitesEnabled,
+    invitationForwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
     onDetailsLocked: () => controller.resetDetails(),
     onSaved: () => {
@@ -121,7 +131,8 @@ function EventComposerContent(
             {(event) => (
               <EditorForwardInvitation
                 event={event()}
-                enabled={guestInvitesEnabled}
+                guestInvitesEnabled={guestInvitesEnabled}
+                forwardEnabled={invitationForwardEnabled}
               />
             )}
           </Show>

@@ -618,8 +618,9 @@ states without a Google account, answer `POST /events/{id}/guests` with HTTP 403
 `guests_cannot_invite` or `guest_list_hidden`; each switches the guest list to its own
 explanation and toast.
 In each of those cases (inviting off, a hidden guest list, an Outlook guest copy, and after
-a refusal) the flag also puts `Forward invitation` (a paper-plane icon) where `Add guests`
-would be, and the explanation goes on: `You can forward the invitation instead. The people
+a refusal), the `enable-calendar-invitation-forward` flag (on in dev, with no PostHog flag
+yet, so off in production) puts `Forward invitation` (a paper-plane icon) where `Add guests`
+would be, whether or not guest invites are on, and the explanation goes on: `You can forward the invitation instead. The people
 you send it to can add the event to their calendar but won't be on the guest list.` It opens
 the same add-only editor (current guests under `Invited`, the picker adds people listed as
 `Forward to`), says `They can add the event to their calendar but won't appear in the guest
@@ -686,7 +687,7 @@ choosing `This event` returns it to the stored values. Save sends `guestPolicy` 
 changed. Guests whose copies Macro holds follow at once, since the organizer's stored copy
 hands its policy to theirs; others follow once Google syncs their copies. Turning `Invite others`
 off replaces a guest's `Add guests` with `Only the organizer can invite guests.` (and, with
-the flag on, `Forward invitation`). The update
+the forward flag on, `Forward invitation`). The update
 refuses a policy change from anyone but the organizer with 403 `not_organizer`, and on an
 Outlook event with
 `provider_rejected`. `viewerCan.organize` marks the organizer of the displayed copy, including

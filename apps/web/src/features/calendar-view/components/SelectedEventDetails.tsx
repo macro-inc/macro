@@ -3,6 +3,7 @@ import { EventDetails } from '@app/features/calendar/components/EventDetails';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
   useCalendarMeetingNotesFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
@@ -193,7 +194,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -497,7 +499,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);

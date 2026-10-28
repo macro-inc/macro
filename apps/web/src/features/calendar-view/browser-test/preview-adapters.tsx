@@ -96,6 +96,7 @@ export const useForwardEventEmail = () => () =>
   announce('Forward event · Preview only');
 export const createGuestInviteController = () => ({ editorOpen: () => false });
 export const useCalendarGuestInvitesFlag = () => () => false;
+export const useCalendarInvitationForwardFlag = () => () => false;
 export const useCalendarMeetingNotesFlag = () => () => false;
 export const CalendarMeetingNotes = () => null;
 export const EventGuests = (props: { event: CalendarEvent }) => (

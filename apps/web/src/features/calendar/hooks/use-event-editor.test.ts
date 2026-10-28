@@ -1066,7 +1066,8 @@ describe('guests of an event the viewer was invited to', () => {
     event: CalendarEvent,
     invitesEnabled: boolean,
     onDetailsLocked?: () => void,
-    syncedEvent?: () => CalendarEvent | undefined
+    syncedEvent?: () => CalendarEvent | undefined,
+    forwardEnabled = invitesEnabled
   ) {
     return createRoot((dispose) => ({
       editor: useEventEditor({
@@ -1075,6 +1076,7 @@ describe('guests of an event the viewer was invited to', () => {
         onSaved: vi.fn(),
         macroCallsEnabled: () => false,
         guestInvitesEnabled: () => invitesEnabled,
+        invitationForwardEnabled: () => forwardEnabled,
         onDetailsLocked,
       }),
       dispose,
@@ -1195,7 +1197,7 @@ describe('guests of an event the viewer was invited to', () => {
     }
   });
 
-  it('explains without offering the forward while guest invites are off', () => {
+  it('explains without offering the forward while forwarding is off', () => {
     const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), false);
     try {
       expect(editor.guestsReadOnlyReason()).toBe(
