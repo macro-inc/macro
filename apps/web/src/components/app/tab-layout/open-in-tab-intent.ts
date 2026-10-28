@@ -12,14 +12,35 @@ export type OpenInNewTabIntent = {
  * without threading the event through every call site.
  */
 let armed: { intent: OpenInNewTabIntent; expires: number } | undefined;
+/** A pointerdown happened and its trailing click has not arrived yet. */
+let awaitingGestureClick = false;
+/** The current press gesture's intent was already consumed. */
+let pressConsumed = false;
 
 /** Long enough for a navigation that follows the click, short enough that an
  * unrelated later navigation cannot pick it up. */
 const INTENT_EXPIRY_MS = 800;
 
 function arm(event: MouseEvent) {
+  const isGestureClick = event.type === 'click' && awaitingGestureClick;
+  if (event.type === 'pointerdown') {
+    awaitingGestureClick = true;
+    pressConsumed = false;
+  } else if (isGestureClick) {
+    awaitingGestureClick = false;
+  }
+
   const modifier = IS_MAC ? event.metaKey : event.ctrlKey;
   if (!modifier || event.button !== 0) {
+    return;
+  }
+
+  // Some surfaces navigate on the press and ignore the click (sidebar list
+  // rows). The press's intent is consumed then, and that gesture's trailing
+  // click must not re-arm, or a stale intent would hijack whatever
+  // navigation happens next. Only the matching pointer gesture's click is
+  // held back; a keyboard-generated click has no pointerdown and still arms.
+  if (isGestureClick && pressConsumed) {
     return;
   }
 
@@ -40,6 +61,7 @@ export function consumeOpenInNewTabIntent(): OpenInNewTabIntent | undefined {
   armed = undefined;
   if (!current || performance.now() > current.expires) return;
 
+  pressConsumed = true;
   return current.intent;
 }
 
@@ -58,5 +80,7 @@ export function installOpenInNewTabIntentTracker(): () => void {
     window.removeEventListener('pointerdown', arm, { capture: true });
     window.removeEventListener('click', arm, { capture: true });
     armed = undefined;
+    awaitingGestureClick = false;
+    pressConsumed = false;
   };
 }
