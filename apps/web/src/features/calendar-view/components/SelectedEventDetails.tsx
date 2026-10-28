@@ -217,7 +217,10 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       onOpenChange={(open) => {
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);
@@ -525,7 +528,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         // is open.
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);

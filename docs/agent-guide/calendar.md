@@ -627,14 +627,16 @@ the same add-only editor (current guests under `Invited`, the picker adds people
 list.`, and `Forward` (or Cmd/Ctrl+Enter) sends; there is no Optional box or occurrence
 choice, since the forward always carries the whole series. It posts
 `POST /email/calendar-events/{event_id}/forward` with the recipients and a body made of
-`Forward by email`'s summary plus that sentence; email-service sends it from the inbox
+`Forward by email`'s summary plus `This invitation was forwarded to you. Add the event to
+your calendar from the attached file. You won't be on the organizer's guest list.`; email-service sends it from the inbox
 holding the copy, with the event's `.ics` (`METHOD:PUBLISH`, no guests or join link)
 attached, so recipients can add the event to their calendar and nothing reaches the
 organizer or the guest list. The toast reads `Invitation forwarded to <name>` (or `to N
 people`) once the send is accepted; a failure reads `Could not forward the invitation`, with
 `Retry` unless the server refused the recipients (400 `invalid_recipients`, whose reason
 shows instead). The editor offers the same `Forward invitation` beside its read-only guests
-pill, whose tooltip carries the longer explanation. Snapshots, cancelled events, read-only
+pill, whose tooltip carries the longer explanation. Event details stay open while the
+forward editor is, as they do for `Add guests`. Snapshots, cancelled events, read-only
 copies and team projections offer nothing. To check the toasts without sending mail, answer
 the route with 202 `{messageId, threadId}`, or with 502 `send_failed` or 400
 `invalid_recipients`.
