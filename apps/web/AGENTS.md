@@ -114,6 +114,10 @@ bucket; `project` means a Drive folder. Preserve broader cache/server matches
 and the existing People preview/pinning. The channel browser suite below also
 checks project ranking and insertion on desktop and phone.
 
+Markdown document history has a backend-free browser regression that opens,
+diffs, and scrubs a 300-session history within time budgets:
+`bunx playwright test --config src/features/block-md/history/browser-test/playwright.config.ts`.
+
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.

@@ -3002,6 +3002,14 @@ selected version into a separate document. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
 
+The session list shows a loading state until history hides sessions whose
+start and end render the same markdown; this runs in slices after the snapshot
+loads. Traces carry `doc.history.filter_sessions`, `doc.history.checkout` (one
+per version not already shown) and `doc.history.render`. A backend-free browser
+regression over a 300-session history checks open, session and scrub timings:
+`bunx playwright test --config src/features/block-md/history/browser-test/playwright.config.ts`
+from `apps/web`.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
