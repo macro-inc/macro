@@ -1,10 +1,12 @@
 use chrono::{DateTime, TimeZone, Utc};
+use external_chat::domain::models::MediaPresentation;
+use external_chat::domain::rich::{
+    Call, CallOutcome, PollVote, RichContent, SystemAction, SystemLine,
+};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    InboundKind, Message as InboundMessage, MessageKind, ReceiptState, RichContent, Target,
+    InboundKind, Message as InboundMessage, MessageKind, ReceiptState, Target,
 };
-use whatsapp_linked::domain::models::MediaPresentation;
-use whatsapp_linked::domain::rich::{Call, CallOutcome, PollVote, SystemAction, SystemLine};
 use whatsmeow::Event;
 use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e;
@@ -637,7 +639,10 @@ fn a_live_message_moves_its_chat_up_with_the_message_as_anchor() {
     let chat = super::message_chat(&message).expect("a chat update");
 
     assert_eq!(chat.jid, "120363000000000001@g.us");
-    assert_eq!(chat.kind, whatsapp_linked::domain::models::ChatKind::Group);
+    assert_eq!(
+        chat.kind,
+        external_chat::domain::models::ExternalChatKind::Group
+    );
     assert_eq!(chat.name, None, "groups are named by their roster");
     assert!(chat.create);
     let anchor = chat.anchor.expect("an anchor");

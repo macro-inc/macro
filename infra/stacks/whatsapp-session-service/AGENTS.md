@@ -41,6 +41,9 @@ From `infra/`: `bun run check`, `bunx biome check stacks/whatsapp-session-servic
 - `stopTimeout` is Fargate's 120 s maximum and the sidecars match it; the app
   container depends on them so they stop last and the drain's logs and spans
   ship. Drain must finish inside 120 s.
+- Egress allows only 443, so the FireLens Datadog output sets `TLS on` and
+  `Port 443`; Fluent Bit's default is plain HTTP on 80, which times out and
+  drops every application log.
 - No ECS container health check: the runtime image has no HTTP client. A
   replica that loses its lock connection must exit non-zero so ECS replaces it.
 - No autoscaling: replicas own accounts, so scaling in forces takeovers. Change

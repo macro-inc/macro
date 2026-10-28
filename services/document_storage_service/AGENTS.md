@@ -23,11 +23,13 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
-- `src/whatsapp_linked.rs`: mounts `/meta/linked` from `crates/whatsapp_linked`
-  and runs the group notification/import worker (LISTEN `whatsapp_group_effects`,
-  `whatsapp_media_ready`; attachments become static files through the static
-  file service, which also deletes released ones) and the `whatsapp_changed` pusher (bare
-  connection-gateway events to the account owner or a group's viewers);
+- `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
+  mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
+  (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
+  `external_chat_effects`, `whatsapp_media_ready`; attachments become static
+  files through the static file service, which also deletes released ones) and
+  the `external_chat_changed` pusher (bare connection-gateway events to the
+  account owner or a chat's viewers);
   enforces a Redis-shared one-send-request-per-second budget per user.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;

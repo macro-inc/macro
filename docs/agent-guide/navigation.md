@@ -56,6 +56,17 @@ normal warmup; if foreground handoff/resume exceeds one second, ordinary queries
 use network fallback while cache-only reads never forward. Writes and received
 mutation confirmations wait for storage instead of being sent twice.
 
+On return, queued commits should produce a coalesced cache refresh, not rebuild
+every cache-driven view after each intermediate write. Open Calendar, switch to
+an unrelated tab (or fully cover Chrome with another macOS app), let remote
+updates arrive, then return and immediately click an event and change the date.
+Check that input is handled and the final events appear without repeated chip
+rebuilds. Repeat with several hidden Macro tabs. `graphql_cache.change_batch`
+reports the number of hints combined; individual commits and mutation replies
+remain separate. The backend-free parking regression verifies five queued commits
+produce one visible-cache refresh, but real macOS occlusion and calendar input
+still need this manual check.
+
 Verify the all-hidden case without activating the former owner: no held physical
 owner lock after parking, preserved generation/queue, and successful reads/writes
 from a returning tab. Start a query while parked, resume storage from another

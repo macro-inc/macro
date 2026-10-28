@@ -32,4 +32,4 @@ export type AddFavoriteRequestEntityType =
   | 'database'
   | 'database_row'
   | 'form'
-  | 'whatsapp_group';
+  | 'external_chat';

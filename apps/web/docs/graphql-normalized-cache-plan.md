@@ -234,6 +234,20 @@ invalidate reset data/leases even if the next owner only opens existing storage.
 Reset completion accounting likewise follows accepted readiness, not whether
 that epoch remains active; its read pause stays in force during the drain.
 
+Catch-up writes keep their individual transactions and replies, but the
+coordinator coalesces broad `cache-changed` and `cache-hydrated` hints across its
+accepted in-flight backlog. The engine's local queue is insufficient: separate
+MessagePort deliveries can make it look idle between queued commits. Each channel
+keeps its latest revision and the union of search buckets; an unscoped hint stays
+unscoped, and hydration never becomes an authoritative invalidation. Publish when
+the last outstanding commit sends its hint or the remaining replies drain,
+including failed/no-op tails. A batch also flushes after 64 completed requests so
+continuous traffic cannot starve subscribers. Single-request updates, reset fences,
+query dependency pushes, and mutation settlements remain immediate. Flush accepted
+hints on owner departure/failure and when the last waiting caller leaves; never
+carry them into another engine's revision space. `graphql_cache.change_batch`
+records how many hints each coalesced broadcast replaced, without payloads.
+
 While parked or transitioning, `waiting` pauses read/init deadlines without
 creating a second page-side request queue. Reads, writes, and teardown retain
 coordinator admission order. A visible consumer starts a one-second read budget
@@ -254,6 +268,20 @@ second request for this retry, and cache-only/replacement-registration-only read
 never gain a network fallback. The anonymous page-side `graphql_cache.read_retry`
 span times the extra read without exporting query contents or identities.
 
+Live notification receipt must not wait for this storage pause. The
+`notificationReceiptExchange`, placed between the normalized-cache exchange and
+the subscription transport, publishes notification callbacks before persistence
+in both cached and uncached clients. The normalized-cache exchange still applies
+subscription effects serially before cache-dependent channel reconciliation.
+Resuming storage never republishes the notification callback. `notification.receive`
+spans record the notification ID, patch type, and page visibility without content;
+listener failures mark this span while remaining listeners still run. Result-local
+weak context links `graphql.subscription.cache_queue` (the wait behind earlier
+subscription effects) and `graphql.subscription.cache_apply` (cache application,
+including parked-storage waits) to that receipt, even after its immediate span
+ends. Cache failures mark the application phase without recording payloads or
+replaying delivery. This context never enters GraphQL extensions or the wire.
+
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
 claims. Accepted settlement requests survive their caller disconnecting; their
@@ -268,7 +296,9 @@ failure/navigation recovery applies. Owner telemetry adds `park-started`, `parke
 `unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
 The backend-free `parking.browser.e2e.ts` exercises physical release, retained
 clients/storage, a query admitted while parked completing across replacement
-without network fallback, and a response settled after parking.
+without network fallback, a response settled after parking, and notification
+receipt while parked without duplicate delivery when persistence resumes, and
+five queued catch-up commits producing one visible-cache refresh on return.
 
 Every departure rejects already-routed optimistic enqueues whose replies were
 lost as `admitted-enqueue-uncertain`, including requests from surviving tabs.

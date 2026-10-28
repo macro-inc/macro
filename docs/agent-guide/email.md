@@ -410,7 +410,11 @@ where the list is already beside the thread). The subject, tags and
 participants stay put while only the messages scroll. Pressing `Escape` in the open thread
 with focus outside any input does the same once there is nothing left to unwind
 (an open reply, an expanded body, or a focused message each take one `Escape`
-first); the list keeps the row you came from focused. The `⋯` email title menu
+first); the list keeps the row you came from focused and comes back at the same
+scroll position, scrolling only if j/k in the thread moved focus off screen. If
+the focused row leaves the list without a list `e` (a reply in Signal marks it
+done, or another device archives it), focus moves to the row that took its
+place, not the first row. The `⋯` email title menu
 right after the subject's last word, in place of Copy subject, holds **Ask AI**,
 **Create a Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and reminders share one outlined group at the right of that header. Separate

@@ -218,6 +218,7 @@ export * from './pipedreamCatalogResponseNextCursor';
 export * from './pipedreamCompleteRequest';
 export * from './pipedreamCompleteRequestServerName';
 export * from './pipedreamConnectionResponse';
+export * from './pipedreamOverlayResponse';
 export * from './pipedreamRecoverRequest';
 export * from './pipedreamRecoverRequestServerName';
 export * from './pipedreamTokenResponse';

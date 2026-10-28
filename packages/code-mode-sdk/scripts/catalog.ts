@@ -18,7 +18,7 @@ export const descriptions: Record<string, string> = {
   calendar: 'Find and manage calendar events.',
   calls: 'Read and edit call records, transcripts and meeting links.',
   channels:
-    "Read and send channel messages; list the WhatsApp chat list (groups and direct chats), add chats to Macro, read and share added chats, and send from the credential owner's own account with mentions, media and delivery. Pairing stays in the app.",
+    "Read and send channel messages; list the WhatsApp chat list (groups and direct chats) and add chats to Macro as external chats; read and share external chats, and send from the credential owner's own account with mentions, media and delivery. Pairing stays in the app.",
   crm: 'Work with CRM records and pipeline tables, columns, rows and sharing.',
   databases: 'Read and edit database schemas, rows, and cells.',
   documents: 'Search, read, create, and manage documents and tasks.',

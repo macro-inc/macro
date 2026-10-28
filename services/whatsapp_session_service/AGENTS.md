@@ -5,7 +5,7 @@
 WhatsApp linked devices: runs one whatsmeow client per linked personal
 WhatsApp account, on whichever replica holds the account's Postgres advisory
 lock. It pairs devices (QR codes into `whatsapp_pairing`), keeps group rosters
-current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
+current, ingests the traffic of added chats (`external_chat`) through `whatsapp_linked`'s
 `SessionService`, and dispatches the sends DSS records. No HTTP API besides
 `GET /health`; DSS talks to it only through rows and `NOTIFY`.
 
@@ -44,7 +44,7 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
   pairing_requested, send_requested, groups_requested, account_changed}`.
-  Payloads are `whatsapp_linked::signals::Signal` JSON; each
+  Payloads are `external_chat::signals::Signal` JSON; each
   one's `traceparent` parents a `whatsapp.signal.receive` span that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
   `whatsapp.account.signal` span run inside it, and a runner started by it
@@ -52,11 +52,11 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   send JSON: `SELECT pg_notify('whatsapp_pairing_requested',
   '{"id":"<pairing id>"}')`.
 - Group rosters: the whole list is read on connect, on resync, and on
-  `whatsapp_groups_requested` (pages opening; at most once per
+  `whatsapp_roster_requested` (pages opening; at most once per
   `groups_refresh_interval`, 30 s, per account). Live `JoinedGroup` /
   `GroupInfo` events update that one group (`update_group`), reading its
   metadata when the event lacks it; a not-in-group answer is `group_left`.
-  No periodic refresh. The domain signals `whatsapp_changed` only when a roster
+  No periodic refresh. The domain signals `external_chat_changed` only when a roster
   write changed something.
 - `outbound/whatsapp.rs` (+ `events.rs`): `whatsapp_store_pg` device store,
   whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Group

@@ -136,7 +136,7 @@ impl QueryRoot {
         async_graphql::Json<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     > {
         super::validate_share_policy_inputs(std::slice::from_ref(&input))?;
-        Ok(async_graphql::Json(input.into_model().policy))
+        Ok(async_graphql::Json(input.into_model()?.policy))
     }
 
     /// Return a successful domain outcome whose deletion cannot be represented by Soup.

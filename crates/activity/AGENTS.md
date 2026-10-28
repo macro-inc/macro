@@ -54,7 +54,7 @@ distribution.
 
 - `cargo test -p activity` (`SQLX_OFFLINE` unset).
 
-- Standalone WhatsApp groups have their own unread state and are excluded from activity ranking/Soup until that integration is added.
+- External chats have their own unread state and are excluded from activity ranking/Soup until that integration is added.
 
 ## Related
 

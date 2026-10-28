@@ -25,6 +25,7 @@ files:
   - apps/web/src/features/agent-activity/core/**
   - apps/web/src/features/agent-dms/core/**
   - apps/web/src/features/agent-conversations/core/**
+  - apps/web/src/features/local-runtime/core/**
   - apps/web/src/features/agent-interactions/core/**
   - apps/web/src/features/billing-lab/core/**
   - apps/web/src/features/calendar-team/core/**

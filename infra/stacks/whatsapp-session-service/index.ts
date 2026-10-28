@@ -9,9 +9,9 @@ const tags = {
   project: 'whatsapp-session-service',
 };
 
-// Config arrives through the Doppler-synced APP_SECRETS_JSON. The
-// doppler-projects stack declares every key, including this stack's KMS alias
-// (`alias/whatsapp-session-service-<stack>`); keep the two in step.
+// Config arrives through the Doppler-synced APP_SECRETS_JSON (only
+// DATABASE_URL). The service derives this stack's KMS alias
+// (`alias/whatsapp-session-service-<stack>`) from ENVIRONMENT; keep the two in step.
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
