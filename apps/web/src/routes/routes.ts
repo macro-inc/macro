@@ -810,6 +810,8 @@ export const legacyContentRoute = defineRoute({
   },
   toReference: ({ type, id }) => {
     const project = type === 'component' ? parseProjectRoute(id) : undefined;
+    // A project mention opens the project, not one of its discussions.
+    if (project?.discussionId) return;
     return project
       ? uuidRouteReference(project.id, 'initiative')
       : uuidRouteReference(id, type);

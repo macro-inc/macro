@@ -152,6 +152,7 @@ describe('legacy link mentions', () => {
 
   it.each([
     '/component/initiative-view~not-a-uuid~overview',
+    `/component/initiative-view~${projectId}~overview~${projectId}`,
     '/component/settings',
     '/md/not-a-uuid',
   ])('leaves %s as a link', (path) => {
