@@ -419,7 +419,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 filteredProperties().length > 0 && 'mt-2'
               )}
             >
-              <AddPropertyButton class="m-px gap-1.5" />
+              <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
           <Modals />
@@ -881,7 +881,6 @@ function NonUserEntityValue(props: { property: Property }) {
           <Button
             type="button"
             variant="ghost"
-            depth={0}
             size="icon-sm"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
@@ -965,7 +964,6 @@ function EntityCollectionPropertyBody(props: {
             <Button
               type="button"
               variant="ghost"
-              depth={0}
               size="icon-sm"
               class="size-5"
               aria-label={`Add ${props.property.displayName}`}
@@ -1068,6 +1066,7 @@ function NonUserEntityChip(props: {
         <Show when={props.canEdit && props.onRemove}>
           <div class="border-l border-edge-muted" />
           <Button
+            variant="ghost"
             type="button"
             size="icon-sm"
             class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
@@ -1077,7 +1076,7 @@ function NonUserEntityChip(props: {
             }}
             aria-label={`Remove ${name()}`}
           >
-            <DeleteIcon />
+            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>

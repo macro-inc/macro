@@ -93,4 +93,53 @@ function Fixture() {
   );
 }
 
-render(() => <Fixture />, document.getElementById('root')!);
+// A height-capped editor that scrolls, as the channel composer does, with a
+// selection that runs past its visible bottom.
+function ClippedSelectionFixture() {
+  const clip = new URLSearchParams(location.search).get('clip') !== '0';
+  const [open, setOpen] = createSignal(false);
+  let editor!: HTMLDivElement;
+  onMount(() => {
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(range);
+    setOpen(true);
+  });
+  return (
+    <main class="relative h-screen bg-page p-4 text-ink">
+      <div
+        data-testid="editor-shell"
+        class="max-h-[160px] overflow-y-auto rounded-xl border border-edge p-2"
+      >
+        <div ref={editor} contentEditable aria-label="Editor">
+          <For each={Array.from({ length: 30 }, (_, i) => i + 1)}>
+            {(line) => <p>Line {line} of a long message being edited.</p>}
+          </For>
+        </div>
+      </div>
+      <Show when={open()}>
+        <div
+          data-testid="format-menu"
+          class="h-10 w-48 rounded-lg menu-surface"
+          ref={(el) =>
+            floatWithSelection(el, () => ({
+              selection: document.getSelection(),
+              reactiveOnContainer: editor,
+              clipToVisible: clip,
+            }))
+          }
+        />
+      </Show>
+    </main>
+  );
+}
+
+const isClippedSelection =
+  new URLSearchParams(location.search).get('fixture') === 'clipped-selection';
+
+render(
+  () => (isClippedSelection ? <ClippedSelectionFixture /> : <Fixture />),
+  document.getElementById('root')!
+);

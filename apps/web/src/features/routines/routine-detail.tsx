@@ -8,7 +8,8 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
-import { onMount, Show } from 'solid-js';
+import { getOwner, onMount, Show } from 'solid-js';
+import type { ScheduleDraft } from './core/draft';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -18,6 +19,10 @@ import { createRoutineDetailSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
+import {
+  openShareTemplateDialog,
+  RoutineTemplatePage,
+} from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
 import { RoutineDetailView } from './views/routine-detail';
 
@@ -74,37 +79,75 @@ export function RoutineDetail(props: {
       onError: () => toast.failure('Failed to delete'),
     });
   };
+  const owner = getOwner();
+  const shareTemplate = () => {
+    const routine = source.routine();
+    if (!routine) return;
+    openShareTemplateDialog(
+      {
+        routineId: routine.id,
+        name: routine.name,
+        prompt: routine.draft?.prompt ?? '',
+        timezone: scheduleTimezone(routine.draft),
+        ownerId: routine.ownerId,
+      },
+      owner
+    );
+  };
+  // Routines run as their owner, so everyone else sees the shared template.
+  const ownedByViewer = () => {
+    const routine = source.routine();
+    return routine ? routine.ownerId === userId() : true;
+  };
   return (
-    <RoutineDetailView
-      source={source}
-      userId={userId}
-      defaultModel={defaultModelForPlan(hasPaidAccess())}
-      initialTab={props.initialTab}
-      onBack={back}
-      onDelete={remove}
-      onRename={(name) => {
-        if (!props.onBack) panel.handle.setDisplayName(name);
-      }}
-      onOpenRun={(resource, newSplit) =>
-        layout.openWithSplit(resource, {
-          activate: true,
-          preferNewSplit: newSplit,
-        })
+    <Show
+      when={ownedByViewer()}
+      fallback={
+        <RoutineTemplatePage scheduleId={props.scheduleId} onBack={back} />
       }
-      onCopyPrompt={async (prompt) => {
-        if (await writeClipboardData({ 'text/plain': prompt }))
-          toast.success('Prompt copied');
-        else toast.alert('Could not copy prompt');
-      }}
-      slots={{
-        PromptEditor: RoutinePromptEditor,
-        ExecutionPicker: RoutineExecutionPicker,
-        Triggers: RoutineTriggers,
-        Apps: RoutineApps,
-        createConnectedApps: createRoutineConnectedApps,
-        createChatMetadata: createChatHistoryMetadata,
-        createAgentMetadata: createAgentHistoryMetadata,
-      }}
-    />
+    >
+      <RoutineDetailView
+        source={source}
+        userId={userId}
+        defaultModel={defaultModelForPlan(hasPaidAccess())}
+        initialTab={props.initialTab}
+        onBack={back}
+        onDelete={remove}
+        onRename={(name) => {
+          if (!props.onBack) panel.handle.setDisplayName(name);
+        }}
+        onOpenRun={(resource, newSplit) =>
+          layout.openWithSplit(resource, {
+            activate: true,
+            preferNewSplit: newSplit,
+          })
+        }
+        onCopyPrompt={async (prompt) => {
+          if (await writeClipboardData({ 'text/plain': prompt }))
+            toast.success('Prompt copied');
+          else toast.alert('Could not copy prompt');
+        }}
+        onShareTemplate={shareTemplate}
+        onOpenTemplate={open}
+        slots={{
+          PromptEditor: RoutinePromptEditor,
+          ExecutionPicker: RoutineExecutionPicker,
+          Triggers: RoutineTriggers,
+          Apps: RoutineApps,
+          createConnectedApps: createRoutineConnectedApps,
+          createChatMetadata: createChatHistoryMetadata,
+          createAgentMetadata: createAgentHistoryMetadata,
+        }}
+      />
+    </Show>
   );
+}
+
+/** The time zone a routine's schedules run in, for sharing it as a template. */
+function scheduleTimezone(draft: ScheduleDraft | undefined) {
+  const schedule = draft?.triggers?.find(
+    (trigger) => trigger.kind === 'schedule'
+  );
+  if (schedule?.kind === 'schedule') return schedule.timezone;
+  return draft?.triggers ? undefined : draft?.timezone;
 }

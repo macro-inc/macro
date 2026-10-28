@@ -21,10 +21,12 @@ semantic control islands on the right. Collection headers use `ListHeader`:
 filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
-Noise) are `Tabs`: separate 32px pills, never inside a group. Groups use the
-canonical elevated surface, fully rounded ends, 32px controls, and 8px gaps.
-A group owns its frame; its child buttons stay flat and do not get extra borders
-or shadows. Nested shared actions reuse the containing group rather than adding
+Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
+`variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
+(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
+materials while each segment keeps its own interaction states. Standalone Buttons
+remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Preserve specialized editor toolbars and touch
@@ -34,19 +36,25 @@ keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
 lists which control to use for each role.
 
+Desktop view-sidebar header actions use `size="icon-xs"` (24px) with 16px
+glyphs for search, close, and collapse. Preserve each action's icon and the
+shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
-or framing. Use `glass={false}` for an explicitly flat frame. Inline
-calendar-invitation text actions remove the transparent border to keep alignment.
+or framing. Primary, neutral, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
+Primary Buttons use the theme accent and its resolved contrast color. Use `neutral` for solid monochrome emphasis (black in light themes, white in dark themes), and secondary for softer neutral actions. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available. The separate accent variant remains removed.
+Button API and composition details live in the
+[shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
+Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
 ## Canonical desktop surfaces
 
-Use `not-touch:elevated` for desktop control surfaces. Buttons, button groups,
-inputs, and unselected tab pills share the same `shadow-elevated` treatment as
-composers, menus, settings cards, and dialogs: a fine outer outline, faint inner
-edge, brighter top edge, and compact shadow. Keep semantic fills and component
-geometry; a button group owns the frame so its child buttons remain flat.
+Use `not-touch:elevated` for existing desktop control surfaces other than Button
+and ButtonGroup. Button applies its raised desktop recipe and the shared touch
+glass utility automatically; ButtonGroup applies the same material once to its
+frame. Explicit segments remain flat. Inputs and unselected tab pills retain
+their existing surfaces.
 In dark mode, compact controls use thinner, lower-opacity edges than composers
 and floating panels. Keep desktop shadows close and faint, with only a slight top
 highlight, and define the border with subtle edge contrast.
@@ -59,7 +67,11 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
 
-Desktop view tabs share one rounded track, with a small inset and a fully rounded selected pill. The selected pill uses the pressed fill and a subtle edge; tabs have no internal dividers. Wrapping preset choices can remain separate pills. Keep the existing touch-specific tab treatment and the agent composer's sliding track.
+Desktop view tabs share one flat rounded track, with a small inset and a fully
+rounded selected pill. Use borders and selected fills without raised edges,
+gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
+preset choices can remain separate pills. Keep each surface's existing touch
+treatment and the agent composer's sliding track (`variant="track"`).
 
 Reuse `Button`, `Input`, `InputGroup`, `Tabs`, `ComposerSurface`, `menu-surface`, and
 `elevated-surface` instead of introducing one-off surface styling. Every menu,
@@ -121,10 +133,10 @@ single-select rows keep their rounded shape.
 
 ## Dialog actions
 
-Cancel uses a ghost button. Confirm, save, and create actions use strong: the
-outline surface and border with semibold text, without inverted colors. Disabled
-and pending primary actions retain the strong variant. Mobile confirmation drawers
-use the same action hierarchy.
+Cancel uses a ghost button. Use primary for the main confirm, save, or create
+action; it uses the theme accent. Use neutral for solid monochrome emphasis and
+secondary for softer neutral actions. Loading actions use `loading`. Mobile
+confirmation drawers use the same action hierarchy.
 
 ## List-item sharing
 
@@ -140,8 +152,8 @@ data unless authorized.
 Avatar and user-mention cards open on hover on pointer devices and as a bottom
 sheet on touch devices. With a keyboard on a touch device, Tab to the trigger and
 press Enter or Space; verify focus enters the sheet and returns to the opener
-after dismissal or copying, including after reopening. DM, Open contact, and
-Assign task should leave focus in their destination when the sheet closes.
+after dismissal or copying, including after reopening. DM, Open contact, Assign
+task, and Settings should leave focus in their destination when the sheet closes.
 On pointer devices, avatars should stay out of the Tab order while still opening
 their cards on hover. Copy email/name confirms only after the clipboard
 write succeeds: the hover card shows a checkmark, while the sheet closes. A failed

@@ -55,6 +55,9 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'mail-calendar',
   'mail-shared',
   'mail-archived',
+  // Search lists done and open rows alike, like mail "All": a marked row flips
+  // to done (or drops out of a not-done filter) and focus moves on.
+  'search-all',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {

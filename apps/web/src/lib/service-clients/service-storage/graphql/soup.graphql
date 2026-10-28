@@ -433,8 +433,10 @@ fragment SoupNotificationStateFields on GraphqlNotification {
 	__typename
 	id
 	eventType
-	# The canonical type also covers entities outside Soup (WhatsApp groups).
-	entityType: targetEntityType
+	# The Soup cache reads `entityType` by its schema name; never alias it.
+	entityType
+	# The canonical type also covers entities outside Soup (external chats).
+	targetEntityType
 	entityId
 	sent
 	state

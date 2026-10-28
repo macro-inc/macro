@@ -38,10 +38,10 @@ export function ShareInboxConflictDialog(props: {
             it so you both manage one inbox instead of syncing a duplicate copy.
           </Dialog.Description>
           <div class="pt-3 justify-end items-center gap-3 inline-flex">
-            <Button variant="ghost" depth={3} onClick={() => props.onCancel()}>
+            <Button variant="ghost" onClick={() => props.onCancel()}>
               Cancel
             </Button>
-            <Button variant="strong" depth={3} onClick={() => props.onShare()}>
+            <Button variant="secondary" onClick={() => props.onShare()}>
               Share inbox
             </Button>
           </div>

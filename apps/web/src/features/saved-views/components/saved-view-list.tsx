@@ -28,7 +28,10 @@ function Root(props: {
   );
 }
 
-function Header(props: { onCreate?: () => void }) {
+function Header(props: {
+  onCreate?: () => void;
+  createButtonRef?: (element: HTMLButtonElement) => void;
+}) {
   return (
     <CollapsibleSection.Header>
       <CollapsibleSection.Trigger>
@@ -38,7 +41,9 @@ function Header(props: { onCreate?: () => void }) {
       <Show when={props.onCreate}>
         {(onCreate) => (
           <CollapsibleSection.Action
-            label={t('viewMenus.newSavedView')}
+            ref={props.createButtonRef}
+            aria-label={t('viewMenus.newSavedView')}
+            tooltip={t('viewMenus.newSavedView')}
             onClick={onCreate()}
           >
             <PlusIcon class="size-3.5" />
@@ -145,7 +150,8 @@ export function SavedViewListRow(props: {
           <Dropdown placement="bottom-end">
             <Dropdown.Trigger
               as={ViewSidebar.Control}
-              label={t('viewMenus.viewActions', { name: props.view.name })}
+              aria-label={t('viewMenus.viewActions', { name: props.view.name })}
+              tooltip={t('viewMenus.viewActions', { name: props.view.name })}
             >
               <DotsIcon class="size-4" />
             </Dropdown.Trigger>

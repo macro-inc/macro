@@ -813,9 +813,7 @@ it('blocks existing images on text-only models and preserves the draft until swi
     />
   ));
   type('Describe this');
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   expect(
     screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
   ).toBe(true);

@@ -36,7 +36,9 @@ sheet that must still press its own controls:
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
-phone screen and below one near the top, have a backend-free browser regression:
+phone screen and below one near the top, and the floating format menu staying
+beside a scrolling editor whose selection runs past its visible bottom
+(`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
@@ -47,10 +49,14 @@ container scan per node.
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
-slides into a short window; the phone drawer shows late requests:
+slides into a short window; the phone drawer shows late requests. The same
+suite covers the Add guests and Forward invitation editors (the real
+`EventGuests` over a stand-in contact picker) on desktop and phone:
 `bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
-above the event whenever a late section changes its height.
+above the event whenever a late section changes its height. Keep the guest
+editors' `overlap`: without it their height follows the room below the button,
+so they never overflow, never flip, and squeeze the chosen people to nothing.
 
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
@@ -81,9 +87,21 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
+in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
+brevity, and explicit type/name boosts. Task projects use the `initiative`
+bucket; `project` means a Drive folder. Preserve broader cache/server matches
+and the existing People preview/pinning. The channel browser suite below also
+checks project ranking and insertion on desktop and phone.
+
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
+
+Block formatting passes a forward copy of the selection to Lexical's
+`$setBlocksType` so backward selections include their first paragraph and keep
+the editor's actual selection direction. The Markdown core browser suite's
+`quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -134,6 +152,11 @@ new MutationObserver(() => {
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
 
+Column renames have a backend-free desktop/phone regression using the real
+schema query and mutation adapter with delayed service responses:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
+It checks the optimistic name, header identity, and persistence across reload.
+
 ## Canvas collaboration
 
 Document sync uses the `sync-via-gateway` PostHog flag in both deployed dev and
@@ -160,6 +183,10 @@ on desktop and mobile. Tool results render through
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
+
+Shared diff and Changes views expand files with at most 40 additions + deletions
+by default; keep saved per-capture choices and explicit toggles authoritative.
+Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -188,8 +215,13 @@ the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
+Agent split headers show live viewers through `BlockLiveIndicators` with the
+resolved session ID; keep the existing `AgentSessionProvider` subscription to
+`agent_session` rather than enabling legacy block tracking of placeholder IDs.
+
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -231,12 +263,20 @@ the user's newest account for that app from the last fifteen minutes.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
   their durable queue entries may survive the old engine.
+- Dispatch live GraphQL notification callbacks before cache persistence so hidden
+  tabs can show browser alerts; keep cache-dependent channel reconciliation
+  behind ordered writes and never replay alerts when the cache resumes. Link
+  cache queue/apply spans to receipt and mark listener failures without stopping
+  the remaining callbacks.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Coalesce broad browser cache-change hints across the coordinator's in-flight
+  backlog, not the engine's per-message queue; keep reset fences, mutation
+  settlements, and query-specific invalidations immediate.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
@@ -246,11 +286,13 @@ the user's newest account for that app from the last fifteen minutes.
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
 - Mobile dock search owns transient category/mode state in `features/command/mobile`; reuse the shared entity source and explicit full-text adapter rather than overlaying the dock query on view tabs or saved facets. See `docs/agent-guide/search.md` at the repository root.
-- Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person to their existing one-to-one DM while preserving name/email matching.
+- Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person against both recent DMs and DMs found by the current search while preserving name/email matching.
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
+- Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
 - Reserve the safe area plus the category row above mobile Search, and only the safe area above Channels; their hidden split headers must not add another blank strip.
@@ -258,6 +300,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
@@ -268,7 +311,8 @@ the user's newest account for that app from the last fifteen minutes.
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
   and Tasks headers: title, filters, view options, New, expandable Search. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
-- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, 32px semantic islands with 8px gaps on the right, fully rounded elevated frames, New then expandable Search; preserve touch layouts. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
+- Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
@@ -293,8 +337,9 @@ the user's newest account for that app from the last fifteen minutes.
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar row notifications through the notification source so read
-  dots update immediately and failed writes roll back; grid selections also mark
+- Mark loaded calendar and agent-session row notifications through the
+  notification source (`markRowNotificationsSeenOnOpen`) so read dots update
+  immediately and failed writes roll back; calendar grid selections also mark
   the canonical event read, excluding team projections.
 - Route explicit call exits using the server's `callEnded` result: ended calls
   open their record; ongoing channel and scheduled calls return to the channel
@@ -355,6 +400,8 @@ the user's newest account for that app from the last fifteen minutes.
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
   in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
+  The resolved interface language is reported to PostHog as the person
+  property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
@@ -554,6 +601,9 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 ### Agent system events
 
+Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
+`magic-chip-shimmer` style; keep Working and Thinking on the same sweep and phase.
+
 Accept `notification` in both fetched and subscribed GraphQL session log rows.
 System notifications live in fold metadata, separate from messages. Review
 subjects refresh their existing card; other subjects render quiet timeline rows
@@ -564,6 +614,10 @@ desktop and mobile.
 Keep Responding bound to the notification turn, including rejection and noop.
 The backend-free desktop/mobile check is
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts`.
+The same suite covers stopping and reloading an agent reply inside a mention:
+keep incomplete trailing Macro XML hidden in settled agent prose, preserve
+completed chips and literal tag examples in Markdown code, and leave user prompts
+unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
@@ -582,7 +636,10 @@ instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
 Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
 `createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Download hands off directly to browser downloads
+bound to the same controller. Call recording menus and the list-row Download
+(`makeDownloadAction`) use the same controller; the list action runs it under
+its own root, because choosing a context-menu item disposes the menu's owner.
+Download hands off directly to browser downloads
 or the native save picker. Show channel Download on hover or keyboard focus,
 always on touch, without a footer. Keep system Share inside the touch Download
 menu; desktop Share belongs to Macro permissions. Do not add a custom

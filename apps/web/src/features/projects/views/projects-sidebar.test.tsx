@@ -11,7 +11,6 @@ import {
   createResource,
   createRoot,
   createSignal,
-  type ParentProps,
 } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ProjectsSource } from '../context/projects-context';
@@ -29,9 +28,7 @@ vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/utils/classname')),
   ...(await import('@app/components/ui/components/Button')),
 }));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
 }));

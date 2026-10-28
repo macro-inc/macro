@@ -33,7 +33,7 @@ export function BookingLinkMenu(props: {
   trigger: JSX.Element;
   triggerLabel?: string;
   triggerClass?: string;
-  triggerVariant: 'outline' | 'ghost';
+  triggerVariant: 'outline' | 'secondary' | 'ghost';
   disabled?: boolean;
   onChoose: (target: FormBookingTarget) => void;
   onCreate: () => void;

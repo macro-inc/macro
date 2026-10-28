@@ -20,6 +20,7 @@ interface CalendarPreferences {
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
+  showNextMeetingBadge: boolean;
 }
 
 /** One persisted store, so preference changes reach invitation cards outside the calendar. */
@@ -32,6 +33,7 @@ export const useCalendarPreferences = createSharedRoot(() => {
     showWeekends: true,
     weekStartsOn: 0,
     timeFormat: getDefaultCalendarTimeFormat(),
+    showNextMeetingBadge: true,
   };
   const [preferences, setPreferences] = makePersisted(
     createStore<CalendarPreferences>(defaultPreferences),

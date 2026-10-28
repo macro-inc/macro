@@ -61,6 +61,7 @@ import {
 } from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
+  createTaskComposerLinkInSource,
   createTaskComposerSharing,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
@@ -125,6 +126,14 @@ export interface ComposeTaskProps {
    * Pairs with onCreateStart for placeholder cleanup.
    */
   onCreateFailure?: () => void;
+  /**
+   * Offers a toggle that links the created task back where it was composed
+   * from; `insert` runs after creation while the toggle is on.
+   */
+  linkInSource?: {
+    label: string;
+    insert: (result: ComposeTaskSuccess) => void;
+  };
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -231,6 +240,11 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [shareWithTeam, setShareWithTeam] = createTaskComposerSharing(
     recovered?.shareWithTeam
   );
+  const [linkInSourceEnabled, setLinkInSourceEnabled] =
+    createTaskComposerLinkInSource();
+  const linkCreatedTask = (result: ComposeTaskSuccess) => {
+    if (linkInSourceEnabled()) props.linkInSource?.insert(result);
+  };
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const userTeams = useUserTeamsQuery();
   const team = () =>
@@ -578,6 +592,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         'compose-task'
       );
     }
+    linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);
   };
   const handleCreateTask = () => createTask(false);
@@ -715,9 +730,10 @@ export function ComposeTask(props: ComposeTaskProps) {
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-composer"
+              variant="ghost"
+              size="icon-md"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-4 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
@@ -727,10 +743,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             disabled={isCreating()}
             tabIndex={-1}
             tooltip="Clear Draft"
-            size="sm"
-            variant="outline"
-            depth={3}
-            class="bg-surface px-3"
+            size="xs"
+            variant="secondary"
           >
             Clear Draft
           </Button>
@@ -740,9 +754,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
-            size="icon-composer"
+            variant="ghost"
+            size="icon-md"
           >
-            <XIcon />
+            <XIcon class="size-4 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </EntityComposer.Header>
@@ -763,6 +778,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             <TaskTitleAccessory>
               <InlineTagsPill
                 docTags={composerTags}
+                variant="secondary"
+                size="xs"
                 showPlaceholder
                 class="shrink-0"
                 onActiveChange={handleTitleTagPickerActive}
@@ -811,7 +828,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Scroll>
         </EntityComposer.Body>
 
-        <div class="shrink-0 flex items-center py-2 -ml-1 touch:-ml-[3px]">
+        <div class="shrink-0 flex items-center py-2">
           <input
             ref={(el) => {
               attachInputRef = el;
@@ -826,9 +843,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={() => attachInputRef?.click()}
             tabIndex={-1}
             tooltip="Attach image or video"
-            size="icon-composer"
+            variant="ghost"
+            size="icon-md"
           >
-            <PaperclipIcon />
+            <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
 
@@ -883,7 +901,12 @@ export function ComposeTask(props: ComposeTaskProps) {
                 )}
               </For>
               <Show when={tagLayoutMode() === 'bottom'}>
-                <InlineTagsPill docTags={composerTags} showPlaceholder />
+                <InlineTagsPill
+                  docTags={composerTags}
+                  variant="secondary"
+                  size="xs"
+                  showPlaceholder
+                />
               </Show>
               <TaskComposerPropertyEditor
                 name={title()}
@@ -925,6 +948,16 @@ export function ComposeTask(props: ComposeTaskProps) {
           )}
         </Show>
         <div class="ml-auto flex items-center gap-3">
+          <Show when={props.linkInSource}>
+            {(linkInSource) => (
+              <ToggleSwitch
+                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                onChange={setLinkInSourceEnabled}
+                checked={linkInSourceEnabled()}
+                label={linkInSource().label}
+              />
+            )}
+          </Show>
           <ToggleSwitch
             labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
             onChange={setCreateMore}
@@ -933,7 +966,8 @@ export function ComposeTask(props: ComposeTaskProps) {
             label="Create More"
           />
           <EntityComposer.Submit
-            variant="strong"
+            variant="primary"
+            size="sm"
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
             hasContent={title().trim().length > 0}

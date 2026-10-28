@@ -79,7 +79,7 @@ export function TeamInviteLinkAcceptance(props: { token: string }) {
             </p>
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
             class="w-full"
             disabled={joinMutation.isPending}
@@ -107,7 +107,7 @@ function Outcome(props: { title: string; body: string }) {
       <h2 class="text-lg font-medium text-ink">{props.title}</h2>
       <p class="text-sm text-ink-muted">{props.body}</p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
         class="w-full"
         onClick={() => navigate('/')}

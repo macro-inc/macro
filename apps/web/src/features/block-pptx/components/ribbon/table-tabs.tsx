@@ -346,7 +346,7 @@ export function TableLayoutTab(props: TableTabProps) {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Insert above"
+          aria-label="Insert above"
           disabled={ro()}
           data-testid="pptx-insert-row-above"
           onClick={() => fireAndForget(c.insertRows('above'), 'pptx-editor')}
@@ -354,7 +354,7 @@ export function TableLayoutTab(props: TableTabProps) {
           Insert above
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert below"
+          aria-label="Insert below"
           disabled={ro()}
           data-testid="pptx-insert-row-below"
           onClick={() => fireAndForget(c.insertRows('below'), 'pptx-editor')}
@@ -362,14 +362,14 @@ export function TableLayoutTab(props: TableTabProps) {
           Insert below
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert left"
+          aria-label="Insert left"
           disabled={ro()}
           onClick={() => fireAndForget(c.insertColumns('left'), 'pptx-editor')}
         >
           Insert left
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert right"
+          aria-label="Insert right"
           disabled={ro()}
           data-testid="pptx-insert-col-right"
           onClick={() => fireAndForget(c.insertColumns('right'), 'pptx-editor')}
@@ -379,7 +379,7 @@ export function TableLayoutTab(props: TableTabProps) {
       </RibbonGroup>
       <RibbonGroup label="Merge">
         <RibbonTextButton
-          label="Merge cells"
+          aria-label="Merge cells"
           disabled={ro() || !c.canMerge()}
           data-testid="pptx-merge-cells"
           onClick={() => fireAndForget(c.mergeCells(), 'pptx-editor')}
@@ -387,7 +387,7 @@ export function TableLayoutTab(props: TableTabProps) {
           Merge cells
         </RibbonTextButton>
         <RibbonTextButton
-          label="Split cells"
+          aria-label="Split cells"
           disabled={ro() || !c.canSplit()}
           onClick={() => fireAndForget(c.splitCells(), 'pptx-editor')}
         >
@@ -414,14 +414,14 @@ export function TableLayoutTab(props: TableTabProps) {
           onCommit={(w) => fireAndForget(c.setCellSize({ w }), 'pptx-editor')}
         />
         <RibbonTextButton
-          label="Distribute rows"
+          aria-label="Distribute rows"
           disabled={ro()}
           onClick={() => fireAndForget(c.distributeRows(), 'pptx-editor')}
         >
           Distribute rows
         </RibbonTextButton>
         <RibbonTextButton
-          label="Distribute columns"
+          aria-label="Distribute columns"
           disabled={ro()}
           onClick={() => fireAndForget(c.distributeColumns(), 'pptx-editor')}
         >
@@ -430,7 +430,7 @@ export function TableLayoutTab(props: TableTabProps) {
       </RibbonGroup>
       <RibbonGroup label="Alignment">
         <RibbonButton
-          label="Align left"
+          aria-label="Align left"
           tooltip="Align left"
           disabled={ro()}
           onClick={() => fireAndForget(c.alignCells('left'), 'pptx-editor')}
@@ -438,7 +438,7 @@ export function TableLayoutTab(props: TableTabProps) {
           <TextAlignLeft />
         </RibbonButton>
         <RibbonButton
-          label="Center"
+          aria-label="Center"
           tooltip="Center"
           disabled={ro()}
           onClick={() => fireAndForget(c.alignCells('center'), 'pptx-editor')}
@@ -446,7 +446,7 @@ export function TableLayoutTab(props: TableTabProps) {
           <TextAlignCenter />
         </RibbonButton>
         <RibbonButton
-          label="Align right"
+          aria-label="Align right"
           tooltip="Align right"
           disabled={ro()}
           onClick={() => fireAndForget(c.alignCells('right'), 'pptx-editor')}
@@ -454,7 +454,7 @@ export function TableLayoutTab(props: TableTabProps) {
           <TextAlignRight />
         </RibbonButton>
         <RibbonButton
-          label="Align top"
+          aria-label="Align top"
           tooltip="Align top"
           disabled={ro()}
           onClick={() => fireAndForget(c.anchorCells('top'), 'pptx-editor')}
@@ -462,7 +462,7 @@ export function TableLayoutTab(props: TableTabProps) {
           <AlignTop />
         </RibbonButton>
         <RibbonButton
-          label="Center vertically"
+          aria-label="Center vertically"
           tooltip="Center vertically"
           disabled={ro()}
           onClick={() => fireAndForget(c.anchorCells('middle'), 'pptx-editor')}
@@ -470,7 +470,7 @@ export function TableLayoutTab(props: TableTabProps) {
           <AlignCenterVertical />
         </RibbonButton>
         <RibbonButton
-          label="Align bottom"
+          aria-label="Align bottom"
           tooltip="Align bottom"
           disabled={ro()}
           onClick={() => fireAndForget(c.anchorCells('bottom'), 'pptx-editor')}

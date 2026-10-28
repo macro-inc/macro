@@ -1153,7 +1153,9 @@ export type DiscoveryResult =
   | {
       app: DiscoveredApp;
       /**
-       * Whether this caller has an enabled connection.
+       * Whether this caller has an enabled connection. For an app that
+       * connects through its own MCP server, that connection is checked
+       * there, not in Pipedream.
        */
       connected: boolean;
       /**

@@ -214,7 +214,7 @@ export function BookingHostSelector(props: {
         <Combobox.Trigger
           as={Button}
           ref={trigger}
-          variant="outline"
+          variant="secondary"
           aria-label="Team hosts"
           aria-invalid={props.invalid ? true : undefined}
           aria-describedby={props.descriptionId}

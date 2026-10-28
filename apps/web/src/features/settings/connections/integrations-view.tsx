@@ -134,7 +134,7 @@ function ConnectionsContent(props: IntegrationsViewProps) {
               {props.children}
               <div class="flex items-center gap-3 text-sm text-ink-muted">
                 Couldn't load Connections.
-                <Button variant="outline" size="sm" depth={3} onClick={retry}>
+                <Button variant="secondary" size="sm" onClick={retry}>
                   Retry
                 </Button>
               </div>
@@ -157,12 +157,7 @@ function ConnectionsContent(props: IntegrationsViewProps) {
                     class="flex items-center gap-3 text-sm text-ink-muted"
                   >
                     Some connections couldn't be loaded.
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      onClick={retry}
-                    >
+                    <Button variant="secondary" size="sm" onClick={retry}>
                       Retry
                     </Button>
                   </div>

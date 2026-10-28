@@ -388,6 +388,90 @@
         }
       }
     },
+    "/email/calendar-events/{event_id}/forward": {
+      "post": {
+        "tags": ["email"],
+        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name: the event's iCalendar file (`METHOD:PUBLISH`, no\nattendees, no join link), sent from the inbox that holds the viewer's\ncopy, with the usual undo delay. Recipients can add the event to their\nown calendar; they are not added to the guest list and the organizer is\nnot told.",
+        "operationId": "forward_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "The viewer's copy of the event",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The email is queued to send",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No, too many, or invalid recipients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The inbox holding the copy cannot send for the viewer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event on one of the viewer's own inboxes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The email could not be sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/contacts": {
       "get": {
         "tags": ["Contacts"],
@@ -5768,6 +5852,81 @@
         "type": "string",
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
+      },
+      "ForwardCalendarEventError": {
+        "type": "object",
+        "description": "A refused or failed forward.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ForwardCalendarEventErrorCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "A message fit to show the user."
+          }
+        }
+      },
+      "ForwardCalendarEventErrorCode": {
+        "type": "string",
+        "description": "Why a forward was not sent.",
+        "enum": [
+          "not_found",
+          "invalid_recipients",
+          "inbox_unavailable",
+          "send_failed"
+        ]
+      },
+      "ForwardCalendarEventRecipient": {
+        "type": "object",
+        "description": "One person a forwarded invitation goes to.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Their email address."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Their display name."
+          }
+        }
+      },
+      "ForwardCalendarEventRequest": {
+        "type": "object",
+        "description": "Who a forwarded invitation goes to, and what its email says.",
+        "required": ["to"],
+        "properties": {
+          "bodyText": {
+            "type": ["string", "null"],
+            "description": "The email's plain-text body. Without one, it names the event and\nsays the recipient won't be on the organizer's guest list."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForwardCalendarEventRecipient"
+            },
+            "description": "The people it goes to, at most 50."
+          }
+        }
+      },
+      "ForwardCalendarEventResponse": {
+        "type": "object",
+        "description": "The email the forward queued.",
+        "required": ["messageId", "threadId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sent message."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its thread."
+          }
+        }
       },
       "GetActiveBackfillJobResponse": {
         "type": "object",

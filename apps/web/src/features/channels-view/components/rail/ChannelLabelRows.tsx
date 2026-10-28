@@ -128,10 +128,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
       <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2 items-center gap-0.5">
         <Dropdown placement="bottom-end">
           <Dropdown.Trigger
+            aria-label={`Options for ${props.label.name}`}
+            tooltip={`Options for ${props.label.name}`}
             as={ViewSidebar.Control}
             variant="ghost"
             size="icon-sm"
-            label={`Options for ${props.label.name}`}
             class="opacity-0 transition-opacity group-hover/channel-label:opacity-100 focus-visible:opacity-100 data-expanded:opacity-100 touch:opacity-100"
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
           >
@@ -185,7 +186,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
           </Dropdown.Content>
         </Dropdown>
         <ViewSidebar.Control
-          label={`${state().open ? 'Collapse' : 'Expand'} ${props.label.name}`}
+          aria-label={`${state().open ? 'Collapse' : 'Expand'} ${props.label.name}`}
           aria-expanded={state().open}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => rail.toggleLabel(props.label.id)}
@@ -211,7 +212,7 @@ export function ChannelsCreateMenu() {
       when={rail.channelTagsEnabled() && rail.labelsAvailable()}
       fallback={
         <ViewSidebar.Control
-          label="Create channel"
+          aria-label="Create channel"
           onClick={openNewChannelModal}
         >
           <PlusIcon class="size-3.5" />
@@ -220,10 +221,11 @@ export function ChannelsCreateMenu() {
     >
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
+          aria-label="Create channel or label"
+          tooltip="Create channel or label"
           as={ViewSidebar.Control}
           variant="ghost"
           size="icon-sm"
-          label="Create channel or label"
         >
           <PlusIcon class="size-3.5" />
         </Dropdown.Trigger>

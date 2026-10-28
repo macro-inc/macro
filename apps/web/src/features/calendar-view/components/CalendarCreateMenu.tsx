@@ -22,9 +22,10 @@ export function CalendarCreateMenu(props: {
         when={props.presentation}
         fallback={
           <Dropdown.Trigger
+            aria-label={props.label}
+            tooltip={props.label}
             size={props.size ?? 'sm'}
             class={props.class}
-            label={props.label}
           >
             {props.trigger}
           </Dropdown.Trigger>

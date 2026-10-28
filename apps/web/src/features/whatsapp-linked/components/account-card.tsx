@@ -7,7 +7,7 @@ import type { WhatsAppAccount } from '../core/account';
 import { WhatsAppTile } from './whatsapp-tile';
 
 /**
- * Nothing linked yet: what linking means, its risk, and Connect. A phone
+ * Nothing linked yet: what linking means, and Connect. A phone
  * can't scan its own screen, so on one it says to link from a computer.
  */
 export function ConnectCard(props: {
@@ -27,10 +27,6 @@ export function ConnectCard(props: {
             ? 'WhatsApp signed this device out. Link it again to keep your chats syncing.'
             : 'Link your personal WhatsApp as a linked device. Only chats you choose come into Macro.'}
         </Item.Description>
-        <Item.Metadata>
-          Macro connects as an unofficial WhatsApp client, which WhatsApp may
-          restrict or ban accounts for.
-        </Item.Metadata>
         <Show when={props.phone}>
           <Item.Description>
             To link, open Macro on a computer, go to External → WhatsApp, and
@@ -42,7 +38,7 @@ export function ConnectCard(props: {
         <Item.Actions class="self-center">
           <Button
             type="button"
-            variant="strong"
+            variant="primary"
             disabled={props.pending}
             onClick={props.onConnect}
           >

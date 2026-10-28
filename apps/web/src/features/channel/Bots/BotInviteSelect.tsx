@@ -149,7 +149,7 @@ export function BotInviteSelect(props: {
         </Combobox>
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         disabled={!selectedBot() || addBotMutation.isPending}
         onClick={() => fireAndForget(inviteBot(), 'channel-bots')}
       >

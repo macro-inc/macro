@@ -228,8 +228,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
+    // Per task. Normally each task runs about one query at a time; a larger
+    // max only lets a slow database pile up more sessions.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (50, 150),
+        Environment::Production => (10, 50),
         Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };

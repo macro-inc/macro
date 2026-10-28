@@ -75,9 +75,8 @@ export function GanttTodayButton() {
   const gantt = useGantt();
   return (
     <Button
-      depth={2}
       size="md"
-      variant="outline"
+      variant="secondary"
       class="bg-surface shadow-sm"
       onClick={() => (gantt.hours() ? gantt.fitToday() : gantt.scrollToToday())}
     >

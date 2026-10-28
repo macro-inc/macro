@@ -498,7 +498,6 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp chat', async ({
   const state = server();
   const unexpected = await mount(page, state);
 
-  await expect(page.getByText(/unofficial WhatsApp client/)).toBeVisible();
   await page.getByRole('button', { name: 'Connect' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toHaveClass(/ph-no-capture/);
@@ -1354,7 +1353,7 @@ for (const mobile of [false, true]) {
         page.getByRole('textbox', { name: 'Message Design Crit' })
       ).toBeVisible();
       await page
-        .getByRole('button', { name: mobile ? 'Show details' : /side panel/i })
+        .getByRole('button', { name: 'Show details', exact: true })
         .click();
       const members = page.getByRole('list', { name: 'WhatsApp members' });
       await expect(members).toBeVisible();
