@@ -74,6 +74,17 @@ export type RequestFailure = { kind: 'request-failed' };
  * Everything the WhatsApp page reads and does. Production builds it from the
  * shared `whatsapp-linked` queries; tests pass fakes.
  */
+/**
+ * Why a pairing was cancelled, recorded on its span. `button` and `escape`
+ * are the dialog's explicit closes; `dismiss` is the mobile sheet's swipe;
+ * `expired_roll` is a replacement code that arrived after the dialog closed.
+ */
+export type PairingCancelReason =
+  | 'button'
+  | 'escape'
+  | 'dismiss'
+  | 'expired_roll';
+
 export type WhatsAppLinkedCapabilities = {
   /** The person's own account, `null` when they never connected one. */
   account: SourceRead<WhatsAppAccount | null>;
@@ -87,7 +98,10 @@ export type WhatsAppLinkedCapabilities = {
   passkey: PasskeyCapability;
   /** One account at a time: switching means disconnecting first. */
   connect: () => ResultAsync<StartedPairing, RequestFailure>;
-  cancelPairing: (pairingId: string) => ResultAsync<void, RequestFailure>;
+  cancelPairing: (
+    pairingId: string,
+    reason: PairingCancelReason
+  ) => ResultAsync<void, RequestFailure>;
   /** Pairing finished: refresh the account and its chats. */
   pairingFinished: () => Promise<unknown>;
   disconnect: (

@@ -151,10 +151,11 @@ export function createWhatsAppLinkedCapabilities(host: {
       ResultAsync.fromPromise(connect.mutateAsync(), failure).map(
         (pairing) => ({ pairingId: pairing.id, expiresAt: pairing.expiresAt })
       ),
-    cancelPairing: (pairingId) =>
-      ResultAsync.fromPromise(cancel.mutateAsync(pairingId), failure).map(
-        () => undefined
-      ),
+    cancelPairing: (pairingId, reason) =>
+      ResultAsync.fromPromise(
+        cancel.mutateAsync({ pairingId, reason }),
+        failure
+      ).map(() => undefined),
     pairingFinished: refreshWhatsappLinkedAccount,
     disconnect: (generation) =>
       ResultAsync.fromPromise(disconnect.mutateAsync(generation), failure).map(

@@ -1,7 +1,10 @@
 import { ActionDialogShell, Button, Dialog } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { PasskeyCeremony } from '../context/whatsapp-linked-context';
+import type {
+  PairingCancelReason,
+  PasskeyCeremony,
+} from '../context/whatsapp-linked-context';
 import type { PairingStep } from '../core/pairing';
 import { ConnectionCode } from './connection-code';
 
@@ -222,15 +225,22 @@ export function PairingDialog(props: {
   /** The person continued in Macro desktop; closing must not cancel. */
   onHandOff: () => void;
   onRetry: () => void;
-  onCancel: () => void;
+  onCancel: (reason: PairingCancelReason) => void;
 }) {
   const qr = () => (props.step.kind === 'scan' ? props.step.qr : undefined);
   const code = () => (props.step.kind === 'code' ? props.step.code : undefined);
   return (
     <Dialog
       open={props.open}
+      // A stray click or focus change must not end a pairing mid-scan; only
+      // Cancel, Escape, or swiping the mobile sheet away does.
+      dismissOnOutside={false}
+      onEscapeKeyDown={(event) => {
+        event.preventDefault();
+        props.onCancel('escape');
+      }}
       onOpenChange={(open) => {
-        if (!open) props.onCancel();
+        if (!open) props.onCancel('dismiss');
       }}
       position="center"
       class="ph-no-capture w-110"
@@ -316,7 +326,7 @@ export function PairingDialog(props: {
             type="button"
             variant="ghost"
             depth={2}
-            onClick={props.onCancel}
+            onClick={() => props.onCancel('button')}
           >
             Cancel
           </Button>

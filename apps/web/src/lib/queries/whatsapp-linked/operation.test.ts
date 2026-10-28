@@ -33,6 +33,20 @@ describe('WhatsApp operation telemetry', () => {
     expect(span.error).not.toHaveBeenCalled();
   });
 
+  it('records the labels it is given before the operation runs', async () => {
+    await whatsappOperation('cancel_pairing', async () => undefined, {
+      'whatsapp.cancel_reason': 'escape',
+    });
+    expect(Telemetry.span).toHaveBeenCalledWith(
+      'whatsapp.cancel_pairing',
+      expect.any(Function)
+    );
+    expect(span.setAttr.mock.calls).toEqual([
+      ['whatsapp.cancel_reason', 'escape'],
+      ['whatsapp.outcome', 'success'],
+    ]);
+  });
+
   it('marks errors without recording sensitive server details', async () => {
     const failure = new Error('sensitive passkey assertion');
     await expect(

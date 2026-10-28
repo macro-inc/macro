@@ -4,9 +4,12 @@ import { type Accessor, createEffect, onCleanup } from 'solid-js';
 /** Keep server error bodies and pairing material out of operation telemetry. */
 export function whatsappOperation<T>(
   name: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  /** Opaque labels only, such as why the operation ran. */
+  attrs: Record<string, string> = {}
 ) {
   return Telemetry.span(`whatsapp.${name}`, async (span) => {
+    for (const [key, value] of Object.entries(attrs)) span.setAttr(key, value);
     try {
       const result = await operation();
       span.setAttr('whatsapp.outcome', 'success');

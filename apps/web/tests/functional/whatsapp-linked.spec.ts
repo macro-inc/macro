@@ -707,6 +707,26 @@ test('cancelling a pairing tells the server and keeps the account unlinked', asy
   await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible();
 });
 
+test('a click outside the pairing dialog keeps it; Escape cancels it', async ({
+  page,
+}) => {
+  const state = server();
+  await mount(page, state);
+
+  await page.getByRole('button', { name: 'Connect' }).click();
+  const code = page.getByRole('img', { name: /Scan this code/ });
+  await expect(code).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(code).toBeVisible();
+  expect(state.requests).not.toContain('DELETE whatsapp/pairing/pairing-1');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect
+    .poll(() => state.requests)
+    .toContain('DELETE whatsapp/pairing/pairing-1');
+});
+
 test('an expired code rolls to a new pairing on its own', async ({ page }) => {
   const state = server();
   await mount(page, state);
