@@ -31,9 +31,17 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import { Badge } from '@ui';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { DocxBlockData } from './definition';
 import {
   buildDocxSeed,
@@ -58,6 +66,7 @@ function displayName(userId: string | undefined) {
 /** Production composition of the collaborative DOCX editor. */
 export default function DocxBlock(props: { share?: string }) {
   const documentId = useBlockId();
+  const [download, setDownload] = createSignal<(() => void) | undefined>();
   const name = useBlockDocumentName('Document');
   const canEdit = useCanEdit();
   const canComment = useCanComment();
@@ -137,6 +146,14 @@ export default function DocxBlock(props: { share?: string }) {
             { op: 'moveToProject' },
             { op: 'delete' },
           ]}
+          menuTools={[
+            {
+              label: 'Download .docx',
+              icon: DownloadSimple,
+              action: () => download()?.(),
+              condition: () => !!download(),
+            },
+          ]}
           tools={[
             {
               group: 'sharing',
@@ -148,6 +165,7 @@ export default function DocxBlock(props: { share?: string }) {
             },
           ]}
         />
+
         <Show when={data()} keyed>
           {(loaded) => {
             const session = createDocxSession({
@@ -200,6 +218,7 @@ export default function DocxBlock(props: { share?: string }) {
                 <Match when={target()} keyed>
                   {({ doc, original }) => (
                     <DocxEditorView
+                      onDownloadReady={(action) => setDownload(() => action)}
                       doc={doc}
                       original={original}
                       canEdit={!!doc && canEdit()}

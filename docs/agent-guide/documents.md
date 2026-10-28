@@ -2873,8 +2873,8 @@ updates live and shows each collaborator's caret with their name
   delete rows and columns or the table), the `Insert footnote or endnote`
   menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
   changes` / `Show tracked changes`, `Comment on selection`, `Find and
-  replace` and `Download .docx` (viewers get `Find and replace` and
-  `Download .docx`).
+  replace` (viewers get `Find and replace`). `Download .docx` is in the
+  document header’s three-dot menu on desktop and mobile.
   While tracking is on (or the caret is on a tracked change) it also shows
   `Accept change`, `Reject change`, `Accept all changes` and `Reject all
   changes`.

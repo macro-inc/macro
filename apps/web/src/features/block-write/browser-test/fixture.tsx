@@ -1,3 +1,4 @@
+import { Dropdown } from '@ui/components/Dropdown';
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { ThrownResultError } from '@core/util/result';
@@ -435,6 +436,18 @@ function Fixture() {
               onSelection={session.setSelection}
               commentRoots={roots}
               onReady={setEditor}
+              actions={(download) => (
+                <Dropdown>
+                  <Dropdown.Trigger label="Document options">
+                    …
+                  </Dropdown.Trigger>
+                  <Dropdown.Content>
+                    <Dropdown.Item onSelect={download}>
+                      Download .docx
+                    </Dropdown.Item>
+                  </Dropdown.Content>
+                </Dropdown>
+              )}
               onDownload={(bytes) => {
                 const url = URL.createObjectURL(
                   new Blob([bytes.slice().buffer], {
