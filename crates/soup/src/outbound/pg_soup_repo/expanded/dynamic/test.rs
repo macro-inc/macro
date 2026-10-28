@@ -167,6 +167,39 @@ fn property_queries_hoist_definition_and_option_lookups() {
 }
 
 #[test]
+fn option_sorts_build_one_uncorrelated_option_map() {
+    let filter = EntityFilterAst::mock_empty();
+    let grouping = GroupingConfig {
+        field: GroupByField::EntityType,
+        group_key: None,
+        per_group_limit: None,
+    };
+    let sort = DynamicSort::Property {
+        property_definition_id: SystemPropertyKey::STATUS_UUID,
+        direction: SoupSortDirection::Asc,
+    };
+    for grouped in [false, true] {
+        let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, grouped));
+        let query = if grouped {
+            build_grouped_query(&filter, false, &grouping, sort, &mut arrays).0
+        } else {
+            build_query(&filter, false, sort, &mut arrays)
+        };
+        let parameter = if grouped { 11 } else { 9 };
+        let sql = query.sql();
+        assert_eq!(
+            sql.matches("jsonb_object_agg(po.id::text, po.display_order)")
+                .count(),
+            1
+        );
+        assert!(sql.contains(&format!(
+            "FROM property_options po WHERE po.property_definition_id = ${parameter}::uuid"
+        )));
+        assert!(!sql.contains("po.property_definition_id = ep_sort.property_definition_id"));
+    }
+}
+
+#[test]
 fn task_only_filters_omit_redundant_namespace_joins() {
     let task = Expr::val(DocumentLiteral::SubType(DocumentSubType::Task));
     let id = Expr::val(DocumentLiteral::Id(Uuid::from_u128(1)));

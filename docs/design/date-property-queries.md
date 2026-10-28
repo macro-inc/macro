@@ -65,6 +65,11 @@ columns retain that join even for task-only filters.
 Property sorting joins `entity_properties` directly by definition, entity ID,
 and canonical entity type. Uncorrelated scalar lookups provide the definition
 type for the guarded sort expression, rather than a per-item definition join.
+Option sorts build a `jsonb_object_agg` map from option IDs to stored display
+orders through an uncorrelated lookup of the sort definition bind (`$9` flat,
+`$11` grouped). PostgreSQL can build the map once as an InitPlan, instead of
+re-reading options per item. Each value takes the minimum mapped order; unknown,
+deleted, and non-UUID option IDs are ignored, and unknown-only values stay missing.
 Grouped property sorts materialize `TopItems` before expanding multi-value groups
 so each item supplies its sort key before fan-out. Timestamp grouped queries
 keep their inlineable `TopItems` CTE.

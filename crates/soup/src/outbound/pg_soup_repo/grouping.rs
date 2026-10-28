@@ -35,14 +35,16 @@ pub(super) fn property_date_expression(alias: &str) -> String {
 /// All arguments are trusted SQL aliases or expressions owned by this adapter.
 pub(super) fn property_value_sql(
     alias: &str,
+    property_definition_id: &str,
     data_type: &str,
     element: &str,
     option_alias: &str,
 ) -> PropertyValueSql {
     let date = property_date_expression(alias);
     let option_order = format!("{option_alias}.display_order::double precision");
+    // Keep the map lookup independent of the item so PostgreSQL can build it once as an InitPlan.
     let selected_order = format!(
-        "(SELECT min(po.display_order)::double precision FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof({alias}.values->'value') = 'array' THEN {alias}.values->'value' ELSE '[]'::jsonb END) chosen(id) JOIN property_options po ON po.id::text = chosen.id AND po.property_definition_id = {alias}.property_definition_id)"
+        "(SELECT min(((SELECT jsonb_object_agg(po.id::text, po.display_order) FROM property_options po WHERE po.property_definition_id = {property_definition_id}) ->> chosen.id)::double precision) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof({alias}.values->'value') = 'array' THEN {alias}.values->'value' ELSE '[]'::jsonb END) chosen(id))"
     );
     let number = format!(
         "CASE WHEN jsonb_typeof({alias}.values->'value') = 'number' THEN ({alias}.values->>'value')::double precision END"
@@ -132,8 +134,14 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::EntityType => Cow::Borrowed("item_type"),
         GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
         GroupByField::Property { .. } => Cow::Owned(
-            property_value_sql("ep_group", "ep_group.data_type", "ep_group.val", "po_group")
-                .group_key,
+            property_value_sql(
+                "ep_group",
+                "NULL::uuid",
+                "ep_group.data_type",
+                "ep_group.val",
+                "po_group",
+            )
+            .group_key,
         ),
     }
 }

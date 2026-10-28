@@ -167,13 +167,14 @@ async fn property_sort_flat_and_grouped_pages_preserve_keys_and_missing_values(
                 let early = Uuid::now_v7();
                 let middle = Uuid::now_v7();
                 let late = Uuid::now_v7();
+                let deleted = Uuid::now_v7();
                 // Keep options tied to the definition inserted below.
                 let property_id = Uuid::now_v7();
                 sqlx::query!(
                     "INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select) VALUES ($1, 'macro|user-1@test.com', $2, $3::text::property_data_type, true)",
                     property_id, format!("Sort {property_id}"), data_type,
                 ).execute(&pool).await?;
-                for (id, order) in [(early, 1), (middle, 2), (late, 3)] {
+                for (id, order) in [(early, 1), (middle, 2), (late, 3), (deleted, 0)] {
                     if data_type == "SELECT_NUMBER" {
                         sqlx::query!(
                             "INSERT INTO property_options (id, property_definition_id, display_order, number_value) VALUES ($1, $2, $3, $4)",
@@ -232,6 +233,28 @@ async fn property_sort_flat_and_grouped_pages_preserve_keys_and_missing_values(
                     .map(|(key, id)| (key.as_str(), *id))
                     .collect::<Vec<_>>()
                 );
+                sqlx::query!("DELETE FROM property_options WHERE id = $1", deleted)
+                    .execute(&pool)
+                    .await?;
+                // Deleted and malformed IDs do not lower A's key or give C a key.
+                for (id, value) in [
+                    (
+                        A,
+                        json!({"type":"SelectOption","value":[late, deleted, "not-a-uuid", middle]}),
+                    ),
+                    (
+                        C,
+                        json!({"type":"SelectOption","value":[deleted, "not-a-uuid", Uuid::now_v7()]}),
+                    ),
+                ] {
+                    sqlx::query!(
+                        "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND property_definition_id = $3",
+                        value, id.to_string(), property_id,
+                    ).execute(&pool).await?;
+                }
+                for direction in [SoupSortDirection::Asc, SoupSortDirection::Desc] {
+                    check_pages(&pool, data_type, property_id, direction, 2.0, 1.0).await?;
+                }
                 continue;
             }
         };

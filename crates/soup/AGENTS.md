@@ -85,6 +85,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
 - Keep flat timestamp top clauses lightweight; bind document-ID arrays after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
 - Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
+- Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.

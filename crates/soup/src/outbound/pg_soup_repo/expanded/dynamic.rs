@@ -65,9 +65,16 @@ fn property_sort_join(enabled: bool, parameter: usize) -> String {
     if !enabled {
         return String::new();
     }
+    let property_definition_id = format!("${parameter}::uuid");
     let data_type =
-        format!("(SELECT data_type FROM property_definitions WHERE id = ${parameter}::uuid)");
-    let value = property_value_sql("ep_sort", &data_type, "NULL::jsonb", "po_group");
+        format!("(SELECT data_type FROM property_definitions WHERE id = {property_definition_id})");
+    let value = property_value_sql(
+        "ep_sort",
+        &property_definition_id,
+        &data_type,
+        "NULL::jsonb",
+        "po_group",
+    );
     format!(
         r#" LEFT JOIN entity_properties ep_sort
         ON ep_sort.property_definition_id = ${parameter}::uuid
@@ -2371,7 +2378,14 @@ fn build_grouped_items_cte(
     builder.push(&select_expr);
     builder.push(") as group_key, ");
     let group_order = if matches!(grouping.field, GroupByField::Property { .. }) {
-        property_value_sql("ep_group", "ep_group.data_type", "ep_group.val", "po_group").group_order
+        property_value_sql(
+            "ep_group",
+            "NULL::uuid",
+            "ep_group.data_type",
+            "ep_group.val",
+            "po_group",
+        )
+        .group_order
     } else {
         "NULL::double precision".to_string()
     };
