@@ -78,7 +78,7 @@ export function SendButton(props: SendButtonProps) {
       >
         {resolved() ?? (
           <>
-            <ArrowUp class="size-4 shrink-0 stroke-4 touch:size-3.5" />
+            <ArrowUp class="size-4 shrink-0 touch:size-3.5" />
             <Show when={local.actionLabel}>
               <span class="hidden whitespace-nowrap text-sm font-medium not-touch:inline">
                 {local.actionLabel}
