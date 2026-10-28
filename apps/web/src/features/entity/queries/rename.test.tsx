@@ -10,6 +10,7 @@ import {
   type Exchange,
   type Operation,
 } from '@urql/core';
+import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
@@ -23,16 +24,22 @@ const mocks = vi.hoisted(() => ({
   history: vi.fn(),
   soup: vi.fn(),
   toast: vi.fn(),
+  renameDatabase: vi.fn(),
+  renameItem: vi.fn(),
+  graphqlEnabled: vi.fn(() => true),
+}));
+vi.mock('@block-database/queries/rename-database', () => ({
+  renameDatabase: mocks.renameDatabase,
 }));
 vi.mock('@core/component/FileList/itemOperations', () => ({
-  renameItem: vi.fn(),
+  renameItem: mocks.renameItem,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.toast },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
+  isFeatureEnabled: mocks.graphqlEnabled,
 }));
 vi.mock('@queries/agent-session/entity-mutations', () => ({
   renameAgentSession: vi.fn(),
@@ -60,7 +67,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
-import { createRenameDssEntityMutation } from './rename';
+import {
+  createBulkRenameDssEntityMutation,
+  createRenameDssEntityMutation,
+} from './rename';
 
 let cache: QueryClient;
 let dispose: (() => void) | undefined;
@@ -68,6 +78,7 @@ afterEach(() => {
   dispose?.();
   cache.clear();
   vi.clearAllMocks();
+  mocks.graphqlEnabled.mockReturnValue(true);
 });
 
 it.each(['channel', 'call'] as const)(
@@ -148,5 +159,108 @@ it.each(['channel', 'call'] as const)(
     expect(cache.getQueryData(key)).toEqual(original);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
     expect(listeners.size).toBe(0);
+  }
+);
+
+it.each(['After', 'Before', ' Before '])(
+  'renames a database to %s through its API only when changed',
+  async (newName) => {
+    cache = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    mocks.client = createClient({
+      url: 'http://test.invalid',
+      exchanges: [],
+    });
+    mocks.renameDatabase.mockResolvedValue(ok(undefined));
+    let mutation!: ReturnType<typeof createRenameDssEntityMutation>;
+    dispose = render(
+      () => (
+        <QueryClientProvider client={cache}>
+          {(() => {
+            mutation = createRenameDssEntityMutation();
+            return null;
+          })()}
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    const result = await mutation.mutateAsync({
+      entity: {
+        id: 'db-1',
+        type: 'database',
+        name: 'Before',
+        grant: 'owner',
+      },
+      newName,
+    });
+    expect(result).toEqual({ success: true });
+    if (newName.trim() === 'Before') {
+      expect(mocks.renameDatabase).not.toHaveBeenCalled();
+    } else {
+      expect(mocks.renameDatabase).toHaveBeenCalledWith(
+        mocks.client,
+        'db-1',
+        newName
+      );
+    }
+    expect(mocks.preview).not.toHaveBeenCalled();
+    expect(mocks.soup).not.toHaveBeenCalled();
+  }
+);
+
+it.each([true, false])(
+  'rolls back only a failed document after a database rename (document success=%s)',
+  async (success) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    cache = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    mocks.graphqlEnabled.mockReturnValue(false);
+    mocks.renameDatabase.mockResolvedValue(
+      success ? err({ kind: 'unreachable' }) : ok(undefined)
+    );
+    mocks.renameItem.mockResolvedValue(success);
+    const rollback = vi.fn();
+    mocks.soup.mockReturnValue({ rollback });
+    let mutation!: ReturnType<typeof createBulkRenameDssEntityMutation>;
+    dispose = render(
+      () => (
+        <QueryClientProvider client={cache}>
+          {(() => {
+            mutation = createBulkRenameDssEntityMutation();
+            return null;
+          })()}
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    expect(
+      await mutation.mutateAsync([
+        {
+          entity: {
+            id: 'db-1',
+            type: 'database',
+            name: 'Database before',
+            grant: 'owner',
+          },
+          newName: 'Database after',
+        },
+        {
+          entity: { id: 'doc-1', type: 'document', name: 'Document before' },
+          newName: 'Document after',
+        },
+      ])
+    ).toEqual([{ success: !success }, { success }]);
+    if (success) expect(rollback).not.toHaveBeenCalled();
+    else {
+      expect(rollback).toHaveBeenCalledOnce();
+      expect(mocks.preview).toHaveBeenLastCalledWith({
+        itemId: 'doc-1',
+        itemType: 'document',
+        name: 'Document before',
+      });
+    }
+    vi.restoreAllMocks();
   }
 );

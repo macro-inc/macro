@@ -936,6 +936,24 @@ export type MessagePart =
       entries: PlanEntry[];
     }
   /**
+   *  A background task the harness reported on: a command, subagent or
+   *  monitor it started earlier finished or emitted an event. The harness
+   *  hands the agent this report as a user turn; it is shown as a system
+   *  fact, never as something a person said.
+   */
+  | {
+      kind: 'task_notification';
+      /**  Where the task ended up; absent for a monitor's mid-stream event. */
+      status: TaskStatus | null;
+      /**
+       *  The harness's one-line account, such as `Background command
+       *  "Run tests" completed (exit code 0)`.
+       */
+      summary: string;
+      /**  The line a monitor streamed, for a monitor event. */
+      event: string | null;
+    }
+  /**
    *  The agent asking the user a question.
    *
    *  When the question was asked on behalf of a tool call this fold had
@@ -1588,6 +1606,15 @@ export type SubagentResult = {
   /**  What kinds of tools the subagent called. */
   stats: ToolStats | null;
 };
+
+/**  How a background task ended, per [`MessagePart::TaskNotification`]. */
+export type TaskStatus =
+  /**  It ran to the end. */
+  | 'completed'
+  /**  It ended with an error or a nonzero exit. */
+  | 'failed'
+  /**  It was stopped, or did not survive the previous session. */
+  | 'stopped';
 
 /**  Where a held call stands. */
 export type ToolApprovalStatus =

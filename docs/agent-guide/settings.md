@@ -72,9 +72,11 @@ Choose **Save signature** to save edits and return to the canonical preview.
 after clearing, reopening Rich text starts empty. It leaves the inbox connected, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
 **Add to replies & forwards** saves that preference immediately. On desktop,
-**Import from Gmail** in each inbox's header fetches that account's Gmail
+**Import from Gmail** in each Gmail inbox's header fetches that account's Gmail
 signature and saves it right away, replacing any unsaved draft; a toast reports
-when Gmail has no signature. Unsaved drafts
+when Gmail has no signature. Outlook inboxes offer Rich text and HTML editing
+without a Gmail import action. The import action uses the inbox's provider,
+not its email domain. Unsaved drafts
 survive switching settings pages. On phones, the signature preview, replies/forwards
 toggle, and clear action are available; editing and import remain desktop-only.
 Email accounts can also be managed from **Integrations**. Its **Email settings**
@@ -90,6 +92,9 @@ conversion and verify the saved HTML is unchanged. Check the preview on a phone
 and ensure a wide signature scrolls inside its own preview instead of the page.
 Save a signature created in Rich text, reopen settings, and confirm Rich text
 editing resumes without a conversion prompt.
+With Gmail and Outlook inboxes connected, confirm only Gmail offers import
+(including Gmail accounts on a custom domain), while both support HTML and Rich
+text editing. Empty Outlook signatures must not suggest Gmail import.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer

@@ -50,6 +50,7 @@ import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { type ToolUsePart, toolUsedAfter } from './parts/shared';
+import { TaskNotificationPart } from './parts/TaskNotificationPart';
 import { TextPart } from './parts/TextPart';
 import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
@@ -135,6 +136,9 @@ function AgentMessagePart(props: {
       </Match>
       <Match when={props.part.kind === 'control' && props.part}>
         {(part) => <ControlPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'task_notification' && props.part}>
+        {(part) => <TaskNotificationPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'elicitation' && props.part}>
         {(part) => <ElicitationPart part={part()} turn={props.message.turn} />}

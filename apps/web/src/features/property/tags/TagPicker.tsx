@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
@@ -67,6 +68,10 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 }
 
 const MAX_LIST_HEIGHT = 192;
+// The keyboard covers the layout viewport's bottom without shrinking it, so
+// flipping cannot see it: a picker opened low on a phone hides behind it.
+const pickerPlacement = () =>
+  virtualKeyboardVisible() ? 'top-start' : 'bottom-start';
 const tagActionButtonClass =
   'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
 
@@ -146,7 +151,7 @@ export function TagPicker(props: TagPickerProps) {
     <Popover
       open={open()}
       onOpenChange={handleOpenChange}
-      placement="bottom-start"
+      placement={pickerPlacement()}
       gutter={4}
     >
       <Popover.Trigger
@@ -278,7 +283,7 @@ export function TagPickerPopover(props: {
         open={props.open}
         onOpenChange={handleOpenChange}
         getAnchorRect={props.getAnchorRect}
-        placement="bottom-start"
+        placement={pickerPlacement()}
         gutter={4}
       >
         <Show when={props.open}>

@@ -1,6 +1,8 @@
 /** Document-storage mutations used by entity surfaces. */
 
+import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { trashDatabase } from '@block-database/queries/trash-database';
 import {
   canDuplicateItemType,
   copyItem,
@@ -36,6 +38,7 @@ import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
+import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -105,7 +108,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'routine'
+      type === 'routine' ||
+      type === 'database'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -140,6 +144,17 @@ export function createBulkDeleteDssItemsMutation() {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
           ).then(() => true);
+        }
+        if (e.type === 'database') {
+          await throwOnErr(() =>
+            trashDatabase(getEntityGraphqlClient(), e.id).mapErr((failure) => [
+              {
+                code: failure.kind,
+                message: databaseEntityMessage(failure, 'delete'),
+              },
+            ])
+          );
+          return true;
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });

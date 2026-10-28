@@ -1421,3 +1421,10 @@ If the metadata is unavailable, the fallback extension comes from the response
 MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
+
+## Pending message drafts
+
+Sending clears the composer immediately while delivery is pending. If delivery
+fails and the composer is still empty, its text, mentions, and attachments return.
+A new draft typed during delivery stays intact if the earlier send fails. Verify
+this with both the Send button on a phone and the desktop composer.

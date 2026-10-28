@@ -44,7 +44,7 @@ function Fixture() {
       >
         <SettingsSection
           title="Signatures"
-          description="Create a signature for each email account, import from Gmail, or paste your HTML. Preview it before sending."
+          description="Create a signature for each email account and preview it before sending."
         >
           <Show when={mounted()}>
             <For each={links.isSuccess ? links.data.links : []}>
