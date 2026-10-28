@@ -1,13 +1,14 @@
 // Independent notification consumers do not commit Kafka offsets. Native MSK
 // consumer-group lag is therefore absent; these logs report application backlog.
 import * as datadog from '@pulumi/datadog';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 const HEALTH = '@telemetry_event:notification_consumer_health';
 const CONTEXT = `Notification-retention rollout: pause scheduled cleanup before investigating.
 Check consumer health/backlog, notification.delete.publish spans, database latency,
 and replica lag. A zero application backlog is not an end-to-end delivery ACK:
 Postgres NOTIFY publication and WebSocket delivery can still fail.
-@webhook-macro-alert-hook`;
+${notify({ pages: false })}`;
 
 for (const environment of ['dev', 'prod']) {
   const query = `${HEALTH} env:${environment}`;
@@ -20,6 +21,7 @@ for (const environment of ['dev', 'prod']) {
     priority: environment === 'prod' ? '2' : '3',
     includeTags: true,
     requireFullWindow: false,
+    renotifyInterval: RENOTIFY_MINUTES,
   };
   new datadog.Monitor(`notification-consumer-backlog-${environment}`, {
     ...common,
@@ -73,6 +75,7 @@ new datadog.Monitor('notification-retention-telemetry-export', {
   priority: '3',
   monitorThresholds: { critical: '0' },
   requireFullWindow: false,
+  renotifyInterval: RENOTIFY_MINUTES,
   onMissingData: 'default',
 });
 
