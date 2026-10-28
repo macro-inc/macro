@@ -18,7 +18,14 @@ export function SystemActivity(props: { event: SystemActivityEvent }) {
       .with({ kind: 'participant_removed' }, ({ participant }) =>
         name(participant)
       )
-      .otherwise(() => 'a participant');
+      .with(
+        { kind: 'renamed' },
+        { kind: 'picture_changed' },
+        { kind: 'call_ended' },
+        { kind: 'unknown' },
+        () => 'a participant'
+      )
+      .exhaustive();
   return (
     <SystemActivityRow
       event={props.event}
