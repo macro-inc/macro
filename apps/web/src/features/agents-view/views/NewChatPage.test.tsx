@@ -234,10 +234,12 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
+/** Most cases exercise an explicit Chat or Code choice; Auto has its own. */
+let startInChat = true;
+
 beforeEach(() => {
   localStorage.clear();
-  // Most cases exercise an explicit Chat or Code choice; Auto has its own.
-  localStorage.setItem('agents-view-mode-v1:user', 'chat');
+  startInChat = true;
   mocks.userId = () => 'user';
   mocks.chooseAgentMode.mockClear();
   mocks.autoEnabled = true;
@@ -269,6 +271,8 @@ function page(
       onOpenRoster={vi.fn()}
     />
   ));
+  const chat = screen.queryByRole('radio', { name: 'Chat' });
+  if (mode === undefined && startInChat && chat) fireEvent.click(chat);
   return onStart;
 }
 function openAgents() {
@@ -434,8 +438,8 @@ describe('agent-led new conversation', () => {
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
   });
-  it('starts a new person in Auto without an agent, model, or effort to pick', () => {
-    localStorage.clear();
+  it('starts in Auto without an agent, model, or effort to pick', () => {
+    startInChat = false;
     page();
     expect(
       (screen.getByRole('radio', { name: 'Auto' }) as HTMLInputElement).checked
@@ -447,7 +451,6 @@ describe('agent-led new conversation', () => {
     expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull();
   });
   it('offers only Chat and Code without the Auto flag', () => {
-    localStorage.clear();
     mocks.autoEnabled = false;
     const send = page();
     expect(screen.queryByRole('radio', { name: 'Auto' })).toBeNull();

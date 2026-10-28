@@ -88,8 +88,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
-  // The composer's Chat/Code choice; an open conversation keeps its own mode.
-  const workspace = createWorkspaceMode(userId());
+  // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
+  const workspace = createWorkspaceMode();
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
