@@ -145,6 +145,17 @@ pub struct CalendarEventIcs {
     pub document: String,
 }
 
+/// What forwarding one of the requester's events by email sends, and from
+/// where: the same document the .ics export renders, and the inbox holding
+/// the requester's own copy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventForward {
+    /// The event as an iCalendar document, with its title.
+    pub ics: CalendarEventIcs,
+    /// Address of the requester's own inbox that holds the requested copy.
+    pub inbox: String,
+}
+
 /// Render an event as a single-event `VCALENDAR` document.
 ///
 /// The UID is the meeting's own, so a client that already holds the meeting
