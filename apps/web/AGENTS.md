@@ -663,3 +663,11 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+
+### Sidebar tag dragging
+
+Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+Keep existing tags and apply to the selected rows when the drop row is selected.
+Use the shared scoped drag helpers and overlayIcon for the tag chip.
+The backend-free browser regression is
+`bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
