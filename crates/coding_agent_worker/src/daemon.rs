@@ -15,6 +15,7 @@ use crate::outbound::agent_session::HarnessApi;
 use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
+use crate::turns::ActiveTurns;
 
 #[cfg(test)]
 mod test;
@@ -29,6 +30,7 @@ const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 pub struct Daemon {
     cancel: CancellationToken,
     task: tokio::task::JoinHandle<rootcause::Result<()>>,
+    turns: ActiveTurns,
 }
 
 impl Daemon {
@@ -69,12 +71,14 @@ impl Daemon {
             None
         };
 
+        let turns = ActiveTurns::default();
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
             config.harness.clone(),
             &config.workspace.path,
             tap,
+            turns.clone(),
         );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
         #[cfg(unix)]
@@ -119,12 +123,21 @@ impl Daemon {
             }
         });
 
-        Ok(Self { cancel, task })
+        Ok(Self {
+            cancel,
+            task,
+            turns,
+        })
     }
 
     /// Whether the serving task is still alive.
     pub fn is_running(&self) -> bool {
         !self.task.is_finished()
+    }
+
+    /// Whether no agent turn is running.
+    pub fn is_idle(&self) -> bool {
+        self.turns.is_idle()
     }
 
     /// Stop serving without waiting for an in-flight network request or trigger.
