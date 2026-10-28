@@ -685,8 +685,8 @@ pub enum ReferencedShareItemType {
     CalendarEvent,
     /// Form entity: posting one lets the channel respond to it.
     Form,
-    /// WhatsApp group added to Macro: mentioning one lets the channel read it.
-    WhatsAppGroup,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -702,7 +702,7 @@ impl ReferencedShareItemType {
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
             "form" => Some(Self::Form),
-            "whatsapp_group" => Some(Self::WhatsAppGroup),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -719,7 +719,7 @@ impl ReferencedShareItemType {
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
             Self::Form => "form",
-            Self::WhatsAppGroup => "whatsapp_group",
+            Self::ExternalChat => "external_chat",
         }
     }
 

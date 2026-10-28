@@ -32,3 +32,12 @@ the local fixture are intercepted. Run just this case by adding
 
 Screenshots: [desktop](proof/autolinks-desktop.png) and
 [phone](proof/autolinks-mobile.png).
+
+## Message quotes
+
+`quotes.browser.e2e.ts` selects three paragraphs backward and applies Quote
+through the real floating toolbar on desktop/tablet and the composer format
+ribbon on phones. It checks the first paragraph's quote styling and the saved
+message. Run just this case by adding `quotes.browser.e2e.ts` to the command above.
+
+Screenshots: [desktop](proof/quotes-desktop.png) and [phone](proof/quotes-mobile.png).

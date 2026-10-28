@@ -6,7 +6,6 @@ pub use mailbox::*;
 use std::future::Future;
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
 use models_email::service::contact::{Contact, ContactList};
 use models_email::service::link::Link;
 use uuid::Uuid;
@@ -84,13 +83,14 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         provider_thread_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 
-    /// Fetches and normalizes every message in a provider thread.
+    /// Fetches and normalizes every message in a provider thread, each with
+    /// its calendar invitation parts, in one provider read.
     fn get_thread(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> impl Future<Output = Result<Vec<Message>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<Vec<MessageWithCalendarParts>, EmailApiError>> + Send;
 
     /// Lists one page of provider threads.
     fn list_threads(
@@ -429,7 +429,7 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         Err(unavailable())
     }
 

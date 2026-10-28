@@ -4,13 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { DateRangeOperator } from './dateRangeOperator';
 import type { FilterTestOneOfNineKind } from './filterTestOneOfNineKind';
 
 /**
- * A checkbox column. An unchecked box and an empty cell are the same.
+ * A date-range column.
  */
 export type FilterTestOneOfNine = {
-  /** Whether the box is checked. */
-  checked: boolean;
   kind: FilterTestOneOfNineKind;
+  /** How the cell's range stands to the day. */
+  operator: DateRangeOperator;
+  /** The start of the day compared against. */
+  value: string;
 };

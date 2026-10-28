@@ -31,6 +31,7 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
+import { parseProjectRoute } from '@app/features/projects/core/route';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -583,13 +584,13 @@ export const reviewsSplitRoute = defineRoute({
   search: [reviewsTabSearch.namespace],
 });
 
-/** A shareable WhatsApp conversation in External's main pane, with no channel or legacy block. */
-export const externalWhatsappGroupRoute = defineRoute({
-  id: 'external-whatsapp-group',
-  path: 'whatsapp/:groupId',
-  params: z.object({ groupId: z.string().uuid() }),
-  remountKey: ({ groupId }) => groupId,
-  claim: ({ groupId }) => ({ namespace: 'whatsapp-group', id: groupId }),
+/** A shareable external chat (any provider) in External's main pane, with no channel or legacy block. */
+export const externalChatRoute = defineRoute({
+  id: 'external-chat',
+  path: 'chat/:chatId',
+  params: z.object({ chatId: z.string().uuid() }),
+  remountKey: ({ chatId }) => chatId,
+  claim: ({ chatId }) => ({ namespace: 'external-chat', id: chatId }),
 });
 
 /** External: outside messaging accounts (WhatsApp) linked into Macro. */
@@ -806,6 +807,14 @@ export const legacyContentRoute = defineRoute({
       namespace: 'block',
       id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
     };
+  },
+  toReference: ({ type, id }) => {
+    const project = type === 'component' ? parseProjectRoute(id) : undefined;
+    // A project mention opens the project, not one of its discussions.
+    if (project?.discussionId) return;
+    return project
+      ? uuidRouteReference(project.id, 'initiative')
+      : uuidRouteReference(id, type);
   },
 });
 

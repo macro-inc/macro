@@ -39,4 +39,4 @@ the durable notification/realtime dispatcher.
   and preserves the deadline. Approval clears it for a further upgrade, while
   denial replaces it with the 24-hour cooldown.
 
-- `ShareEntityType::WhatsAppGroup` uses the generic direct-access/request workflow; viewing requires no WhatsApp connection.
+- `ShareEntityType::ExternalChat` uses the generic direct-access/request workflow; viewing requires no provider account.

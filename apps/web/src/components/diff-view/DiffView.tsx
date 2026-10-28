@@ -100,9 +100,7 @@ function Root(
     ready: () => parsed()?.patch === patch(),
     diffStyle: () => props.diffStyle,
     themeType: createThemeType(),
-    collapse:
-      props.collapse ??
-      createDiffCollapse(() => props.files.map((file) => file.path)),
+    collapse: props.collapse ?? createDiffCollapse(() => props.files),
     active: () => props.active,
   };
   return (
@@ -361,7 +359,7 @@ function CollapseButton() {
     >
       <CaretRightIcon
         class={cn(
-          'transition-transform duration-100 motion-reduce:transition-none',
+          'size-3.5 shrink-0 transition-transform duration-100 motion-reduce:transition-none',
           !collapsed() && 'rotate-90'
         )}
       />
@@ -422,9 +420,9 @@ function CollapseAll(props: { iconOnly?: boolean }) {
   const { collapse } = useDiffView();
   return (
     <Button
+      aria-label={collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}
       variant="ghost"
       size={props.iconOnly ? 'icon-sm' : 'sm'}
-      label={collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}
       tooltip={
         collapse.anyExpanded()
           ? 'Hide every diff, keeping just the file headers'
@@ -432,7 +430,11 @@ function CollapseAll(props: { iconOnly?: boolean }) {
       }
       onClick={() => collapse.toggleAll()}
     >
-      {collapse.anyExpanded() ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+      {collapse.anyExpanded() ? (
+        <ArrowsInIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      ) : (
+        <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      )}
       <Show when={!props.iconOnly}>
         <span>{collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}</span>
       </Show>

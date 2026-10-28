@@ -155,10 +155,14 @@ pub async fn handle_retryable_error(
     let error_chain = format!("{:#}", _e.source);
     tracing::Span::current().record("error", &error_chain);
 
-    // Rate limits are expected backpressure, redelivered after the visibility
-    // timeout; the email API client logs provider throttling at ERROR.
-    if _e.reason == FailureReason::GmailApiRateLimited {
-        tracing::debug!("Rate-limited backfill operation will be redelivered");
+    // Rate limits and busy write slots are expected backpressure, redelivered
+    // after the visibility timeout; the email API client logs provider
+    // throttling at ERROR.
+    if matches!(
+        _e.reason,
+        FailureReason::GmailApiRateLimited | FailureReason::BackfillWritesBusy
+    ) {
+        tracing::debug!("Refused backfill operation will be redelivered");
         return Ok(());
     }
 

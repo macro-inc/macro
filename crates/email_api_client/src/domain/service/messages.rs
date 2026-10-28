@@ -1,4 +1,3 @@
-use models_email::email::service::message::Message;
 use uuid::Uuid;
 
 use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage};
@@ -79,13 +78,14 @@ where
         .await
     }
 
-    /// Fetches and normalizes every message in one provider thread.
+    /// Fetches and normalizes every message in one provider thread, with any
+    /// calendar invitation parts, in a single provider read.
     #[tracing::instrument(skip(self), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn get_thread(
         &self,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         self.read_with_token(link_id, ApiOperationKind::GetThread, |token| async move {
             self.repository
                 .get_thread(&token, link_id, provider_thread_id)
@@ -172,7 +172,8 @@ where
 
     /// Writes one message's labels. With `skip_missing`, a message the mailbox
     /// no longer has counts as written, as it does in a batch request.
-    async fn modify_one_message_labels(
+    #[tracing::instrument(skip(self, labels_to_add, labels_to_remove), fields(gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    pub async fn modify_one_message_labels(
         &self,
         link_id: Uuid,
         provider_message_id: &str,
@@ -211,7 +212,7 @@ where
 /// Gmail charges 5 quota units per `messages.modify` and 50 per
 /// `messages.batchModify` of any size, so below ten messages separate writes
 /// cost less.
-const SEPARATE_LABEL_WRITES_BELOW: usize = 10;
+pub const SEPARATE_LABEL_WRITES_BELOW: usize = 10;
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where

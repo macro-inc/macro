@@ -8,6 +8,11 @@
 //! to the webview as a `macrod-status` event, and exposes commands to detect
 //! installed agents, start or stop the daemon, and read the snapshot.
 //!
+//! Once started, the daemon is kept up: an unexpected exit (a crash, a lost
+//! connection, an expired pairing) restarts it with backoff until the user
+//! stops it, and app launch resumes any configured daemon the user has not
+//! stopped.
+//!
 //! GUI apps on macOS inherit launchd's minimal `PATH`, where user-installed
 //! CLIs (`claude`, `codex`, `npm`) are invisible. Every macrod invocation runs
 //! with the user's login-shell `PATH` so detection matches what a terminal
@@ -16,6 +21,7 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -23,6 +29,18 @@ use tokio::io::AsyncBufReadExt as _;
 
 /// The webview event carrying each [`MacrodStatus`] change.
 const STATUS_EVENT: &str = "macrod-status";
+
+/// The first restart delay after an unexpected exit; doubles per consecutive
+/// failure up to [`RESTART_MAX_DELAY`].
+const RESTART_BASE_DELAY: Duration = Duration::from_secs(1);
+const RESTART_MAX_DELAY: Duration = Duration::from_secs(60);
+
+/// How long to wait before restart attempt `attempt` (1-based).
+fn restart_delay(attempt: u32) -> Duration {
+    RESTART_BASE_DELAY
+        .saturating_mul(1 << attempt.saturating_sub(1).min(6))
+        .min(RESTART_MAX_DELAY)
+}
 
 /// Where the daemon lifecycle currently stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -116,6 +134,11 @@ struct Inner {
     status: MacrodStatus,
     /// Increments per start so a stale reader task cannot clobber a newer run.
     generation: u64,
+    /// Whether the daemon should be up: set by a start, cleared by a stop.
+    /// An exit while this is set is unexpected and triggers a restart.
+    wanted: bool,
+    /// Consecutive restarts without reaching `running`, for backoff.
+    restarts: u32,
 }
 
 fn emit_status(app: &AppHandle, status: &MacrodStatus) {
@@ -318,9 +341,29 @@ pub(crate) async fn macrod_start(
     state: tauri::State<'_, MacrodState>,
     options: MacrodStartOptions,
 ) -> Result<MacrodStatus, String> {
-    stop_child(&app, &state.inner).await;
+    stop_child(&state.inner).await;
+    {
+        let mut inner = state.inner.lock().expect("macrod state lock");
+        inner.wanted = true;
+        inner.restarts = 0;
+    }
+    set_autostart(&app, true);
+    let status =
+        launch(&app, &state.inner, &options, None)?.expect("an unconditional launch always spawns");
+    emit_status(&app, &status);
+    Ok(status)
+}
 
-    let mut command = macrod_command(&app)?;
+/// Spawn `macrod service` and attach its readers. With `resume`, this is a
+/// supervisor restart after that generation exited: it spawns nothing
+/// (returns `None`) when a start or stop has happened since.
+fn launch(
+    app: &AppHandle,
+    state: &Arc<Mutex<Inner>>,
+    options: &MacrodStartOptions,
+    resume: Option<u64>,
+) -> Result<Option<MacrodStatus>, String> {
+    let mut command = macrod_command(app)?;
     command.arg("service");
     if let Some(agent) = &options.agent {
         command.args(["--agent", agent]);
@@ -337,37 +380,26 @@ pub(crate) async fn macrod_start(
             if allowed { "true" } else { "false" },
         ]);
     }
-    let mut child = command
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+
+    // Spawn under the lock so a concurrent start or stop cannot interleave
+    // with a supervisor restart.
+    let mut inner = state.lock().expect("macrod state lock");
+    if resume.is_some_and(|generation| inner.generation != generation || !inner.wanted) {
+        return Ok(None);
+    }
+    let mut child = command
         .spawn()
         .map_err(|error| format!("could not start macrod: {error}"))?;
-
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| "macrod started without stdout".to_owned())?;
-    let stderr = child.stderr.take();
-
-    let status = {
-        let mut inner = state.inner.lock().expect("macrod state lock");
-        inner.child = Some(child);
-        inner.generation += 1;
-        inner.status = MacrodStatus {
-            phase: MacrodPhase::Starting,
-            ..MacrodStatus::default()
-        };
-        tauri::async_runtime::spawn(read_events(
-            app.clone(),
-            state.inner.clone(),
-            inner.generation,
-            stdout,
-        ));
-        inner.status.clone()
-    };
-    if let Some(stderr) = stderr {
+    if let Some(stderr) = child.stderr.take() {
         tauri::async_runtime::spawn(async move {
             let mut lines = tokio::io::BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -375,9 +407,58 @@ pub(crate) async fn macrod_start(
             }
         });
     }
-    set_autostart(&app, true);
-    emit_status(&app, &status);
-    Ok(status)
+    inner.child = Some(child);
+    inner.generation += 1;
+    inner.status = MacrodStatus {
+        phase: MacrodPhase::Starting,
+        ..MacrodStatus::default()
+    };
+    tauri::async_runtime::spawn(read_events(
+        app.clone(),
+        state.clone(),
+        inner.generation,
+        stdout,
+    ));
+    Ok(Some(inner.status.clone()))
+}
+
+/// Restart the daemon once the backoff for this failure elapses, unless a
+/// start or stop superseded `generation` meanwhile. A spawn failure counts as
+/// another failure and schedules the next attempt.
+fn schedule_restart(app: AppHandle, state: Arc<Mutex<Inner>>, generation: u64) {
+    let attempt = {
+        let mut inner = state.lock().expect("macrod state lock");
+        inner.restarts += 1;
+        inner.restarts
+    };
+    let delay = restart_delay(attempt);
+    tracing::warn!(target: "macrod", attempt, ?delay, "macrod exited unexpectedly; restarting");
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(delay).await;
+        match launch(
+            &app,
+            &state,
+            &MacrodStartOptions::default(),
+            Some(generation),
+        ) {
+            Ok(Some(status)) => emit_status(&app, &status),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(target: "macrod", "macrod restart failed: {error}");
+                let status = {
+                    let mut inner = state.lock().expect("macrod state lock");
+                    if inner.generation != generation || !inner.wanted {
+                        return;
+                    }
+                    inner.status.phase = MacrodPhase::Error;
+                    inner.status.last_error = Some(error);
+                    inner.status.clone()
+                };
+                emit_status(&app, &status);
+                schedule_restart(app, state, generation);
+            }
+        }
+    });
 }
 
 /// Fold the service's stdout into the snapshot until it closes.
@@ -399,24 +480,34 @@ async fn read_events(
                 return;
             }
             inner.status.apply(&event);
+            if inner.status.phase == MacrodPhase::Running {
+                inner.restarts = 0;
+            }
             inner.status.clone()
         };
         emit_status(&app, &status);
     }
     // stdout closed: the daemon exited. Keep an error phase so the user sees
-    // why; otherwise show it as stopped.
-    let status = {
+    // why; otherwise show it as starting again, or stopped when unwanted.
+    let (status, restart) = {
         let mut inner = inner.lock().expect("macrod state lock");
         if inner.generation != generation {
             return;
         }
         inner.child = None;
         if inner.status.phase != MacrodPhase::Error {
-            inner.status.phase = MacrodPhase::Stopped;
+            inner.status.phase = if inner.wanted {
+                MacrodPhase::Starting
+            } else {
+                MacrodPhase::Stopped
+            };
         }
-        inner.status.clone()
+        (inner.status.clone(), inner.wanted)
     };
     emit_status(&app, &status);
+    if restart {
+        schedule_restart(app, inner, generation);
+    }
 }
 
 /// Stop the supervised daemon and stop auto-starting it.
@@ -426,7 +517,8 @@ pub(crate) async fn macrod_stop(
     state: tauri::State<'_, MacrodState>,
 ) -> Result<MacrodStatus, String> {
     set_autostart(&app, false);
-    stop_child(&app, &state.inner).await;
+    state.inner.lock().expect("macrod state lock").wanted = false;
+    stop_child(&state.inner).await;
     let status = {
         let mut inner = state.inner.lock().expect("macrod state lock");
         inner.status = MacrodStatus::default();
@@ -451,6 +543,7 @@ pub(crate) fn macrod_status(state: tauri::State<'_, MacrodState>) -> MacrodStatu
 pub(crate) fn kill_now(state: &MacrodState) {
     let child = {
         let mut inner = state.inner.lock().expect("macrod state lock");
+        inner.wanted = false;
         inner.generation += 1;
         inner.child.take()
     };
@@ -460,7 +553,7 @@ pub(crate) fn kill_now(state: &MacrodState) {
 }
 
 /// Kill the child, invalidating any reader still attached to it.
-async fn stop_child(_app: &AppHandle, inner: &Arc<Mutex<Inner>>) {
+async fn stop_child(inner: &Arc<Mutex<Inner>>) {
     let child = {
         let mut inner = inner.lock().expect("macrod state lock");
         inner.generation += 1;
@@ -510,24 +603,27 @@ fn set_autostart(app: &AppHandle, autostart: bool) {
     }
 }
 
-fn autostart_enabled(app: &AppHandle) -> bool {
+/// Whether the user explicitly stopped the daemon. Only a stop opts out of
+/// auto-start; a missing or unreadable marker does not.
+fn stopped_by_user(app: &AppHandle) -> bool {
     autostart_marker(app)
         .and_then(|path| std::fs::read(path).ok())
         .and_then(|raw| serde_json::from_slice::<AutostartMarker>(&raw).ok())
-        .is_some_and(|marker| marker.autostart)
+        .is_some_and(|marker| !marker.autostart)
 }
 
-/// At app launch: resume the daemon when the user enabled it and a paired
-/// config exists, so agents are reachable without opening settings.
+/// At app launch: resume the daemon whenever a config exists and the user has
+/// not stopped it, so agents are reachable without opening settings. A config
+/// whose credential lapsed re-pairs, and the webview approves the new code.
 pub(crate) fn autostart(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if !autostart_enabled(&app) || macrod_binary(&app).is_none() {
+        if stopped_by_user(&app) || macrod_binary(&app).is_none() {
             return;
         }
-        let paired = match macrod_query(&app, &["inspect"]).await {
+        let configured = match macrod_query(&app, &["inspect"]).await {
             Ok(inspection) => inspection
-                .get("paired")
+                .get("exists")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
             Err(error) => {
@@ -535,7 +631,7 @@ pub(crate) fn autostart(app: &AppHandle) {
                 false
             }
         };
-        if !paired {
+        if !configured {
             return;
         }
         let state = app.state::<MacrodState>();
@@ -543,4 +639,16 @@ pub(crate) fn autostart(app: &AppHandle) {
             tracing::warn!(target: "macrod", "autostart failed: {error}");
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restart_delay_doubles_up_to_the_cap() {
+        let seconds: Vec<u64> = (1..=9).map(|n| restart_delay(n).as_secs()).collect();
+        assert_eq!(seconds, [1, 2, 4, 8, 16, 32, 60, 60, 60]);
+        assert_eq!(restart_delay(u32::MAX), RESTART_MAX_DELAY);
+    }
 }

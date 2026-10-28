@@ -362,7 +362,10 @@ mod code_mode {
         let app = app(Arc::new(Runs::default()));
 
         let flagged = rpc(app.clone(), FLAGGED, "tools/list", serde_json::json!({})).await;
-        assert_eq!(tool_names(&flagged), ["DescribeCodeTools", "ExecuteCode"]);
+        assert_eq!(
+            tool_names(&flagged),
+            ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+        );
         let unflagged = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
         assert!(tool_names(&unflagged).is_empty());
 

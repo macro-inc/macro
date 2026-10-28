@@ -28,7 +28,7 @@ pub enum Signal {
     PairingRequested(Uuid),
     /// `whatsapp_send_requested`.
     SendRequested(Uuid),
-    /// `whatsapp_groups_requested`.
+    /// `whatsapp_roster_requested`.
     GroupsRequested(Uuid),
     /// `whatsapp_account_changed`.
     AccountChanged(Uuid),

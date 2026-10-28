@@ -1,5 +1,15 @@
 # Documents
 
+For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
+production) and recreate document sessions after the client receives the updated
+flag. A reload can initially read PostHog's cached value; open sessions do not
+change transport when the remote value changes. Off or unknown flag values use a
+direct sync-service WebSocket per document; on multiplexes document frames over
+a dedicated DSS `/sync/ws` socket. Confirm all DSS replicas have the sync
+endpoint before enabling; notification traffic still uses connection gateway.
+Verify two clients converge after concurrent edits, a large update, and a forced
+sync disconnect with pending edits. The historical flag name is unchanged. Local stacks can override with `VITE_SYNC_VIA_GATEWAY=true` or `false`.
+
 The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
@@ -259,6 +269,23 @@ and the composer reopens with the title, body, and tags for retry.
 tags, opens it in an adjacent split, and inserts its mention in the source editor.
 An empty title uses **New Note** when expanding.
 **Create → Document** continues to open a document directly.
+
+## Create a task from a Markdown selection
+
+Select text in a Markdown document and choose **Task** in the selection toolbar
+(desktop) or touch toolbar. The task composer opens with the selected text as
+the title (truncated to 70 characters) and a **Snippet** mention of the
+selection as the body; opening that mention scrolls to and highlights the
+range. Editors also see a **Link in document** toggle beside **Create More**;
+it is remembered and starts off. While on, creating the task inserts its
+mention right after the selected text, inside the same checklist item when the
+selection is in one; a selection ending between list items links after the
+preceding item's text and never adds list items. Verify both toggle states and
+that other text edited while the composer was open is preserved.
+
+When an editor's selection spans two or more checklist items, the button reads
+**N tasks** and creates one task per item without opening the composer; each
+item is replaced by its task mention and a **Created N tasks** toast appears.
 
 ## Markdown outline
 
@@ -720,7 +747,8 @@ import note, and **Download as Excel** writes a macro-free `.xlsx`; an uploaded
 is rejected here with a hint to upload it instead; uploads convert it (see
 [Legacy Office uploads](#legacy-office-uploads)).
 
-**Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
+**Import and export → Download as Excel (.xlsx)** (also the header's "…" file
+menu **Download** submenu, beside **Download as CSV**) exports every sheet with formulas,
 current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
@@ -2863,8 +2891,9 @@ updates live and shows each collaborator's caret with their name
   delete rows and columns or the table), the `Insert footnote or endnote`
   menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
   changes` / `Show tracked changes`, `Comment on selection`, `Find and
-  replace` and `Download .docx` (viewers get `Find and replace` and
-  `Download .docx`).
+  replace` (viewers get `Find and replace`). The header's three-dot file menu
+  has **Download** on desktop and mobile, which saves the live `.docx`, or the
+  server's export before the editor has loaded.
   While tracking is on (or the caret is on a tracked change) it also shows
   `Accept change`, `Reject change`, `Accept all changes` and `Reject all
   changes`.
@@ -2933,7 +2962,7 @@ updates live and shows each collaborator's caret with their name
   Word comments (`addComment`), both attributed to the requesting user by
   name rather than to the agent. Its comments are written into the file, so
   they appear as `In the document` cards and travel with the download.
-- `Download .docx` exports the current collaborative state with every edit,
+- `Download` exports the current collaborative state with every edit,
   including headers, footers and tracked changes. Macro comment threads are
   not written into the file; Word comments (including the agent's
   `addComment` ones) are.

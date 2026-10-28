@@ -109,6 +109,7 @@ export function NoteDialog(props: {
                     size="md"
                     fullWidth
                     aria-label={document.name}
+                    tooltip={document.name}
                     aria-pressed={
                       props.selected?.documentId === document.documentId
                     }
@@ -215,7 +216,7 @@ export function NoteDialog(props: {
             Cancel
           </Button>
           <Button
-            variant={props.kind === 'unlink' ? 'danger' : 'strong'}
+            variant={props.kind === 'unlink' ? 'danger' : 'primary'}
             size="md"
             onClick={props.onSave}
             disabled={
@@ -227,7 +228,7 @@ export function NoteDialog(props: {
             }
           >
             <Show when={props.kind === 'link'}>
-              <LinkIcon />
+              <LinkIcon class="size-4 shrink-0 touch:size-6" />
             </Show>
             {props.saving
               ? 'Saving…'
@@ -241,10 +242,11 @@ export function NoteDialog(props: {
           variant="ghost"
           size="icon-sm"
           aria-label="Close"
+          tooltip="Close"
           disabled={props.saving}
           class="absolute right-4 top-4 sm:right-6 sm:top-6"
         >
-          <XIcon />
+          <XIcon class="size-3.5 shrink-0 touch:size-6" />
         </Dialog.CloseButton>
       </div>
     </Dialog>

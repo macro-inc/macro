@@ -99,6 +99,8 @@ export type TasksViewProviderProps = ContextProviderProps & {
   onCloseTask?: () => void;
   /** Host-owned task creation, including scope and permissions for embedded views. */
   onCreateTask?: (options?: TaskCreateOptions) => void;
+  /** Hides each task's project when every task shares the host's project. */
+  hideTaskProject?: boolean;
   savedViewTeam?: Accessor<{ id: string; name: string } | undefined>;
   /** Main Tasks supplies independent queries; embedded lists leave them out. */
   savedViewsSource?: () => SavedViewsSource;
@@ -134,6 +136,7 @@ export type TasksViewContext = {
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
   projectsEnabled: Accessor<boolean>;
+  showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
@@ -190,6 +193,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
   const projectsFlag = useFeatureFlag(enableProjects);
   const projectsEnabled = () => projectsFlag().enabled;
+  const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
 
@@ -641,6 +645,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     },
     state,
     projectsEnabled,
+    showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
     selectedTask,

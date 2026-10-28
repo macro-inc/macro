@@ -46,6 +46,7 @@ import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
+import type { ExternalChatProvider } from '@service-notification/generated/schemas/externalChatProvider';
 import type { GithubPrCheckRunState } from '@service-notification/generated/schemas/githubPrCheckRunState';
 import type { GithubPrCommentKind } from '@service-notification/generated/schemas/githubPrCommentKind';
 import type { GithubPrEventAction } from '@service-notification/generated/schemas/githubPrEventAction';
@@ -105,9 +106,11 @@ import {
   type SoupQuery,
 } from './graphql/generated/graphql';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
+  publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
@@ -476,6 +479,7 @@ function getUncachedRealtimeClient(): Client {
     preferGetMethod: false,
     exchanges: [
       networkRevalidationExchange(),
+      notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       fetchExchange,
     ],
@@ -645,6 +649,10 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
+/** Cache writes reach readers of the normalized cache only while it runs. */
+export const hasGraphqlCacheHost = (): boolean =>
+  graphqlCacheEnabled() && getGraphqlCacheHost() !== undefined;
+
 /**
  * Resolves the urql client, lazily assembling the cached client on first
  * use. The cache scope is an anonymous client uuid — no identity lookup is
@@ -812,6 +820,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
           }),
+          notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
         ],
@@ -909,6 +918,13 @@ function mapGraphqlPropertyValue(
       type: 'Date' as const,
       value: dateValue,
     }))
+    .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) => ({
+        type: 'DateRange' as const,
+        value: { start: rangeStart, end: rangeEnd },
+      })
+    )
     .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
@@ -1054,15 +1070,17 @@ function mapGraphqlNotificationMetadata(
 ): NotifEvent {
   return match(metadata)
     .with(
-      { __typename: 'GraphqlWhatsappGroupMessageMetadata' },
+      { __typename: 'GraphqlExternalChatMessageMetadata' },
       (metadata) =>
         ({
-          tag: 'whatsapp_group_message',
+          tag: 'external_chat_message',
           content: {
-            groupName: metadata.whatsappGroupName,
-            messageId: metadata.whatsappMessageId,
+            // GraphQL types the provider as a string; DSS only writes known ones.
+            provider: metadata.externalChatProvider as ExternalChatProvider,
+            chatName: metadata.externalChatName,
+            messageId: metadata.externalChatMessageId,
           },
-        }) satisfies NotifEventMember<'whatsapp_group_message'>
+        }) satisfies NotifEventMember<'external_chat_message'>
     )
     .with(
       { __typename: 'GraphqlChannelMentionMetadata' },
@@ -1655,13 +1673,21 @@ function mapGraphqlNotificationMetadata(
           },
         }) satisfies NotifEventMember<'agent_session_mentioned'>
     )
-    .exhaustive(
-      () =>
-        ({
-          tag: 'reminder',
-          content: { description: '', reminderId: '' },
-        }) satisfies NotifEventMember<'reminder'>
-    );
+    .with(
+      { __typename: 'GraphqlWhatsappGroupMessageMetadata' },
+      unexpectedNotificationMetadata
+    )
+    .exhaustive(unexpectedNotificationMetadata);
+}
+
+/** Placeholder for metadata the server never returns: unknown members and the
+ * schema-only `GraphqlWhatsappGroupMessageMetadata` stub kept for released
+ * clients (remove that case with the stub after 2026-11-30). */
+function unexpectedNotificationMetadata(): NotifEventMember<'reminder'> {
+  return {
+    tag: 'reminder',
+    content: { description: '', reminderId: '' },
+  };
 }
 
 /**
@@ -1681,7 +1707,7 @@ export function mapGraphqlNotification(
     notification_metadata: mapGraphqlNotificationMetadata(record.metadata),
     entity_id: record.entityId,
     entity_type:
-      record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
+      record.targetEntityType.toLowerCase() as ApiUserNotification['entity_type'],
     sent: record.sent,
     state: notificationStateFromGraphql(record.state),
     created_at: record.createdAt,

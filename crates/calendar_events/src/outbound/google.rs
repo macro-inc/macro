@@ -2492,10 +2492,26 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
                 .with_timezone(&Utc),
             time_zone: start.time_zone.clone(),
         },
-        (_, _, Some(start_value), Some(end_value)) => EventTime::AllDay {
-            start_date: NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?,
-            end_date: NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?,
-        },
+        (_, _, Some(start_value), Some(end_value)) => {
+            let start_date = NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?;
+            let mut end_date = NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?;
+            // Imported Google events can use the same date for both ends.
+            // Represent that day with an exclusive end; retain Google's
+            // original dates in the source payload without writing them back.
+            if end_date == start_date {
+                end_date = end_date.succ_opt().ok_or_else(|| {
+                    rootcause::report!("Google event {} has an out-of-range all-day end", event.id)
+                })?;
+                tracing::debug!(
+                    provider_event_id = %event.id,
+                    "normalized a Google all-day event with matching dates"
+                );
+            }
+            EventTime::AllDay {
+                start_date,
+                end_date,
+            }
+        }
         _ => {
             return Err(rootcause::report!(
                 "Google event {} has mixed or missing time fields",

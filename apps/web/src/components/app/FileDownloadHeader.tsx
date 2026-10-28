@@ -10,7 +10,7 @@ export function FileDownloadHeader(props: {
   return (
     <SidePanel.HeaderActions>
       <HeaderActionGroup label="File download">
-        <FileDownloadButton download={props.download} />
+        <FileDownloadButton grouped download={props.download} />
       </HeaderActionGroup>
     </SidePanel.HeaderActions>
   );

@@ -1154,6 +1154,68 @@ export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_lo
 export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
 
 /**
+ * A refused or failed forward.
+ */
+export type ForwardCalendarEventError = {
+    /**
+     * What went wrong.
+     */
+    code: ForwardCalendarEventErrorCode;
+    /**
+     * A message fit to show the user.
+     */
+    message: string;
+};
+
+/**
+ * Why a forward was not sent.
+ */
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+
+/**
+ * One person a forwarded invitation goes to.
+ */
+export type ForwardCalendarEventRecipient = {
+    /**
+     * Their email address.
+     */
+    email: string;
+    /**
+     * Their display name.
+     */
+    name?: string | null;
+};
+
+/**
+ * Who a forwarded invitation goes to, and what its email says.
+ */
+export type ForwardCalendarEventRequest = {
+    /**
+     * The email's plain-text body. Without one, it names the event and
+     * says the recipient won't be on the organizer's guest list.
+     */
+    bodyText?: string | null;
+    /**
+     * The people it goes to, at most 50.
+     */
+    to: Array<ForwardCalendarEventRecipient>;
+};
+
+/**
+ * The email the forward queued.
+ */
+export type ForwardCalendarEventResponse = {
+    /**
+     * The sent message.
+     */
+    messageId: string;
+    /**
+     * Its thread.
+     */
+    threadId: string;
+};
+
+/**
  * The response returned from the get backfill job endpoint
  */
 export type GetActiveBackfillJobResponse = {
@@ -2115,6 +2177,52 @@ export type GetBackfillGmailResponses = {
 };
 
 export type GetBackfillGmailResponse = GetBackfillGmailResponses[keyof GetBackfillGmailResponses];
+
+export type ForwardCalendarEventData = {
+    body: ForwardCalendarEventRequest;
+    path: {
+        /**
+         * The viewer's copy of the event
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/email/calendar-events/{event_id}/forward';
+};
+
+export type ForwardCalendarEventErrors = {
+    /**
+     * No, too many, or invalid recipients
+     */
+    400: ForwardCalendarEventError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The inbox holding the copy cannot send for the viewer
+     */
+    403: ForwardCalendarEventError;
+    /**
+     * No such event on one of the viewer's own inboxes
+     */
+    404: ForwardCalendarEventError;
+    /**
+     * The email could not be sent
+     */
+    502: ForwardCalendarEventError;
+};
+
+export type ForwardCalendarEventError2 = ForwardCalendarEventErrors[keyof ForwardCalendarEventErrors];
+
+export type ForwardCalendarEventResponses = {
+    /**
+     * The email is queued to send
+     */
+    202: ForwardCalendarEventResponse;
+};
+
+export type ForwardCalendarEventResponse2 = ForwardCalendarEventResponses[keyof ForwardCalendarEventResponses];
 
 export type ListContactsData = {
     body?: never;

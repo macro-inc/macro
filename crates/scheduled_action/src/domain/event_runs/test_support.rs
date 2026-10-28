@@ -309,6 +309,7 @@ impl EventRunRepository for Repo {
                 next_run_at: None,
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
+                template_id: None,
             },
         }))
     }

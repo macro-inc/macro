@@ -27,16 +27,20 @@ const MAX_DEFERRAL: Duration = Duration::from_secs(60);
 /// SQS's longest message delay, which bounds a provider's longer Retry-After.
 const MAX_SQS_DELAY: Duration = Duration::from_secs(900);
 
-/// The wait a rate-limited operation was told to observe, when the failure is
-/// a rate limit: the request gate's or Gmail's Retry-After, if either gave one.
+/// The wait a refused operation was told to observe, when the failure is a
+/// refusal: a Gmail rate limit (the request gate's or Gmail's Retry-After, if
+/// either gave one) or no free backfill write slot.
 pub(crate) fn rate_limit(error: &DetailedError) -> Option<Option<Duration>> {
-    if error.reason != FailureReason::GmailApiRateLimited {
-        return None;
-    }
-    Some(match error.source.downcast_ref::<EmailApiError>() {
-        Some(EmailApiError::RateLimited { retry_after, .. }) => *retry_after,
+    match error.reason {
+        FailureReason::GmailApiRateLimited => {
+            Some(match error.source.downcast_ref::<EmailApiError>() {
+                Some(EmailApiError::RateLimited { retry_after, .. }) => *retry_after,
+                _ => None,
+            })
+        }
+        FailureReason::BackfillWritesBusy => Some(None),
         _ => None,
-    })
+    }
 }
 
 /// How often the received operation has already been deferred.

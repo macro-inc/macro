@@ -68,8 +68,8 @@ export function BotSettingsList(props: {
       title="Bots"
       description="A bot is an account your program uses to read and send channel messages. Create a bot, add it to channels, then use its token with the Macro SDK to control it."
       actions={
-        <Button variant="cta" size="sm" onClick={props.onCreate}>
-          <PlusIcon />
+        <Button variant="neutral" size="sm" onClick={props.onCreate}>
+          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Create bot
         </Button>
       }
@@ -103,11 +103,11 @@ export function BotSettingsList(props: {
                   </div>
                   <Button
                     class="mt-4"
-                    variant="cta"
+                    variant="neutral"
                     size="sm"
                     onClick={props.onCreate}
                   >
-                    <PlusIcon />
+                    <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     Create bot
                   </Button>
                 </div>

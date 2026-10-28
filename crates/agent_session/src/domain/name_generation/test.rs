@@ -33,6 +33,118 @@ impl AgentSessionNameGenerator for Namer {
         self.0.fetch_add(1, Ordering::SeqCst);
         Ok(Some("Generated name".into()))
     }
+
+    async fn retitle(
+        &self,
+        _session: &AgentSession,
+        _current: &str,
+        _conversation: &ConversationDigest,
+    ) -> Result<Option<String>, rootcause::Report> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(Some("Retitled name".into()))
+    }
+}
+
+/// Answers every question with one probability, counting the calls.
+struct Classifier {
+    probability: f32,
+    calls: Arc<AtomicUsize>,
+}
+
+impl YesNoClassifier for Classifier {
+    async fn classify(
+        &self,
+        usage: UsageContext,
+        input: &serde_json::Value,
+        questions: &[YesNoQuestion],
+    ) -> Result<Vec<jev::domain::Probability>, JevError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(usage.feature, AiFeature::ChatRename);
+        assert_eq!(input["current_title"], "Investigate Issue");
+        assert_eq!(questions.len(), 1);
+        Ok(vec![
+            jev::domain::Probability::new(self.probability).expect("a valid probability"),
+        ])
+    }
+}
+
+fn conversation() -> ConversationDigest {
+    ConversationDigest {
+        messages: vec![
+            crate::domain::retitle::DigestMessage {
+                role: crate::domain::retitle::DigestRole::User,
+                text: "investigate issue".into(),
+            },
+            crate::domain::retitle::DigestMessage {
+                role: crate::domain::retitle::DigestRole::Agent,
+                text: "The OAuth callback drops its trailing slash.".into(),
+            },
+        ],
+    }
+}
+
+async fn retitle_with(probability: Option<f32>) -> (Option<String>, usize, usize) {
+    let named = Arc::new(AtomicUsize::new(0));
+    let classified = Arc::new(AtomicUsize::new(0));
+    let generator = ClassifiedRetitle::new(
+        Namer(named.clone()),
+        probability.map(|probability| Classifier {
+            probability,
+            calls: classified.clone(),
+        }),
+    );
+    let session = crate::testing::test_agent_session(super::super::model::AgentSessionId::TEST_A);
+    let name = generator
+        .retitle(&session, "Investigate Issue", &conversation())
+        .await
+        .unwrap();
+    (
+        name,
+        classified.load(Ordering::SeqCst),
+        named.load(Ordering::SeqCst),
+    )
+}
+
+#[tokio::test]
+async fn retitles_only_when_the_classifier_is_confident_the_name_no_longer_fits() {
+    assert_eq!(
+        retitle_with(Some(0.95)).await,
+        (Some("Retitled name".into()), 1, 1)
+    );
+    assert_eq!(retitle_with(Some(0.79)).await, (None, 1, 0));
+}
+
+#[tokio::test]
+async fn without_a_classifier_every_name_is_kept() {
+    assert_eq!(retitle_with(None).await, (None, 0, 0));
+}
+
+#[tokio::test]
+async fn denied_retitling_skips_both_models() {
+    let named = Arc::new(AtomicUsize::new(0));
+    let classified = Arc::new(AtomicUsize::new(0));
+    let generator = AdmittedAgentSessionNameGenerator::new(
+        ClassifiedRetitle::new(
+            Namer(named.clone()),
+            Some(Classifier {
+                probability: 1.0,
+                calls: classified.clone(),
+            }),
+        ),
+        Arc::new(Admission(Err(AiAdmissionError::Denied(
+            DenyReason::AllowanceExhausted,
+        )))),
+    );
+    let session = crate::testing::test_agent_session(super::super::model::AgentSessionId::TEST_A);
+    assert!(
+        generator
+            .retitle(&session, "Investigate Issue", &conversation())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(classified.load(Ordering::SeqCst), 0);
+    assert_eq!(named.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

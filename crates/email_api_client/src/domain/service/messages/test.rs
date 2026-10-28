@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use models_email::email::service::message::Message;
 use uuid::Uuid;
 
 use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
@@ -96,7 +95,7 @@ impl MailboxMessageClient for MessageClient {
         access_token: &AccessToken,
         link_id: Uuid,
         thread_id: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         Err(self.record(
             access_token,
             MessageCall::Thread(link_id, thread_id.to_string()),

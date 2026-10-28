@@ -1,4 +1,5 @@
-//! Periodic call reconciliation for missed RTC leave webhooks.
+//! Periodic call reconciliation for missed RTC leave webhooks, and cleanup of
+//! RTC rooms that outlived their archived call.
 
 use std::sync::Arc;
 use std::time::Duration;

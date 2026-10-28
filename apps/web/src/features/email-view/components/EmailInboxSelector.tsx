@@ -11,7 +11,14 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
-import { AvatarGroup, Button, cn, Dropdown, pressHandlers } from '@ui';
+import {
+  AvatarGroup,
+  Button,
+  ButtonGroup,
+  cn,
+  Dropdown,
+  pressHandlers,
+} from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { fromInboxOptions } from '../../email-compose/core/email-sender';
 import { useEmailView } from '../email-view-context';
@@ -385,7 +392,7 @@ export function EmailInboxFilter(props: { class?: string }) {
  * Icon-only trigger the narrow header falls back to while the sidebar is
  * collapsed; opens the same single-select list as a menu.
  */
-export function EmailInboxMenu(props: { class?: string }) {
+export function EmailInboxMenu(props: { class?: string; grouped?: boolean }) {
   const selection = useInboxSelection();
 
   const radioValue = () => {
@@ -402,19 +409,24 @@ export function EmailInboxMenu(props: { class?: string }) {
     <Show when={selection.hasMultipleInboxes()}>
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
+          as={props.grouped ? ButtonGroup.Button : Button}
           variant="ghost"
           size="icon-md"
-          depth={2}
           aria-label={`Inbox: ${selection.label()}`}
           tooltip={selection.label()}
           class={cn('shrink-0', props.class)}
         >
-          <Show
-            when={selection.selectedOption()}
-            fallback={<AllInboxesAvatar options={selection.options()} />}
+          <span
+            aria-hidden="true"
+            class="inline-flex size-4 shrink-0 items-center justify-center"
           >
-            {(option) => <InboxAvatar option={option()} size="sm" />}
-          </Show>
+            <Show
+              when={selection.selectedOption()}
+              fallback={<AllInboxesAvatar options={selection.options()} />}
+            >
+              {(option) => <InboxAvatar option={option()} size="sm" />}
+            </Show>
+          </span>
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-56">
           <Dropdown.Group>

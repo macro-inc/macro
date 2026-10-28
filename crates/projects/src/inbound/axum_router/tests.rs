@@ -135,6 +135,14 @@ impl ProjectService for FakeProjectService {
         Ok(Vec::new())
     }
 
+    async fn get_project_tree(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _limit: usize,
+    ) -> Result<crate::domain::models::ProjectTree, ProjectError> {
+        unreachable!("no HTTP route loads a project tree")
+    }
+
     async fn get_project_permissions(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,

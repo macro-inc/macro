@@ -68,7 +68,7 @@ vi.mock('@channel/Calls/ChannelCallsTab', () => ({
   ChannelCallsTab: () => null,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
-  ChannelTopIcon: () => null,
+  ChannelTitleIcon: () => null,
 }));
 vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
   ChannelParticipantsTab: () => null,

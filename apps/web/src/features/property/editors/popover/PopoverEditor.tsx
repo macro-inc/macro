@@ -2,6 +2,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { Match, Switch } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { DateEditor } from './DateEditor';
+import { DateRangeEditor } from './DateRangeEditor';
 import { EntityEditor } from './EntityEditor';
 import { SelectEditor } from './SelectEditor';
 
@@ -26,6 +27,9 @@ export function PopoverEditor(props: PopoverEditorProps) {
     <Switch>
       <Match when={type() === 'DATE'}>
         <DateEditor />
+      </Match>
+      <Match when={type() === 'DATE_RANGE'}>
+        <DateRangeEditor />
       </Match>
       <Match when={type() === 'SELECT_STRING' || type() === 'SELECT_NUMBER'}>
         <SelectEditor />

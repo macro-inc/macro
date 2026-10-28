@@ -80,7 +80,7 @@ export function SourceControls(props: SourceControlsProps) {
                 </Checkbox>
                 <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
                   <ViewSidebar.Control
-                    label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
+                    aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
                     aria-expanded={expanded()}
                     onClick={() => toggleExpanded(group.key)}
                   >

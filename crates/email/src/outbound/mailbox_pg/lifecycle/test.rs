@@ -339,3 +339,33 @@ async fn subscription_cleanup_precedes_revoke_and_delete_even_with_parallel_publ
     }
     panic!("disconnect must eventually publish deletion");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn effect_claims_take_due_mailbox_effects_before_gmail_history_and_skip_backed_off_rows(
+    db: PgPool,
+) {
+    let (repo, link) = super::super::test::fixture(&db).await;
+    let history = InboxLifecycleEffect::GmailHistory {
+        work: crate::domain::mailbox::gmail_history::HistoryWork::Delete {
+            provider_id: "history-due".into(),
+        },
+    };
+    let later = InboxLifecycleEffect::AccessRemoved {
+        viewer: "later".into(),
+    };
+    let due = InboxLifecycleEffect::AccessRemoved {
+        viewer: "due".into(),
+    };
+    for (effect, delay) in [(later, 3600.0), (history, -120.0), (due, -60.0)] {
+        sqlx::query!("INSERT INTO email_mailbox_lifecycle_outbox(id,link_id,payload,available_at) VALUES($1,$2,$3,now() + make_interval(secs => $4))",Uuid::now_v7(),link,serde_json::to_value(effect).unwrap(),delay).execute(&db).await.unwrap();
+    }
+    let mut claimed = Vec::new();
+    while let Some(lease) = repo.claim_effect(Uuid::now_v7()).await.unwrap() {
+        claimed.push(match lease.effect {
+            InboxLifecycleEffect::AccessRemoved { viewer } => viewer,
+            InboxLifecycleEffect::GmailHistory { .. } => "history".into(),
+            other => panic!("unexpected effect {other:?}"),
+        });
+    }
+    assert_eq!(claimed, ["due", "history"]);
+}

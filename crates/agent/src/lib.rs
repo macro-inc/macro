@@ -23,7 +23,9 @@ pub mod types;
 
 pub use accumulator::StreamAccumulator;
 pub use agent_loop::{AgentLoop, Session, SystemPrompt};
-pub use completion::{complete, complete_about_image, complete_with_history};
+pub use completion::{
+    complete, complete_about_image, complete_with_history, complete_with_history_and_params,
+};
 pub use convert::{merge_consecutive_parts, to_rig_messages, to_rig_messages_limited};
 pub use error::AgentError;
 pub use hook::{FinishedUserTool, PendingUserTool, UserToolFinisher};

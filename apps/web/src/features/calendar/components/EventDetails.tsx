@@ -557,7 +557,7 @@ export function EventDetails(props: {
               <Button
                 variant="ghost"
                 size="sm"
-                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active"
                 onClick={() =>
                   openExternalUrl(
                     conferenceJoinUrl(url(), props.event.calendar.emailAddress)
@@ -565,13 +565,14 @@ export function EventDetails(props: {
                 }
               >
                 {conferenceLabel()}
-                <ArrowSquareOutIcon />
+                <ArrowSquareOutIcon class="size-3.5 shrink-0" />
               </Button>
               <Button
+                aria-label="Copy call link"
+                tooltip="Copy call link"
                 variant="ghost"
                 size="icon-sm"
                 class="shrink-0"
-                label="Copy call link"
                 onClick={async () => {
                   if (await writeClipboardData({ 'text/plain': url() })) {
                     toast.success('Call link copied');

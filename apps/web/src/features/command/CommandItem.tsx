@@ -274,6 +274,8 @@ export function CommandItem(props: CommandItemProps) {
   return (
     <CommandMenuListItem
       as="div"
+      role="option"
+      aria-selected={props.selected}
       selected={props.selected}
       onMouseMove={() => props.onMouseMove?.(props.index)}
       onClick={(e) => {

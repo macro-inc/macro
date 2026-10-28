@@ -129,7 +129,7 @@ export function FormCardView(props: {
       <Show
         when={poll() || !props.narrow}
         fallback={
-          <Button variant="outline" size="sm" onClick={props.onOpen}>
+          <Button variant="secondary" size="sm" onClick={props.onOpen}>
             Open the form to respond
           </Button>
         }

@@ -186,7 +186,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   variant="ghost"
                   onClick={() => setResolved(false)}
                 >
-                  <ArrowCounterClockwise />
+                  <ArrowCounterClockwise class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Reopen
                 </Button>
               </Show>
@@ -204,7 +204,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   context.setActiveThread(null);
                 }}
               >
-                <Check />
+                <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                 Resolve
               </Button>
             </div>

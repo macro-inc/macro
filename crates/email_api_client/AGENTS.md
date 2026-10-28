@@ -43,7 +43,11 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Checks
 
-- `cargo test -p email_api_client --all-features`.
+- `cargo test -p email_api_client --all-features`. The Outlook calendar
+  mutation tests in `src/outbound/outlook/calendar/test/mutations.rs` drive the
+  calendar domain service against Postgres through `#[sqlx::test]`, so they
+  need the local test database from
+  [Database development](../../docs/development/database.md).
 
 ## Gotchas
 

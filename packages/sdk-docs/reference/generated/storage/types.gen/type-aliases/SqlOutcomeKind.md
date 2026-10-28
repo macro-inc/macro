@@ -1,5 +1,5 @@
 # Type Alias: SqlOutcomeKind
 
-> **SqlOutcomeKind** = `"text"` \| `"number"` \| `"boolean"` \| `"date"` \| `"select"` \| `"entity"` \| `"row"`
+> **SqlOutcomeKind** = `"text"` \| `"number"` \| `"boolean"` \| `"date"` \| `"dateRange"` \| `"select"` \| `"entity"` \| `"row"`
 
 The value kind of a result column.
