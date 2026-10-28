@@ -27,12 +27,28 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`).
 - `install/`: `install.sh` and `install.ps1`, the one-line installers the docs
-  serve from `main`. They download `macrod-<os>-<arch>` from the latest release.
+  serve from `main`. `install.sh` adds `~/.local/bin` to the shell's startup
+  file once (`--no-modify-path` opts out); `install.ps1` installs the Windows
+  launcher layout. Both take `MACROD_UPDATE_SOURCE`.
 - `src/update.rs` (`src/update/`): self-update. The TUI polls the latest
-  GitHub release hourly, stages the verified binary beside the executable, and
-  swaps + re-execs once `Daemon::is_idle` (no `session/prompt` outstanding,
-  tracked by `src/turns.rs` off the ACP wire). Spans: `macrod.update.check`,
-  `macrod.update.download`, `macrod.update.apply`.
+  GitHub release hourly (or the `MACROD_UPDATE_SOURCE` mirror: `latest.json`
+  plus the archives beside it), verifies and smoke-tests the new binary, and
+  once `Daemon::is_idle` (no `session/prompt` outstanding, `src/turns.rs`)
+  swaps it in and `execve`s. Spans: `macrod.update.check`,
+  `macrod.update.download`, `macrod.update.apply`, `macrod.update.handoff`.
+  Off with `[update] auto = false` or `MACROD_NO_UPDATE=1`.
+- `src/handoff.rs`: the Unix hot handoff. `harness.rs` is macrod's own line
+  relay (`outbound/acp_process/running.rs`), so it can stop at a line
+  boundary and pass the live agent (pid, pipes, unread bytes, running
+  prompts) to the next image through a versioned state file named by
+  `MACROD_HANDOFF_FD`. State the new image cannot read kills the agent and
+  starts fresh. Bump `FORMAT_VERSION` when `HandoffState` changes.
+- `src/update/versions.rs`: the Windows layout. `macrod.exe` on `PATH` is a
+  launcher for the newest `versions\<tag>\macrod-core.exe`; updates install
+  as a new version for the next launch and the footer says so.
+- `e2e/`: end-to-end update and installer tests (`build_releases.sh`,
+  `update_e2e.py`, `installer_test.sh`, `windows_test.ps1`), run by the
+  `test_macrod_update` workflow.
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
   switching, MCP) — read before changing anything under `src/herdr/`.
 
@@ -62,6 +78,11 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).
 - `just run` (from this directory) to run the daemon against `macrod.toml` at
   the repo root.
+- Self-update end to end (Linux/macOS): `e2e/build_releases.sh /tmp/rel
+  v2000.1.1.1 v2000.1.1.2`, then `python3 e2e/update_e2e.py --releases /tmp/rel
+  --v1 v2000.1.1.1 --v2 v2000.1.1.2`, and `e2e/installer_test.sh /tmp/rel
+  v2000.1.1.1` with zsh and fish on `PATH`. `MACROD_UPDATE_CHECK_SECONDS`
+  shortens the check interval.
 - `OPENSSL_NO_VENDOR=0 just build-static` to build and smoke-test the release `macrod` the way
   the tag workflow does (needs the Nix devshell: cargo-zigbuild, zig, cmake).
   The override enables bundled OpenSSL for the musl target in the devshell.
@@ -83,6 +104,12 @@ external chat replies depend on it. Direct session controls still mint IDs.
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the
   desktop app updates it.
+- The update still waits for idle although the agent survives it: the
+  harness service ends a session's turn when its runtime connection closes,
+  so a turn in flight would be cut off in Macro. After a handoff the service
+  re-runs `initialize` and `session/resume` (or `load`) on the live agent.
+- A `macrod herdr-acp` harness is a child process, so it is handed off like
+  any agent and keeps running the old binary until it restarts.
 - Switching native agents clears the previous agent's model/extra-args but
   keeps storage and focus preferences (README.md, "Setup").
 
