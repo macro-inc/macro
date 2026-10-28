@@ -575,6 +575,8 @@ the shimmer.
   provide the same tools. Selecting one inserts its name as plain text
   (`Linear MCP `) to steer the model toward those tools. Loading and failed
   connection reads have distinct states; disabled connections are omitted.
+  See the slash menu on [desktop](media/ai-chat/slash-connections-desktop.png)
+  and [phone](media/ai-chat/slash-connections-phone.png).
 
   Check `/` with the Android software keyboard too: the skills menu should open
   and filter while typing, without sending the draft.
