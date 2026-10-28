@@ -1,4 +1,4 @@
-//! Isolated session worktrees, opened separately as tabs in macrod's workspace.
+//! Isolated session worktrees, opened separately in independent Herdr workspaces.
 
 use crate::outbound::git::{GitRepositories, create_worktree, git};
 use crate::repository::{Repository, prepare};

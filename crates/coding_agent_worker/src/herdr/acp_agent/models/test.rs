@@ -327,6 +327,7 @@ async fn native_identity_changes_are_rejected_and_metadata_is_not_a_turn() {
         status: "idle".to_owned(),
         state_change_seq: 1,
         window: None,
+        workspace_id: None,
     };
     assert!(same_session(&session, &info));
     info.cwd = Some(root.path().join("other"));

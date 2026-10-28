@@ -4,8 +4,8 @@ fixture_dir=$(dirname "$0")
 printf '%s\n' "$*" >> "$fixture_dir/calls"
 case "$1 $2" in
   'agent get') cat "$fixture_dir/agent.json" ;;
-  'tab create')
-    printf '%s\n' '{"result":{"root_pane":{"pane_id":"w1:p2","tab_id":"w1:t2"}}}'
+  'workspace create')
+    printf '%s\n' '{"result":{"workspace":{"workspace_id":"w2"},"root_pane":{"pane_id":"w2:p1","tab_id":"w2:t1"}}}'
     ;;
   'pane get')
     if [ -f "$fixture_dir/socket-error" ]; then
@@ -26,6 +26,6 @@ case "$1 $2" in
       printf '%s\n' '{"result":{"process_info":{"shell_pid":1,"foreground_process_group_id":1}}}'
     fi
     ;;
-  'tab close'|'tab rename') ;;
+  'tab close'|'tab rename'|'workspace close'|'workspace rename') ;;
   *) exit 2 ;;
 esac

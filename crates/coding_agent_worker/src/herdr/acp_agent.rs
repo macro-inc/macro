@@ -4,9 +4,9 @@
 //! macrod runs this as its harness like any other ACP agent, so sessions
 //! still open, prompt, stream, and stop through Macro's ACP infrastructure.
 //! Behind the protocol, each session is a real interactive `claude` or
-//! `codex` in its own herdr tab, rooted at the session's working directory:
+//! `codex` in its own Herdr workspace, rooted at the session's working directory:
 //!
-//! - the first `session/prompt` opens the tab and starts the agent there
+//! - the first `session/prompt` opens the workspace and starts the agent there
 //!   with the session's model and Macro MCP servers;
 //! - prompts are typed into the TUI with `herdr agent prompt`;
 //! - the agent's own session transcript is tailed and streamed back as

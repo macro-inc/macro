@@ -1,4 +1,4 @@
-//! Keep one tab per native session across launch retries and daemon restarts.
+//! Keep one independent workspace per native session across retries and restarts.
 
 use super::*;
 use crate::herdr::cli::Window;
@@ -14,10 +14,18 @@ impl Adapter {
         info: &crate::herdr::cli::AgentInfo,
     ) -> Result<(), RpcError> {
         let saved = lock(&session.window).clone();
-        if let Some(window) = &info.window
-            && saved.as_ref() != Some(window)
-        {
-            *lock(&session.window) = Some(window.clone());
+        let Some(mut window) = info.window.clone() else {
+            return Ok(());
+        };
+        // Observing an agent in a workspace does not grant ownership of it.
+        // Retain ownership only while it remains in the workspace we created.
+        window.workspace_id = saved
+            .as_ref()
+            .and_then(|saved| saved.workspace_id.as_ref())
+            .filter(|workspace| info.workspace_id.as_deref() == Some(workspace.as_str()))
+            .cloned();
+        if saved.as_ref() != Some(&window) {
+            *lock(&session.window) = Some(window);
             self.save(session, Some(live))?;
         }
         Ok(())
@@ -39,11 +47,11 @@ impl Adapter {
             return Ok(window);
         }
         let window = herdr
-            .open_window(&session.cwd, label, !self.options.no_focus)
+            .open_workspace(&session.cwd, label, !self.options.no_focus)
             .await?;
         *lock(&session.window) = Some(window.clone());
         if let Err(error) = self.save(session, previous) {
-            herdr.close_tab(&window.tab_id).await?;
+            herdr.close_window(&window).await?;
             *lock(&session.window) = None;
             return Err(error);
         }

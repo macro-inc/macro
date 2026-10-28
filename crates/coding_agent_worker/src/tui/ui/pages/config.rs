@@ -26,7 +26,11 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     };
     if let Some(start) = herdr_start {
         frame.render_widget(
-            Paragraph::new(section("Herdr", "each session in its own tab", inner.width)),
+            Paragraph::new(section(
+                "Herdr",
+                "each session in its own workspace",
+                inner.width,
+            )),
             Rect {
                 y: inner.y + row_of(start) - 1,
                 height: 1,

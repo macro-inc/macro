@@ -15,7 +15,7 @@ async fn generated_names_and_later_renames_update_only_the_matching_session_tab(
     std::fs::write(&script, include_str!("../acp_agent/windows/herdr.sh")).unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     let pane = json!({"result":{"pane":{
-        "pane_id":"w1:p2","tab_id":"w1:t2","cwd":cwd,"foreground_cwd":cwd
+        "workspace_id":"w1","pane_id":"w1:p2","tab_id":"w1:t2","cwd":cwd,"foreground_cwd":cwd
     }}});
     std::fs::write(root.path().join("pane.json"), pane.to_string()).unwrap();
     Store(root.path().to_owned())
@@ -27,6 +27,7 @@ async fn generated_names_and_later_renames_update_only_the_matching_session_tab(
             model: "default".to_owned(),
             native_id: None,
             window: Some(Window {
+                workspace_id: None,
                 tab_id: "w1:t2".to_owned(),
                 pane_id: "w1:p2".to_owned(),
             }),
@@ -115,6 +116,7 @@ async fn generated_names_and_later_renames_update_only_the_matching_session_tab(
     assert!(calls.contains("tab rename w1:t3 Open channel in new split"));
     assert!(!calls.contains("Unrelated session"));
     assert!(!calls.contains("pane run"));
+    assert!(!calls.contains("workspace rename"));
 
     let mut replaced = moved.clone();
     replaced["result"]["pane"]["foreground_cwd"] = json!(root.path().join("other"));
@@ -126,4 +128,69 @@ async fn generated_names_and_later_renames_update_only_the_matching_session_tab(
     assert_eq!(calls.matches("tab rename").count(), 4);
     assert!(calls.contains("tab rename w1:t3 Updated session name"));
     server.await.unwrap();
+}
+
+#[tokio::test]
+async fn session_names_follow_owned_workspaces_but_not_a_foreign_workspace_after_a_move() {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("herdr");
+    std::fs::write(&script, include_str!("../acp_agent/windows/herdr.sh")).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut pane = json!({"result":{"pane":{
+        "workspace_id":"w2","pane_id":"w2:p1","tab_id":"w2:t1","cwd":root.path()
+    }}});
+    std::fs::write(root.path().join("pane.json"), pane.to_string()).unwrap();
+    let record = Record {
+        version: 1,
+        id: uuid::Uuid::new_v4().to_string(),
+        kind: TuiAgent::Codex,
+        cwd: root.path().to_owned(),
+        model: "default".to_owned(),
+        native_id: None,
+        window: Some(Window {
+            workspace_id: Some("w2".to_owned()),
+            tab_id: "w2:t1".to_owned(),
+            pane_id: "w2:p1".to_owned(),
+        }),
+        transcript: None,
+        started: 1,
+    };
+    let mut sync = TitleSync::new(
+        EventStreamClient::new(
+            &MacroApi {
+                api_url: "http://unused".to_owned(),
+                storage_url: "http://unused".to_owned(),
+                web_url: "http://unused".to_owned(),
+            },
+            &HarnessCredentials {
+                harness_id: HarnessId::TEST_A,
+                token: "mhns_test".to_owned(),
+                scope: HarnessScope::User,
+            },
+        ),
+        HerdrCli::new(script, Some("w1".to_owned())),
+        root.path().to_owned(),
+        root.path().join("worktrees"),
+    );
+    sync.apply(&record, "Generated name").await.unwrap();
+    sync.apply(&record, "Generated name").await.unwrap();
+    sync.apply(&record, "Renamed session").await.unwrap();
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert_eq!(calls.matches("workspace rename").count(), 2);
+    assert!(calls.contains("workspace rename w2 Generated name"));
+    assert!(calls.contains("workspace rename w2 Renamed session"));
+    assert!(calls.contains("tab rename w2:t1 Renamed session"));
+
+    pane["result"]["pane"]["workspace_id"] = json!("w3");
+    pane["result"]["pane"]["tab_id"] = json!("w3:t2");
+    pane["result"]["pane"]["pane_id"] = json!("w3:p2");
+    std::fs::write(root.path().join("pane.json"), pane.to_string()).unwrap();
+    sync.apply(&record, "Moved session").await.unwrap();
+    std::fs::remove_file(root.path().join("pane.json")).unwrap();
+    sync.apply(&record, "Closed session").await.unwrap();
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert_eq!(calls.matches("workspace rename").count(), 2);
+    assert!(calls.contains("tab rename w3:t2 Moved session"));
+    assert!(!calls.contains("Closed session"));
+    assert!(!calls.contains("create"));
 }

@@ -1,4 +1,4 @@
-//! Keep native tab labels aligned with Macro's generated and edited session names.
+//! Keep native workspace and tab labels aligned with Macro's session names.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -61,7 +61,7 @@ impl TitleSync {
                         failed = false;
                     } else if !failed {
                         tracing::warn!(
-                            "session title sync failed; retaining existing tab names and retrying"
+                            "session title sync failed; retaining existing names and retrying"
                         );
                         failed = true;
                     }
@@ -96,7 +96,7 @@ impl TitleSync {
         }
     }
 
-    #[tracing::instrument(name = "macrod.rename_tab", skip_all, fields(session_id = %record.id), err)]
+    #[tracing::instrument(name = "macrod.rename_session", skip_all, fields(session_id = %record.id), err)]
     async fn apply(&mut self, record: &Record, title: &str) -> rootcause::Result<()> {
         let Some(window) = &record.window else {
             return Ok(());
@@ -111,7 +111,7 @@ impl TitleSync {
         {
             return Ok(());
         }
-        self.cli.rename_tab(&current.tab_id, title).await?;
+        self.cli.rename_window(&current, title).await?;
         self.applied
             .insert(record.id.clone(), (current, title.to_owned()));
         Ok(())

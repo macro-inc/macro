@@ -60,7 +60,7 @@ enum Command {
         session: String,
     },
     /// Serve ACP on stdio with each session as a live coding-agent TUI in
-    /// its own herdr window. Set as the harness of a macrod run inside herdr.
+    /// its own Herdr workspace. Set as the harness of a macrod run inside Herdr.
     #[cfg(unix)]
     HerdrAcp {
         /// Private storage for this paired macrod instance.
@@ -76,8 +76,7 @@ enum Command {
         /// `acceptEdits` or `bypassPermissions`.
         #[arg(long)]
         permission_mode: Option<String>,
-        /// Open each session's tab in the background rather than switching
-        /// herdr to it.
+        /// Open each session's workspace in the background.
         #[arg(long)]
         no_focus: bool,
         /// Extra arguments for every agent launch, e.g. `-- -s workspace-write`.

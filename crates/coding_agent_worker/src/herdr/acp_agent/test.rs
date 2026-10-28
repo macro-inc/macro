@@ -514,7 +514,7 @@ async fn an_agent_waits_for_a_shell_still_loading_its_environment() {
             r#"#!/bin/sh
 cd {}
 case "$1:$2" in
-  tab:create) printf '{{"result":{{"root_pane":{{"tab_id":"w1:t1","pane_id":"w1:p1"}}}}}}\n' ;;
+  workspace:create) printf '{{"result":{{"workspace":{{"workspace_id":"w1"}},"root_pane":{{"tab_id":"w1:t1","pane_id":"w1:p1"}}}}}}\n' ;;
   agent:start)
     printf x >> starts
     [ "$(wc -c < starts)" -ge 3 ] && exit 0

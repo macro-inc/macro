@@ -28,7 +28,7 @@ pub(super) fn agent_groups<'a>(
                 lines.push(Line::raw(""));
             }
             lines.push(if herdr {
-                section("Herdr", "each session in its own tab", width)
+                section("Herdr", "each session in its own workspace", width)
             } else {
                 section("ACP", "headless, driven by macrod", width)
             });
