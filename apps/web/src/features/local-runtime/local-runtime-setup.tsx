@@ -1,5 +1,4 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
-import { createWorkspaceMode } from '@app/features/agents-view/primitives/workspace-mode';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
@@ -23,9 +22,8 @@ export function LocalRuntimeSetup(props: {
   const layout = useSplitLayout();
 
   const openSession = (agent: ReadyAgent) => {
-    // The composer opens on the agent last chosen, in Code mode.
+    // The composer opens in Auto, with this agent as the usual coding agent.
     createRecentAgentSelections(userId()).remember(agent.botId);
-    createWorkspaceMode(userId()).setMode('code');
     openAgentComposer(layout);
   };
 
