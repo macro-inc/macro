@@ -28,6 +28,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`).
 - `install/`: `install.sh` and `install.ps1`, the one-line installers the docs
   serve from `main`. They download `macrod-<os>-<arch>` from the latest release.
+- `src/update.rs` (`src/update/`): self-update. The TUI polls the latest
+  GitHub release hourly, stages the verified binary beside the executable, and
+  swaps + re-execs once `Daemon::is_idle` (no `session/prompt` outstanding,
+  tracked by `src/turns.rs` off the ACP wire). Spans: `macrod.update.check`,
+  `macrod.update.download`, `macrod.update.apply`.
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
   switching, MCP) — read before changing anything under `src/herdr/`.
 
@@ -74,6 +79,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - macrod never pulls into the operator's working branch — new herdr worktrees
   start from a fresh fetch of `origin/main` (see README.md).
+- Only release builds update themselves: the tag workflow compiles the tag in
+  as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
+  polls. `macrod service` (the desktop app's bundled copy) never updates; the
+  desktop app updates it.
 - Switching native agents clears the previous agent's model/extra-args but
   keeps storage and focus preferences (README.md, "Setup").
 

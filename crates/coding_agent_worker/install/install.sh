@@ -3,7 +3,8 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
 #
-# Run it again to update. MACROD_VERSION pins a release tag (v2026.10.18.0);
+# A running macrod updates itself; run this again to update right away.
+# MACROD_VERSION pins a release tag (v2026.10.18.0);
 # MACROD_INSTALL_DIR overrides where the binary goes (~/.local/bin).
 
 set -eu

@@ -122,9 +122,11 @@ To reconnect later, run `macrod` from the same directory so it loads your saved 
 
 ## Update macrod
 
-Run the install command again. It replaces `macrod` with the latest release and keeps your `macrod.toml`. A running `macrod` keeps the old version until you restart it.
+`macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, verifies its checksum, and restarts into it as soon as no agent turn is running. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
 
-To install a specific release instead, set the `MACROD_VERSION` environment variable to its tag, such as `v2026.10.18.0`, before running the install command.
+To update right away, run the install command again and restart `macrod`.
+
+To install a specific release, set the `MACROD_VERSION` environment variable to its tag, such as `v2026.10.18.0`, before running the install command. A running `macrod` still updates itself to the latest release.
 
 ## Troubleshooting
 

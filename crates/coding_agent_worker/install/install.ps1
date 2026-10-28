@@ -2,7 +2,8 @@
 #
 #   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
 #
-# Run it again to update. MACROD_VERSION pins a release tag (v2026.10.18.0);
+# A running macrod updates itself; run this again to update right away.
+# MACROD_VERSION pins a release tag (v2026.10.18.0);
 # MACROD_INSTALL_DIR overrides where the binary goes
 # (%LOCALAPPDATA%\Programs\macrod), which is added to the user PATH.
 
