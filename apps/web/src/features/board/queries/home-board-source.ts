@@ -1,46 +1,27 @@
-import { useHomeEntitiesQuery } from '@app/features/home/queries/use-home-query';
-import { t } from '@app/lib/i18n';
-import { useChannelsContext } from '@core/context/channels';
-import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
+import { useHomeDataSource } from '@app/features/home/queries/use-home-query';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData, WithNotification } from '@entity';
-import { queryReadyGate } from '@queries/gate';
-import { getBotDisplayName } from '@queries/messages/message-sender';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import type { BoardSource } from '../context/board-context';
 import type { BoardItem } from '../core/item';
 import { type BoardItemResolvers, toBoardItem } from './entity-board-items';
 
-const localPart = (id: string) =>
-  id.replace(/^macro\|/, '').split('@')[0] || id;
-
 /**
- * The board shows Home's Signal feed: the conversations, mail, documents and
- * runs Home lists, with their notifications attached so items update live.
- * `entity` returns the feed entity behind a board item, for opening it.
+ * The board shows Home's desktop Signal feed, read from the same source as
+ * Home's list: the conversations, mail, documents and runs Home lists, with
+ * their notifications attached so items update live. `entity` returns the
+ * feed entity behind a board item, for opening it.
  */
-export function createHomeBoardSource() {
-  const home = useHomeEntitiesQuery({ tab: 'signal', facets: {} });
-  const viewerId = useUserId();
-  const channels = useChannelsContext();
-
-  const resolvers = (): BoardItemResolvers => ({
-    viewerId: viewerId(),
-    userName: (id) =>
-      getDisplayName(tryMacroId(id), { emailFallback: 'local-part' }) ||
-      localPart(id),
-    botName: (id) => getBotDisplayName(id),
-    channelName: (id, fallback) =>
-      channels.channelsById()[id]?.name?.trim() || fallback,
-    updatedText: t('board.updated'),
-    threadContext: (channel) => t('board.threadIn', { channel }),
+export function createHomeBoardSource(resolvers: Accessor<BoardItemResolvers>) {
+  const home = useHomeDataSource({
+    tab: 'signal',
+    search: '',
+    groupBy: 'none',
+    facets: {},
   });
 
   const entities = createMemo((): WithNotification<EntityData>[] =>
-    queryReadyGate(home.query)
-      ? home.transformEntities(home.query.data.entities)
-      : []
+    home.items().flatMap((row) => (row.kind === 'entity' ? [row.entity] : []))
   );
 
   const entityByKey = createMemo(
@@ -58,11 +39,10 @@ export function createHomeBoardSource() {
   const source: BoardSource = {
     items,
     state: () => {
-      if (home.awaitingViewer() || home.query.isPending) return 'loading';
-      if (home.query.error && items().length === 0) return 'error';
-      return 'ready';
+      if (home.isLoading()) return 'loading';
+      return home.error() ? 'error' : 'ready';
     },
-    retry: () => fireAndForget(home.query.refresh(), 'board'),
+    retry: () => fireAndForget(home.refresh(), 'board'),
   };
 
   return {

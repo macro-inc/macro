@@ -22,6 +22,8 @@ const resolvers: BoardItemResolvers = {
   channelName: (id, fallback) => (id === 'c-launch' ? 'launch' : fallback),
   updatedText: 'Updated',
   threadContext: (channel) => `Thread in #${channel}`,
+  agentStatus: (state) => (state === 'dormant' ? undefined : state),
+  pullRequestStatus: (state) => state,
 };
 
 function notification(
@@ -256,6 +258,29 @@ describe('toBoardItem', () => {
       text: 'Is 2pm still good?',
       unread: true,
     });
+  });
+
+  it('names what an agent run is doing, and says nothing while it rests', () => {
+    const run = (turnState: string) =>
+      toBoardItem(
+        withNotifications(
+          {
+            id: 'run-1',
+            type: 'agent_session',
+            name: 'Fix flaky checkout test',
+            ownerId: VIEWER,
+            botId: 'bot-1',
+            status: 'ready',
+            turnState,
+          },
+          []
+        ),
+        resolvers
+      );
+
+    expect(run('blocked')).toMatchObject({ zone: 'agents', status: 'waiting' });
+    expect(run('running')?.status).toBe('working');
+    expect(run('idle')?.status).toBeUndefined();
   });
 
   it('leaves out kinds the board does not draw', () => {

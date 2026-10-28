@@ -1,3 +1,4 @@
+import type { ConversationState } from '@app/features/agents-view/core/conversation-state';
 import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import {
   markChannelNotificationsSeenOnOpen,
@@ -22,18 +23,23 @@ import {
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from '@core/component/UserIcon';
+import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { getInitialsFromName } from '@core/user';
+import { getDisplayName, getInitialsFromName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
   type EntityData,
+  type GithubPullRequestEntity,
   isNonMemberChannelEntity,
   ListEntityMetadataQueryProvider,
   type WithNotification,
 } from '@entity';
+import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Avatar } from '@ui';
+import { Result } from 'neverthrow';
 import { createSignal, Match, onCleanup, onMount, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { boardSearch } from './board-search';
 import {
   type BoardCapabilities,
@@ -41,10 +47,39 @@ import {
   type BoardStorage,
 } from './context/board-context';
 import type { BoardAuthor } from './core/item';
+import type { BoardItemResolvers } from './queries/entity-board-items';
 import { createHomeBoardSource } from './queries/home-board-source';
 import { BoardView } from './views/board-view';
 
 const MEMORY = createUserScopedStorage('macro:board:v1');
+
+const parseMemory = Result.fromThrowable(
+  (raw: string): unknown => JSON.parse(raw),
+  () => undefined
+);
+
+const localPart = (id: string) =>
+  id.replace(/^macro\|/, '').split('@')[0] || id;
+
+/** What an agent run is doing, when it is doing anything. */
+function agentStatus(state: ConversationState): string | undefined {
+  return match(state)
+    .with('starting', () => t('board.agentStarting'))
+    .with('working', () => t('board.agentWorking'))
+    .with('waiting', () => t('board.agentWaiting'))
+    .with('dormant', () => undefined)
+    .exhaustive();
+}
+
+function pullRequestStatus(
+  state: GithubPullRequestEntity['metadata']['status']
+): string | undefined {
+  return match(state)
+    .with('open', () => t('board.pullRequestOpen'))
+    .with('merged', () => t('board.pullRequestMerged'))
+    .with('closed', () => t('board.pullRequestClosed'))
+    .exhaustive(() => undefined);
+}
 
 /** Profile pictures for Macro users and contacts, marks for agents. */
 function BoardAvatar(props: { author: BoardAuthor; size: number }) {
@@ -110,8 +145,23 @@ export function BoardEntry() {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+  const channels = useChannelsContext();
   const [search, setSearch] = createSearchParams(boardSearch);
-  const home = createHomeBoardSource();
+  const home = createHomeBoardSource(
+    (): BoardItemResolvers => ({
+      viewerId: userId(),
+      userName: (id) =>
+        getDisplayName(tryMacroId(id), { emailFallback: 'local-part' }) ||
+        localPart(id),
+      botName: (id) => getBotDisplayName(id),
+      channelName: (id, fallback) =>
+        channels.channelsById()[id]?.name?.trim() || fallback,
+      updatedText: t('board.updated'),
+      threadContext: (channel) => t('board.threadIn', { channel }),
+      agentStatus,
+      pullRequestStatus,
+    })
+  );
   const selectPreview = createPreviewSelectionGuard();
   useSplitDisplayName(() => t('board.title'));
 
@@ -125,12 +175,7 @@ export function BoardEntry() {
     read: () => {
       const id = userId();
       const raw = id ? MEMORY.read(id) : null;
-      if (!raw) return undefined;
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return undefined;
-      }
+      return raw ? parseMemory(raw).unwrapOr(undefined) : undefined;
     },
     write: (value) => {
       const id = userId();

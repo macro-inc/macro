@@ -54,6 +54,12 @@ export default {
   threadIn: 'Thread in #{{channel}}',
   live: 'Live',
   noMessages: 'No new messages',
+  agentStarting: 'Starting',
+  agentWorking: 'Working',
+  agentWaiting: 'Waiting for you',
+  pullRequestOpen: 'Open',
+  pullRequestMerged: 'Merged',
+  pullRequestClosed: 'Closed',
   morePeople: { one: '+{{count}}', other: '+{{count}}' },
 
   // Controls

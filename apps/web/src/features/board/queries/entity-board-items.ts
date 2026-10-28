@@ -1,8 +1,13 @@
+import {
+  type ConversationState,
+  conversationState,
+} from '@app/features/agents-view/core/conversation-state';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type {
   ChannelEntity,
   ChannelThreadEntity,
   EntityData,
+  GithubPullRequestEntity,
   WithNotification,
 } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
@@ -36,6 +41,12 @@ export type BoardItemResolvers = {
   updatedText: string;
   /** "Thread in #channel". */
   threadContext: (channel: string) => string;
+  /** An agent run's state worth showing, or nothing while it rests. */
+  agentStatus: (state: ConversationState) => string | undefined;
+  /** "Open", "Merged" or "Closed". */
+  pullRequestStatus: (
+    state: GithubPullRequestEntity['metadata']['status']
+  ) => string | undefined;
 };
 
 /** What each kind of entity contributes before unread state is counted. */
@@ -318,7 +329,9 @@ export function toBoardItem(
     )
     .with({ type: 'agent_session' }, (session) =>
       notifiedShape('agents', 'agent', session.name, notifications, resolve, {
-        status: session.turnState ?? undefined,
+        status: resolve.agentStatus(
+          conversationState(session.status, session.turnState)
+        ),
         updatedAt,
       })
     )
@@ -346,7 +359,7 @@ export function toBoardItem(
           resolve,
           {
             context: `${pullRequest.metadata.repo}#${pullRequest.metadata.number}`,
-            status: pullRequest.metadata.status,
+            status: resolve.pullRequestStatus(pullRequest.metadata.status),
             updatedAt,
           }
         )
