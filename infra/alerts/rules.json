@@ -1,0 +1,573 @@
+{
+  "rules": [
+    {
+      "id": "macrodb-primary-freeable-memory",
+      "title": "macro-db-prod freeable memory low",
+      "service": "macro-db-prod",
+      "comparison": "below",
+      "window": "15m",
+      "thresholds": { "warning": 2000000000, "critical": 1000000000 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "Freeable memory is {{value}} bytes. Normal is 7-18 GB; it fell to about 0.45 GB during the October overload. Each connection holds about 14 MB of private memory, so check connection count and swap first.",
+      "runbook": "docs/runbooks/macrodb.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):avg:aws.rds.freeable_memory{dbinstanceidentifier:macro-db-prod} < 1000000000"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "FreeableMemory",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod"] },
+          "statistic": "Average",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-replica-freeable-memory",
+      "title": "macro-db-prod-read-replica freeable memory low",
+      "service": "macro-db-prod",
+      "comparison": "below",
+      "window": "15m",
+      "thresholds": { "warning": 1500000000, "critical": 750000000 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "Replica freeable memory is {{value}} bytes. Normal minimum is about 3 GB. The replica serves GraphQL reads, so memory pressure shows up as slow lists.",
+      "runbook": "docs/runbooks/macrodb.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):avg:aws.rds.freeable_memory{dbinstanceidentifier:macro-db-prod-read-replica} < 750000000"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "FreeableMemory",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod-read-replica"] },
+          "statistic": "Average",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-swap",
+      "title": "macro-db-prod swapping",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 2000000000, "critical": 5000000000 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{dbinstanceidentifier.name}} is using {{value}} bytes of swap. Normal is under 0.6 GB. Swap above 5 GB preceded both October overloads by hours.",
+      "runbook": "docs/runbooks/macrodb.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):max:aws.rds.swap_usage{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} > 5000000000"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "SwapUsage",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod", "macro-db-prod-read-replica"] },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-load",
+      "title": "macro-db-prod database load above vCPU count",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 2, "critical": 4 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{dbinstanceidentifier.name}} has {{value}}x as many active sessions as vCPUs. Normal is under 1.3; the October overload reached 8. Look at Performance Insights top waits (locks, IO) and the services holding the most connections.",
+      "runbook": "docs/runbooks/macrodb.md#load",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):avg:aws.rds.dbload_relative_to_num_vcpus{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} > 4"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "DBLoadRelativeToNumVCPUs",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod", "macro-db-prod-read-replica"] },
+          "statistic": "Average",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-cpu",
+      "title": "macro-db-prod CPU high",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 70, "critical": 85 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{dbinstanceidentifier.name}} CPU averaged {{value}}% over 15 minutes. Normal peaks are about 30%.",
+      "runbook": "docs/runbooks/macrodb.md#load",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):avg:aws.rds.cpuutilization{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} > 85"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod", "macro-db-prod-read-replica"] },
+          "statistic": "Average",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-primary-connections",
+      "title": "macro-db-prod connections high",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 1700, "critical": 2200 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "macro-db-prod has {{value}} connections. Normal 15-minute peaks are about 1,100; max_connections is 3,439. Each connection costs about 14 MB, so this also drains freeable memory.",
+      "runbook": "docs/runbooks/macrodb.md#connections",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:aws.rds.database_connections{dbinstanceidentifier:macro-db-prod} > 2200"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "DatabaseConnections",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod"] },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-replica-connections",
+      "title": "macro-db-prod-read-replica connections high",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 550, "critical": 700 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "The read replica has {{value}} connections. Normal peaks are about 460.",
+      "runbook": "docs/runbooks/macrodb.md#connections",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:aws.rds.database_connections{dbinstanceidentifier:macro-db-prod-read-replica} > 700"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "DatabaseConnections",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod-read-replica"] },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-replica-lag",
+      "title": "macro-db-prod-read-replica lagging",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 60, "critical": 300 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "The read replica is {{value}} seconds behind the primary. Normal is under 6 seconds. GraphQL reads use the replica, so users see stale data and missing new items.",
+      "runbook": "docs/runbooks/macrodb.md#replica-lag",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:aws.rds.replica_lag{dbinstanceidentifier:macro-db-prod-read-replica} > 300"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "ReplicaLag",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod-read-replica"] },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-read-latency",
+      "title": "macro-db-prod disk read latency high",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 0.005, "critical": 0.01 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{dbinstanceidentifier.name}} disk reads take {{value}} seconds on average. Normal is about 0.6 ms.",
+      "runbook": "docs/runbooks/macrodb.md#load",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):avg:aws.rds.read_latency{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} > 0.01"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "ReadLatency",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod", "macro-db-prod-read-replica"] },
+          "statistic": "Average",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "macrodb-free-storage",
+      "title": "macro-db-prod free storage low",
+      "service": "macro-db-prod",
+      "comparison": "below",
+      "window": "1h",
+      "thresholds": { "warning": 1500000000000, "critical": 1000000000000 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{dbinstanceidentifier.name}} has {{value}} bytes of free storage out of 5.37 TB.",
+      "runbook": "docs/runbooks/macrodb.md#storage",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_1h):min:aws.rds.free_storage_space{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} < 1000000000000"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/RDS",
+          "metricName": "FreeStorageSpace",
+          "dimensions": { "DBInstanceIdentifier": ["macro-db-prod", "macro-db-prod-read-replica"] },
+          "statistic": "Minimum",
+          "reducer": "min"
+        }
+      }
+    },
+    {
+      "id": "macrodb-free-storage-forecast",
+      "title": "macro-db-prod free storage forecast to run low within a week",
+      "service": "macro-db-prod",
+      "comparison": "below",
+      "window": "1w",
+      "thresholds": { "critical": 500000000000 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "At the current write rate {{dbinstanceidentifier.name}} drops below 500 GB free within a week. Find what started writing; recent growth was 100-200 GB a day.",
+      "runbook": "docs/runbooks/macrodb.md#storage",
+      "datadog": {
+        "type": "query alert",
+        "query": "min(next_1w):forecast(min:aws.rds.free_storage_space{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}, 'linear', 1, interval='60m', history='1w', model='default') <= 500000000000",
+        "thresholdWindows": { "triggerWindow": "last_1h", "recoveryWindow": "last_1h" }
+      },
+      "grafana": { "gap": "Grafana alerting has no forecast function." }
+    },
+    {
+      "id": "macrodb-blocked-connections",
+      "title": "macro-db-prod connections blocked on locks",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 20, "critical": 50 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{host.name}} has {{value}} connections waiting on locks. Normal is under 7. Advisory and tuple locks dominated the October overload; see Database Monitoring's blocking queries view.",
+      "runbook": "docs/runbooks/macrodb.md#locks",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:postgresql.activity.blocked_connections{host:macro-db-prod*} by {host} > 50"
+      },
+      "grafana": { "gap": "Database Monitoring metric; the Grafana Postgres collector runs against dev only." }
+    },
+    {
+      "id": "macrodb-long-transactions",
+      "title": "macro-db-prod long-running transaction",
+      "service": "macro-db-prod",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 600, "critical": 1800 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "The oldest open transaction on {{host.name}} is {{value}} seconds old. Long transactions hold locks and stop vacuum.",
+      "runbook": "docs/runbooks/macrodb.md#locks",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host} > 1800"
+      },
+      "grafana": { "gap": "Database Monitoring metric; the Grafana Postgres collector runs against dev only." }
+    },
+    {
+      "id": "redis-memory",
+      "title": "Redis memory high",
+      "service": "elasticache",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 75, "critical": 90 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "{{cacheclusterid.name}} is using {{value}}% of maxmemory. Keys without a TTL are never evicted under volatile-lru, so at 100% writes fail.",
+      "runbook": "docs/runbooks/redis.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_10m):max:aws.elasticache.database_memory_usage_percentage{cacheclusterid:*prod*} by {cacheclusterid} > 90"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/ElastiCache",
+          "metricName": "DatabaseMemoryUsagePercentage",
+          "dimensions": {
+            "CacheClusterId": [
+              "macro-cache-prod-001",
+              "macro-cache-prod-002",
+              "email-service-redis-prod-c862c10",
+              "calendar-service-redis-prod-aee80d2",
+              "connection-gateway-redis-prod-f9d8cd0"
+            ]
+          },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "redis-memory-forecast",
+      "title": "Redis memory forecast to fill within three days",
+      "service": "elasticache",
+      "comparison": "above",
+      "window": "3d",
+      "thresholds": { "critical": 95 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{cacheclusterid.name}} memory is growing fast enough to pass 95% within three days. macro-cache-prod climbed from 60% to 100% over a month before writes failed.",
+      "runbook": "docs/runbooks/redis.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "max(next_3d):forecast(max:aws.elasticache.database_memory_usage_percentage{cacheclusterid:*prod*} by {cacheclusterid}, 'linear', 1, interval='60m', history='1w', model='default') >= 95",
+        "thresholdWindows": { "triggerWindow": "last_1h", "recoveryWindow": "last_1h" }
+      },
+      "grafana": { "gap": "Grafana alerting has no forecast function." }
+    },
+    {
+      "id": "redis-evictions",
+      "title": "Redis evicting keys",
+      "service": "elasticache",
+      "comparison": "above",
+      "window": "10m",
+      "thresholds": { "warning": 0, "critical": 1000 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{cacheclusterid.name}} evicted {{value}} keys in 10 minutes. Prod caches normally evict nothing.",
+      "runbook": "docs/runbooks/redis.md#memory",
+      "datadog": {
+        "type": "query alert",
+        "query": "sum(last_10m):sum:aws.elasticache.evictions{cacheclusterid:*prod*} by {cacheclusterid}.as_count() > 1000"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/ElastiCache",
+          "metricName": "Evictions",
+          "dimensions": {
+            "CacheClusterId": [
+              "macro-cache-prod-001",
+              "macro-cache-prod-002",
+              "email-service-redis-prod-c862c10",
+              "calendar-service-redis-prod-aee80d2",
+              "connection-gateway-redis-prod-f9d8cd0"
+            ]
+          },
+          "statistic": "Sum",
+          "reducer": "sum"
+        }
+      }
+    },
+    {
+      "id": "sqs-dlq-inflow",
+      "title": "Messages landing in a prod dead-letter queue",
+      "service": "sqs",
+      "comparison": "above",
+      "window": "30m",
+      "thresholds": { "warning": 0, "critical": 50 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{value}} messages moved to {{queuename.name}} in 30 minutes. Most DLQs hold old messages permanently, so this alerts on new arrivals only.",
+      "runbook": "docs/runbooks/queues.md#dead-letters",
+      "datadog": {
+        "type": "query alert",
+        "query": "sum(last_30m):sum:aws.sqs.number_of_messages_sent{queuename:*-dlq-prod} by {queuename}.as_count() > 50"
+      },
+      "grafana": { "gap": "CloudWatch dimensions cannot be filtered by name pattern; needs an explicit queue list." }
+    },
+    {
+      "id": "sqs-email-backfill-age",
+      "title": "Email backfill queue falling behind",
+      "service": "email-service",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 3600, "critical": 10800 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "The oldest message in email-service-backfill-queue-prod is {{value}} seconds old. Normal peaks are about 50 minutes; new users wait this long for their mailbox to fill.",
+      "runbook": "docs/runbooks/queues.md#backlog",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-backfill-queue-prod} > 10800"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateAgeOfOldestMessage",
+          "dimensions": { "QueueName": ["email-service-backfill-queue-prod"] },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "sqs-work-queue-age",
+      "title": "Prod work queue falling behind",
+      "service": "sqs",
+      "comparison": "above",
+      "window": "15m",
+      "thresholds": { "warning": 1800, "critical": 7200 },
+      "pages": true,
+      "pager": "datadog",
+      "description": "The oldest message in {{queuename.name}} is {{value}} seconds old. These queues normally drain within minutes.",
+      "runbook": "docs/runbooks/queues.md#backlog",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_15m):max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-refresh-queue-prod OR queuename:convert-service-queue-prod OR queuename:ai-projection-queue-prod OR queuename:email-service-gmail-webhook-queue-prod OR queuename:notification-ingress-queue-prod} by {queuename} > 7200"
+      },
+      "grafana": {
+        "cloudwatch": {
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateAgeOfOldestMessage",
+          "dimensions": {
+            "QueueName": [
+              "email-service-refresh-queue-prod",
+              "convert-service-queue-prod",
+              "ai-projection-queue-prod",
+              "email-service-gmail-webhook-queue-prod",
+              "notification-ingress-queue-prod"
+            ]
+          },
+          "statistic": "Maximum",
+          "reducer": "mean"
+        }
+      }
+    },
+    {
+      "id": "sqs-email-backfill-backlog-anomaly",
+      "title": "Email backfill backlog growing abnormally",
+      "service": "email-service",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "Visible messages in email-service-backfill-queue-prod are above their usual band. A jump in enqueues loads macrodb through the backfill workers.",
+      "runbook": "docs/runbooks/queues.md#backlog",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(max:aws.sqs.approximate_number_of_messages_visible{queuename:email-service-backfill-queue-prod}, 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Grafana alerting has no anomaly detection." }
+    },
+    {
+      "id": "apm-server-error-anomaly",
+      "title": "HTTP server errors abnormally high",
+      "service": "apm",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{service.name}} is returning more HTTP server errors than its usual band. Check the latest deploy of that service first.",
+      "runbook": "docs/runbooks/regressions.md#errors",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(sum:trace.http.server.request.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Prod traces are not exported to Tempo, and Grafana alerting has no anomaly detection." }
+    },
+    {
+      "id": "apm-internal-error-anomaly",
+      "title": "Internal span errors abnormally high",
+      "service": "apm",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{service.name}} is recording more failed internal spans (background jobs, workers, browser operations) than its usual band. Check the latest deploy of that service first.",
+      "runbook": "docs/runbooks/regressions.md#errors",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(sum:trace.Internal.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Prod traces are not exported to Tempo, and Grafana alerting has no anomaly detection." }
+    },
+    {
+      "id": "apm-consumer-error-anomaly",
+      "title": "Queue consumer errors abnormally high",
+      "service": "apm",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{service.name}} is failing more queue and Kafka messages than its usual band.",
+      "runbook": "docs/runbooks/regressions.md#errors",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(sum:trace.Consumer.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Prod traces are not exported to Tempo, and Grafana alerting has no anomaly detection." }
+    },
+    {
+      "id": "apm-latency-anomaly",
+      "title": "HTTP latency abnormally high",
+      "service": "apm",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{service.name}} p95 HTTP latency is above its usual band.",
+      "runbook": "docs/runbooks/regressions.md#latency",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(p95:trace.http.server.request{env:prod,service:cloud-storage-service OR service:authentication-service} by {service}, 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Prod traces are not exported to Tempo, and Grafana alerting has no anomaly detection." }
+    },
+    {
+      "id": "error-logs-anomaly",
+      "title": "Error logs abnormally high",
+      "service": "logs",
+      "comparison": "above",
+      "window": "4h",
+      "thresholds": { "critical": 1 },
+      "pages": false,
+      "pager": "datadog",
+      "description": "{{service.name}} is logging more errors than its usual band. Check the latest deploy of that service first.",
+      "runbook": "docs/runbooks/regressions.md#errors",
+      "datadog": {
+        "type": "query alert",
+        "query": "avg(last_4h):anomalies(sum:macro.logs.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
+      },
+      "grafana": { "gap": "Prod logs are not exported to Loki, and Grafana alerting has no anomaly detection." }
+    }
+  ]
+}
