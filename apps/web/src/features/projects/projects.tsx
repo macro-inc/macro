@@ -38,7 +38,6 @@ import {
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
-import { projectRouteId } from './core/route';
 import {
   createProjectCollection,
   type ProjectListActivation,
@@ -198,13 +197,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
           globalSplitManager()?.canAppendSplit() ?? false
         }
         onCopyLink={(id) =>
-          fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id, section: 'overview' }),
-              'component'
-            ),
-            'projects'
-          )
+          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
         }
         onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}

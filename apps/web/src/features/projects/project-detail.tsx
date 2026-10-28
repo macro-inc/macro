@@ -42,7 +42,7 @@ import {
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import { type ProjectRoute, projectRouteId } from './core/route';
+import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
@@ -168,10 +168,7 @@ function ProjectTitleMenu(props: {
         }
         onCopyLink={(row) =>
           fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id: row.project.id, section: 'overview' }),
-              'component'
-            ),
+            copyLink.executeByBlock(row.project.id, 'initiative'),
             'projects'
           )
         }
