@@ -180,7 +180,7 @@ export function HistoryProvider(props: {
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
   // per user.
-  const sessions = createMemo<readonly HistorySession[]>(() => {
+  const allSessions = createMemo<readonly HistorySession[]>(() => {
     const doc = loadedDoc();
     const peers = loadedPeers();
     if (!doc || !peers) return [];
@@ -194,21 +194,28 @@ export function HistoryProvider(props: {
     }
 
     return sessionize(events);
-    // TODO (seamus/wolf): this is expensive. on 55 bones test doc each
-    // each inter of the filter loop took avg 6 seconds.
-    // const index = historyIndex();
-    // if (!index) return sessionize(events);
-    // return sessionize(events).filter((s) => {
-    //   const before = index.checkoutAt(s.startMs - 1);
-    //   const after = index.checkoutAt(s.endMs);
-    //   // Can't compute both states (edge frontiers) — keep rather than hide.
-    //   if (!before || !after) return true;
-    //   return (
-    //     // HACK: basically, some deltas are not visually different, and that's confusing
-    //     serializedEditorStateToMarkdown(before) !==
-    //     serializedEditorStateToMarkdown(after)
-    //   );
-    // });
+  });
+
+  // Some sessions are not visibly different (their edits cancel out, or touch
+  // nothing markdown renders), and listing them is confusing. The check replays
+  // history, so it runs in slices after the timeline loads.
+  const [unchangedSessions] = createResource(
+    () => {
+      const index = historyIndex();
+      const sessions = allSessions();
+      return index && sessions.length > 0 ? { index, sessions } : undefined;
+    },
+    ({ index, sessions }) =>
+      index.findUnchangedSessions(sessions, () => allSessions() !== sessions)
+  );
+  const sessionsFiltered = () =>
+    unchangedSessions.state === 'ready' && unchangedSessions.latest !== null;
+
+  const sessions = createMemo<readonly HistorySession[]>(() => {
+    const list = allSessions();
+    if (!sessionsFiltered()) return list;
+    const unchanged = unchangedSessions.latest;
+    return unchanged ? list.filter((s) => !unchanged.has(s)) : list;
   });
 
   const checkoutAt = (ms: number): SerializedEditorState | null =>
@@ -233,7 +240,8 @@ export function HistoryProvider(props: {
     if (!before.root.children?.length || !after.root.children?.length)
       return null;
     try {
-      const doc = loadedDoc();
+      // Attribute each block to its last editor as of the session's end.
+      const doc = historyIndex()?.docAt(session.endMs);
       const peers = loadedPeers();
       const whoMap =
         doc && peers
@@ -263,7 +271,10 @@ export function HistoryProvider(props: {
     loading: {
       // A failed load is not a pending one — `error` owns that state.
       sessions: () =>
-        error() == null && (loadedDoc() == null || peerMap.isPending),
+        error() == null &&
+        (loadedDoc() == null ||
+          peerMap.isPending ||
+          (allSessions().length > 0 && !sessionsFiltered())),
       doc: () => error() == null && loadedDoc() == null,
     },
     error,
