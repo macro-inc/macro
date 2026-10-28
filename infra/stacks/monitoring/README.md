@@ -2,16 +2,16 @@
 
 Datadog monitors and synthetic tests as code.
 
-36 resources here (35 monitors and one synthetic test) already exist in
+37 resources here (36 monitors and one synthetic test) already exist in
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. The two AI-editing monitors in `monitors/ai-editing.ts`
 are new and are meant to be created.
 
 ## Read this before deploying
 
-**Run the import before the first `pulumi up`.** The program declares 35
+**Run the import before the first `pulumi up`.** The program declares 36
 monitors that already exist in Datadog. Until `pulumi import` has told Pulumi
-they exist, a deploy would create 35 duplicates — duplicate pages to
+they exist, a deploy would create 36 duplicates — duplicate pages to
 `#holy-shit-alarms` included.
 
 Adoption is a one-time local run. `pulumi import` reads Datadog and writes
@@ -39,7 +39,7 @@ and records options omitted during import.
 
 The gate is that preview:
 
-- **35 monitors + 1 synthetic test unchanged** — adoption is exact.
+- **36 monitors + 1 synthetic test unchanged** — adoption is exact.
 - **2 monitors to create** (`ai-editing-*`) — expected, that's the new alerting.
 - **Any update, replace, or delete** — the hand-written code in `monitors/*.ts`
   drifted from the live monitor. Reconcile against `imported.generated.ts`
@@ -110,6 +110,13 @@ Declare it in the matching `monitors/*.ts` with `new datadog.Monitor(...)`. Use
 the `adopted()` helper only for monitors that already exist in Datadog — it sets
 `protect`, which is there to stop a program that no longer declares a
 pre-existing monitor from deleting it.
+
+The one-time import has already run against `prod`, so adopt a monitor created
+in the UI since then on its own: add it to `import.json`, declare it with
+`adopted()`, and before deploying run
+`pulumi import datadog:index/monitor:Monitor <name> <id> --protect --out imported.generated.ts --yes`.
+The preview must then show only the edits you meant to make to that monitor;
+copy any other differing field from `imported.generated.ts`.
 
 ## AI-editing coverage
 

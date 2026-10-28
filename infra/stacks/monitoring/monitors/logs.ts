@@ -240,3 +240,19 @@ adopted('channel-invite-spam-prod', {
   groupbySimpleMonitor: false,
   groupRetentionDuration: '1h',
 });
+
+// https://us5.datadoghq.com/monitors/22681005
+adopted('graphql-cache-worker-host-disposed', {
+  name: 'GraphQL cache worker host was disposed',
+  type: 'log alert',
+  query:
+    'logs("message:\\"cache worker host was disposed\\"").index("*").rollup("count").last("5m") > 0',
+  message: `**{{eval "int(value)"}}** "cache worker host was disposed" log events in the last 5 minutes.
+Reported by the web app's GraphQL cache (\`apps/web/src/lib/graphql-cache/host/worker-host.ts\`).
+
+@webhook-macro-alert-hook`,
+  monitorThresholds: {
+    critical: '0',
+  },
+  onMissingData: 'default',
+});
