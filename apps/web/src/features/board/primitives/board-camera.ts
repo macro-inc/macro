@@ -16,13 +16,31 @@ const IDENTITY: Camera = { x: 0, y: 0, scale: 1 };
 /** Gestures that start inside these are the node's, not the board's. */
 const NODE_SELECTOR = '[data-board-node], [data-board-overlay]';
 
+/** WebKit's `GestureEvent`, which the DOM typings leave out. */
+type WebKitGesture = Event & {
+  scale: number;
+  clientX: number;
+  clientY: number;
+};
+
+function isWebKitGesture(event: Event): event is WebKitGesture {
+  return (
+    'scale' in event &&
+    typeof event.scale === 'number' &&
+    'clientX' in event &&
+    typeof event.clientX === 'number' &&
+    'clientY' in event &&
+    typeof event.clientY === 'number'
+  );
+}
+
 /**
  * The board's camera. Until the viewer pans or zooms it frames the whole
  * layout, following it as items arrive; after that it stays where they put
  * it (and is remembered) until they zoom to fit again.
  *
- * Wheel pans, pinch or Ctrl/⌘-wheel zooms at the pointer, dragging empty
- * board pans, and two touch points pinch-zoom.
+ * Wheel pans, pinch (Ctrl/⌘-wheel, or WebKit gesture events) zooms at the
+ * pointer, dragging empty board pans, and two touch points pinch-zoom.
  */
 export function createBoardCamera(options: {
   saved: Accessor<Camera | undefined>;
@@ -125,6 +143,21 @@ export function createBoardCamera(options: {
     panBy(-dx * lines, -dy * lines);
   };
 
+  // WebKit (Safari) reports trackpad pinches as gesture events with a
+  // running scale instead of ctrl+wheel.
+  let gestureScale = 1;
+  const onGestureStart = (event: Event) => {
+    event.preventDefault();
+    gestureScale = 1;
+  };
+  const onGestureChange = (event: Event) => {
+    event.preventDefault();
+    if (!isWebKitGesture(event)) return;
+    const factor = event.scale / gestureScale;
+    gestureScale = event.scale;
+    zoomBy(factor, local(event));
+  };
+
   // Active pointers on empty board, for one-finger pan and two-finger pinch.
   const pointers = new Map<number, Point>();
   let pinch: { distance: number; mid: Point } | undefined;
@@ -185,12 +218,16 @@ export function createBoardCamera(options: {
     setViewport(element);
     // Wheel must be non-passive so pinch-zoom does not zoom the page.
     element.addEventListener('wheel', onWheel, { passive: false });
+    element.addEventListener('gesturestart', onGestureStart);
+    element.addEventListener('gesturechange', onGestureChange);
     element.addEventListener('pointerdown', onPointerDown);
     element.addEventListener('pointermove', onPointerMove);
     element.addEventListener('pointerup', onPointerEnd);
     element.addEventListener('pointercancel', onPointerEnd);
     onCleanup(() => {
       element.removeEventListener('wheel', onWheel);
+      element.removeEventListener('gesturestart', onGestureStart);
+      element.removeEventListener('gesturechange', onGestureChange);
       element.removeEventListener('pointerdown', onPointerDown);
       element.removeEventListener('pointermove', onPointerMove);
       element.removeEventListener('pointerup', onPointerEnd);

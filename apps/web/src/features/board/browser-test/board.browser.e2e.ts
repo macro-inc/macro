@@ -155,7 +155,7 @@ test('read items fade, leave after a quiet day, and can be shown again', async (
   await expect.poll(() => nodes.count()).toBeGreaterThan(unread);
 });
 
-test('zooms with the toolbar and fits the whole board again', async ({
+test('zooms with the toolbar and a WebKit pinch, and fits the board again', async ({
   page,
 }) => {
   await openBoard(page);
@@ -165,4 +165,18 @@ test('zooms with the toolbar and fits the whole board again', async ({
   await expect(level).not.toHaveText(fitted ?? '');
   await page.getByRole('button', { name: 'Zoom to fit' }).click();
   await expect(level).toHaveText(fitted ?? '');
+  // Safari reports trackpad pinches as gesture events, not ctrl+wheel.
+  await page
+    .locator('section[aria-roledescription="board"]')
+    .evaluate((board) => {
+      const gesture = (type: string, scale: number) =>
+        Object.assign(new Event(type, { cancelable: true }), {
+          scale,
+          clientX: 700,
+          clientY: 450,
+        });
+      board.dispatchEvent(gesture('gesturestart', 1));
+      board.dispatchEvent(gesture('gesturechange', 1.5));
+    });
+  await expect(level).not.toHaveText(fitted ?? '');
 });
