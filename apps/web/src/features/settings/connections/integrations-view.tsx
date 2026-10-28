@@ -4,6 +4,8 @@ import {
   pendingConnectApp,
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import DesktopIcon from '@icon/system/regular/desktop.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import {
@@ -14,7 +16,8 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { SettingsPage, SettingsSurface } from '../primitives';
+import { ConnectAction, IntegrationGroup } from '../integration-ui';
+import { IntegrationRow, SettingsPage, SettingsSurface } from '../primitives';
 import { ConnectedView } from './ConnectedView';
 import { DiscoverView } from './DiscoverView';
 import { capabilitiesFor, type ProviderId } from './model';
@@ -27,41 +30,45 @@ import {
   useConnectionsView,
 } from './view-state';
 
-function IntegrationSetupCallouts(props: {
+function AiAppsGroup(props: {
   onOpenMacroMcp: () => void;
   onOpenLocalAgents?: () => void;
 }) {
   return (
-    <div class="flex flex-col gap-2">
-      <SettingsSurface class="flex items-center justify-between gap-4 px-4 py-2">
-        <p class="text-base font-medium text-ink">
-          Use Macro in your favorite AI harness with the official Macro MCP
-        </p>
-        <Button
-          variant="ghost"
-          size="md"
-          aria-label="Set up Macro in AI apps"
-          onClick={props.onOpenMacroMcp}
+    <IntegrationGroup title="AI apps">
+      <SettingsSurface>
+        <IntegrationRow
+          icon={<ClaudeIcon />}
+          title="Claude Code, Codex, and ChatGPT"
+          description="Use your Macro workspace from Claude Code, Codex, ChatGPT, Claude.ai, and IDEs through the Macro MCP server."
         >
-          Set up
-        </Button>
+          <ConnectAction
+            label="Set up"
+            variant="neutral"
+            ariaLabel="Set up Macro in AI apps"
+            onClick={props.onOpenMacroMcp}
+          />
+        </IntegrationRow>
       </SettingsSurface>
       <Show when={props.onOpenLocalAgents}>
-        <SettingsSurface class="flex items-center justify-between gap-4 px-4 py-2">
-          <p class="text-base font-medium text-ink">
-            Stream sessions from your local AI harness to Macro
-          </p>
-          <Button
-            variant="ghost"
-            size="md"
-            aria-label="Set up local agents"
-            onClick={props.onOpenLocalAgents}
-          >
-            Set up
-          </Button>
-        </SettingsSurface>
+        {(open) => (
+          <SettingsSurface>
+            <IntegrationRow
+              icon={<DesktopIcon />}
+              title="Coding agents on your computer"
+              description="Pair your computer so Macro agents run on Claude Code, Codex, OpenCode, OpenClaw, or Hermes there, with each session streamed into Macro."
+            >
+              <ConnectAction
+                label="Set up"
+                variant="neutral"
+                ariaLabel="Set up local agents"
+                onClick={open()}
+              />
+            </IntegrationRow>
+          </SettingsSurface>
+        )}
       </Show>
-    </div>
+    </IntegrationGroup>
   );
 }
 
@@ -127,11 +134,11 @@ function ConnectionsContent(props: IntegrationsViewProps) {
               onBack={view.provider() ? view.closeProvider : undefined}
               backLabel="Integrations"
             >
-              <IntegrationSetupCallouts
+              {props.children}
+              <AiAppsGroup
                 onOpenMacroMcp={props.onOpenMacroMcp}
                 onOpenLocalAgents={props.onOpenLocalAgents}
               />
-              {props.children}
               <div class="flex items-center gap-3 text-sm text-ink-muted">
                 Couldn't load Connections.
                 <Button variant="outline" size="sm" depth={3} onClick={retry}>
@@ -145,12 +152,12 @@ function ConnectionsContent(props: IntegrationsViewProps) {
             when={ready() && view.provider()}
             keyed
             fallback={
-              <SettingsPage title="Integrations" bodyClass="mt-6 gap-6">
-                <IntegrationSetupCallouts
+              <SettingsPage title="Integrations" bodyClass="mt-6 gap-8">
+                {props.children}
+                <AiAppsGroup
                   onOpenMacroMcp={props.onOpenMacroMcp}
                   onOpenLocalAgents={props.onOpenLocalAgents}
                 />
-                {props.children}
                 <Show when={partialError()}>
                   <div
                     role="status"
@@ -173,29 +180,26 @@ function ConnectionsContent(props: IntegrationsViewProps) {
                     <p class="text-sm text-ink-muted">Loading Connections…</p>
                   }
                 >
-                  <section
-                    aria-label="Agent Integrations"
-                    class="flex min-w-0 flex-col gap-4"
+                  <IntegrationGroup
+                    title="Agent tools"
+                    description="Apps your agents can use when you ask them to. Connecting an app doesn't copy its data into Macro; use Import for that."
                   >
-                    <h2 class="text-lg font-medium text-ink">
-                      Agent Integrations
-                    </h2>
                     <section
                       aria-label="Installed integrations"
                       class="min-w-0 w-full"
                     >
-                      <h3 class="mb-2 text-base font-medium text-ink">
+                      <h3 class="mb-2 text-sm font-medium text-ink-muted">
                         Installed
                       </h3>
                       <ConnectedView model={model()} />
                     </section>
                     <section
                       aria-label="Available integrations"
-                      class="min-w-0 w-full"
+                      class="mt-5 min-w-0 w-full"
                     >
                       <DiscoverView model={model()} />
                     </section>
-                  </section>
+                  </IntegrationGroup>
                 </Show>
               </SettingsPage>
             }

@@ -10,36 +10,23 @@ import type { ProviderId } from './model';
 export type FeaturedStarter = {
   id: ProviderId;
   name: string;
-  note: string;
 };
 
 export const EMPTY_STARTERS: FeaturedStarter[] = [
-  {
-    id: 'github',
-    name: 'GitHub',
-    note: 'Repos, pull requests, and issues for Macro AI',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    note: 'Issues for Macro AI',
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    note: 'Search pages with Macro AI',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    note: 'Conversations for Macro AI',
-  },
+  { id: 'github', name: 'GitHub' },
+  { id: 'linear', name: 'Linear' },
+  { id: 'notion', name: 'Notion' },
+  { id: 'slack', name: 'Slack' },
 ];
 
 export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
   ...EMPTY_STARTERS.map((item) => item.id),
   ...SLACK_PIPEDREAM_SLUGS,
   'cursor',
+  // Macro syncs email and calendars natively (Settings → Integrations → Email).
+  'gmail',
+  'google_calendar',
+  'google_sheets',
 ]);
 
 export function isPipedreamBrowseHidden(appSlug: string): boolean {

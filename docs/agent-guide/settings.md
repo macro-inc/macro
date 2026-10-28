@@ -271,14 +271,15 @@ Left nav (feature and platform gates still apply):
 - **Team · <team name>** (just **Team** without a team): General (name, slug,
   GitHub autolink, default link sharing, Delete Team), Members (member list,
   roles and seat plans, **Invite**, pending invites, auto-join and
-  members-can-invite), Connections (Slack import, GitHub App). Without a team
-  only General shows, with pending invitations or **Create Team**. Search
-  finds these by `invite`, `members`, `teammates`, `slack`, and similar terms;
-  results name their group, e.g. **Team · Members**.
+  members-can-invite). Without a team only General shows, with pending
+  invitations or **Create Team**. Search finds these by `invite`, `members`,
+  `teammates`, and similar terms; results name their group, e.g.
+  **Team · Members**. The team Slack export import and the GitHub App live in
+  Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
   sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
-- **Workspace**: Tags, Integrations (personal Gmail/GitHub accounts and agent tools).
+- **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Runtimes, MCP server, API Keys, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
@@ -562,28 +563,35 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations labels the Email/GitHub
-section Core Integrations and the connector section Agent Integrations, separated
-by spacing without a divider. Core integrations stack in one column, with compact
-GitHub and Granola rows and inline email account details that wrap on narrow screens.
-Installed tools use a two-column card grid (one
-column on narrow screens), followed by Featured and All apps, without a Discover
-heading or a separate installed sidebar. All apps has a gray Add Custom action beside its
-heading. Labelled Search apps and Category controls share a row directly below
-that heading and stack below a 560px catalog width. Both use matching 44px outlined
-frames with a subtle neutral fill; search includes an icon and a clear action.
-Installed, Featured, and All apps use headings above rounded cards. Their cards,
-the empty state, and the setup rows use the same raised composer surface as core
-integrations, with glass in dark mode and soft shadows in light mode.
-Two thin, stacked setup rows appear at the top. “Use Macro in your favorite AI
-harness with the official Macro MCP” opens connection setup; “Stream sessions
-from your local AI harness to Macro” opens Runtimes within Integrations to connect
-a local machine. Its Back button returns to Integrations; opening Runtimes from
-Agents keeps the return to Agents. The local-harness setup row follows the
-Runtimes availability gate and is hidden when that tab is unavailable.
-Email, GitHub, and Granola cards appear next under Core Integrations;
-they use two columns and share a height on wide screens, stacking on narrow screens. A small gear on the Email card opens Email settings;
-Calendar settings remain available from the settings sidebar.
+With `pipedream-mcp` enabled, Settings → Integrations is one column of
+full-width rows, each on its own raised surface with a title and a short line on
+what it does in Macro (never the app directory's own description). Groups, in
+order:
+
+- **Email**: one row per connected inbox with its provider icon, chips, sync
+  state and actions, then **Connect another Google Workspace account** and
+  **Connect an Outlook account**. Further inboxes still need multi-inbox; with
+  no inbox both rows always show. Outlook checks provider availability first.
+  A gear beside the heading opens Email settings. Finished syncs show no label.
+- **Accounts**: GitHub (Configure app opens the GitHub App install), Granola,
+  and, for team admins with Slack archive import enabled, **Slack export**.
+- **AI apps**: “Claude Code, Codex, and ChatGPT” opens Macro MCP setup;
+  “Coding agents on your computer” (Claude Code, Codex, OpenCode, OpenClaw,
+  Hermes) opens Runtimes within Integrations. Its Back button returns to
+  Integrations; opening Runtimes from Agents keeps the return to Agents. The
+  local row follows the Runtimes availability gate.
+- **Agent tools**: Installed, Featured, and All apps. Installed apps say agents
+  can use them and nothing is copied into Macro.
+
+Gmail, Google Calendar and Google Sheets are hidden from the catalog because
+Macro syncs email and calendars natively. Apps Macro can import from (the
+connector-import catalog: Notion, Google Drive, Dropbox, Linear, Jira, Asana,
+Trello, Airtable, Slack and others) show **Import** beside **Connect**: Import
+opens the connector import dialog for that app, which connects it and hands
+the import to an agent; Connect only gives agents the app's tools. Featured
+rows (GitHub, Linear, Notion, Slack) open their provider page from Connect or
+Manage. All apps has an Add Custom action beside its heading; Search apps and
+Category share a row and stack below a 560px catalog width.
 All apps groups each app under its first nonempty Pipedream category; apps without
 category metadata appear under More apps. Categories lead with Productivity,
 Communication, Developer Tools, AI, File Storage, and CRM; remaining categories
@@ -596,17 +604,13 @@ All apps to show one group; changing the search returns to all categories. Group
 counts reflect the currently loaded results.
 Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open
-Pipedream: their plus action opens the vendor's own MCP OAuth consent in a new
+Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
 tab (system browser on native) and the card turns connected once that server is
 authorized, after which the app appears with the custom MCP servers under
 Installed. Verify with an overlaid app such as Sentry or Asana; completing a
 Pipedream connection for one answers 409.
-Featured and catalog cards use two columns on wide screens and one on narrow
-screens, with a plus action for available apps. Featured cards show app names
-without descriptions, and catalog descriptions
-and connection status use readable body-sized text. The Agents workspace opens this same Integrations
-page. Installed groups GitHub, Linear, Notion, and Slack tool grants by provider,
-lists other catalog connections alongside them, and lists custom servers in the same installed grid. The available integrations include featured providers, a searchable catalog,
+The Agents workspace opens this same Integrations page. Installed groups GitHub, Linear, Notion, and Slack tool grants by provider,
+lists other catalog connections alongside them, and lists custom servers in the same installed list. The available integrations include featured providers, a searchable catalog,
 and `Add Custom`. Pipedream Slack OAuth is available in production and
 development from the featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.

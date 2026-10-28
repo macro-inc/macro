@@ -309,7 +309,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             <PipedreamConnectorIcon appSlug={item.appSlug} class="size-8" />
           }
           title={item.title}
-          description={item.subtitle}
+          description="Agents can use this app when you ask them to. Nothing is copied into Macro."
           muted={muted}
         >
           {actions()}

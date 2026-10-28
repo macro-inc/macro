@@ -17,7 +17,7 @@ import {
 } from './integration-ui';
 import { IntegrationRow, SettingsCard } from './primitives';
 
-/** GitHub integration as a Connected-accounts card. */
+/** GitHub account link, one row on the Integrations page. */
 export function GitHubCard(props: { class?: string } = {}) {
   const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
@@ -72,6 +72,7 @@ export function GitHubCard(props: { class?: string } = {}) {
       <IntegrationRow
         icon={<GithubIcon />}
         title="GitHub"
+        description="Review your pull requests in Macro, see live pull request status in docs and chats, and let agents work in your repositories."
         status={
           <Show when={connectionState()}>
             {(state) => <StatusDot state={state()} label={connectionLabel()} />}

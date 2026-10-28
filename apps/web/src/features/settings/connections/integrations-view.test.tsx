@@ -118,6 +118,17 @@ vi.mock('../primitives', () => ({
   SettingsCard: (props: { children: JSX.Element }) => (
     <div>{props.children}</div>
   ),
+  IntegrationRow: (props: {
+    title: JSX.Element;
+    description?: JSX.Element;
+    children?: JSX.Element;
+  }) => (
+    <div>
+      <span>{props.title}</span>
+      <span>{props.description}</span>
+      {props.children}
+    </div>
+  ),
 }));
 
 beforeEach(() => {

@@ -1,10 +1,10 @@
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { For, Show } from 'solid-js';
+import { StatusDot } from '../integration-ui';
 import { IntegrationRow, SettingsSurface } from '../primitives';
 import { LeftoverRow } from './leftover-row';
-import type { ConnectionsModel } from './model';
-import { isConnectionsEmpty } from './model';
+import { type ConnectionsModel, CURATED_AI, isConnectionsEmpty } from './model';
 import { providerIcon } from './provider-meta';
 import { useConnectionsView } from './view-state';
 
@@ -25,7 +25,7 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
         </SettingsSurface>
       }
     >
-      <div class="grid grid-cols-1 gap-3 @[440px]/settings-page:grid-cols-2">
+      <div class="flex flex-col gap-2">
         <For each={props.model.providers}>
           {(provider) => (
             <SettingsSurface class="overflow-hidden">
@@ -37,12 +37,17 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
                 <IntegrationRow
                   icon={providerIcon(provider.id)}
                   title={provider.name}
-                  class="gap-3 px-4 py-3"
-                  description={
-                    <span class="text-sm">
-                      {provider.ready} of {provider.total} active
-                    </span>
+                  status={
+                    <StatusDot
+                      state={
+                        provider.ready === provider.total
+                          ? 'connected'
+                          : 'attention'
+                      }
+                      label={`${provider.ready} of ${provider.total} active`}
+                    />
                   }
+                  description={CURATED_AI[provider.id].outcome}
                   facts={provider.accounts || undefined}
                 >
                   <span class="flex size-8 shrink-0 items-center justify-center">
