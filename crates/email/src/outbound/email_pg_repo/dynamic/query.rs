@@ -441,8 +441,12 @@ fn push_thread_candidate_select(
 fn build_query(
     view: &PreviewView,
     email_filter: &Expr<EmailLiteral>,
-    params: QueryParams,
+    mut params: QueryParams,
 ) -> QueryBuilder<'static, Postgres> {
+    params.resolved.include_trash = matches!(
+        view,
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
+    );
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_message_filter = build_view_message_filter(view);
     // When neither ordering nor filtering needs view history, the
