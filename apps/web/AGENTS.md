@@ -245,6 +245,7 @@ the user's newest account for that app from the last fifteen minutes.
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
+- Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
