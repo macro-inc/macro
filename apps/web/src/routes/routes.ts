@@ -167,6 +167,13 @@ export const internalInviteLinksRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Macro staff only: set the status banner every user sees. */
+export const internalSystemStatusRoute = defineRoute({
+  id: 'internal-system-status',
+  path: 'internal/status',
+  externalSearch: '*',
+});
+
 export const teamInviteRoute = defineRoute({
   id: 'team-invite',
   path: 'team-invite',
