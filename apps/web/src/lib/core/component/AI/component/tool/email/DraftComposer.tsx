@@ -107,6 +107,14 @@ function fromEmailRecipients(
   });
 }
 
+function attachedDocumentQueryOptions(documentId: string) {
+  return {
+    queryKey: entityKeys.documentMetadata(documentId).queryKey,
+    queryFn: () => fetchDocumentMetadata(documentId),
+    staleTime: 60 * 1000,
+  };
+}
+
 function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
   return <ComposerSurface {...props} as="div" />;
 }
@@ -242,11 +250,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const describeDocument = async (
     documentId: string
   ): Promise<DocumentDescription> => {
-    const metadata = await queryClient.fetchQuery({
-      queryKey: entityKeys.documentMetadata(documentId).queryKey,
-      queryFn: () => fetchDocumentMetadata(documentId),
-      staleTime: 60 * 1000,
-    });
+    const metadata = await queryClient.fetchQuery(
+      attachedDocumentQueryOptions(documentId)
+    );
     const fileType = metadata.fileType ?? undefined;
     return {
       fileName: documentAttachmentFileName(metadata.documentName, fileType),

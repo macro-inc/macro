@@ -78,6 +78,15 @@ function generateDatabaseQuery(
 }
 
 /** Production transport adapters; the composer only receives these narrow capabilities. */
+function currentDatabaseQueryOptions(databaseId: string) {
+  return {
+    queryKey: databasesKeys.detail(databaseId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => storageServiceClient.databases.get({ id: databaseId })),
+    staleTime: 0,
+  };
+}
+
 export function createQueryCapabilities(
   model: Accessor<TModel>
 ): QueryCapabilities {
@@ -93,14 +102,7 @@ export function createQueryCapabilities(
       ),
     describe: (databaseId) =>
       ResultAsync.fromPromise(
-        queryClient.fetchQuery({
-          queryKey: databasesKeys.detail(databaseId).queryKey,
-          queryFn: () =>
-            throwOnErr(() =>
-              storageServiceClient.databases.get({ id: databaseId })
-            ),
-          staleTime: 0,
-        }),
+        queryClient.fetchQuery(currentDatabaseQueryOptions(databaseId)),
         databasesFailure
       ),
   });
