@@ -13,9 +13,9 @@ type ItemLabelProps = ComponentProps<typeof KobalteRadioGroup.ItemLabel>;
 
 const RadioGroupSizeContext = createContext<() => RadioGroupSize>(() => 'md');
 const radioSizes: Record<RadioGroupSize, { control: string; indicator: string }> = {
-  sm: { control: 'size-3.5', indicator: 'size-1' },
-  md: { control: 'size-4', indicator: 'size-1.5' },
-  lg: { control: 'size-5', indicator: 'size-2' },
+  sm: { control: 'size-3.5', indicator: 'size-1.5' },
+  md: { control: 'size-4', indicator: 'size-2' },
+  lg: { control: 'size-5', indicator: 'size-2.5' },
 };
 
 function RadioGroupItem(props: ItemProps) {
