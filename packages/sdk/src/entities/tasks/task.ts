@@ -20,23 +20,6 @@ const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
 const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
 
-/** Task creation settings. */
-export interface TaskOptions {
-  name: string;
-  markdown?: string;
-  /** Folder the task document is filed in; unrelated to {@link initiative}. */
-  project?: Project;
-  /** The initiative (shown as the task's Project in the app) it belongs to. */
-  initiative?: Initiative;
-  /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
-  assignees?: User[];
-  dueDate?: Date;
-  /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
-  team?: Team;
-  /** Defaults to true. */
-  shareWithTeam?: boolean;
-}
-
 /** A task's name and state from one batched read, without its content. */
 export interface TaskSummary {
   task: Task;
@@ -74,7 +57,24 @@ export class Task extends Document {
    * Create a task, with its initiative, assignees and due date in the same
    * request. The task starts Not started.
    */
-  static async create(client: MacroClient, opts: TaskOptions): Promise<Task> {
+  static async create(
+    client: MacroClient,
+    opts: {
+      name: string;
+      markdown?: string;
+      /** Folder the task document is filed in; unrelated to `initiative`. */
+      project?: Project;
+      /** The initiative (shown as the task's Project in the app) it belongs to. */
+      initiative?: Initiative;
+      /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
+      assignees?: User[];
+      dueDate?: Date;
+      /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
+      team?: Team;
+      /** Defaults to true. */
+      shareWithTeam?: boolean;
+    },
+  ): Promise<Task> {
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
@@ -180,7 +180,7 @@ export class Task extends Document {
  */
 async function initialProperties(
   client: MacroClient,
-  opts: TaskOptions,
+  opts: Parameters<typeof Task.create>[1],
 ): Promise<PropertyInput[] | null> {
   if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
   const assignees = opts.assignees ?? [await User.me(client)];

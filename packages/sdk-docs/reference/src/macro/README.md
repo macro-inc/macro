@@ -634,12 +634,6 @@ Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/ty
 
 ***
 
-### TaskOptions
-
-Re-exports [TaskOptions](../entities/tasks/task/interfaces/TaskOptions.md)
-
-***
-
 ### TaskSummary
 
 Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)

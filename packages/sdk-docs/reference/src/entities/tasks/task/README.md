@@ -6,5 +6,4 @@
 
 ## Interfaces
 
-- [TaskOptions](interfaces/TaskOptions.md)
 - [TaskSummary](interfaces/TaskSummary.md)

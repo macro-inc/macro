@@ -316,7 +316,7 @@ export {
 } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
-export type { TaskOptions, TaskSummary } from './entities/tasks/task';
+export type { TaskSummary } from './entities/tasks/task';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

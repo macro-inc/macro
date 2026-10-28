@@ -1,6 +1,10 @@
 import type { MacroClient } from '../../utils/client';
+import type { Initiative } from '../initiatives/initiative';
+import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search';
-import { Task, type TaskOptions, type TaskSummary } from './task';
+import type { Team } from '../teams/team';
+import type { User } from '../users/user';
+import { Task, type TaskSummary } from './task';
 
 /**
  * Tasks: one `create` call sets initiative, assignees and due date; one
@@ -20,7 +24,21 @@ export class TaskNamespace {
    * Create a task, with its initiative, assignees and due date in the same
    * request. The task starts Not started.
    */
-  create(opts: TaskOptions): Promise<Task> {
+  create(opts: {
+    name: string;
+    markdown?: string;
+    /** Folder the task document is filed in; unrelated to `initiative`. */
+    project?: Project;
+    /** The initiative (shown as the task's Project in the app) it belongs to. */
+    initiative?: Initiative;
+    /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
+    assignees?: User[];
+    dueDate?: Date;
+    /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
+    team?: Team;
+    /** Defaults to true. */
+    shareWithTeam?: boolean;
+  }): Promise<Task> {
     return Task.create(this.client, opts);
   }
 
