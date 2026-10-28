@@ -181,7 +181,7 @@ const eyebrowStyle = {
   'letter-spacing': '0.12em',
   'text-transform': 'uppercase',
   color: 'var(--color-ink-extra-muted)',
-  'font-family': 'Rajdhani',
+  'font-family': 'Inter',
 };
 
 const headingStyles: Record<number, Record<string, string>> = {
@@ -256,8 +256,7 @@ export function UtilPlainText(props: {
   content: string;
   /** Render `- ` / `1. ` lines as real lists (off by default — see BULLET_RE). */
   lists?: boolean;
-  /** Blog-post measure and Cyber Reader. Skips the wordmark, title, and date
-   *  line so the caller can render those in a posts-article header. */
+
   variant?: 'legal' | 'post';
 }) {
   const parsed = parseContent(props.content, props.lists ?? false);

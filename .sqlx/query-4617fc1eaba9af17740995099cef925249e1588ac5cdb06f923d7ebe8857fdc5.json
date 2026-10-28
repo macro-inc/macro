@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_external_replies SET announced = TRUE WHERE session_id = $1 AND action_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4617fc1eaba9af17740995099cef925249e1588ac5cdb06f923d7ebe8857fdc5"
+}

@@ -1,7 +1,7 @@
 import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import { themeReactive } from '../theme/signals/themeReactive';
+import { committedThemeAccent } from '../theme/signals/themeSignals';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
@@ -14,10 +14,13 @@ import {
 import { openNotification } from './notification-navigation';
 import {
   DefaultDocumentNameResolver,
+  DefaultUserAvatarResolver,
   DefaultUserNameResolver,
   type DocumentNameResolver,
+  type UserAvatarResolver,
   type UserNameResolver,
 } from './notification-resolvers';
+import { getNotificationSenderAvatarUrl } from './notification-sender';
 import type { UnifiedNotification } from './types';
 
 /// the interface for a singular notification on this device
@@ -27,18 +30,25 @@ export interface PlatformNotificationHandle {
   close: () => void;
 }
 
+export interface PlatformNotificationSender {
+  /** The sender's Macro user id, or the agent's name when it has none. */
+  id: string;
+  name: string;
+  avatarUrl?: string;
+}
+
 export interface PlatformNotificationData {
   title: string;
+  notificationId?: string;
   options?: NotificationOptions;
+  /** Who it is from, for platforms that show the sender apart from `title`. */
+  sender?: PlatformNotificationSender;
+  /** Where it happened. `name` is set only when `title` names it too. */
+  conversation?: { id: string; name?: string };
 }
 
 const USER_NAME_FALLBACK = 'Someone';
 const DOCUMENT_NAME_FALLBACK = 'Something';
-
-function getAccentColorForIcon(): string {
-  const { l, c, h } = themeReactive.a0;
-  return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
-}
 
 /**
  * Who the notification reads as being from. Agent notifications have no user
@@ -69,12 +79,24 @@ async function resolveActorName(
     : undefined;
 }
 
+async function resolveSenderAvatarUrl(
+  notification: UnifiedNotification,
+  resolveUserAvatar: UserAvatarResolver
+): Promise<string | undefined> {
+  const avatarUrl = getNotificationSenderAvatarUrl(notification);
+  if (avatarUrl) return avatarUrl;
+  return notification.sender_id
+    ? await resolveUserAvatar(notification.sender_id)
+    : undefined;
+}
+
 export async function toPlatformNotificationData(
   notification: UnifiedNotification,
   resolveUserName: UserNameResolver,
-  resolveDocumentName: DocumentNameResolver
+  resolveDocumentName: DocumentNameResolver,
+  resolveUserAvatar: UserAvatarResolver
 ): Promise<PlatformNotificationData | null> {
-  const accentColor = getAccentColorForIcon();
+  const accentColor = committedThemeAccent();
   const icon = getFaviconUrl(accentColor);
   const metadata = notification.notification_metadata;
 
@@ -90,9 +112,11 @@ export async function toPlatformNotificationData(
     };
   }
 
-  const actor =
-    (await resolveActorName(notification, resolveUserName)) ??
-    USER_NAME_FALLBACK;
+  const [actorName, avatarUrl] = await Promise.all([
+    resolveActorName(notification, resolveUserName),
+    resolveSenderAvatarUrl(notification, resolveUserAvatar),
+  ]);
+  const actor = actorName ?? USER_NAME_FALLBACK;
 
   const showTarget = shouldShowNotificationTarget(notification);
   const targetName =
@@ -111,6 +135,17 @@ export async function toPlatformNotificationData(
     options: {
       body: content ? markdownToPlainText(content) : action,
       icon,
+    },
+    sender: actorName
+      ? {
+          id: notification.sender_id ?? actorName,
+          name: actorName,
+          avatarUrl,
+        }
+      : undefined,
+    conversation: {
+      id: notification.entity_id,
+      name: showTarget ? targetName : undefined,
     },
   };
 }
@@ -139,20 +174,29 @@ export async function maybeHandlePlatformNotification(
   const platformNotificationData = await toPlatformNotificationData(
     notification,
     DefaultUserNameResolver,
-    DefaultDocumentNameResolver
+    DefaultDocumentNameResolver,
+    DefaultUserAvatarResolver
   );
 
   if (platformNotificationData) {
-    let notificationHandle = await notificationInterface.showNotification(
-      platformNotificationData
-    );
+    let notificationHandle = await notificationInterface.showNotification({
+      ...platformNotificationData,
+      notificationId: notification.id,
+    });
     if (
       notificationHandle !== 'not-granted' &&
       notificationHandle !== 'disabled-in-ui'
     ) {
       notificationHandle.onClick(() => {
         window.focus();
-        openNotification(notification, splitLayoutManager);
+        openNotification(
+          notification,
+          splitLayoutManager,
+          false,
+          undefined,
+          undefined,
+          { source: 'browser_push' }
+        );
         notificationHandle.close();
       });
     }

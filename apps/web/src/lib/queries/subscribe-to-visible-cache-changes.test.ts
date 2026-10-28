@@ -1,4 +1,8 @@
-import type { CacheHost } from '@graphql-cache/host/types';
+import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
+import {
+  type HydrationSearchChanges,
+  INITIAL_CACHE_REVISION,
+} from '@graphql-cache/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { subscribeToVisibleCacheChanges } from './subscribe-to-visible-cache-changes';
 
@@ -10,17 +14,26 @@ function setVisibility(value: DocumentVisibilityState) {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
-function setup(refresh = vi.fn<() => void | Promise<unknown>>()) {
-  let notify = () => {};
+function setup(
+  refresh = vi.fn<() => void | Promise<unknown>>(),
+  options?: Parameters<typeof subscribeToVisibleCacheChanges>[2]
+) {
+  let notify: CacheChangeListener = () => {};
   const unsubscribe = vi.fn();
   const host = {
-    onCacheChanged: vi.fn((callback: () => void) => {
+    onCacheChanged: vi.fn((callback: CacheChangeListener) => {
       notify = callback;
       return unsubscribe;
     }),
   } satisfies Pick<CacheHost, 'onCacheChanged'>;
-  dispose = subscribeToVisibleCacheChanges(host, refresh);
-  return { host, notify, refresh, unsubscribe };
+  dispose = subscribeToVisibleCacheChanges(host, refresh, options);
+  return {
+    host,
+    notify: (changes?: HydrationSearchChanges) =>
+      notify(INITIAL_CACHE_REVISION, changes),
+    refresh,
+    unsubscribe,
+  };
 }
 
 beforeEach(() => {
@@ -38,6 +51,61 @@ afterEach(() => {
 });
 
 describe('subscribeToVisibleCacheChanges', () => {
+  it('does no work for unrelated hydration, including while hidden', () => {
+    const { notify, refresh } = setup(undefined, {
+      searchBuckets: () => ['note', 'task'],
+    });
+    notify({ searchChangedBuckets: ['email'] });
+    notify({ searchChangedBuckets: [] });
+    setVisibility('hidden');
+    notify({ searchChangedBuckets: ['channel'] });
+    setVisibility('visible');
+    vi.advanceTimersByTime(1000);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('refreshes newly hydrated matching buckets and falls back for legacy/reset notifications', () => {
+    const { notify, refresh } = setup(undefined, {
+      searchBuckets: () => ['note'],
+    });
+    notify({ searchChangedBuckets: ['note'] });
+    expect(refresh).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(250);
+    notify();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not queue a follow-up for unrelated hydration during a slow refresh', async () => {
+    let finish!: () => void;
+    const refresh = vi.fn<() => void | Promise<unknown>>().mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const { notify } = setup(refresh, {
+      searchBuckets: () => ['channel', 'dm'],
+    });
+    notify({ searchChangedBuckets: ['dm'] });
+    for (let i = 0; i < 20; i++)
+      notify({ searchChangedBuckets: ['email', 'note'] });
+    finish();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('uses current bucket interests for projected lists', () => {
+    let buckets = ['note'];
+    const { notify, refresh } = setup(undefined, {
+      searchBuckets: () => buckets,
+    });
+    notify({ searchChangedBuckets: ['channel'] });
+    expect(refresh).not.toHaveBeenCalled();
+    buckets = ['channel'];
+    notify({ searchChangedBuckets: ['channel'] });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('retains leading/trailing throttling and hydration updates when visible', () => {
     const { host, notify, refresh } = setup();
     expect(host.onCacheChanged).toHaveBeenCalledWith(expect.any(Function), {

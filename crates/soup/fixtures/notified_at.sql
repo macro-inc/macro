@@ -3,7 +3,7 @@
 -- user-1 is the subject. Their notifications span every entity type the feed
 -- surfaces, plus every trap the query must dodge: deleted notification rows,
 -- other users' notifications, deleted and inaccessible entities, left
--- channels, other users' inboxes/events/foreign entities/reminders,
+-- channels, other users' inboxes/events/foreign entities,
 -- notification types the feed does not roll up, and a malformed entity id.
 --
 -- user-1's expected feed, latest notification first (T = minute past 10:00):
@@ -17,7 +17,6 @@
 --   T5 event-E1    (owned calendar event)
 --   T4 thread-Z    (user-1's own inbox link)
 --   T3 pr-F1       (foreign entity stored for user-1)
---   T2 reminder-R1
 --   T0 channel-X   (a channel-level notification with no secondary item)
 
 SET session_replication_role = 'replica';
@@ -76,11 +75,10 @@ INSERT INTO public.comms_channels ("id", "channel_type", "owner_id", "created_at
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'private', 'macro|user-1@test.com', '2023-01-07 10:00:00', '2023-01-07 10:00:00'),
        ('33333333-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'private', 'macro|user-2@test.com', '2023-01-07 11:00:00', '2023-01-07 11:00:00');
 
--- Replica mode skips the trigger that derives the parent columns from channel_id,
--- so this fixture sets them itself.
-INSERT INTO public.comms_messages ("id", "channel_id", "parent_entity_type", "parent_entity_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
+-- Message parents are identified by their entity type and id.
+INSERT INTO public.comms_messages ("id", "parent_entity_type", "parent_entity_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
 -- thread-M is a root message in channel-X that user-1 was mentioned in.
-VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
 
 INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", "joined_at", "left_at")
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-1@test.com', '2023-01-07 10:00:00', NULL),
@@ -116,11 +114,6 @@ VALUES ('77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'org/repo#1', 'github_pull_reque
        -- Stored for Team T, which user-1 belongs to: visible through the team source.
        ('77777777-cccc-cccc-cccc-cccccccccccc', 'org/repo#3', 'github_pull_request', '{}', 'eeeeeeee-1111-1111-1111-111111111111', 'team', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
 
-INSERT INTO public.reminder ("id", "user_id", "description", "remind_at", "next_run_at")
-VALUES ('88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', 'Reminder R1', '2024-06-01 10:02:00+00', '2024-06-01 10:02:00+00'),
-       -- Notified at T17 but it is user-2's reminder: must never surface.
-       ('88888888-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', 'Reminder R2', '2024-06-01 10:17:00+00', '2024-06-01 10:17:00+00');
-
 INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level", "granted_from_project_id")
 VALUES ('aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'macro|user-1@test.com', 'user', 'owner', NULL),
        ('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
@@ -153,8 +146,6 @@ VALUES
 ('0190a000-0000-7000-8000-000000000004', 'email_received', '44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'email_thread', 'test', '2024-06-01 10:04:00', '{}', NULL, NULL, NULL),
 -- pr-F1 at T3.
 ('0190a000-0000-7000-8000-000000000003', 'github_pull_request_event', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'foreign_entity', 'test', '2024-06-01 10:03:00', '{}', NULL, NULL, NULL),
--- reminder-R1 at T2.
-('0190a000-0000-7000-8000-000000000002', 'reminder_fired', '88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'reminder', 'test', '2024-06-01 10:02:00', '{}', NULL, NULL, NULL),
 -- Isolated doc at T10: user-1 has no access row.
 ('0190a000-0000-7000-8000-000000000010', 'document_mention', '11111111-9999-9999-9999-999999999999', 'document', 'test', '2024-06-01 10:10:00', '{}', 'macro|user-2@test.com', NULL, NULL),
 -- Deleted doc at T11: the row is soft-deleted.
@@ -169,8 +160,6 @@ VALUES
 ('0190a000-0000-7000-8000-000000000015', 'calendar_event_reminder', '66666666-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'calendar_event', 'test', '2024-06-01 10:15:00', '{}', NULL, NULL, NULL),
 -- pr-F2 at T16: stored for user-2.
 ('0190a000-0000-7000-8000-000000000016', 'github_pull_request_event', '77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'foreign_entity', 'test', '2024-06-01 10:16:00', '{}', NULL, NULL, NULL),
--- reminder-R2 at T17: user-2's reminder.
-('0190a000-0000-7000-8000-000000000017', 'reminder_fired', '88888888-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'reminder', 'test', '2024-06-01 10:17:00', '{}', NULL, NULL, NULL),
 -- A call notification at T18: calls are not part of the feed.
 ('0190a000-0000-7000-8000-000000000018', 'call_started', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'call', 'test', '2024-06-01 10:18:00', '{}', NULL, NULL, NULL),
 -- pr-F3 at T19: stored for user-1's team.
@@ -194,7 +183,6 @@ VALUES
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, 'unseen', FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000002', '2024-06-01 10:02:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000011', '2024-06-01 10:11:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, '2024-06-01 10:12:30', 'unseen', FALSE),
@@ -202,7 +190,6 @@ VALUES
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000014', '2024-06-01 10:14:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, 'unseen', FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, 'unseen', FALSE),

@@ -18,6 +18,7 @@ import {
   createGraphqlSoupDeletion,
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
+  prepareGraphqlSoupRestore,
   usePendingGraphqlSoupDeleteIds,
   withoutPendingGraphqlSoupDeletes,
   withoutPendingSoupEntities,
@@ -66,6 +67,39 @@ function data(): SoupAstItemsData {
 }
 
 describe('GraphQL Soup deletion lifecycle', () => {
+  it('does not resurrect restored ids when an earlier deletion settles late', async () => {
+    refresh.mockReturnValue(new Promise<void>(() => {}));
+    const deletion = createGraphqlSoupDeletion(['restored', 'sibling']);
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let finish!: () => void;
+    const network = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const mutation = client.getMutationCache().build(client, {
+      mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+      onMutate: () => ({ graphqlDeletion: deletion }),
+      mutationFn: async () => {
+        started();
+        await network;
+      },
+      onSettled: () => deletion.settle(['restored', 'sibling']),
+    });
+    const request = mutation.execute(undefined);
+    await ready;
+    try {
+      const confirmRestore = prepareGraphqlSoupRestore();
+      confirmRestore(['restored']);
+      finish();
+      await request;
+      expect(deletion.ids()).toEqual(['sibling']);
+    } finally {
+      deletion.release();
+    }
+  });
+
   it('retains confirmed ids after their completed mutation is garbage collected', async () => {
     let finishRefresh!: () => void;
     refresh.mockReturnValue(

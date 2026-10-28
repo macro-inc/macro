@@ -47,8 +47,8 @@ pub mod outbound;
 // Re-export commonly used types for convenience
 pub use domain::model::PropertyRow;
 pub use domain::model::{
-    EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption, SourceEntity,
-    StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
+    CrmRecordLink, EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption,
+    SourceEntity, StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
 };
 pub use domain::port::SystemPropertiesRepository;
 

@@ -26,6 +26,15 @@ impl AsRef<str> for GithubAccessToken {
     }
 }
 
+/// Result of storing an OAuth grant on an authentication identity.
+#[derive(Debug, PartialEq, Eq)]
+pub enum GithubGrantLinkOutcome {
+    /// The grant was created or refreshed.
+    Linked,
+    /// The authentication identity no longer exists.
+    IdentityMissing,
+}
+
 /// A GitHub link record (as stored in the database)
 #[derive(Debug, Clone)]
 pub struct GithubLink {
@@ -43,6 +52,17 @@ pub struct GithubLink {
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// When the link was last updated
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Whether a user's GitHub link can be used.
+#[derive(Debug, Clone)]
+pub enum GithubLinkStatus {
+    /// The user has not linked a GitHub account.
+    NotLinked,
+    /// The user linked a GitHub account, but its token no longer works.
+    ReauthenticationRequired,
+    /// The user's GitHub link has a working token.
+    Linked(GithubLink),
 }
 
 /// GitHub OAuth token exchange response

@@ -13,14 +13,12 @@ const OTHER_DOC: &str = "doc-2";
 
 #[derive(Debug, PartialEq, sqlx::FromRow)]
 struct ParentColumns {
-    channel_id: Option<Uuid>,
     parent_entity_type: String,
     parent_entity_id: String,
 }
 
 fn channel_parent(channel_id: Uuid) -> ParentColumns {
     ParentColumns {
-        channel_id: Some(channel_id),
         parent_entity_type: "channel".to_owned(),
         parent_entity_id: channel_id.to_string(),
     }
@@ -28,7 +26,7 @@ fn channel_parent(channel_id: Uuid) -> ParentColumns {
 
 async fn parent_columns(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<ParentColumns> {
     Ok(sqlx::query_as(
-        "SELECT channel_id, parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
+        "SELECT parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
     )
     .bind(id)
     .fetch_one(pool)
@@ -47,10 +45,10 @@ async fn thread_rows(pool: &Pool<Postgres>, root_id: Uuid) -> anyhow::Result<i64
 async fn insert_channel_root(pool: &Pool<Postgres>, channel_id: Uuid) -> anyhow::Result<Uuid> {
     let id = macro_uuid::generate_uuid_v7();
     sqlx::query(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, 'root')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'channel', $2, $3, 'root')",
     )
     .bind(id)
-    .bind(channel_id)
+    .bind(channel_id.to_string())
     .bind(USER1)
     .execute(pool)
     .await?;
@@ -92,17 +90,11 @@ fn constraint_name(err: &sqlx::Error) -> Option<&str> {
     err.as_database_error().and_then(|e| e.constraint())
 }
 
-fn error_code(err: &sqlx::Error) -> Option<String> {
-    err.as_database_error()
-        .and_then(|e| e.code())
-        .map(|code| code.into_owned())
-}
-
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../fixtures", scripts("channels"))
 )]
-async fn old_style_channel_insert_gets_parent_columns_and_thread_row(
+async fn channel_insert_gets_parent_columns_and_thread_row(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
@@ -135,7 +127,7 @@ async fn old_style_channel_insert_gets_parent_columns_and_thread_row(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../fixtures", scripts("channels"))
 )]
-async fn parent_only_channel_insert_gets_channel_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn parent_only_channel_insert_gets_thread_row(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let id = macro_uuid::generate_uuid_v7();
     sqlx::query(
         "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
@@ -161,7 +153,6 @@ async fn document_root_without_channel_inserts_and_gets_thread_row(
     assert_eq!(
         parent_columns(&pool, root_id).await?,
         ParentColumns {
-            channel_id: None,
             parent_entity_type: "document".to_owned(),
             parent_entity_id: DOC.to_owned(),
         }
@@ -221,11 +212,11 @@ async fn reply_with_different_parent_than_root_is_rejected(
 
     let channel_root = insert_channel_root(&pool, CH1).await?;
     let err = sqlx::query(
-        "INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content)
-         VALUES ($1, $2, $3, $4, 'reply')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content)
+         VALUES ($1, 'channel', $2, $3, $4, 'reply')",
     )
     .bind(macro_uuid::generate_uuid_v7())
-    .bind(CH3)
+    .bind(CH3.to_string())
     .bind(channel_root)
     .bind(USER2)
     .execute(&pool)
@@ -234,44 +225,6 @@ async fn reply_with_different_parent_than_root_is_rejected(
     assert_eq!(
         constraint_name(&err),
         Some("comms_messages_thread_parent_fkey")
-    );
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../fixtures", scripts("channels"))
-)]
-async fn disagreeing_channel_id_and_parent_are_rejected(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let err = sqlx::query(
-        "INSERT INTO comms_messages (id, channel_id, parent_entity_type, parent_entity_id, sender_id, content)
-         VALUES ($1, $2, 'channel', $3, $4, 'hi')",
-    )
-    .bind(macro_uuid::generate_uuid_v7())
-    .bind(CH1)
-    .bind(CH3.to_string())
-    .bind(USER1)
-    .execute(&pool)
-    .await
-    .expect_err("channel_id and parent_entity_id must agree");
-    assert_eq!(error_code(&err).as_deref(), Some("23514"));
-
-    let err = sqlx::query(
-        "INSERT INTO comms_messages (id, channel_id, parent_entity_type, parent_entity_id, sender_id, content)
-         VALUES ($1, $2, 'document', $3, $4, 'hi')",
-    )
-    .bind(macro_uuid::generate_uuid_v7())
-    .bind(CH1)
-    .bind(DOC)
-    .bind(USER1)
-    .execute(&pool)
-    .await
-    .expect_err("a document message cannot carry a channel_id");
-    assert_eq!(
-        constraint_name(&err),
-        Some("comms_messages_channel_parent_check")
     );
     Ok(())
 }
@@ -409,12 +362,6 @@ async fn pdf_anchors_reference_document_thread_rows(pool: Pool<Postgres>) -> any
     .bind(USER1)
     .execute(&pool)
     .await?;
-    sqlx::query(r#"INSERT INTO "Thread" (id, owner, "documentId") VALUES (901, $1, $2)"#)
-        .bind(USER1)
-        .bind(DOC)
-        .execute(&pool)
-        .await?;
-
     let root_id = insert_document_root(&pool, DOC).await?;
     let placeable = Uuid::from_u128(0xf0000000_0000_0000_0000_000000000001);
     let highlight = Uuid::from_u128(0xf0000000_0000_0000_0000_000000000002);
@@ -422,9 +369,9 @@ async fn pdf_anchors_reference_document_thread_rows(pool: Pool<Postgres>) -> any
         r#"INSERT INTO "PdfPlaceableCommentAnchor" (
                uuid, "documentId", owner, page, "wasEdited", "wasDeleted", "shouldLockOnSave",
                "originalPage", "originalIndex", "xPct", "yPct", "widthPct", "heightPct", rotation,
-               "threadId", root_id
+               root_id
            )
-           VALUES ($1, $2, $3, 1, false, false, false, 1, 0, 0.1, 0.1, 0.2, 0.2, 0, 901, $4)"#,
+           VALUES ($1, $2, $3, 1, false, false, false, 1, 0, 0.1, 0.1, 0.2, 0.2, 0, $4)"#,
     )
     .bind(placeable)
     .bind(DOC)

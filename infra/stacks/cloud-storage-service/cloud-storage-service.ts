@@ -7,8 +7,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
-  datadogAgentContainer,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
   ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -36,11 +35,13 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
+  githubPullRequestPatchBucketArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
+  slackImportUploadPolicyArn: pulumi.Output<string> | string;
   callRecordingCrudPolicyArn: pulumi.Output<string> | string;
   snsPlatformArns: (pulumi.Output<string> | string)[];
   tags: { [key: string]: string };
@@ -63,12 +64,14 @@ export class CloudStorageService extends pulumi.ComponentResource {
       platform,
       documentStorageBucketArn,
       docxUploadBucketArn,
+      githubPullRequestPatchBucketArn,
       serviceContainerPort,
       healthCheckPath,
       containerEnvVars,
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
+      slackImportUploadPolicyArn,
       callRecordingCrudPolicyArn,
       snsPlatformArns,
       tags,
@@ -105,6 +108,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
                 pulumi.interpolate`${documentStorageBucketArn}/*`,
                 docxUploadBucketArn,
                 pulumi.interpolate`${docxUploadBucketArn}/*`,
+                githubPullRequestPatchBucketArn,
+                pulumi.interpolate`${githubPullRequestPatchBucketArn}/*`,
               ],
               Effect: 'Allow',
             },
@@ -246,6 +251,15 @@ export class CloudStorageService extends pulumi.ComponentResource {
     );
 
     new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-slack-import-upload-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: slackImportUploadPolicyArn,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
       `${BASE_NAME}-role-call-recording-att-${stack}`,
       {
         role: this.role,
@@ -348,16 +362,14 @@ export class CloudStorageService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
-              environment: containerEnvVars,
+              environment: [...(containerEnvVars ?? [])],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
@@ -381,7 +393,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
                 },
               ],
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
             cpuArchitecture: `${

@@ -1,0 +1,90 @@
+---
+source: crates/folds/claude_fold/src/test.rs
+expression: events
+---
+[
+  {
+    "Update": {
+      "sessionUpdate": "user_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "Read the file."
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_thought_chunk",
+      "content": {
+        "type": "text",
+        "text": "I will inspect it."
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "t1",
+      "title": "Read /repo/a.txt",
+      "kind": "read",
+      "status": "in_progress",
+      "rawInput": {
+        "file_path": "/repo/a.txt"
+      },
+      "_meta": {
+        "claudeCode": {
+          "toolName": "Read"
+        }
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call_update",
+      "toolCallId": "t1",
+      "status": "failed",
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "File missing"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "The file is missing."
+      }
+    }
+  },
+  {
+    "TurnEnded": "end_turn"
+  },
+  {
+    "Update": {
+      "sessionUpdate": "user_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "Thanks."
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "You are welcome."
+      }
+    }
+  },
+  {
+    "TurnEnded": "max_tokens"
+  }
+]

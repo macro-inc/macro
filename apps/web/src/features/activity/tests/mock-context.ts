@@ -32,6 +32,7 @@ export function createMockActivityContext(
       const id = botId();
       return firstPartyBotName(id) ?? `Bot ${id.split('-')[0]}`;
     },
+    entityTypeShown: () => true,
     entityDisplay: (entityId) => ({
       name: () => `Entity ${entityId()}`,
       icon: () => null,

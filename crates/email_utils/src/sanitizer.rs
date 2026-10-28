@@ -9,6 +9,7 @@
 use ammonia::Builder;
 use regex::Regex;
 use scraper::{Html, Selector};
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
@@ -159,6 +160,38 @@ static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| build_cleaner(fals
 /// Cleaner for locally-authored bodies; see [`sanitize_authored_html`].
 static AUTHORED_CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| build_cleaner(true));
 
+const ALLOWED_URL_SCHEMES: [&str; 6] = ["http", "https", "mailto", "cid", "tel", "sms"];
+
+// Ammonia cannot filter inline styles while also allowing <style> elements.
+// Use its patched CSS parser independently; stylesheet text still goes through
+// sanitize_style_blocks after the outer HTML has been cleaned.
+static STYLE_ATTRIBUTE_CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| {
+    let mut cleaner = Builder::default();
+    cleaner.add_generic_attributes(&["style"]);
+    cleaner.filter_style_properties(get_safe_css_properties());
+    cleaner.url_schemes(HashSet::from(ALLOWED_URL_SCHEMES));
+    cleaner
+});
+static STYLE_ATTRIBUTE_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("div").expect("static selector is valid"));
+
+fn sanitize_style_attribute(value: &str) -> String {
+    let escaped = value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;");
+    let cleaned = STYLE_ATTRIBUTE_CLEANER
+        .clean(&format!("<div style=\"{escaped}\"></div>"))
+        .to_string();
+    let fragment = Html::parse_fragment(&cleaned);
+    fragment
+        .select(&STYLE_ATTRIBUTE_SELECTOR)
+        .next()
+        .and_then(|element| element.value().attr("style"))
+        .unwrap_or_default()
+        .to_owned()
+}
+
 fn build_cleaner(allow_editor_round_trip: bool) -> Builder<'static> {
     let mut cleaner = Builder::default();
 
@@ -217,10 +250,16 @@ fn build_cleaner(allow_editor_round_trip: bool) -> Builder<'static> {
         "summary", // Modern
     ]);
 
-    cleaner.filter_style_properties(get_safe_css_properties());
+    cleaner.attribute_filter(|_, attribute, value| {
+        Some(if attribute == "style" {
+            Cow::Owned(sanitize_style_attribute(value))
+        } else {
+            Cow::Borrowed(value)
+        })
+    });
 
     // Allow common, generally safe attributes
-    // IMPORTANT: `style` is included here, enabling Ammonia's CSS filter
+    // The attribute callback above applies Ammonia's CSS filter to `style`.
     cleaner.add_generic_attributes(&[
         "style",
         "class",
@@ -274,14 +313,7 @@ fn build_cleaner(allow_editor_round_trip: bool) -> Builder<'static> {
     cleaner.add_tag_attributes("details", &["open"]);
 
     // Link safety and url schemes
-    let mut allowed_schemes = HashSet::new();
-    allowed_schemes.insert("http");
-    allowed_schemes.insert("https");
-    allowed_schemes.insert("mailto");
-    allowed_schemes.insert("cid");
-    allowed_schemes.insert("tel");
-    allowed_schemes.insert("sms");
-    cleaner.url_schemes(allowed_schemes);
+    cleaner.url_schemes(HashSet::from(ALLOWED_URL_SCHEMES));
 
     if allow_editor_round_trip {
         // `data-*` attributes are inert, and the composer round-trips through

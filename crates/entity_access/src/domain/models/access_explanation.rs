@@ -237,6 +237,15 @@ pub enum AccessGrant {
     },
     /// Current static-file policy. Every caller gets View.
     StaticFileAlwaysView,
+    /// Edit on a database because the caller can edit a live form over it:
+    /// form editors read and change its responses.
+    ViaForm {
+        /// The form whose edit or owner grant reaches the database.
+        form_id: Uuid,
+    },
+    /// The form's audience is anyone with the link, so every caller can
+    /// view (respond to) it.
+    PublicForm,
 }
 
 impl AccessGrant {
@@ -263,10 +272,10 @@ impl AccessGrant {
             Self::InboxDelegate { .. } => EntityPermission::AccessLevel {
                 access_level: AccessLevel::Owner,
             },
-            Self::CalendarInboxDelegate => EntityPermission::AccessLevel {
+            Self::CalendarInboxDelegate | Self::ViaForm { .. } => EntityPermission::AccessLevel {
                 access_level: AccessLevel::Edit,
             },
-            Self::StaticFileAlwaysView | Self::ForeignEntity { .. } => {
+            Self::StaticFileAlwaysView | Self::ForeignEntity { .. } | Self::PublicForm => {
                 EntityPermission::AccessLevel {
                     access_level: AccessLevel::View,
                 }
@@ -353,6 +362,8 @@ impl Display for AccessGrant {
                 "foreign_entity stored_for={stored_for_id} auth={stored_for_auth_entity}"
             ),
             Self::StaticFileAlwaysView => write!(f, "static_file_always_view"),
+            Self::ViaForm { form_id } => write!(f, "via_form {form_id} edit"),
+            Self::PublicForm => write!(f, "public_form view"),
         }
     }
 }

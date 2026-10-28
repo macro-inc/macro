@@ -4,9 +4,9 @@ import DesignIcon from '../assets/designs/design-icon.svg';
 
 export function Header() {
   const navItemStyle = {
-    'font-family': 'Rajdhani',
-    'font-size': '18px',
-    'font-weight': '700',
+    'font-family': 'Inter',
+    'font-size': '14px',
+    'font-weight': '500',
     'letter-spacing': '0.02em',
     'text-decoration': 'none',
     color: 'var(--c4)',

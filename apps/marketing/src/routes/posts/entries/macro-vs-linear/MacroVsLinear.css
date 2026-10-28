@@ -1,0 +1,22 @@
+.posts-article .linear-post .mvn-graphic {
+  left: 50%;
+  position: relative;
+  transform: translateX(-50%);
+  width: min(920px, calc(100vw - 48px));
+}
+
+.linear-post .mvn-graphic-frame {
+  background: transparent;
+  border-color: #292929;
+  border-radius: 12px;
+  padding: 0;
+}
+
+.linear-post .mvn-graphic-frame::before {
+  content: none;
+}
+
+.linear-post .mvn-graphic-inner {
+  border: 0;
+  border-radius: inherit;
+}

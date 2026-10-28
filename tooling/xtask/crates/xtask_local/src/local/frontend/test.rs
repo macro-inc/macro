@@ -10,7 +10,7 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
         Instance::derive(Some("other-dev"), Some(20300)).unwrap(),
     ] {
         for mode in [Mode::Local, Mode::Dev] {
-            let env: std::collections::HashMap<_, _> = dev_env(&instance, mode, true, false)
+            let env: std::collections::HashMap<_, _> = dev_env(&instance, mode, true)
                 .unwrap()
                 .into_iter()
                 .collect();
@@ -35,7 +35,7 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
                 assert!(!env.contains_key("VITE_AI_EDITING_WORKER_URL"));
             }
         }
-        let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false, false)
+        let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false)
             .unwrap()
             .into_iter()
             .collect();

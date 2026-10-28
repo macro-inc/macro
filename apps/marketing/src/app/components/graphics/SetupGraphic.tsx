@@ -366,6 +366,8 @@ export function SetupGraphic(props: {
    *  Brand modules (including GitHub) stay in their top slots. */
   importButton?: {
     href: string;
+    leadingLabel?: string;
+    trailingLabel?: string;
     onClick?: (event: MouseEvent) => void;
     /** Physical horizontal correction for the CTA, applied independently of
      * the artwork's own SVG offset. */
@@ -1096,23 +1098,24 @@ export function SetupGraphic(props: {
               <Supermodule
                 place={importSupermoduleTransform(importVerticalOffset())}
                 href={button().href}
-                ariaLabel="Import via MCP with 1 click"
+                ariaLabel={`${button().leadingLabel ?? '1 click'}: ${button().trailingLabel ?? 'import via MCP'}`}
                 onActivate={button().onClick}
               />
               <g class="supermodule-cta" aria-hidden="true">
                 <text
                   class="supermodule-cta-headline"
-                  x={IMPORT_CTA_COPY.oneClick.x}
+                  x={button().leadingLabel ? 350 : IMPORT_CTA_COPY.oneClick.x}
+                  text-anchor={button().leadingLabel ? 'end' : 'start'}
                   y={IMPORT_CTA_COPY.oneClick.y + importVerticalOffset()}
                 >
-                  1 click
+                  {button().leadingLabel ?? '1 click'}
                 </text>
                 <text
                   class="supermodule-cta-headline"
                   x={IMPORT_CTA_COPY.importLabel.x}
                   y={IMPORT_CTA_COPY.importLabel.y + importVerticalOffset()}
                 >
-                  import via MCP
+                  {button().trailingLabel ?? 'import via MCP'}
                 </text>
               </g>
               <path

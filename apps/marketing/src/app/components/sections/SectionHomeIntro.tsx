@@ -69,8 +69,8 @@ const pillars: Pillar[] = [
   },
   {
     slug: 'shared-memory',
-    title: 'Shared memory',
-    body: 'Shared, team-level memory built nightly from your unified workspace.',
+    title: 'Workspace memory',
+    body: 'Agent memory built from your documents, emails, projects, and conversations.',
     Graphic: FigDb,
   },
   {
@@ -367,7 +367,7 @@ export function SectionHomeIntro() {
         }
         .home-intro-letter-body,
         .home-intro-letter-signoff {
-          font-family: cyberreader;
+          font-family: Inter;
           font-size: 18px;
           font-weight: 300;
           line-height: 1.6;

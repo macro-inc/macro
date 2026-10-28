@@ -1,35 +1,44 @@
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import XIcon from '@phosphor/x.svg';
+import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
-import { Button, Checkbox, EntityComposer } from '@ui';
+import { Button, EntityComposer, ToggleSwitch } from '@ui';
+import { $getRoot } from 'lexical';
 import { For, onMount, Show } from 'solid-js';
+import { ProjectDescriptionComposer } from '../components/project-description-composer';
 import { useProjectsContext } from '../context/projects-context';
 import {
   createProjectComposer,
   type ProjectComposerDraft,
+  type ProjectComposerSubmission,
 } from '../primitives/create-project';
 import { withProjectPropertyValue } from '../primitives/property-draft';
 
 export function CreateProject(props: {
   initialDraft?: ProjectComposerDraft;
   onClose(): void;
-  onCreated(id: string): void;
+  /** The server creates the project after the host has closed the composer. */
+  onSubmit(submission: ProjectComposerSubmission): void;
   onContinueInSplit?(draft: ProjectComposerDraft): void;
-  onFailure?(draft: ProjectComposerDraft): void;
 }) {
   const context = useProjectsContext();
   const definitions = context.createPropertyDefinitionsSource();
   const composer = createProjectComposer(
     context.createCommands(),
-    props.onCreated,
     props.initialDraft
   );
   let titleInput: HTMLInputElement | undefined;
+  let description: EditorControls | undefined;
   onMount(() => titleInput?.focus());
-  const submit = async () => {
-    if ((await composer.submit()) === 'failed') {
-      props.onFailure?.(composer.snapshot());
-    }
+  const focusDescriptionStart = () => {
+    const editor = description?.getLexical();
+    if (!editor) return;
+    editor.update(() => $getRoot().getFirstChild()?.selectStart());
+    editor.focus();
+  };
+  const submit = () => {
+    const submission = composer.submit();
+    if (submission) props.onSubmit(submission);
   };
 
   return (
@@ -38,7 +47,7 @@ export function CreateProject(props: {
       aria-label="New project"
       onSubmit={(event) => {
         event.preventDefault();
-        void submit();
+        submit();
       }}
       onKeyDown={(event) => {
         if (
@@ -48,7 +57,7 @@ export function CreateProject(props: {
         ) {
           event.preventDefault();
           event.stopPropagation();
-          void submit();
+          submit();
         }
       }}
     >
@@ -57,32 +66,34 @@ export function CreateProject(props: {
           <div class="flex-1 flex items-center">
             <Show when={props.onContinueInSplit}>
               <Button
+                variant="ghost"
                 tabIndex={-1}
                 aria-label="Continue editing in split"
                 tooltip="Continue editing in split"
-                size="icon-composer"
+                size="icon-md"
                 disabled={composer.pending()}
                 onClick={() => props.onContinueInSplit?.(composer.snapshot())}
               >
-                <ArrowsOutIcon />
+                <ArrowsOutIcon class="size-4 shrink-0 pointer-events-none" />
               </Button>
             </Show>
           </div>
           <Show
             when={
-              !composer.createdId() &&
-              (composer.name() || composer.drafts().size > 0)
+              composer.name() ||
+              composer.description().trim() ||
+              composer.drafts().size > 0
             }
           >
             <Button
               tabIndex={-1}
-              size="sm"
-              variant="outline"
-              depth={3}
-              class="bg-surface px-3"
+              tooltip="Clear Draft"
+              size="xs"
+              variant="secondary"
               disabled={composer.pending()}
               onClick={() => {
                 composer.clear();
+                description?.clear();
                 titleInput?.focus();
               }}
             >
@@ -90,14 +101,15 @@ export function CreateProject(props: {
             </Button>
           </Show>
           <Button
+            variant="ghost"
             tabIndex={-1}
             aria-label="Close"
             tooltip="Close"
-            size="icon-composer"
+            size="icon-md"
             disabled={composer.pending()}
             onClick={props.onClose}
           >
-            <XIcon />
+            <XIcon class="size-4 shrink-0 pointer-events-none" />
           </Button>
         </EntityComposer.Header>
         <EntityComposer.Main class="min-h-28 justify-between">
@@ -110,25 +122,50 @@ export function CreateProject(props: {
               class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
               value={composer.name()}
               required
-              disabled={composer.pending() || Boolean(composer.createdId())}
+              disabled={composer.pending()}
               onInput={(event) => composer.setName(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.isComposing ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey ||
+                  (event.key !== 'Enter' && event.key !== 'ArrowDown')
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                focusDescriptionStart();
+              }}
             />
           </EntityComposer.Title>
+          <EntityComposer.Body>
+            <ProjectDescriptionComposer
+              initialValue={composer.description()}
+              disabled={composer.pending()}
+              onChange={composer.setDescription}
+              onSubmit={submit}
+              onLeaveStart={() => titleInput?.focus()}
+              ref={(controls) => {
+                description = controls;
+              }}
+            />
+          </EntityComposer.Body>
           <div>
             <EntityComposer.Properties>
               <For each={definitions.properties()}>
                 {(property) => (
                   <PropertyValuePill
+                    variant="secondary"
+                    size="xs"
                     property={withProjectPropertyValue(
                       property,
                       composer.drafts().get(property.propertyDefinitionId)
                         ?.value
                     )}
                     canEdit={!composer.pending()}
-                    entitySelfFilter={{
-                      entityType: 'INITIATIVE',
-                      blockId: composer.createdId(),
-                    }}
+                    entitySelfFilter={{ entityType: 'INITIATIVE' }}
                     onSave={async (_, value) => {
                       composer.saveDraft(property, value);
                     }}
@@ -160,27 +197,23 @@ export function CreateProject(props: {
           )}
         </Show>
         <EntityComposer.Footer class="items-center flex-wrap">
-          <Checkbox
+          <ToggleSwitch
+            class="shrink-0 ml-0.5"
             checked={composer.shareWithTeam()}
-            disabled={composer.pending() || Boolean(composer.createdId())}
+            disabled={composer.pending()}
             onChange={composer.setShareWithTeam}
-          >
-            <Checkbox.Control />
-            <Checkbox.Label class="text-xs text-ink-muted font-normal whitespace-nowrap">
-              Share with my team
-            </Checkbox.Label>
-          </Checkbox>
+            label="Share with my team"
+            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+          />
           <EntityComposer.Submit
             type="submit"
+            variant="primary"
+            size="sm"
             class="ml-auto"
             hasContent={Boolean(composer.name().trim())}
             disabled={composer.pending() || !composer.name().trim()}
           >
-            {composer.pending()
-              ? 'Saving…'
-              : composer.createdId()
-                ? 'Retry saving properties'
-                : 'Create Project'}
+            Create Project
           </EntityComposer.Submit>
         </EntityComposer.Footer>
       </EntityComposer.Root>

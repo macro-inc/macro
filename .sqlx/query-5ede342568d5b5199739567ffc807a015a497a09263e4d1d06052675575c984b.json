@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.id AS chat_id, m.message_id AS \"message_id!\", m.effect_revision, m.published_revision, m.origin, m.content_revision, m.deleted_at, p.user_id, m.kind\n            FROM external_chat_message m\n            JOIN external_chat b ON b.id = m.chat_id\n            JOIN external_chat_person p ON p.id = m.person_id\n            WHERE m.message_id IS NOT NULL AND m.published_revision < m.effect_revision AND m.notification_retry_at <= now()\n            ORDER BY m.notification_retry_at, m.message_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "effect_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "published_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "kind",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "5ede342568d5b5199739567ffc807a015a497a09263e4d1d06052675575c984b"
+}

@@ -125,6 +125,7 @@ fn long_arguments_stop_being_peeked() {
         calls.push_arguments("call", "y", start + Duration::from_secs(2)),
         None
     );
+    assert!(calls.calls["call"].arguments.len() <= PEEK_LIMIT);
 }
 
 #[test]
@@ -146,4 +147,22 @@ fn calls_left_open_are_reported_in_open_order() {
     assert!(calls.finish("second"));
     assert!(!calls.finish("never-opened"));
     assert_eq!(calls.into_unfinished(), vec!["first", "third"]);
+}
+
+#[test]
+fn invalid_prefixes_are_throttled_and_reopening_preserves_arguments() {
+    let start = Instant::now();
+    let mut calls = StreamingCalls::default();
+    calls.open("call");
+    assert_eq!(calls.push_arguments("call", "{", start), None);
+    calls.open("call");
+    assert_eq!(
+        calls.push_arguments("call", r#""body":"a"#, start + PEEK_WINDOW / 2),
+        None
+    );
+    assert_eq!(
+        calls.push_arguments("call", "b", start + PEEK_WINDOW),
+        Some(json!({ "body": "ab" }))
+    );
+    assert_eq!(calls.into_unfinished(), ["call"]);
 }

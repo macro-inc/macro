@@ -1,3 +1,4 @@
+import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -8,6 +9,7 @@ import {
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { buildEntityData } from '@entity';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import type { MarkdownDocumentKind } from '../types';
@@ -38,9 +40,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
   const documentName = () =>
-    displayName() ??
-    props.fallbackName ??
-    (props.kind === 'task' ? 'New Task' : 'Untitled');
+    displayName() || props.fallbackName || blockNameToDefaultFile(blockName());
   useSplitDisplayName(documentName);
   const focusDocument = () => state.editor.md.editor?.focus();
 
@@ -73,18 +73,23 @@ export function MarkdownDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={() => {
-              item.onSelect();
-              focusDocument();
-            }}
-            tooltip={documentName()}
+          <DocumentTitleHoverCard
+            documentId={props.documentId}
+            name={documentName()}
+            ownerId={props.ownerId}
           >
-            <EntityIcon targetType={blockName()} size="xs" class="shrink-0" />
-            <span class="truncate">{documentName()}</span>
-          </ViewBreadcrumbs.Button>
+            <ViewBreadcrumbs.Button
+              class="gap-1.5"
+              isActive={item.isActive()}
+              onClick={() => {
+                item.onSelect();
+                focusDocument();
+              }}
+            >
+              <EntityIcon targetType={blockName()} size="xs" class="shrink-0" />
+              <span class="truncate">{documentName()}</span>
+            </ViewBreadcrumbs.Button>
+          </DocumentTitleHoverCard>
           <div class="shrink-0">
             <SplitFileMenu
               id={props.documentId}

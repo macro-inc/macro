@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { calendarKeys } from '@queries/calendar/keys';
 import {
   createCalendarOccurrenceQueryRange,
@@ -41,8 +42,7 @@ export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
   });
 
   const days = createMemo(() => {
-    const data =
-      query.isSuccess && !query.isPlaceholderData ? query.data : undefined;
+    const data = query.isSuccess ? query.data : undefined;
     if (!data || data.syncStatus === CalendarSyncStatus.syncing) return;
 
     const busyIntervals = busyIntervalsFromOccurrences(data.items);
@@ -91,6 +91,6 @@ export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
     days,
     refreshRange,
     isError: () => query.isError,
-    retry: () => void query.refetch(),
+    retry: () => fireAndForget(query.refetch(), 'calendar-availability'),
   };
 }

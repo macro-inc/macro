@@ -8,6 +8,7 @@ query EmailThreadPage($threadId: ID!, $offset: Int!, $limit: Int!) {
 }
 
 fragment EmailThreadPageFields on GraphqlSoupEmailThread {
+	...SoupItemFields
 	__typename
 	id
 	providerId
@@ -41,6 +42,8 @@ fragment EmailThreadPageFields on GraphqlSoupEmailThread {
 }
 
 fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
+  draftGeneration
+  operationStatus { state revision remoteVersion issue }
 	__typename
 	id
 	providerId
@@ -57,6 +60,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	isDraft
 	hasAttachments
 	scheduledSendTime
+	scheduledSendStatus
 	from {
 		email
 		name
@@ -95,6 +99,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 		sizeBytes
 		sfsId
 		contentId
+		referenceUrl
 	}
 	attachmentsDraft {
 		__typename
@@ -105,6 +110,9 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 		sha
 		size
 		s3Key
+		uploadPending
+		contentId
+		isInline
 	}
 	attachmentsForwarded {
 		__typename
@@ -118,4 +126,29 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	}
 	createdAt
 	updatedAt
+}
+
+# Explicit identity read follows durable redirects without requiring a cached page.
+fragment EmailThreadIdentityFields on GraphqlSoupEmailThread {
+    id
+    cacheProjection @cacheOnly
+}
+
+# Compact cached Quick Access rows: no snippets or message bodies.
+fragment EmailQuickAccessFields on GraphqlSoupEmailThread {
+    __typename
+    id
+    name
+    ownerId
+    createdAt
+    updatedAt
+    viewedAt
+    senderName
+    senderEmail
+    senders { name email }
+    isRead
+    isDraft
+    isImportant
+    inboxVisible
+    linkId
 }

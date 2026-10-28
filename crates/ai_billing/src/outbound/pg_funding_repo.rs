@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool, types::Json};
 
+use crate::domain::AiPricing;
 use crate::domain::financial::*;
 use crate::domain::models::{BillingPeriod, UsagePolicy};
 use crate::domain::period::{
@@ -27,12 +28,14 @@ mod test;
 #[derive(Clone)]
 pub struct PgFundingRepo {
     pool: PgPool,
+    pricing: AiPricing,
 }
 
 impl PgFundingRepo {
-    /// Share the same database/payer account lock as `PgBillingRepo`.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    /// Share the same database/payer account lock as `PgBillingRepo`. New
+    /// admissions are priced at `pricing`.
+    pub fn new(pool: PgPool, pricing: AiPricing) -> Self {
+        Self { pool, pricing }
     }
 }
 
@@ -109,7 +112,17 @@ async fn read_period(
 ) -> FinancialResult<Option<FundingPeriod>> {
     let row = sqlx::query!(
         "SELECT user_id, payer_id, subscription_id, period_start, period_end, policy FROM ai_billing_usage_period
-         WHERE user_id = $1 AND period_start <= $2 AND period_end > $2",
+         WHERE user_id = $1 AND period_start <= $2 AND period_end > $2
+         AND NOT EXISTS (
+             SELECT 1 FROM ai_billing_plan_change AS reset
+             WHERE reset.user_id = ai_billing_usage_period.user_id
+               AND reset.period_start = ai_billing_usage_period.period_start
+               AND (reset.new_plan = 'max' AND reset.changed_at <= $2
+                    OR reset.previous_plan = 'max' AND reset.changed_at > reset.period_start
+                       AND NOT EXISTS (SELECT 1 FROM ai_billing_plan_change AS earlier
+                           WHERE earlier.user_id = reset.user_id AND earlier.period_start = reset.period_start
+                             AND earlier.changed_at < reset.changed_at))
+         )",
         seat, at,
     ).fetch_optional(conn).await?;
     row.map(|r| {
@@ -370,6 +383,7 @@ impl FundingRepo for PgFundingRepo {
             let available = availability(&mut tx, &period).await?;
             let maximum = rate.tokens.price(request.token_budget)?;
             let reservation = match reserve(
+                self.pricing,
                 snapshot,
                 AllocationSequence::from_raw(units(account.next_sequence)?),
                 maximum,
@@ -448,7 +462,7 @@ impl FundingRepo for PgFundingRepo {
                 sqlx::query!("UPDATE ai_funding_reservation SET completion = $2, actual_public = $3 WHERE invocation_id = $1",
                     id.as_uuid(), completion, actual).execute(&mut *tx).await?;
             }
-            reconcile_locked(&mut tx, &row.payer_id).await?;
+            reconcile_locked(&mut tx, &row.payer_id, self.pricing).await?;
             tx.commit().await?;
             Ok(())
         })
@@ -491,7 +505,7 @@ impl FundingRepo for PgFundingRepo {
         Box::pin(async move {
             let mut tx = self.pool.begin().await?;
             lock_payer(&mut tx, payer.as_ref()).await?;
-            reconcile_locked(&mut tx, payer.as_ref()).await?;
+            reconcile_locked(&mut tx, payer.as_ref(), self.pricing).await?;
             tx.commit().await?;
             Ok(())
         })
@@ -552,7 +566,11 @@ async fn availability(
 
 /// Bounded work makes a large ready backlog restart-safe without unbounded transactions.
 /// Unresolved evidence stops the watermark and retains every later hold.
-async fn reconcile_locked(conn: &mut PgConnection, payer: &str) -> FinancialResult<()> {
+async fn reconcile_locked(
+    conn: &mut PgConnection,
+    payer: &str,
+    pricing: AiPricing,
+) -> FinancialResult<()> {
     for _ in 0..100 {
         let row = sqlx::query!(
             r#"SELECT r.invocation_id, r.sequence, r.user_id, r.period_start, r.actual_public,
@@ -582,7 +600,7 @@ async fn reconcile_locked(conn: &mut PgConnection, payer: &str) -> FinancialResu
             .try_fold(CustomerMoney::from_units(0), |total, r| {
                 total.checked_add(CustomerMoney::from_units(units(r.units)?))
             })?;
-        let mut reservation = row.admission.reservation()?;
+        let mut reservation = row.admission.reservation(pricing)?;
         let allocation = reservation
             .allocate(
                 AllocationPosition {
@@ -723,9 +741,10 @@ impl AdmissionData {
         })
     }
 
-    fn reservation(&self) -> FinancialResult<Reservation> {
+    fn reservation(&self, pricing: AiPricing) -> FinancialResult<Reservation> {
         let [used, held, prepaid, prepaid_held, incurred, postpaid_held] = self.available;
         reserve(
+            pricing,
             AuthorizationSnapshot {
                 id: self.id.try_into()?,
                 invocation_id: self.invocation_id.try_into()?,

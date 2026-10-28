@@ -1,11 +1,13 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import {
+  EXTERNAL_VIEW_PATH,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { CommandState } from '@app/features/command';
-import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
@@ -14,6 +16,7 @@ import {
 } from '@app/features/team-invitations/invite-modal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -22,37 +25,30 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_CALLS,
   enableCrm,
-  enableReminders,
-  isFeatureEnabled,
+  enableTasksReviews,
+  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
-import type { SettingsTab } from '@core/constant/SettingsState';
-import { useEmail, useUserId } from '@core/context/user';
+import { getRunnableHotkeys } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { clearPressedKeys } from '@core/hotkey/state';
+import { activeScope, clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import BellIcon from '@icon/system/regular/bell.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellIcon from '@phosphor/bell.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import CompassIcon from '@phosphor/compass.svg';
-import GearIcon from '@phosphor/gear.svg';
-import HomeIcon from '@phosphor/house.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import ActivityIcon from '@phosphor/pulse.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
-import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Dropdown, Hotkey } from '@ui';
+import { cn } from '@ui';
 import {
   type Component,
   createEffect,
@@ -79,7 +75,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'home',
     get label() {
-      return isTouchDevice() ? 'Notifications' : 'Home';
+      return isTouchDevice() ? t('nav.notifications') : t('nav.home');
     },
     href: LIST_VIEW_PATHS.home,
     get icon() {
@@ -90,7 +86,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'search',
-    label: 'Search',
+    get label() {
+      return t('nav.search');
+    },
     href: LIST_VIEW_PATHS.search,
     icon: SearchIcon,
     hotkey: '/',
@@ -99,7 +97,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'agents',
-    label: 'Agents',
+    get label() {
+      return t('nav.agents');
+    },
     href: LIST_VIEW_PATHS.agents,
     icon: getIconConfig('agent').icon,
     hotkey: 'a',
@@ -107,7 +107,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'mail',
-    label: 'Email',
+    get label() {
+      return t('nav.email');
+    },
     href: LIST_VIEW_PATHS.mail,
     icon: getIconConfig('email').icon,
     hotkey: 'e',
@@ -115,7 +117,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Files',
+    get label() {
+      return t('nav.files');
+    },
     href: LIST_VIEW_PATHS.documents,
     icon: getIconConfig('files').icon,
     hotkey: 'f',
@@ -123,7 +127,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    get label() {
+      return t('nav.documents');
+    },
     href: LIST_VIEW_PATHS.documents,
     params: {
       initialFacets: { type: ['doc-markdown'] },
@@ -134,23 +140,19 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'tasks',
-    label: 'Tasks',
+    get label() {
+      return t('nav.tasks');
+    },
     href: LIST_VIEW_PATHS.tasks,
     icon: getIconConfig('task').icon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
   {
-    id: 'reminders',
-    label: 'Reminders',
-    href: LIST_VIEW_PATHS.reminders,
-    icon: getIconConfig('reminder').icon,
-    hotkey: 'm',
-    hotkeyToken: TOKENS.sidebar.goTo.reminders,
-  },
-  {
     id: 'calendar',
-    label: 'Calendar',
+    get label() {
+      return t('nav.calendar');
+    },
     href: calendarPath('timeGridWeek'),
     icon: getIconConfig('calendar').icon,
     hotkey: 'r',
@@ -158,7 +160,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'channels',
-    label: 'Channels',
+    get label() {
+      return t('nav.channels');
+    },
     href: LIST_VIEW_PATHS.channels,
     icon: getIconConfig('channel').icon,
     hotkey: 'c',
@@ -166,6 +170,7 @@ const SIDEBAR_LINKS = [
   },
 ] satisfies SidebarItem[];
 
+// Global view switches restore session context; explicit split opens stay fresh.
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 export function sidebarContent(
@@ -180,9 +185,8 @@ export function sidebarContent(
 }
 
 /**
- * Navigate to a sidebar view by pushing a fresh entry into the active split.
- * Holding shift opens it in a new split. Use in-app back/forward to return to
- * prior entries.
+ * Navigate through the layout, resuming only views that opted into retention.
+ * Holding shift opens a fresh view in a new split.
  */
 export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
@@ -190,19 +194,31 @@ export function navigateToSidebarView(args: {
   shiftKey: boolean;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
+  onApplied?: () => void;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, openWithSplit, referredFrom } = args;
+  const { viewId, params, shiftKey, openWithSplit, referredFrom, onApplied } =
+    args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
+    resume: !shiftKey,
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
+    onApplied,
   }).split;
 }
 
 /** Whether the "g" leader key is currently awaiting a destination key. */
 const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
+
+/**
+ * True while the "g" leader awaits a destination, so nav buttons can show
+ * their destination key. Any key in the GoTo scope leaves it, including a
+ * view's own GoTo command (Email's g s), so the hints clear with it.
+ */
+export const isGoToLeaderActive = () =>
+  goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
 
 const resetGoToHotkeysState = () => {
   setGoToHotkeyVisible(false);
@@ -225,7 +241,7 @@ export const GoToHotkeys = () => {
   const inviteHotkey = registerHotkey({
     scopeId: 'global',
     hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Send Invites',
+    description: () => t('nav.sendInvites'),
     keyDownHandler: (e) => {
       e?.preventDefault();
       setInviteModalOpen(true);
@@ -233,18 +249,20 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
-  const reminders = useFeatureFlag(enableReminders);
+  const reviews = useFeatureFlag(enableTasksReviews);
+  const external = useFeatureFlag(enableWhatsappLinked);
+  const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
-      gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reminders().enabled
+      reviews().enabled,
+      external().enabled,
+      crm().enabled
     )
   );
 
@@ -259,7 +277,7 @@ export const GoToHotkeys = () => {
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
     hotkeyToken: TOKENS.sidebar.goToLeader,
-    description: 'Go to page',
+    description: () => t('nav.goToPage'),
     keyDownHandler: () => {
       // We debounce the time till the hot keys are visible to allow other commands
       // like g+g to fire
@@ -282,9 +300,6 @@ export const GoToHotkeys = () => {
     leaderHotkey.dispose();
   });
 
-  const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
-
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
   // not part of the sidebar hotkeys, won't fire the command
@@ -302,7 +317,8 @@ export const GoToHotkeys = () => {
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      registeredGoToKeys().has(context.pressedKeysString)
+      // The sidebar's letters and those a focused view adds (Email's g s).
+      getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
     ) {
       return false;
     }
@@ -343,6 +359,14 @@ export const GoToHotkeys = () => {
           params: link.params,
           shiftKey: !!e?.shiftKey,
           openWithSplit,
+          onApplied:
+            link.id === 'search'
+              ? () => {
+                  const split = globalSplitManager()?.activeSplit();
+                  if (split?.content().id === 'search')
+                    requestSearchFocus(split.id);
+                }
+              : undefined,
         });
         if (link.id === 'search' && handle) {
           requestSearchFocus(handle.id);
@@ -354,9 +378,12 @@ export const GoToHotkeys = () => {
         hotkey: link.hotkey,
         scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
         hotkeyToken: link.hotkeyToken,
-        description: `Go to ${link.label}`,
+        description: () => t('nav.goTo', { label: link.label }),
         keyDownHandler: openSidebarView,
         icon: link.icon,
+        // Views can claim a letter while focused (Email's g then i). Re-running
+        // this effect when flags load must not eclipse those.
+        registrationType: 'add',
       });
     });
 
@@ -370,160 +397,11 @@ export const GoToHotkeys = () => {
   return <InviteModal />;
 };
 
-type SidebarSettingsWidgetProps = {
-  isSlim: () => boolean;
-  onSelect: (tab: SettingsTab) => void;
-  onMenuOpenChange?: (open: boolean) => void;
-  /**
-   * Icon-only: drops the trigger's leading padding and start alignment so the
-   * avatar centres in its square, and grows the avatar to nearly fill it. For
-   * `SidebarRail`, where the name and caret are hidden anyway.
-   */
-  compact?: boolean;
-};
-
-export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
-  const userId = useUserId();
-  const email = useEmail();
-  const logout = useLogout();
-
-  const userName = useOwnUserName();
-
-  // Prefer the user's real name (first/last); fall back to their email.
-  const displayName = createMemo(() => {
-    const name = userName();
-    const parts = [name?.first_name, name?.last_name]
-      .map((part) => part?.trim())
-      .filter((part): part is string => isRealNamePart(part));
-    return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
-  });
-
-  return (
-    <Dropdown
-      placement="top-start"
-      gutter={6}
-      onOpenChange={props.onMenuOpenChange}
-    >
-      <Dropdown.Trigger
-        variant="ghost"
-        class={cn(
-          'flex items-center cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          props.compact
-            ? 'justify-center gap-0 p-0'
-            : 'justify-start gap-3 px-1.5 py-1'
-        )}
-        label={displayName()}
-        fullWidth
-        tooltipDisabled={!props.isSlim()}
-        tooltipPlacement="right"
-        onMouseDown={(e: MouseEvent) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-        }}
-      >
-        <Show
-          when={userId()}
-          fallback={
-            <div
-              class={cn(
-                'shrink-0 rounded-full bg-ink/10',
-                props.compact ? 'size-8' : 'size-5'
-              )}
-            />
-          }
-        >
-          {(id) => (
-            <div class={cn('shrink-0', props.compact ? 'size-8' : 'size-5')}>
-              <UserIcon
-                id={id()}
-                size="fill"
-                suppressClick
-                showTooltip={false}
-              />
-            </div>
-          )}
-        </Show>
-        <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
-          {displayName()}
-        </span>
-        <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
-      </Dropdown.Trigger>
-      {/*
-        The menu is shrink-to-fit, so without a cap a long name or email
-        stretches it instead of engaging the `truncate` below.
-      */}
-      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))]">
-        <Dropdown.Group class="p-1.5 gap-0">
-          <div class="flex items-center gap-3 px-1 py-1">
-            <Show
-              when={userId()}
-              fallback={<div class="size-10 shrink-0 rounded-full bg-ink/10" />}
-            >
-              {(id) => (
-                <div class="size-10 shrink-0">
-                  <UserIcon
-                    id={id()}
-                    size="fill"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                </div>
-              )}
-            </Show>
-            <div class="min-w-0">
-              <div class="truncate text-sm font-semibold text-ink">
-                {displayName()}
-              </div>
-              <div class="truncate text-sm text-ink-muted">{email()}</div>
-            </div>
-          </div>
-          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-divider" />
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => CommandState.open()}
-          >
-            <span class="size-5 flex items-center justify-center text-ink-extra-muted">
-              ⌘
-            </span>
-            <span class="flex-1 text-ink">Command menu</span>
-            <Hotkey
-              token={TOKENS.global.commandMenu}
-              theme="subtle"
-              class="ml-6"
-            />
-          </Dropdown.Item>
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => props.onSelect('Account')}
-          >
-            <span class="size-5 flex items-center justify-center">
-              <GearIcon class="size-4 shrink-0 text-ink-extra-muted" />
-            </span>
-            <span class="flex-1 text-ink">Settings</span>
-            <Hotkey
-              token={TOKENS.global.toggleSettings}
-              theme="subtle"
-              class="ml-6"
-            />
-          </Dropdown.Item>
-          <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-failure"
-            onSelect={() => logout()}
-          >
-            <span class="size-5 flex items-center justify-center">
-              <SignOutIcon class="size-4 shrink-0" />
-            </span>
-            <span>Log out</span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-};
-
 const CALLS_LINK: SidebarItem = {
   id: 'calls',
-  label: 'Calls',
+  get label() {
+    return t('nav.calls');
+  },
   href: LIST_VIEW_PATHS.calls,
   icon: getIconConfig('call').icon,
   hotkey: 'l',
@@ -532,25 +410,20 @@ const CALLS_LINK: SidebarItem = {
 
 const COMPANIES_LINK: SidebarItem = {
   id: 'companies',
-  label: 'Customers',
+  get label() {
+    return t('nav.customers');
+  },
   href: LIST_VIEW_PATHS.companies,
   icon: getIconConfig('company').icon,
   hotkey: 'o',
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
-const GETTING_STARTED_LINK: SidebarItem = {
-  id: 'getting-started',
-  label: 'Getting Started',
-  href: '/getting-started',
-  icon: CompassIcon,
-  hotkey: 's',
-  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
-};
-
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
-  label: 'Activity',
+  get label() {
+    return t('nav.activity');
+  },
   href: '/activity',
   icon: ActivityIcon,
   hotkey: 'y',
@@ -559,7 +432,9 @@ const ACTIVITY_LINK: SidebarItem = {
 
 const RECENT_LINK: SidebarItem = {
   id: 'recent',
-  label: 'Recent',
+  get label() {
+    return t('nav.recent');
+  },
   href: LIST_VIEW_PATHS.recent,
   icon: ActivityIcon,
   // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
@@ -568,26 +443,45 @@ const RECENT_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
+const REVIEWS_LINK: SidebarItem = {
+  id: 'reviews',
+  get label() {
+    return t('nav.reviews');
+  },
+  href: '/reviews',
+  icon: getIconConfig('githubPullRequest').icon,
+  hotkey: 'v',
+  hotkeyToken: TOKENS.sidebar.goTo.reviews,
+};
+
+const EXTERNAL_LINK: SidebarItem = {
+  id: 'external',
+  get label() {
+    return t('nav.external');
+  },
+  href: EXTERNAL_VIEW_PATH,
+  icon: PlugIcon,
+  // `e` is Email; `x` is the only free letter of "external".
+  hotkey: 'x',
+  hotkeyToken: TOKENS.sidebar.goTo.external,
+};
+
 /**
- * Assemble the ordered sidebar link list: the static links plus Getting
- * started and the flag-gated Recent, Activity, Calendar, Reminders, Calls, and CRM
- * entries in their correct positions.
- * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
- * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
- * passed in because this runs outside a component; when false the link is
- * fully absent — `g s` hotkey and command menu entry.
+ * Assemble the ordered sidebar link list: the static links plus the
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
+ * entries in their correct positions. Callers subscribe to the flags and pass
+ * them in, so a flag that resolves after mount still rebuilds the list.
  */
 const buildSidebarLinks = (
-  showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReminders: boolean
+  showReviews: boolean,
+  showExternal: boolean,
+  showCustomers: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) =>
-      (showCalendar || link.id !== 'calendar') &&
-      (showReminders || link.id !== 'reminders')
+    (link) => showCalendar || link.id !== 'calendar'
   );
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {
@@ -595,12 +489,8 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Getting started, Recent, and Activity follow it in that order.
+  // Home leads; Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (showGettingStarted) {
-    insertAfter(anchorId, GETTING_STARTED_LINK);
-    anchorId = 'getting-started';
-  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';
@@ -612,7 +502,7 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  if (isFeatureEnabled(enableCrm)) {
+  if (showCustomers) {
     // Customers sits just after Channels (and Calls when present).
     const anchorId = ENABLE_CALLS ? 'calls' : 'channels';
     const idx = links.findIndex((l) => l.id === anchorId);
@@ -622,6 +512,13 @@ const buildSidebarLinks = (
       ...links.slice(idx + 1),
     ];
   }
+
+  if (showReviews) {
+    // Reviews sits at the end (accessed via More menu but has a hotkey).
+    links = [...links, REVIEWS_LINK];
+  }
+
+  if (showExternal) links = [...links, EXTERNAL_LINK];
 
   return links;
 };
@@ -669,7 +566,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       referredFrom: 'sidebar',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
+      toast.alert(t('nav.contentAlreadyOpen'));
     }
   };
 
@@ -694,7 +591,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       referredFrom: 'sidebar',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
+      toast.alert(t('nav.contentAlreadyOpen'));
     }
   };
 
@@ -722,14 +619,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       <ContextMenu.Portal>
         <ContextMenuContent class="text-xs text-ink-muted">
           <MenuItem
-            text="Open in new split"
+            text={t('nav.openInNewSplit')}
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
           <Show when={canOpenFullscreen()}>
-            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+            <MenuItem text={t('nav.openFullscreen')} onClick={openFullscreen} />
           </Show>
-          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem
+            text={t('nav.openInCurrentSplit')}
+            onClick={openInCurrentSplit}
+          />
           {props.additionalActions}
         </ContextMenuContent>
       </ContextMenu.Portal>

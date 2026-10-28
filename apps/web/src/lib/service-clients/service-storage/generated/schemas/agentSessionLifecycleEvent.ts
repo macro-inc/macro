@@ -14,6 +14,7 @@ import type { AgentSessionLifecycleEventOneOfOneseven } from './agentSessionLife
 import type { AgentSessionLifecycleEventOneOfOnethree } from './agentSessionLifecycleEventOneOfOnethree';
 import type { AgentSessionLifecycleEventOneOfSeven } from './agentSessionLifecycleEventOneOfSeven';
 import type { AgentSessionLifecycleEventOneOfThree } from './agentSessionLifecycleEventOneOfThree';
+import type { AgentSessionLifecycleEventOneOfTwoone } from './agentSessionLifecycleEventOneOfTwoone';
 
 /**
  * Events publishable to [`MacroAgentSessionLifecycleTopic`].
@@ -33,4 +34,5 @@ export type AgentSessionLifecycleEvent =
   | AgentSessionLifecycleEventOneOfOnethree
   | AgentSessionLifecycleEventOneOfOnefive
   | AgentSessionLifecycleEventOneOfOneseven
-  | AgentSessionLifecycleEventOneOfOnenine;
+  | AgentSessionLifecycleEventOneOfOnenine
+  | AgentSessionLifecycleEventOneOfTwoone;

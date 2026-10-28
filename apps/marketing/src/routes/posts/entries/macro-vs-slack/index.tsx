@@ -14,6 +14,7 @@ import {
   ComparisonTable,
   SlackLogo,
 } from '../../PostComparison';
+import { PostFaqItem } from '../../PostFaq';
 import type { PostMeta } from '../../registry';
 
 const SLACK_VIDEO_ID = '1gDOXUxHo0U';
@@ -396,48 +397,52 @@ export default function MacroVsSlackPost() {
           UX, and is a more powerful bedrock for agentic development.
         </p>
 
-        <h2>FAQ</h2>
-        <div class="mvn-faq">
-          <h3>Should I switch from Slack to Macro?</h3>
-          <p>
-            If your stack is Slack plus email plus a tracker plus docs plus a
-            CRM, yes — that is five tools that do not share context. Run Macro
-            alongside Slack for a week, move a few active channels over, and
-            feel what a real inbox and a Signal/Noise split do to your day.
-          </p>
+        <h2 class="post-faq-title">Frequently asked questions</h2>
+        <div class="post-faq">
+          <PostFaqItem question="Should I switch from Slack to Macro?">
+            <p>
+              If your stack is Slack plus email plus a tracker plus docs plus a
+              CRM, yes — that is five tools that do not share context. Run Macro
+              alongside Slack for a week, move a few active channels over, and
+              feel what a real inbox and a Signal/Noise split do to your day.
+            </p>
+          </PostFaqItem>
 
-          <h3>When would I keep Slack instead?</h3>
-          <p>
-            When you depend on Slack's enormous app directory or on Slack
-            Connect channels with external companies. Those ecosystems took
-            years to build and we will not pretend Macro matches them yet; some
-            teams keep both during a transition.
-          </p>
+          <PostFaqItem question="When would I keep Slack instead?">
+            <p>
+              When you depend on Slack's enormous app directory or on Slack
+              Connect channels with external companies. Those ecosystems took
+              years to build and we will not pretend Macro matches them yet;
+              some teams keep both during a transition.
+            </p>
+          </PostFaqItem>
 
-          <h3>Does Macro have huddles or calls?</h3>
-          <p>
-            Yes — start a call in any channel or DM like a huddle, or share a
-            link like Google Meet. Calls run across devices with nothing to
-            install and are recorded, transcribed and diarized into your team's
-            shared memory by default.
-          </p>
+          <PostFaqItem question="Does Macro have huddles or calls?">
+            <p>
+              Yes — start a call in any channel or DM like a huddle, or share a
+              link like Google Meet. Calls run across devices with nothing to
+              install and are recorded, transcribed and diarized into your
+              team's shared memory by default.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro open source?</h3>
-          <p>
-            Yes, end to end:{' '}
-            <a
-              href="https://github.com/macro-inc/macro"
-              target="_blank"
-              rel="noreferrer"
-            >
-              github.com/macro-inc/macro
-            </a>
-            . Your data stays open and portable and the app is extensible. Slack
-            is closed source.
-          </p>
+          <PostFaqItem question="Is Macro open source?">
+            <p>
+              Yes, end to end:{' '}
+              <a
+                href="https://github.com/macro-inc/macro"
+                target="_blank"
+                rel="noreferrer"
+              >
+                github.com/macro-inc/macro
+              </a>
+              . Your data stays open and portable and the app is extensible.
+              Slack is closed source.
+            </p>
+          </PostFaqItem>
         </div>
 
-        <p>
+        <p class="post-footnote">
           For the inbox, Signal and Noise, @mentions and turning messages into
           tasks, see the{' '}
           <a

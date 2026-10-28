@@ -31,18 +31,21 @@ use model_user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
 use rootcause::Report;
 use serde_json::{Value, json};
+use shared_entity_registry::RegisteredEntityType;
 use tower::ServiceExt;
 
 use crate::domain::{
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
-        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
+        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError,
+        JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError,
+        TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember,
+        TeamWithMembers, ToggleAutoJoinDomainError,
     },
-    team_repo::TeamService,
+    owned_entity_cleanup::OwnedEntityCleanupError,
+    team_repo::{TeamInviteLinkService, TeamService},
 };
 
 use super::{
@@ -79,8 +82,59 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
 }
 
 #[tokio::test]
+async fn invite_link_errors_map_to_their_statuses() {
+    for (error, status) in [
+        (
+            ManageTeamInviteLinkError::NonAdminInvitesDisabled.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            ManageTeamInviteLinkError::ResetRequiresAdmin.into_response(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            JoinTeamByInviteLinkError::LinkNotFound.into_response(),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            JoinTeamByInviteLinkError::AlreadyInAnotherTeam.into_response(),
+            StatusCode::CONFLICT,
+        ),
+        (
+            JoinTeamByInviteLinkError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+                JoinTeamError::CustomerError(customer_error()),
+            ))
+            .into_response(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ),
+    ] {
+        assert_eq!(error.status(), status);
+    }
+    assert_customer_error_is_obfuscated(JoinTeamByInviteLinkError::JoinError(
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(customer_error())),
+    ))
+    .await;
+}
+
+#[tokio::test]
 async fn delete_team_customer_error_response_is_obfuscated() {
     assert_customer_error_is_obfuscated(DeleteTeamError::CustomerError(customer_error())).await;
+}
+
+#[tokio::test]
+async fn delete_team_cleanup_error_says_the_team_survived_without_details() {
+    let error = DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::Purge {
+        entity_type: RegisteredEntityType::Document,
+        id: uuid::Uuid::from_u128(1),
+        source: Box::new(std::io::Error::other("document storage unreachable")),
+    });
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body_text,
+        r#"{"message":"unable to delete the team's content; the team was not deleted"}"#
+    );
 }
 
 #[tokio::test]
@@ -176,7 +230,10 @@ async fn toggle_auto_join_domain_generic_domain_response_is_bad_request() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body_text.contains("gmail.com"));
+    assert_eq!(
+        body_text,
+        r#"{"message":"Auto-join isn't available for gmail.com"}"#
+    );
 }
 
 #[tokio::test]
@@ -310,6 +367,7 @@ impl TeamService for FakeTeamService {
     async fn restore_permissions_for_team_members(
         &self,
         _team_id: &uuid::Uuid,
+        _started: Option<crate::domain::open_seat_release::SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
         panic!("unexpected restore_permissions_for_team_members call")
     }
@@ -425,11 +483,56 @@ impl TeamService for FakeTeamService {
         panic!("unexpected toggle_allow_non_admin_invites call")
     }
 
+    async fn remove_user_from_all_teams(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), crate::domain::model::RemoveUserFromAllTeamsError> {
+        panic!("unexpected remove_user_from_all_teams call")
+    }
+
     async fn try_join_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
+    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
+    }
+}
+
+impl TeamInviteLinkService for FakeTeamService {
+    async fn get_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<Option<TeamInviteLinkToken>, ManageTeamInviteLinkError> {
+        panic!("unexpected get_team_invite_link call")
+    }
+
+    async fn create_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<TeamInviteLinkToken, ManageTeamInviteLinkError> {
+        panic!("unexpected create_team_invite_link call")
+    }
+
+    async fn delete_team_invite_link(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<(), TeamError> {
+        panic!("unexpected delete_team_invite_link call")
+    }
+
+    async fn get_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+    ) -> Result<TeamInviteLinkTeam, JoinTeamByInviteLinkError> {
+        panic!("unexpected get_team_by_invite_link call")
+    }
+
+    async fn join_team_by_invite_link(
+        &self,
+        _token: &TeamInviteLinkToken,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError> {
+        panic!("unexpected join_team_by_invite_link call")
     }
 }
 
@@ -562,6 +665,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             return Ok(user_context(USER_ID));
         }
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
     }
 
     async fn authorize_internal(

@@ -486,7 +486,7 @@ function SummaryCard() {
               'align-items': 'center',
               color: 'var(--a0)',
               display: 'inline-flex',
-              'font-family': "'rajdhani', body",
+              'font-family': "'Inter', body",
               'font-size': '11px',
               'font-weight': 700,
               gap: '6px',

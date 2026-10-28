@@ -1,9 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import StackIcon from '@phosphor/stack.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
@@ -21,6 +22,7 @@ import {
   Switch,
 } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 type PickerItem =
   | { type: 'clear' }
@@ -37,10 +39,12 @@ export function ProjectPicker(props: {
   let listRef: HTMLDivElement | undefined;
 
   const assign = async (projectId?: string) => {
+    // The selection that owns these ids unmounts as soon as the picker closes.
+    const taskIds = [...props.taskIds];
     // Close first like the other property editors; the save settles after.
     props.onClose();
     try {
-      const results = await commands.assignTasks(projectId, props.taskIds);
+      const results = await commands.assignTasks(projectId, taskIds);
       const failed = results.filter((item) => item.error);
       if (!failed.length) return;
       toast.failure(
@@ -60,7 +64,11 @@ export function ProjectPicker(props: {
     itemCount: () => items().length,
     onSelect: (index) => {
       const item = items()[index];
-      if (item) void assign(item.type === 'project' ? item.id : undefined);
+      if (item)
+        fireAndForget(
+          assign(item.type === 'project' ? item.id : undefined),
+          'projects'
+        );
     },
     onClose: props.onClose,
   });
@@ -74,9 +82,7 @@ export function ProjectPicker(props: {
 
   const items = createMemo<PickerItem[]>(() => {
     const projects: PickerItem[] = (source.rows() ?? [])
-      .filter(
-        (row) => row.project.access === 'edit' || row.project.access === 'owner'
-      )
+      .filter((row) => canEditProject(row.project))
       .map((row) => ({
         type: 'project',
         id: row.project.id,
@@ -100,7 +106,7 @@ export function ProjectPicker(props: {
     if (!source.hasMore() || source.loadingMore()) return;
     // One row of slack so the next page lands before the list bottoms out.
     if (element.scrollTop + element.clientHeight >= element.scrollHeight - 32)
-      void source.loadMore();
+      fireAndForget(source.loadMore(), 'projects');
   };
 
   onMount(() => document.addEventListener('keydown', dropdown.handleKeyDown));
@@ -149,8 +155,9 @@ export function ProjectPicker(props: {
                     <DropdownSelectableRow
                       isSelected={index() === dropdown.selectedIndex()}
                       onClick={() =>
-                        void assign(
-                          item.type === 'project' ? item.id : undefined
+                        fireAndForget(
+                          assign(item.type === 'project' ? item.id : undefined),
+                          'projects'
                         )
                       }
                       onMouseEnter={() => {

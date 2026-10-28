@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -21,6 +21,8 @@ export type DeleteDialogProps = ManagedDialogProps & {
   pending?: boolean;
   position?: DialogProps['position'];
   class?: string;
+  /** Where focus lands on close, e.g. when the opener no longer exists. */
+  onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
   onDelete: () => void;
 };
 
@@ -49,6 +51,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
       onOpenChange={(open) => {
         if (!open) close();
       }}
+      onCloseAutoFocus={props.onCloseAutoFocus}
       position={props.position ?? 'center'}
       class={cn('w-110', props.class)}
       visibleScrim
@@ -91,7 +94,6 @@ export function DeleteDialog(props: DeleteDialogProps) {
           <Button
             type="button"
             variant="ghost"
-            depth={2}
             disabled={props.pending}
             onClick={close}
           >
@@ -99,8 +101,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
           </Button>
           <Button
             type="button"
-            variant="strong"
-            depth={2}
+            variant="danger"
             disabled={!canDelete()}
             onClick={deleteItem}
           >

@@ -28,10 +28,19 @@ type DragOperationContextValue = {
   isAltKey: Accessor<boolean>;
 };
 
+export type ItemDragOverlayData = {
+  overlayIcon?: () => JSXElement;
+};
+
 const DragOperationContext = createContext<DragOperationContextValue>();
 
+/** Optional for composed entity rows rendered outside the draggable workspace. */
+export function useOptionalDragOperation() {
+  return useContext(DragOperationContext);
+}
+
 export function useDragOperation() {
-  const context = useContext(DragOperationContext);
+  const context = useOptionalDragOperation();
   if (!context) {
     throw new Error('useDragOperation must be used within ItemDndProvider');
   }
@@ -43,6 +52,8 @@ function ItemDragOverlay() {
   const activeDraggable = createMemo(() => {
     return state?.active.draggable;
   });
+  const overlayIcon = () =>
+    (activeDraggable()?.data as ItemDragOverlayData | undefined)?.overlayIcon;
 
   const iconType = createMemo((): EntityIconSelector => {
     const data = activeDraggable()?.data;
@@ -52,15 +63,9 @@ function ItemDragOverlay() {
     if (data.dragType === 'channel-label') {
       return data.iconType as EntityIconSelector;
     }
-    if (data.dragType === 'stage') return 'default';
+    if (overlayIcon()) return 'default';
     return getEntityIconType(data as EntityDragData);
   });
-
-  // Deal stage rows in CRM settings (see StageDragData in settings/Crm)
-  // carry no entity; their chip is the stage dot plus the label.
-  const isStage = createMemo(
-    () => activeDraggable()?.data.dragType === 'stage'
-  );
 
   const centeredOnPointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
@@ -80,12 +85,10 @@ function ItemDragOverlay() {
       >
         <div class="flex flex-row items-center gap-2">
           <Show
-            when={!isStage()}
-            fallback={
-              <span class="size-2 shrink-0 rounded-full bg-accent/70" />
-            }
+            when={overlayIcon()}
+            fallback={<EntityIcon size="xs" targetType={iconType()} />}
           >
-            <EntityIcon size="xs" targetType={iconType()} />
+            {(icon) => icon()()}
           </Show>
           <TruncatedText size="xs">
             {activeDraggable()?.data.name}

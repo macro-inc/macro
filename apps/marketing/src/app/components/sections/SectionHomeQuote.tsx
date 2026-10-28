@@ -137,7 +137,7 @@ function QuoteFigure(props: { card: QuoteCard }) {
       <blockquote
         class="home-quote-card-quote"
         style={{
-          'font-family': 'cyberreader, body',
+          'font-family': 'Inter, body',
           'font-weight': '420',
           'letter-spacing': '-0.018em',
           'line-height': 1.4,
@@ -284,7 +284,7 @@ function TweetQuoteCard() {
         class="home-quote-tweet-quote"
         style={{
           color: 'var(--c1)',
-          'font-family': 'cyberreader, body',
+          'font-family': 'Inter, body',
           'font-weight': '420',
           'letter-spacing': '-0.014em',
           'line-height': 1.45,
@@ -723,7 +723,7 @@ export function SectionHomeQuote(props: { variant?: 'default' | 'migrate' }) {
                         style={{
                           color: 'var(--c1)',
                           'font-family': 'body',
-                          'font-size': '18px',
+                          'font-size': '15px',
                           'font-weight': '700',
                           'line-height': 1.2,
                         }}
@@ -748,7 +748,7 @@ export function SectionHomeQuote(props: { variant?: 'default' | 'migrate' }) {
                     class="home-quote-migrate-quote"
                     style={{
                       color: 'var(--c1)',
-                      'font-family': 'cyberreader, body',
+                      'font-family': 'Inter, body',
                       'font-weight': '420',
                       'letter-spacing': '-0.012em',
                       'line-height': 1.45,
@@ -828,7 +828,7 @@ export function SectionHomeQuote(props: { variant?: 'default' | 'migrate' }) {
                 color: 'var(--c1)',
                 cursor: 'pointer',
                 'font-family': 'body',
-                'font-size': '18px',
+                'font-size': '15px',
                 height: '34px',
                 'line-height': 1,
                 position: 'absolute',

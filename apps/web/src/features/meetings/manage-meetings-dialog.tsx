@@ -4,6 +4,7 @@ import {
 } from '@app/features/channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useCancelMeetingMutation,
   useMeetingsQuery,
@@ -78,8 +79,8 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   Could not load your call links.
                 </p>
                 <Button
-                  variant="outline"
-                  onClick={() => void meetings.refetch()}
+                  variant="secondary"
+                  onClick={() => fireAndForget(meetings.refetch(), 'meetings')}
                 >
                   Try again
                 </Button>
@@ -94,19 +95,19 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   meetings={list()}
                   confirmId={confirmId()}
                   revokingId={cancel.isPending ? cancel.variables : undefined}
-                  onCopy={(meeting) => void copy(meeting)}
+                  onCopy={(meeting) => fireAndForget(copy(meeting), 'meetings')}
                   onJoin={(meeting) => {
                     props.onClose();
                     navigate(getMeetingPath(meeting.shareToken));
                   }}
                   onRequestRevoke={setConfirmId}
-                  onRevoke={(id) => void revoke(id)}
+                  onRevoke={(id) => fireAndForget(revoke(id), 'meetings')}
                 />
               </Match>
             </Switch>
           </div>
           <div class="flex justify-end pt-4">
-            <Button variant="strong" onClick={props.onClose}>
+            <Button variant="secondary" onClick={props.onClose}>
               Done
             </Button>
           </div>

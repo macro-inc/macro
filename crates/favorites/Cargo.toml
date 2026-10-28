@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 default = []
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:uuid", "ports"]
 inbound = [
   "dep:axum",
   "dep:axum-extra",
@@ -21,7 +22,9 @@ ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
 postgres = ["dep:sqlx", "outbound"]
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 # `query` brings `axum_extra::extract::Query`, whose deserializer collects
 # repeated query keys into a vector; `axum::extract::Query` keeps only one.
@@ -34,12 +37,14 @@ macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true, optional = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

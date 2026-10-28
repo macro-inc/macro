@@ -13,11 +13,13 @@ use crate::domain::models::{
 };
 use crate::inbound::mutation_router::{
     CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
-    DeleteCalendarEventQuery, RsvpCalendarEventRequest, UpdateCalendarEventRequest,
+    DeleteCalendarEventQuery, InviteCalendarEventGuestsRequest, RsvpCalendarEventRequest,
+    UpdateCalendarEventRequest,
 };
 
 fn sample_draft() -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "Standup".to_string(),
         description: Some("Daily".to_string()),
         location: None,
@@ -37,13 +39,14 @@ fn sample_draft() -> CalendarEventDraft {
         reminders: Some(EventReminders::default()),
         conference: Some(crate::domain::models::ConferenceChange::GoogleMeet),
         out_of_office: None,
+        guest_policy: None,
     }
 }
 
 #[test]
 fn create_body_matches_the_router_request() {
     let calendar_id = Some(Uuid::from_u128(3));
-    let body = create_body(None, calendar_id, &sample_draft());
+    let body = create_body(None, calendar_id, &sample_draft(), false);
     let request: CreateCalendarEventRequest = serde_json::from_value(body).unwrap();
 
     assert_eq!(request.calendar_id, calendar_id);
@@ -70,7 +73,7 @@ fn out_of_office_survives_the_create_wire_contract() {
         decline_message: Some("Away".to_string()),
     });
     let request: CreateCalendarEventRequest =
-        serde_json::from_value(create_body(None, None, &draft)).unwrap();
+        serde_json::from_value(create_body(None, None, &draft, false)).unwrap();
 
     let out_of_office = request
         .out_of_office
@@ -207,6 +210,30 @@ fn rsvp_body_matches_the_router_request() {
 }
 
 #[test]
+fn invite_body_matches_the_router_request() {
+    let body = invite_body(
+        None,
+        &[CalendarAttendeeInput {
+            email: "ada@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        }],
+        &CalendarUpdateScope::ThisEvent {
+            recurrence_id: "k-1".to_string(),
+        },
+    );
+    let request: InviteCalendarEventGuestsRequest = serde_json::from_value(body).unwrap();
+    assert_eq!(request.guests.len(), 1);
+    assert_eq!(request.guests[0].email, "ada@example.com");
+    assert!(request.guests[0].optional);
+    assert!(matches!(
+        request.scope,
+        Some(CalendarUpdateScopeParam::ThisEvent)
+    ));
+    assert_eq!(request.recurrence_id.as_deref(), Some("k-1"));
+}
+
+#[test]
 fn router_error_bodies_round_trip_to_their_domain_failures() {
     let cases = [
         CalendarMutationError::NotFound,
@@ -214,6 +241,12 @@ fn router_error_bodies_round_trip_to_their_domain_failures() {
         CalendarMutationError::ReadOnly,
         CalendarMutationError::NoWritableCalendar,
         CalendarMutationError::NotAttendee,
+        CalendarMutationError::NotOrganizer,
+        CalendarMutationError::GuestsCannotInvite,
+        CalendarMutationError::GuestListHidden,
+        CalendarMutationError::GuestsCannotModify,
+        CalendarMutationError::AlreadyOnCalendar,
+        CalendarMutationError::JoinRequestOpen,
         CalendarMutationError::InvalidInput("bad".to_string()),
         CalendarMutationError::ReauthRequired("expired".to_string()),
         CalendarMutationError::ProviderRejected("no".to_string()),
@@ -252,4 +285,41 @@ fn unrecognized_failures_are_classified_by_status() {
         Some(r#"{"code":"mystery","message":"no"}"#.to_string()),
     );
     assert!(matches!(parsed, CalendarMutationError::Retryable(_)));
+}
+
+#[test]
+fn create_body_asks_for_a_macro_call_only_when_requested() {
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(create_body(None, None, &sample_draft(), true)).unwrap();
+    assert!(request.macro_call);
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(create_body(None, None, &sample_draft(), false)).unwrap();
+    assert!(!request.macro_call);
+}
+
+#[test]
+fn macro_call_failures_round_trip_to_the_meeting_link_error() {
+    let api_error = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+        MeetingLinkError::Failed("down".to_string()),
+    ));
+    let body = serde_json::to_string(&api_error).unwrap();
+    let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, Some(body));
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(_))
+    ));
+
+    let api_error = CalendarMutationApiError::from(CalendarMutationError::NoWritableCalendar);
+    let body = serde_json::to_string(&api_error).unwrap();
+    let parsed = macro_call_error_from_response(StatusCode::CONFLICT, Some(body));
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::Calendar(CalendarMutationError::NoWritableCalendar)
+    ));
+
+    let parsed = macro_call_error_from_response(StatusCode::SERVICE_UNAVAILABLE, None);
+    assert!(matches!(
+        parsed,
+        CreateEventWithMacroCallError::Calendar(CalendarMutationError::Retryable(_))
+    ));
 }

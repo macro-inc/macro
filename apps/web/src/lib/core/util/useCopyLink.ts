@@ -15,13 +15,19 @@ export type CopyLinkOptions = {
 export function useCopyLink() {
   const referralCode = useReferralCode();
 
-  return (link: string, options: CopyLinkOptions = {}) => {
+  return async (link: string, options: CopyLinkOptions = {}) => {
     const url = new URL(link);
     const code = referralCode();
     if (code) url.searchParams.set('referral_code', code);
-    void navigator.clipboard.writeText(url.toString());
+    try {
+      await navigator.clipboard.writeText(url.toString());
+    } catch {
+      toast.failure('Could not copy link');
+      return false;
+    }
     if (!options.silent) {
       toast.success('Link copied to clipboard.', { subtext: options.subtext });
     }
+    return true;
   };
 }

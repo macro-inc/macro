@@ -1,3 +1,8 @@
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -20,9 +25,10 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
@@ -44,7 +50,7 @@ export function TopBar() {
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
     if (!file) return;
-    downloadFile(file, downloadName());
+    fireAndForget(downloadFile(file, downloadName()), 'image-top-bar');
   });
 
   const ops: FileOperation[] = [
@@ -60,7 +66,26 @@ export function TopBar() {
     { op: 'delete' },
   ];
 
+  const chatEntity = () => ({
+    type: 'document' as const,
+    id: blockId,
+    name: name() ?? '',
+    fileType: 'image',
+  });
+
   const tools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () => openChatWithAgent(chatEntity()),
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
+        />
+      ),
+    },
     {
       group: 'sharing',
       label: 'Share',

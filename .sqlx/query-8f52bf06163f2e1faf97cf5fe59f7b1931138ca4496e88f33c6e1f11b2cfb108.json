@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT session.id, session.manager_replica_id AS \"replica!\", session.manager_fence\n            FROM agent_session AS session\n            JOIN harness_replica AS replica ON replica.id = session.manager_replica_id\n            WHERE session.manager_replica_id IS NOT NULL\n              AND replica.last_heartbeat_at <= now() - make_interval(secs => $1)\n            ORDER BY session.manager_replica_id, session.id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "replica!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "manager_fence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8f52bf06163f2e1faf97cf5fe59f7b1931138ca4496e88f33c6e1f11b2cfb108"
+}

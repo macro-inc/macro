@@ -76,16 +76,17 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 ## Event ingestion and matching
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
-`macro.channels`, `macro.webhooks`, `macro.agent_sessions`, and
-`macro.agent_session_lifecycle`. It supports these event names:
+`macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
+and `macro.agent_session_lifecycle`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.message_posted`, `channel.message_patched`,
-  `channel.message_deleted`, `channel.message_attachment_created`,
-  `channel.message_attachment_removed`, `channel.participant_added`,
-  `channel.participant_removed`, and `channel.mentioned`.
+  `channel.participant_added`, and `channel.participant_removed`.
+- Messages, on channels and document discussions alike: `message.posted`,
+  `message.patched`, `message.deleted`, `message.attachment_created`,
+  `message.attachment_removed`, and `message.mentioned`. Each payload carries
+  the message's `parent` (`{"type": "channel" | "document", "id": ...}`).
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
@@ -95,20 +96,21 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
 
-For document and channel events, ingestion asks `EntityAccessService` for the
-people who currently have access to the entity. The matching workspace set
+For document, channel, and message events, ingestion asks `EntityAccessService`
+for the people who currently have access to the entity; a message's entity is
+its parent channel or document. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
 to which any of those people belongs. The set is deduplicated before matching,
 so one person or team is considered only once.
 
-`channel.mentioned` is emitted once per distinct entity `@`-mentioned in a
-channel message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
+`message.mentioned` is emitted once per distinct entity `@`-mentioned in a
+message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
 any future mentionable kind. Bot mentions only emit when the bot is an active
-channel participant; the author may itself be a bot. Like every channel
-event, access and `ids` filtering are by channel: the entity is the channel
-containing the message, and the mentioned entity travels in the payload's
-`mentioned` field for consumers to filter on (e.g. the SDK's
-`events.onSelfMention`).
+channel participant; the author may itself be a bot. Like every message
+event, access and `ids` filtering are by the message's parent: the entity is
+the channel or document containing the message, and the mentioned entity
+travels in the payload's `mentioned` field for consumers to filter on (e.g.
+the SDK's `events.onSelfMention`).
 
 Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
 bot's whole trigger stream. Access is gated by the channel the mention sits in
@@ -150,9 +152,11 @@ matches every entity ID for that filter's events:
 ```
 
 For document events, IDs always mean the event's `document_id`. For every
-channel event, IDs mean `channel_id`. This includes message, attachment, and
-participant events: their message, attachment, and participant IDs are not used
-for webhook filtering. For webhook events, IDs mean the subject `webhook_id`;
+channel event, IDs mean `channel_id`. This includes attachment and participant
+events: their attachment and participant IDs are not used for webhook filtering.
+For message events, IDs mean the parent's id (`metadata.parent.id`, a channel
+or document); message ids are not used for webhook filtering. For webhook
+events, IDs mean the subject `webhook_id`;
 an absent or `null` `ids` field matches every webhook ID in the strict owner
 workspace.
 
@@ -192,7 +196,8 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents`, `macro.channels`, and `macro.webhooks` topics. Consumers must
+`macro.documents`, `macro.channels`, `macro.messages`, and `macro.webhooks`
+topics. Consumers must
 therefore treat the order as observed order, not total event order.
 
 ## HTTP delivery contract

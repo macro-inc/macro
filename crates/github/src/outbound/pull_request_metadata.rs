@@ -8,8 +8,10 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubKey, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestStatus, GithubRepository,
+    EnrichedGithubPullRequest, GitRef, GithubKey, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUser, GithubRepository, latest_reviews,
 };
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -37,10 +39,13 @@ pub(crate) async fn fetch_pull_request_metadata(
     .await;
 
     let mut participant_ids = pull_request.participant_ids();
-    let comments = discussion.map(|discussion| {
-        participant_ids.extend(discussion.participant_ids);
-        discussion.comments
-    });
+    let (comments, reviews) = match discussion {
+        Some(discussion) => {
+            participant_ids.extend(discussion.participant_ids);
+            (Some(discussion.comments), Some(discussion.reviews))
+        }
+        None => (None, None),
+    };
     // A failed comments fetch still yields the partial author/reviewer/assignee set; stored
     // metadata merges participants as a union, so partial sets are safe.
     let participant_github_user_ids =
@@ -50,8 +55,10 @@ pub(crate) async fn fetch_pull_request_metadata(
         .as_ref()
         .and_then(|user| user.login.clone());
     let author_id = pull_request.user.as_ref().and_then(|user| user.id);
+    let requested_reviewer_github_user_ids = user_ids(&pull_request.requested_reviewers);
 
     Ok(GithubPullRequestDetails {
+        repository_id: pull_request.base.repository_id(),
         title: pull_request.title,
         state: pull_request.state,
         merged_at: pull_request.merged_at,
@@ -63,6 +70,14 @@ pub(crate) async fn fetch_pull_request_metadata(
         comments,
         checks,
         participant_github_user_ids,
+        draft: pull_request.draft,
+        requested_reviewer_github_user_ids: Some(requested_reviewer_github_user_ids),
+        github_updated_at: pull_request.updated_at,
+        assignees: Some(pull_request_users(&pull_request.assignees)),
+        labels: Some(pull_request_labels(&pull_request.labels)),
+        reviews,
+        base: pull_request.base.git_ref(),
+        head: Some(pull_request.head.git_ref()),
     })
 }
 
@@ -151,6 +166,7 @@ struct GithubInstallationRepositoriesResponse {
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubInstallationRepositoryResponse {
+    id: u64,
     name: String,
     owner: GithubRepositoryOwnerResponse,
     html_url: String,
@@ -168,6 +184,7 @@ impl GithubInstallationRepositoryResponse {
             html_url: self.html_url,
             default_branch: self.default_branch,
             private: self.private,
+            id: self.id,
         }
     }
 }
@@ -183,11 +200,21 @@ struct GithubOpenPullRequestResponse {
     title: String,
     html_url: String,
     body: Option<String>,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
+    #[serde(default)]
+    head: Option<GithubPullRequestHeadResponse>,
+    #[serde(default)]
+    draft: Option<bool>,
+    #[serde(default)]
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
     #[serde(default)]
     assignees: Vec<GithubUserResponse>,
+    #[serde(default)]
+    labels: Vec<GithubLabelResponse>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -199,11 +226,19 @@ struct GithubPullRequestResponse {
     deletions: u64,
     body: Option<String>,
     head: GithubPullRequestHeadResponse,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
+    #[serde(default)]
+    draft: Option<bool>,
+    #[serde(default)]
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
     #[serde(default)]
     assignees: Vec<GithubUserResponse>,
+    #[serde(default)]
+    labels: Vec<GithubLabelResponse>,
 }
 
 impl GithubPullRequestResponse {
@@ -232,7 +267,83 @@ fn structural_participant_ids(
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubPullRequestHeadResponse {
+    #[serde(default, rename = "ref")]
+    name: Option<String>,
     sha: String,
+}
+
+impl GithubPullRequestHeadResponse {
+    fn git_ref(&self) -> GitRef {
+        GitRef {
+            name: self.name.clone(),
+            sha: Some(self.sha.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct GithubPullRequestBaseResponse {
+    repo: Option<GithubRepositoryIdResponse>,
+    #[serde(default, rename = "ref")]
+    name: Option<String>,
+    #[serde(default)]
+    sha: Option<String>,
+}
+
+impl GithubPullRequestBaseResponse {
+    fn repository_id(&self) -> Option<u64> {
+        self.repo.as_ref().map(|repo| repo.id)
+    }
+
+    fn git_ref(&self) -> Option<GitRef> {
+        (self.name.is_some() || self.sha.is_some()).then(|| GitRef {
+            name: self.name.clone(),
+            sha: self.sha.clone(),
+        })
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRepositoryIdResponse {
+    id: u64,
+}
+
+/// The users that have a stable numeric id, with their logins.
+fn pull_request_users(users: &[GithubUserResponse]) -> Vec<GithubPullRequestUser> {
+    users
+        .iter()
+        .filter_map(|user| {
+            Some(GithubPullRequestUser {
+                github_user_id: user.id?.to_string(),
+                login: user.login.clone(),
+            })
+        })
+        .collect()
+}
+
+fn pull_request_labels(labels: &[GithubLabelResponse]) -> Vec<GithubPullRequestLabel> {
+    labels
+        .iter()
+        .map(|label| GithubPullRequestLabel {
+            name: label.name.clone(),
+            color: label.color.clone(),
+        })
+        .collect()
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubLabelResponse {
+    name: String,
+    color: Option<String>,
+}
+
+/// The stable numeric ids, as strings, of the users that have one.
+fn user_ids(users: &[GithubUserResponse]) -> Vec<String> {
+    users
+        .iter()
+        .filter_map(|user| user.id)
+        .map(|id| id.to_string())
+        .collect()
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -263,6 +374,7 @@ struct GithubCommentResponse {
 struct GithubReviewResponse {
     id: u64,
     body: Option<String>,
+    state: Option<String>,
     user: Option<GithubUserResponse>,
     author_association: Option<String>,
     html_url: Option<String>,
@@ -320,6 +432,8 @@ async fn fetch_pull_request(
 struct FetchedDiscussion {
     comments: Vec<GithubPullRequestComment>,
     participant_ids: BTreeSet<u64>,
+    /// Each reviewer's latest submitted review. Only the reviews fetch fills it.
+    reviews: Vec<GithubPullRequestReview>,
 }
 
 async fn fetch_comments(
@@ -340,6 +454,7 @@ async fn fetch_comments(
     let reviews = fetch_reviews(client, access_token, owner, repo, number).await?;
     discussion.comments.extend(reviews.comments);
     discussion.participant_ids.extend(reviews.participant_ids);
+    discussion.reviews = reviews.reviews;
 
     Some(discussion)
 }
@@ -366,6 +481,7 @@ async fn fetch_issue_comments(
     {
         Ok(comments) => Some(FetchedDiscussion {
             participant_ids: author_ids(&comments, |comment| comment.user.as_ref()),
+            reviews: Vec::new(),
             comments: comments
                 .into_iter()
                 .map(|comment| comment.into_pull_request_comment("issue_comment"))
@@ -406,6 +522,7 @@ async fn fetch_review_comments(
     {
         Ok(comments) => Some(FetchedDiscussion {
             participant_ids: author_ids(&comments, |comment| comment.user.as_ref()),
+            reviews: Vec::new(),
             comments: comments
                 .into_iter()
                 .map(|comment| comment.into_pull_request_comment("review_comment"))
@@ -448,6 +565,7 @@ async fn fetch_reviews(
         // from the comment list but their reviewers still count as participants.
         Ok(reviews) => Some(FetchedDiscussion {
             participant_ids: author_ids(&reviews, |review| review.user.as_ref()),
+            reviews: latest_reviews(reviews.iter().filter_map(GithubReviewResponse::review)),
             comments: reviews
                 .into_iter()
                 .filter_map(GithubReviewResponse::into_pull_request_comment)
@@ -597,6 +715,7 @@ impl GithubOpenPullRequestResponse {
             github_key: GithubKey::new(owner, repo, self.number).to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: self.base.repository_id(),
             number: self.number,
             url: self.html_url,
             display_name: format!("{owner}/{repo}#{}", self.number),
@@ -611,6 +730,17 @@ impl GithubOpenPullRequestResponse {
             checks: None,
             participant_github_user_ids: (!participant_ids.is_empty())
                 .then(|| participant_ids.iter().map(u64::to_string).collect()),
+            draft: self.draft,
+            requested_reviewer_github_user_ids: Some(user_ids(&self.requested_reviewers)),
+            github_updated_at: self.updated_at,
+            assignees: Some(pull_request_users(&self.assignees)),
+            labels: Some(pull_request_labels(&self.labels)),
+            reviews: None,
+            base: self.base.git_ref(),
+            head: self
+                .head
+                .as_ref()
+                .map(GithubPullRequestHeadResponse::git_ref),
         }
     }
 }
@@ -637,6 +767,17 @@ impl GithubCommentResponse {
 }
 
 impl GithubReviewResponse {
+    /// The review as its reviewer's state, when it was submitted by a user with an id.
+    fn review(&self) -> Option<GithubPullRequestReview> {
+        let user = self.user.as_ref()?;
+        Some(GithubPullRequestReview {
+            reviewer_github_user_id: user.id?.to_string(),
+            reviewer_login: user.login.clone(),
+            state: GithubPullRequestReviewState::from_github(self.state.as_deref()?)?,
+            submitted_at: self.submitted_at,
+        })
+    }
+
     fn into_pull_request_comment(self) -> Option<GithubPullRequestComment> {
         let body = self.body.unwrap_or_default();
 

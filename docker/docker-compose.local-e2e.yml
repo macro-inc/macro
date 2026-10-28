@@ -22,6 +22,7 @@ x-local-e2e-env: &local-e2e-env
   STATIC_STORAGE_BUCKET: static-file-storage
   UPLOAD_STAGING_BUCKET: bulk-upload-staging
   AGENT_SESSION_CHANGES_BUCKET: agent-session-changes
+  GITHUB_PULL_REQUEST_PATCH_BUCKET: github-pull-request-patches
 
   BULK_UPLOAD_REQUESTS_TABLE: bulk-upload
   CONNECTION_GATEWAY_TABLE: connection-gateway-table
@@ -65,7 +66,7 @@ services:
     environment: *local-e2e-env
   # Not needed by the smoke suite. Keep this behind an inactive profile so
   # missing cognition-only env vars do not block local E2E startup.
-  document_cognition_service:
+  agent_harness_service:
     profiles:
       - local-e2e-unused
     environment: *local-e2e-env

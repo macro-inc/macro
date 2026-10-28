@@ -1,0 +1,8 @@
+config:
+  aws:region: us-east-1
+  aws-native:region: us-east-1
+  website-infra:certArn: arn:aws:acm:us-east-1:569036502058:certificate/50d917af-65f9-49d6-9505-39f9c01eeb22
+  website-infra:domain: macro.com
+  website-infra:subdomain: www
+  website-infra:oidcBucketArn: "arn:aws:s3:::macro-oidc-prod"
+  website-infra:oidcBucketWebsiteEndpoint: "macro-oidc-prod.s3.us-east-1.amazonaws.com"

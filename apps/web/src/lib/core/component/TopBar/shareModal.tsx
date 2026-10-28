@@ -1,20 +1,17 @@
 import type { BlockAlias, BlockName } from '@core/block';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import {
   useDocumentAccessLevelQuery,
   useDocumentMetadataQuery,
 } from '@queries/storage/document-metadata';
-import {
-  type DialogHandle,
-  type ManagedDialogInput,
-  openDialog,
-  useImperativeDialog,
-} from '@ui';
+import { type DialogHandle, type ManagedDialogInput, openDialog } from '@ui';
 import {
   type Accessor,
   type ComponentProps,
   createEffect,
   createSignal,
+  getOwner,
   Suspense,
 } from 'solid-js';
 import { getPermissions } from '../SharePermissions';
@@ -35,7 +32,9 @@ function SuspendedShareModal(props: ShareModalProps) {
 
 /** Opens the share modal outside of any component, e.g. from a list action. */
 export function openShareModal(props: ShareModalInput): DialogHandle {
-  return openDialog(SuspendedShareModal, props);
+  return openDialog(SuspendedShareModal, props, {
+    key: `share:${props.itemType}:${props.id}`,
+  });
 }
 
 /**
@@ -43,16 +42,33 @@ export function openShareModal(props: ShareModalInput): DialogHandle {
  * modal follows `props` while open and closes when the component unmounts.
  * Return `undefined` from `props` until the share data has loaded; opening
  * before then waits for it, so the modal never shows placeholder permissions.
+ * `onClose` runs when the person closes an opened modal, not when a newer
+ * one replaces it or its owner unmounts.
  */
 export function useShareModal(
-  props: Accessor<ShareModalInput | undefined>
+  props: Accessor<ShareModalInput | undefined>,
+  options: { onClose?: () => void } = {}
 ): () => void {
-  const dialog = useImperativeDialog(SuspendedShareModal);
+  const owner = getOwner();
   const [pending, setPending] = createSignal(false);
+
+  const notifyClosed = async (handle: DialogHandle) => {
+    const { reason } = await handle.closed;
+    if (reason === 'dismissed' || reason === 'programmatic')
+      options.onClose?.();
+  };
 
   const openWith = (initial: ShareModalInput) => {
     setPending(false);
-    dialog.open(() => props() ?? initial);
+    fireAndForget(
+      notifyClosed(
+        openDialog(SuspendedShareModal, () => props() ?? initial, {
+          owner,
+          key: `share:${initial.itemType}:${initial.id}`,
+        })
+      ),
+      'share-modal'
+    );
   };
 
   createEffect(() => {

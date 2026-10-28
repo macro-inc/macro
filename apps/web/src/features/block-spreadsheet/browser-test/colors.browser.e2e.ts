@@ -31,6 +31,15 @@ test('imported black text and borders follow the theme without changing exported
   const negative = sheet.getCell('A4');
   negative.value = -100;
   negative.font = { color: { argb: 'FFFF0000' } };
+  // Templates paint white "paper" to hide gridlines.
+  const paper = sheet.getCell('A5');
+  paper.value = 'Template paper';
+  paper.font = { color: { argb: 'FF000000' } };
+  paper.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFFFFFFF' },
+  };
 
   await page.getByLabel('Import spreadsheet file').setInputFiles({
     name: 'display-colors.xlsx',
@@ -57,6 +66,7 @@ test('imported black text and borders follow the theme without changing exported
       (element, colors) => {
         element.style.setProperty('--color-ink', colors[0]);
         element.style.setProperty('--color-surface', colors[1]);
+        element.style.setProperty('--color-panel', colors[1]);
       },
       [ink, surface]
     );
@@ -89,6 +99,18 @@ test('imported black text and borders follow the theme without changing exported
       'color',
       'rgb(255, 0, 0)'
     );
+    // White paper follows the app background and hides its gridlines.
+    const paperCell = page.locator('[data-address="A5"]');
+    await expect(paperCell).toHaveCSS('color', expected);
+    await expect(paperCell).toHaveCSS(
+      'background-color',
+      surface === '#ffffff' ? 'rgb(255, 255, 255)' : 'rgb(17, 17, 17)'
+    );
+    await expect(paperCell).toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
+    await expect(page.locator('[data-address="A4"]')).toHaveCSS(
+      'border-bottom-color',
+      'rgba(0, 0, 0, 0)'
+    );
     expect(
       await page.evaluate(() => window.spreadsheetFixture.snapshot())
     ).toEqual(stored);
@@ -110,4 +132,7 @@ test('imported black text and borders follow the theme without changing exported
   expect(exported.getCell('A2').font.color?.argb).toBe('FF000000');
   expect(exported.getCell('A3').font.color?.argb).toBe('FFFFFFFF');
   expect(exported.getCell('A4').font.color?.argb).toBe('FFFF0000');
+  expect(
+    (exported.getCell('A5').fill as ExcelJS.FillPattern).fgColor?.argb
+  ).toBe('FFFFFFFF');
 });

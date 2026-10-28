@@ -633,12 +633,8 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
              element; this is the frame it starts from, and what SSR and a
              reader who never scrolls this far get. */
           color: var(--c4);
-          /* Cyberreader at its Light 300, the page's own reading face rather
-             than the docs figure's rajdhani: these labels are prose about
-             the picture, and at the regular weight they had more presence
-             than the hairline pointing at them. The two paragraph tiers on
-             /tasks are set the same way. */
-          font-family: cyberreader, body;
+
+          font-family: Inter, body;
           font-weight: 300;
           /* In stage units, so every clearance measured in stage units holds
              at whatever width the figure ends up. */

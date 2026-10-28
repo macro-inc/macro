@@ -1,0 +1,6 @@
+fragment TaskCompletion on GraphqlSoupDocument {
+  subType {
+    __typename
+    ... on GraphqlTaskSubType { isCompleted }
+  }
+}

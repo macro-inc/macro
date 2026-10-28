@@ -87,7 +87,7 @@ export function PartnerBadge() {
 
       <text
         fill="var(--c1)"
-        font-family="rajdhani, body, sans-serif"
+        font-family="Inter, body, sans-serif"
         font-size="9.2"
         font-weight="700"
         letter-spacing="2.4"

@@ -1,6 +1,6 @@
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TextField } from '@kobalte/core/text-field';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { Button, cn, Hotkey, Surface } from '@ui';
 import type { JSX, JSXElement } from 'solid-js';
@@ -8,7 +8,7 @@ import { Show, splitProps } from 'solid-js';
 
 export type SearchBarProps = Omit<
   JSX.InputHTMLAttributes<HTMLInputElement>,
-  'children' | 'class' | 'onInput' | 'type' | 'value'
+  'children' | 'class' | 'onInput' | 'size' | 'type' | 'value'
 > & {
   label: string;
   value: string;
@@ -23,6 +23,7 @@ export type SearchBarProps = Omit<
   onClose?: () => void;
   /** Controls shown after the input and before its clear or close action. */
   actions?: JSXElement;
+  size?: 'sm' | 'md';
   class?: string;
   inputClass?: string;
 };
@@ -36,6 +37,7 @@ export function SearchBar(props: SearchBarProps) {
     'onEscape',
     'onClose',
     'actions',
+    'size',
     'class',
     'inputClass',
     'disabled',
@@ -65,7 +67,8 @@ export function SearchBar(props: SearchBarProps) {
       depth={2}
       hideBorder
       class={cn(
-        'h-10 w-full min-w-0 rounded-full border border-edge-button bg-control text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
+        'w-full min-w-0 rounded-full border border-edge-button bg-control not-touch:elevated text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
+        local.size === 'sm' ? 'h-8' : 'h-[var(--view-search-height,2.5rem)]',
         local.class
       )}
       data-search-bar=""
@@ -78,13 +81,19 @@ export function SearchBar(props: SearchBarProps) {
         disabled={local.disabled}
         readOnly={local.readOnly}
         required={local.required}
-        class="group flex size-full min-w-0 items-center gap-2 px-3"
+        class={cn(
+          'group flex size-full min-w-0 items-center',
+          local.size === 'sm' ? 'gap-1.5 px-2' : 'gap-2 px-3'
+        )}
         onKeyDown={onKeyDown}
       >
         <TextField.Label class="sr-only">{local.label}</TextField.Label>
         <MagnifyingGlassIcon
           aria-hidden="true"
-          class="size-4 shrink-0 text-ink-extra-muted"
+          class={cn(
+            'shrink-0 text-ink-extra-muted',
+            local.size === 'sm' ? 'size-3.5' : 'size-4'
+          )}
         />
         <div class="relative min-w-0 flex-1">
           <TextField.Input
@@ -105,7 +114,11 @@ export function SearchBar(props: SearchBarProps) {
               class="pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap text-sm text-ink-placeholder group-focus-within:hidden"
             >
               <span class="truncate">{inputProps.placeholder}</span>
-              <Hotkey shortcut={local.hotkey} theme="subtle" class="shrink-0" />
+              <Hotkey
+                shortcut={local.hotkey}
+                theme="subtle"
+                class="shrink-0 touch:hidden"
+              />
             </div>
           </Show>
         </div>
@@ -114,7 +127,7 @@ export function SearchBar(props: SearchBarProps) {
             <Hotkey
               shortcut={hotkey()}
               theme="subtle"
-              class="shrink-0 group-focus-within:hidden"
+              class="shrink-0 group-focus-within:hidden touch:hidden"
             />
           )}
         </Show>
@@ -125,14 +138,15 @@ export function SearchBar(props: SearchBarProps) {
           }
         >
           <Button
+            aria-label={local.onClose ? 'Close search' : 'Clear search'}
+            tooltip={local.onClose ? 'Close search' : 'Clear search'}
             type="button"
-            size="sm"
-            square
-            label={local.onClose ? 'Close search' : 'Clear search'}
+            variant="ghost"
+            size="icon-xs"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => (local.onClose ?? clear)()}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </TextField>

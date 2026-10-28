@@ -17,14 +17,17 @@ export const sleep = (millis) => new Promise(resolve => setTimeout(resolve, mill
 
 async function migrateDatabase(mf: Miniflare) {
   const db = await mf.getD1Database("USER_PEER_MAPPING");
-  const migration = fs.readFileSync("database/user-peer-mapping/migrations/0001_add_users.sql", "utf8");
-  const statements = migration
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
+  const migrationsDir = "database/user-peer-mapping/migrations";
+  for (const file of fs.readdirSync(migrationsDir).sort()) {
+    const migration = fs.readFileSync(`${migrationsDir}/${file}`, "utf8");
+    const statements = migration
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
 
-  for (const statement of statements) {
-    await db.prepare(statement).run();
+    for (const statement of statements) {
+      await db.prepare(statement).run();
+    }
   }
 }
 
@@ -33,6 +36,7 @@ export async function setupMiniflare(
     persistPath?: string;
     migrate?: boolean;
     dssUrl?: string;
+    lexicalServiceUrl?: string;
     fetchMock?: MiniflareOptions['fetchMock'];
   } = {},
 ) {
@@ -73,6 +77,9 @@ export async function setupMiniflare(
       SPS_URL: "http://localhost:8092",
       local:true,
       ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
+      ...(options.lexicalServiceUrl
+        ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, LEXICAL_SERVICE_AUTH_KEY: "lexical-key" }
+        : {}),
     },
     compatibilityDate: '2025-03-05'
   });

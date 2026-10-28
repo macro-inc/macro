@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createLoroManager,
   type LoroManager,
@@ -24,7 +25,6 @@ import {
   createSignal,
   on,
   type ParentProps,
-  Show,
   Suspense,
 } from 'solid-js';
 import {
@@ -37,10 +37,11 @@ import {
   type MarkdownDocumentState,
 } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
+import { HistoryWorkspace } from '../history/HistoryWorkspace';
 import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
-import { InstructionsNotebook, Notebook } from './Notebook';
+import { Notebook } from './Notebook';
 
 type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
 type SnapshotResult = {
@@ -110,7 +111,10 @@ function startSnapshotIngest(
       })
     : ingest();
 
-  void recordSnapshotResult(parentSpan, source, operation);
+  fireAndForget(
+    recordSnapshotResult(parentSpan, source, operation),
+    'markdown-editor'
+  );
 }
 
 async function ingestLocalSnapshot(
@@ -217,7 +221,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
           tabIndex={-1}
         >
           <HistoryProvider documentId={() => props.documentId}>
-            {props.children}
+            <HistoryWorkspace>{props.children}</HistoryWorkspace>
           </HistoryProvider>
         </div>
       </MarkdownNameProvider>
@@ -282,7 +286,6 @@ function useMarkdownSnapshotIngest(
 }
 
 export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
-  isInstructions?: boolean;
   hotkeyScope?: string;
   autoFocus?: boolean;
 };
@@ -297,8 +300,6 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
 
   useMarkdownSnapshotIngest(loroManager, props);
 
-  const isInstructions = () => props.isInstructions ?? false;
-
   return (
     <div class="w-full grow overflow-hidden relative" data-block-content>
       <Scroll
@@ -311,22 +312,12 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
       >
         <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
           <Suspense>
-            <Show
-              when={!isInstructions()}
-              fallback={
-                <InstructionsNotebook
-                  loroManager={loroManager}
-                  hotkeyScope={props.hotkeyScope}
-                />
-              }
-            >
-              <Notebook
-                loroManager={loroManager}
-                documentId={documentId}
-                hotkeyScope={props.hotkeyScope}
-                autoFocus={props.autoFocus ?? false}
-              />
-            </Show>
+            <Notebook
+              loroManager={loroManager}
+              documentId={documentId}
+              hotkeyScope={props.hotkeyScope}
+              autoFocus={props.autoFocus ?? false}
+            />
           </Suspense>
         </div>
       </Scroll>

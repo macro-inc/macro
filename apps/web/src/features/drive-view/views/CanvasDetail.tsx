@@ -1,15 +1,17 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { CanvasDocument } from '@block-canvas/component/CanvasDocument';
-import { useCanvasDocument } from '@block-canvas/context/canvas-document-context';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { SidePanel } from '@components/app/side-panel';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import { downloadFile } from '@filesystem/download';
+import { createFileDownload } from '@core/util/createFileDownload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useSearchParams } from '@solidjs/router';
-import type { JSX } from 'solid-js';
+import { err, ok } from 'neverthrow';
+import type { Accessor, JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
 import {
@@ -25,18 +27,26 @@ function CanvasDetailContent(props: {
   data: CanvasDocumentData;
   children?: (context: CanvasDetailContext) => JSX.Element;
   content: JSX.Element;
+  savedFile: Accessor<Blob | undefined>;
 }) {
   const analytics = useAnalytics();
-  const [savedFile] = useCanvasDocument().state.signals.currentSavedFile;
-  const downloadName = documentDownloadName(
-    props.data.documentMetadata,
-    'Unknown Filename'
-  );
-  const operations = [
-    downloadFileOperation(() => {
-      downloadFile(savedFile() ?? props.data.file, downloadName);
+  const download = createFileDownload(() => ({
+    id: `${props.data.documentMetadata.documentId}:${props.data.documentMetadata.documentVersionId}`,
+    name: documentDownloadName(props.data.documentMetadata, 'Unknown Filename'),
+    load: async () => {
+      const blob = props.savedFile() ?? props.data.file;
+      if (!blob)
+        return err([
+          { code: 'NOT_READY', message: 'Canvas content is still loading.' },
+        ]);
       analytics.track('download', { blockType: 'canvas' });
-    }),
+      return ok({ blob });
+    },
+  }));
+  const operations = [
+    downloadFileOperation(() =>
+      fireAndForget(download.start(), 'drive-file-download')
+    ),
   ];
 
   return (
@@ -46,6 +56,7 @@ function CanvasDetailContent(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         {props.content}
@@ -59,7 +70,6 @@ export function CanvasDetailDocument(props: {
   data: CanvasDocumentData;
   children?: (context: CanvasDetailContext) => JSX.Element;
 }) {
-  const panel = useSplitPanelOrThrow();
   const [searchParams] = useSearchParams();
   const canEdit = () =>
     hasPermissions(
@@ -73,19 +83,30 @@ export function CanvasDetailDocument(props: {
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
     >
+      <SidePanel.HeaderActions>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: props.documentId,
+            name:
+              props.data.documentMetadata.documentName ?? 'Unknown Filename',
+            fileType: 'canvas',
+          }}
+        />
+      </SidePanel.HeaderActions>
       <CanvasDocument
         documentId={props.documentId}
         file={props.data.file}
+        shared={props.data.shared}
         canEdit={canEdit()}
-        hotkeyScope={panel.splitHotkeyScope}
-        portalScope="split"
         locationParams={searchParams}
       >
-        {(content) => (
+        {(content, state) => (
           <CanvasDetailContent
             data={props.data}
             children={props.children}
             content={content}
+            savedFile={state.savedFile}
           />
         )}
       </CanvasDocument>
@@ -100,6 +121,7 @@ export function CanvasDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="canvas"
       label="canvas"
       load={loadCanvasDocument}
     >

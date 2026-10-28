@@ -21,6 +21,7 @@ import {
   SHARD_SETTINGS,
   SLOWLOG_SETTINGS,
 } from '../constants';
+import { IMPORTED_AUTHOR_MAPPING } from './add_imported_author';
 
 export type CreateIndexArgs = {
   indexName: string;
@@ -424,6 +425,8 @@ const CHANNEL_BODY = {
         type: 'keyword',
         index: true,
       },
+      // Queried directly alongside content so message-body highlights stay intact.
+      imported_author: IMPORTED_AUTHOR_MAPPING,
       mentions: {
         type: 'keyword',
         index: true,

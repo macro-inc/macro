@@ -1,10 +1,12 @@
 /// <reference lib="webworker" />
 
-import { installCacheCoordinatorWorker } from '../cache-coordinator-runtime';
+import { installSharedCacheCoordinatorWorker } from '../cache-coordinator-runtime';
 import { CoordinatorRouter } from '../coordinator-router';
 
+declare const self: SharedWorkerGlobalScope;
+
 const router = new CoordinatorRouter();
-installCacheCoordinatorWorker({ router });
+installSharedCacheCoordinatorWorker(self, router);
 let telemetry: BroadcastChannel | undefined;
 
 setInterval(() => {

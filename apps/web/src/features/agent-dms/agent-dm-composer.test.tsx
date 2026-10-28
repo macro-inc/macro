@@ -1,0 +1,189 @@
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { type Accessor, createSignal, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ query: vi.fn() }));
+vi.mock('@app/features/agent-conversations/queries/conversations', () => ({
+  useAgentConversations: mocks.query,
+}));
+vi.mock(
+  '@app/features/agent-conversations/agent-conversation-controls',
+  () => ({
+    AgentConversationControls: () => null,
+  })
+);
+vi.mock('@ui', () => ({
+  Button: (props: { onClick: () => void; children: JSX.Element }) => (
+    <button onClick={props.onClick}>{props.children}</button>
+  ),
+}));
+
+import { AgentDmComposer } from './agent-dm-composer';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('agent DM composer availability', () => {
+  it('keeps normal channel composers independent of the agent metadata service', () => {
+    mocks.query.mockReturnValue({
+      isPending: true,
+      isError: false,
+      get data() {
+        throw new Error('Disabled data must not be read');
+      },
+      refetch: vi.fn(),
+    });
+    const view = render(() => (
+      <AgentDmComposer channelId="ordinary" botId={undefined}>
+        <textarea aria-label="Message" />
+      </AgentDmComposer>
+    ));
+    expect(view.getByRole('textbox')).toBeTruthy();
+    const [, enabled] = mocks.query.mock.calls[0] as [
+      unknown,
+      Accessor<boolean>,
+    ];
+    expect(enabled()).toBe(false);
+  });
+
+  it('waits for access and preserves readable history when a persona is revoked', () => {
+    const [state, setState] = createStore({
+      status: 'pending',
+      available: true,
+    });
+    mocks.query.mockReturnValue({
+      get isPending() {
+        return state.status === 'pending';
+      },
+      get isSuccess() {
+        return state.status === 'success';
+      },
+      get isError() {
+        return state.status === 'error';
+      },
+      get data() {
+        if (state.status !== 'success')
+          throw new Error('Pending data must not be read');
+        return [{ botId: 'persona', available: state.available }];
+      },
+      refetch: vi.fn(),
+    });
+    const view = render(() => (
+      <>
+        <p>Earlier conversation</p>
+        <AgentDmComposer channelId="dm" botId="persona">
+          <textarea aria-label="Message" />
+        </AgentDmComposer>
+      </>
+    ));
+    expect(view.getByText('Loading conversation…')).toBeTruthy();
+    expect(view.queryByRole('textbox')).toBeNull();
+    setState('status', 'success');
+    expect(view.getByRole('textbox')).toBeTruthy();
+    setState('available', false);
+    expect(view.queryByRole('textbox')).toBeNull();
+    expect(view.getByText(/no longer available/)).toBeTruthy();
+    expect(view.getByText('Earlier conversation')).toBeTruthy();
+  });
+
+  it('offers a retry for metadata failures without treating them as lost access', async () => {
+    const refetch = vi.fn();
+    mocks.query.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      refetch,
+    });
+    const view = render(() => (
+      <AgentDmComposer channelId="dm" botId="persona">
+        <textarea />
+      </AgentDmComposer>
+    ));
+    await fireEvent.click(view.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledOnce();
+    expect(view.queryByText(/no longer available/)).toBeNull();
+  });
+
+  it('keeps the composer through a failed poll', () => {
+    const [state, setState] = createStore({ status: 'success' });
+    mocks.query.mockReturnValue({
+      isPending: false,
+      get isSuccess() {
+        return state.status === 'success';
+      },
+      get isError() {
+        return state.status === 'error';
+      },
+      // A failed refetch keeps the last data it loaded.
+      data: [{ botId: 'persona', available: true }],
+      refetch: vi.fn(),
+    });
+    let mounts = 0;
+    const Input = () => {
+      mounts += 1;
+      return <textarea aria-label="Message" />;
+    };
+    const view = render(() => (
+      <AgentDmComposer channelId="dm" botId="persona">
+        <Input />
+      </AgentDmComposer>
+    ));
+    expect(view.getByRole('textbox')).toBeTruthy();
+    setState('status', 'error');
+    expect(view.getByRole('textbox')).toBeTruthy();
+    expect(view.queryByText('Could not load this conversation.')).toBeNull();
+    expect(mounts).toBe(1);
+  });
+
+  it('keeps the input it already showed when the channel names its agent late', () => {
+    const [botId, setBotId] = createSignal<string>();
+    const [state, setState] = createStore({
+      status: 'pending',
+      available: true,
+    });
+    mocks.query.mockImplementation(
+      (_channelId: Accessor<string>, enabled: Accessor<boolean>) => ({
+        get isPending() {
+          return !enabled() || state.status === 'pending';
+        },
+        get isError() {
+          return enabled() && state.status === 'error';
+        },
+        get data() {
+          if (!enabled() || state.status !== 'success')
+            throw new Error('Pending data must not be read');
+          return [{ botId: 'persona', available: state.available }];
+        },
+        refetch: vi.fn(),
+      })
+    );
+    let mounts = 0;
+    const Input = () => {
+      mounts += 1;
+      return <textarea aria-label="Message" />;
+    };
+    const view = render(() => (
+      <AgentDmComposer channelId="dm" botId={botId()}>
+        <Input />
+      </AgentDmComposer>
+    ));
+    const input = view.getByRole('textbox');
+    input.focus();
+
+    // The channel's metadata names its agent after the input rendered.
+    setBotId('persona');
+    expect(view.queryByText('Loading conversation…')).toBeNull();
+    setState('status', 'success');
+    expect(view.getByRole('textbox')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(mounts).toBe(1);
+
+    // The input goes only once the conversation says the agent is gone.
+    setState('available', false);
+    expect(view.queryByRole('textbox')).toBeNull();
+    expect(view.getByText(/no longer available/)).toBeTruthy();
+  });
+});

@@ -16,6 +16,8 @@ import {
   executeGraphqlSetFavoriteMutation,
   graphqlReorderFavoritesResult,
   graphqlSetFavoriteResult,
+  mapGraphqlFavorite,
+  toGraphqlFavoriteEntityType,
 } from './graphql-favorites';
 
 const mutationMock = vi.fn();
@@ -63,6 +65,44 @@ describe('favorites GraphQL mutations', () => {
     mutationMock.mockReturnValue({
       toPromise: async () => ({ data: reorderData }),
     });
+  });
+
+  it('preserves the database entity identity across REST and GraphQL', () => {
+    expect(toGraphqlFavoriteEntityType('database')).toBe('DATABASE');
+    expect(
+      mapGraphqlFavorite({
+        __typename: 'GraphqlFavorite',
+        id: 'database:database-1',
+        entityType: 'DATABASE',
+        entityId: 'database-1',
+        sortOrder: 2,
+        createdAt: '2026-09-21T00:00:00.000Z',
+        fileType: null,
+        documentSubType: null,
+        channelType: null,
+        channelId: null,
+      })
+    ).toMatchObject({
+      id: 'database:database-1',
+      entityType: 'database',
+      entityId: 'database-1',
+    });
+  });
+
+  it('favorites an independent external chat without inventing a Soup entity', async () => {
+    await executeGraphqlSetFavoriteMutation(
+      client,
+      { entityType: 'external_chat', entityId: 'chat-1' },
+      true,
+      0
+    );
+    expect(mutationMock.mock.calls[0][1]).toMatchObject({
+      entity: { type: 'EXTERNAL_CHAT', id: 'chat-1' },
+    });
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
+        .setFavorite.result.effects
+    ).toEqual([]);
   });
 
   it.each([

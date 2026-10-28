@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"ok\":true,\"members\":[\"U0000000001\",\"U0000000002\"],\"response_metadata\":{\"next_cursor\":\"synthetic-next-page\"}}"
+    }
+  ],
+  "isError": false
+}

@@ -1,14 +1,10 @@
 //! Port for persistence operations on CRM companies.
 
-use crate::domain::comment::{
-    CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult,
-};
 use crate::domain::model::{
     CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
     CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
-use serde_json::Value;
 
 /// Sort order for [`CompaniesRepository::list_companies_for_soup`]. All
 /// variants tiebreak on `id DESC` for deterministic pagination. The two
@@ -49,6 +45,34 @@ pub struct CrmCompanySoupCursor {
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
+    /// List authorized contacts across enabled teams. Apply visibility and
+    /// predicates before choosing one record per lowercased full email (latest
+    /// interaction, then highest ID). Deduplicate before seeking/limiting. An
+    /// ID-only filter is exact hydration and retains each requested record.
+    fn list_contacts_for_soup(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        viewer_id: &str,
+        query: &super::contact_listing::CrmContactListQuery,
+    ) -> impl Future<Output = Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError>> + Send;
+
+    /// Resolve `record` to the records its associated items match, under the
+    /// same visibility as the scope's contact listings: CRM-enabled teams
+    /// only, and hidden companies and contacts are visible only to the owning
+    /// team's admins and owners. `None` when the record is not visible.
+    fn resolve_association(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        record: super::association::CrmAssociation,
+    ) -> impl Future<Output = Result<Option<super::association::CrmRecordAssociation>, CrmError>> + Send;
+
+    /// Resolve the complete activity scope with no contact email deduplication.
+    /// Membership and CRM settings gate rows; hidden records never participate.
+    fn resolve_activity(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+    ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single
@@ -224,24 +248,26 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// case-insensitively. Returns `Ok(None)` when no row exists for
     /// the domain — the caller is expected to resolve via
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// and then [`upsert_domain_metadata`] before retrying.
+    /// and then [`upsert_domain_metadata`] (or, when the resolver is
+    /// unavailable, [`insert_pending_domain`]) before retrying.
     ///
     /// `Some(DomainMetadata { name: None, ... })` is distinct from
-    /// `None`: it means the domain has been looked up before and the
-    /// resolver returned nothing useful — the negative-cache entry
-    /// suppresses further resolver calls.
+    /// `None`: the domain already has an entry, either resolved to
+    /// nothing useful (the negative cache) or still pending for the
+    /// enrichment worker. Either way callers don't resolve it inline.
     ///
     /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
+    /// [`insert_pending_domain`]: CompaniesRepository::insert_pending_domain
     fn lookup_domain_metadata(
         &self,
         domain: &str,
     ) -> impl Future<Output = Result<Option<DomainMetadata>, CrmError>> + Send;
 
-    /// Insert `metadata` for `domain` into `crm_domain_directory` with
-    /// `ON CONFLICT (LOWER(domain)) DO NOTHING`. The directory is a
-    /// global, first-write-wins cache: a row for `domain` (whether
-    /// populated or all-NULL) is preserved as-is for the lifetime of
-    /// the table. `domain` is lower-cased before storage.
+    /// Store resolved `metadata` for `domain` in `crm_domain_directory`
+    /// and stamp it resolved. The directory is a global cache: a
+    /// resolved row (whether populated or all-NULL) is first-write-wins
+    /// and preserved as-is; a pending row is filled in. `domain` is
+    /// lower-cased before storage.
     ///
     /// Idempotent under concurrent calls — racing producers can both
     /// resolve the same domain and both call this method; the second
@@ -251,6 +277,30 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         domain: &str,
         metadata: &DomainMetadata,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Insert a pending `crm_domain_directory` row for `domain` (no
+    /// metadata, not resolved) unless the domain already has a row.
+    /// Read paths treat it like a negative-cache row; the enrichment
+    /// worker claims it through [`claim_pending_domains`].
+    ///
+    /// [`claim_pending_domains`]: CompaniesRepository::claim_pending_domains
+    fn insert_pending_domain(
+        &self,
+        domain: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Claim up to `limit` pending `crm_domain_directory` rows whose
+    /// domain some team still tracks, with fewer than `max_attempts`
+    /// enrichment attempts and no attempt since `attempted_before`.
+    /// Claiming counts an attempt and stamps it now, so concurrent
+    /// workers skip the claimed rows until `attempted_before` passes
+    /// them. Returns the claimed domains.
+    fn claim_pending_domains(
+        &self,
+        limit: i64,
+        max_attempts: i16,
+        attempted_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<String>, CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`: drops the
     /// matching `crm_contact_sources` row, then `crm_contacts` if no other
@@ -532,6 +582,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Searches the team's contacts whose email or name contains `query`
+    /// (case-insensitive), most recently interacted first, at most `limit`
+    /// rows. An empty query lists the most recent contacts. Hidden contacts
+    /// and contacts under hidden companies are excluded unless
+    /// `include_hidden` (admin/owner).
+    fn search_contacts_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        query: &str,
+        limit: i64,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
     /// Fetches a single CRM contact by email, scoped to `team_id` via the
     /// contact's company. Email matching is case-insensitive. Returns
     /// `Ok(None)` when the contact doesn't exist, belongs to a different
@@ -561,106 +624,6 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         company_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
-
-    /// Create a CRM comment. With `thread_id = None` a new thread is opened
-    /// on `(entity_type, entity_id)` and the comment becomes its root; with
-    /// `Some`, the comment is appended to that existing thread (whose
-    /// `updated_at` is bumped). Scoped to `team_id` via the entity's
-    /// company: returns [`CrmError::CompanyNotFoundForTeam`] /
-    /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
-    /// the team, or [`CrmError::ThreadNotFound`] when a supplied `thread_id`
-    /// is deleted or doesn't belong to that entity. Returns the full thread
-    /// (with all its comments) after the insert.
-    /// `include_hidden` mirrors the read endpoints: non-admin callers
-    /// pass `false` (cannot comment on a hidden entity); admin/owner
-    /// callers pass `true` (can comment regardless of visibility).
-    #[allow(clippy::too_many_arguments)]
-    fn create_crm_comment(
-        &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
-        owner: &str,
-        thread_id: Option<uuid::Uuid>,
-        thread_metadata: Option<Value>,
-        text: &str,
-        metadata: Option<Value>,
-        include_hidden: bool,
-    ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
-
-    /// List the non-deleted comment threads on `(entity_type, entity_id)`,
-    /// each with its comments nested oldest-first; threads are ordered
-    /// oldest-first by creation. Scoped to `team_id` via the entity's
-    /// company — returns [`CrmError::CompanyNotFoundForTeam`] /
-    /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
-    /// the team (so existence doesn't leak across teams); an owned entity
-    /// with no threads returns `Ok(vec![])`. Hidden entities 404 for
-    /// non-admin viewers (`include_hidden = false`); admins/owners can
-    /// see threads on hidden entities (`include_hidden = true`).
-    fn get_crm_comment_threads(
-        &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
-        include_hidden: bool,
-    ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
-
-    /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
-    /// thread → entity → company. Owner-only: returns
-    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
-    /// user id) is not the comment's author, or
-    /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
-    /// the team. `include_hidden = false` (non-admin) additionally
-    /// returns `CommentNotFound` when the parent entity is hidden.
-    fn edit_crm_comment(
-        &self,
-        team_id: &uuid::Uuid,
-        comment_id: &uuid::Uuid,
-        text: &str,
-        include_hidden: bool,
-        requester: &str,
-    ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
-
-    /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
-    /// When it was the thread's last live comment, the thread is
-    /// soft-deleted too (reported via
-    /// [`DeleteCrmCommentResult::thread_deleted`]). Owner-only: returns
-    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
-    /// user id) is not the comment's author, or
-    /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
-    /// already deleted, or isn't owned by the team. `include_hidden =
-    /// false` (non-admin) additionally returns `CommentNotFound` when
-    /// the parent entity is hidden.
-    fn delete_crm_comment(
-        &self,
-        team_id: &uuid::Uuid,
-        comment_id: &uuid::Uuid,
-        include_hidden: bool,
-        requester: &str,
-    ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
-
-    /// Resolve a CRM comment to the entity its thread is attached to.
-    /// Returns `Ok(None)` when the comment doesn't exist or is
-    /// soft-deleted. The schema's `crm_thread_one_parent` check
-    /// constraint guarantees exactly one of `company_id` / `contact_id`
-    /// is set on the parent thread, so the variant is unambiguous. This
-    /// is the lookup the comment access extractor uses to dispatch
-    /// access checks to the right entity type.
-    fn get_comment_entity(
-        &self,
-        comment_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
-
-    /// The first comment of a legacy `crm_thread` on the record, which is the
-    /// id its imported discussion root carries. Lets a client that still holds
-    /// a legacy thread id reply to the imported discussion.
-    fn legacy_thread_root(
-        &self,
-        _entity_id: &uuid::Uuid,
-        _thread_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send {
-        async { Ok(None) }
-    }
 
     /// Read the team's CRM configuration from `team_crm_settings`.
     /// A missing row yields [`CrmTeamSettings::default`].

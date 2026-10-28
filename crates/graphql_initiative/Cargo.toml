@@ -10,6 +10,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 graphql_permission = { path = "../graphql_permission" }
+graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }
 initiative = { path = "../initiative", default-features = false, features = ["ports"] }
 macro_user_id = { path = "../macro_user_id" }

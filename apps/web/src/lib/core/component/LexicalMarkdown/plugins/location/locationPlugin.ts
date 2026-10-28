@@ -87,7 +87,7 @@ function _getNodesFromEphemeralLocation(
  * anchorNodeId.anchorOffset,focusNodeId.focusOffset
  * or anchorAndFocusId.anchorOffset.focusOffset if the focusNodeId is the same as the anchorNodeId.
  */
-function serializePersistentLocation(location: PersistentLocation) {
+export function serializePersistentLocation(location: PersistentLocation) {
   if (location.focus.id === location.anchor.id) {
     return `${location.anchor.id}.${location.anchor.offset}.${location.focus.offset}`;
   }

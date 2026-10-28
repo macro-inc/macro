@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseMacroAppUrl, resolvePastedMacroAppUrl } from './textPastePlugin';
+import {
+  parseMacroAppUrl,
+  parsePastedGithubPrUrl,
+  resolvePastedMacroAppUrl,
+} from './textPastePlugin';
 
 // Keep the parser tests independent of application boot and editor UI wiring.
 vi.mock('@core/internal/BlockLoader', () => ({}));
 vi.mock('../../utils', () => ({}));
 vi.mock('../mentions', () => ({}));
+vi.mock('@queries/storage/pr-mention', () => ({}));
 
 const sessionId = '019507e8-14a3-7bc1-8610-419f16bd03a8';
 
@@ -25,7 +30,7 @@ describe('parseMacroAppUrl', () => {
     }
   );
 
-  it.each(['md', 'channel', 'task', 'pr'])(
+  it.each(['md', 'channel', 'task', 'pr', 'initiative', 'pipeline'])(
     'preserves existing %s links',
     (block) => {
       expect(
@@ -124,5 +129,36 @@ describe('route-aware paste resolver', () => {
         `https://dev.macro.com/app/drive/md/${sessionId}`
       )
     ).toBeUndefined();
+  });
+});
+
+describe('parsePastedGithubPrUrl', () => {
+  it.each([
+    'https://github.com/macro-inc/macro/pull/7870',
+    'https://www.github.com/macro-inc/macro/pull/7870',
+    '  https://github.com/macro-inc/macro/pull/7870\n',
+    'https://github.com/macro-inc/macro/pull/7870/files',
+    'https://github.com/macro-inc/macro/pull/7870/files?w=1#diff-abc',
+    'http://github.com/macro-inc/macro/pull/7870',
+  ])('recognizes %s', (url) => {
+    expect(parsePastedGithubPrUrl(url)).toEqual({
+      owner: 'macro-inc',
+      repo: 'macro',
+      number: 7870,
+    });
+  });
+
+  it.each([
+    'https://github.com/macro-inc/macro/issues/7870',
+    'https://github.com/macro-inc/macro/pull/',
+    'https://github.com/macro-inc/macro/pull/0',
+    'https://github.com/macro-inc/macro/pull/7870abc',
+    'https://github.example.com/macro-inc/macro/pull/7870',
+    'https://gist.github.com/macro-inc/macro/pull/7870',
+    'see https://github.com/macro-inc/macro/pull/7870',
+    'https://github.com/macro-inc/macro/pull/7870 and more',
+    'github.com/macro-inc/macro/pull/7870',
+  ])('ignores %s', (text) => {
+    expect(parsePastedGithubPrUrl(text)).toBeNull();
   });
 });

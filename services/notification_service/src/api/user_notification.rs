@@ -49,9 +49,12 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         MentionedInDocumentCommentMetadata::TYPE_NAME,
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
         CommentedOnDocumentMetadata::TYPE_NAME,
+        model_notifications::EntityAccessRequestedMetadata::TYPE_NAME,
+        model_notifications::EntityAccessGrantedMetadata::TYPE_NAME,
         InitiativeDiscussionMetadata::TYPE_NAME,
         CrmDiscussionMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
+        model_notifications::CalendarEventJoinRequestMetadata::TYPE_NAME,
         AgentSessionSettledMetadata::TYPE_NAME,
         AgentSessionWaitingForInputMetadata::TYPE_NAME,
         AgentSessionMentionedMetadata::TYPE_NAME,
@@ -138,7 +141,7 @@ pub struct GetAllUserNotificationsResponse {
 
 /// Convert a [`UserNotificationRow<serde_json::Value>`] into a
 /// [`UserNotificationRow<NotifEvent>`] by tagging and deserializing the metadata.
-#[tracing::instrument(err)]
+#[tracing::instrument(err, skip(row), fields(notification_id = %row.notification_id))]
 pub fn to_typed_row(
     row: UserNotificationRow<serde_json::Value>,
 ) -> Result<UserNotificationRow<NotifEvent>, serde_json::Error> {

@@ -12,6 +12,7 @@ fn registered_kinds_round_trip_and_match_check_spellings() {
         (RegisteredEntityType::Chat, "chat"),
         (RegisteredEntityType::AgentSession, "agent_session"),
         (RegisteredEntityType::ScheduledAction, "scheduled_action"),
+        (RegisteredEntityType::ExternalChat, "external_chat"),
     ];
     assert_eq!(
         RegisteredEntityType::ALL,
@@ -21,6 +22,7 @@ fn registered_kinds_round_trip_and_match_check_spellings() {
             RegisteredEntityType::Chat,
             RegisteredEntityType::AgentSession,
             RegisteredEntityType::ScheduledAction,
+            RegisteredEntityType::ExternalChat,
         ]
     );
     for (kind, spelling) in expected {
@@ -56,6 +58,40 @@ fn try_from_rejects_every_unregistered_entity_type() {
             Err(UnregisteredEntityType(ty))
         );
     }
+}
+
+#[test]
+fn registered_kinds_serialize_as_their_entity_type_spelling() {
+    let expected = [
+        (RegisteredEntityType::Project, r#""project""#),
+        (RegisteredEntityType::Document, r#""document""#),
+        (RegisteredEntityType::Chat, r#""chat""#),
+        (RegisteredEntityType::AgentSession, r#""agent_session""#),
+        (
+            RegisteredEntityType::ScheduledAction,
+            r#""scheduled_action""#,
+        ),
+        (RegisteredEntityType::ExternalChat, r#""external_chat""#),
+    ];
+    for (kind, json) in expected {
+        assert_eq!(serde_json::to_string(&kind).unwrap(), json);
+        assert_eq!(
+            serde_json::from_str::<RegisteredEntityType>(json).unwrap(),
+            kind
+        );
+    }
+}
+
+#[test]
+fn deserializing_an_unregistered_kind_fails() {
+    let error = serde_json::from_str::<RegisteredEntityType>(r#""team""#).unwrap_err();
+    assert_eq!(error.to_string(), "team is not a registered entity type");
+
+    let error = serde_json::from_str::<RegisteredEntityType>(r#""Document""#).unwrap_err();
+    assert!(
+        error.to_string().starts_with("unknown variant `Document`"),
+        "{error}"
+    );
 }
 
 #[test]

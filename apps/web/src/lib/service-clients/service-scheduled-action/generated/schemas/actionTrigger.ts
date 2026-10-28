@@ -6,9 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActionTriggerOneOf } from './actionTriggerOneOf';
+import type { ActionTriggerOneOfFive } from './actionTriggerOneOfFive';
 import type { ActionTriggerOneOfThree } from './actionTriggerOneOfThree';
 
 /**
- * Exactly one trigger per action. Existing cron validation is reused.
+ * A routine may run on one trigger or any of several schedules and Macro events.
  */
-export type ActionTrigger = ActionTriggerOneOf | ActionTriggerOneOfThree;
+export type ActionTrigger =
+  | ActionTriggerOneOf
+  | ActionTriggerOneOfThree
+  | ActionTriggerOneOfFive;

@@ -7,7 +7,7 @@
  * guaranteed to be in {@link MODEL_PRETTYNAME}. Harnesses that keep no
  * display name for a model (the in-memory Macro Agent among them) echo the
  * slug back as the name, so anything that renders the reported name verbatim
- * shows `claude-sonnet-5` where the rest of the app says "Sonnet 5". Route
+ * shows `claude-sonnet-5-5` where the rest of the app says "Sonnet 5.5". Route
  * those through {@link modelLabel} instead.
  */
 
@@ -19,8 +19,9 @@ import { MODEL_PRETTYNAME, type Model } from './model';
  * session row may store both resolve to one entry.
  */
 const HARNESS_PRETTYNAME: Record<string, string> = {
+  auto: 'Auto',
   'kimi-k3': 'Kimi K3',
-  'deepseek-v4-pro-0813': 'DeepSeek V4 Pro',
+  'deepseek-v4p1-flash-1017': 'DeepSeek V4.1 Flash',
   'muse-glimmer-30b': 'Muse Glimmer',
   'glm-5p3': 'GLM 5.3',
   'glm-5p3-flash': 'GLM 5.3 Flash',

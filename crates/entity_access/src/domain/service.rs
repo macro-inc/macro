@@ -4,16 +4,20 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
-        CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
+        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
-    ports::{AccessRepository, EntityAccessService},
+    ports::{
+        AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
+        EntityAccessService, ScheduledActionGrants,
+    },
 };
 use futures::{StreamExt, stream};
 use macro_user_id::{
     cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
 };
+use tracing::Level;
 use uuid::Uuid;
 
 const MAX_CONCURRENT_BATCH_ACCESS_CHECKS: usize = 8;
@@ -55,19 +59,34 @@ where
                     .repo
                     .get_agent_session_access(entity_id, user_id)
                     .await?;
-                let inherited = if let Some(document) =
-                    self.repo.get_agent_session_document(entity_id).await?
-                {
-                    self.repo
-                        .get_document_access(&document, user_id)
-                        .await?
-                        .map(session_permission_from_document)
-                } else {
-                    None
+                let parent_access = match self.repo.get_agent_session_parent(entity_id).await? {
+                    Some(AgentSessionParent::Document(document)) => {
+                        self.repo.get_document_access(&document, user_id).await?
+                    }
+                    // Call history and chat require sign-in, including public
+                    // call links. Their sessions inherit the same boundary.
+                    Some(AgentSessionParent::Call(call_id)) if user_id.is_some() => {
+                        self.repo
+                            .get_call_access(&call_id.to_string(), user_id)
+                            .await?
+                    }
+                    Some(AgentSessionParent::Call(_)) | None => None,
                 };
-                Ok(direct.max(inherited))
+                Ok(direct.max(parent_access.map(session_permission_from_parent)))
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
+            EntityType::CrmPipeline => self.repo.get_pipeline_access(entity_id, user_id).await,
+            EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
+            EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
+            EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
+            EntityType::ExternalChat => {
+                self.repo.get_external_chat_access(entity_id, user_id).await
+            }
+            EntityType::ScheduledAction => {
+                self.repo
+                    .get_scheduled_action_access(entity_id, user_id)
+                    .await
+            }
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -168,7 +187,14 @@ where
                 .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
                 .await;
         }
+        self.get_team_permission(user_id, entity_id).await
+    }
 
+    async fn get_team_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+    ) -> Result<EntityPermission, AccessError> {
         let requested_team_id = Uuid::parse_str(entity_id)
             .map_err(|_| AccessError::BadRequest("Invalid team ID format"))?;
         let user_team = self
@@ -196,7 +222,12 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::DatabaseRow
+            | EntityType::ExternalChat
+            | EntityType::Form => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -206,8 +237,9 @@ where
             }
             EntityType::AgentSession => {
                 let direct = self.repo.get_team_entity_access(bot_id, team_id, entity_id, entity_type).await?;
-                let inherited = if let Some(document) = self.repo.get_agent_session_document(entity_id).await? {
-                    self.repo.get_team_entity_access(bot_id, team_id, &document, EntityType::Document).await?.map(session_permission_from_document)
+                let inherited = if let Some(parent) = self.repo.get_agent_session_parent(entity_id).await? {
+                    let parent: Entity = parent.into();
+                    self.repo.get_team_entity_access(bot_id, team_id, &parent.entity_id, parent.entity_type).await?.map(session_permission_from_parent)
                 } else { None };
                 Ok(EntityPermission::AccessLevel { access_level: direct.max(inherited).ok_or(AccessError::Unauthorized)? })
             }
@@ -275,11 +307,37 @@ where
     }
 }
 
+impl<R> AccessibleDatabases for EntityAccessServiceImpl<R>
+where
+    R: AccessRepository,
+{
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_database_access(user_id).await
+    }
+}
+
+impl<R> AccessibleForms for EntityAccessServiceImpl<R>
+where
+    R: AccessRepository,
+{
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn accessible_forms(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_form_access(user_id).await
+    }
+}
+
 impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -304,6 +362,71 @@ where
             entity_permission,
             _marker: PhantomData,
         })
+    }
+
+    #[tracing::instrument(skip_all, fields(row_count = row_ids.len()))]
+    async fn generate_database_row_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        row_ids: &[String],
+    ) -> HashMap<String, Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>> {
+        let mut receipts = HashMap::with_capacity(row_ids.len());
+        let mut valid_ids = Vec::with_capacity(row_ids.len());
+        for row_id in row_ids {
+            match Uuid::parse_str(row_id) {
+                Ok(id) => valid_ids.push((row_id, id)),
+                Err(_) => {
+                    receipts.insert(
+                        row_id.clone(),
+                        Err(AccessError::BadRequest("Invalid database row ID format")),
+                    );
+                }
+            }
+        }
+        if valid_ids.is_empty() {
+            return receipts;
+        }
+        let levels = match self
+            .repo
+            .get_database_rows_access(
+                &valid_ids.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+                user_id,
+            )
+            .await
+        {
+            Ok(levels) => levels,
+            Err(error) => {
+                tracing::error!(?error, "bulk database row access check failed");
+                for (row_id, _) in valid_ids {
+                    receipts.insert(
+                        row_id.clone(),
+                        Err(AccessError::internal(
+                            "bulk database row access check failed",
+                        )),
+                    );
+                }
+                return receipts;
+            }
+        };
+        for (row_id, id) in valid_ids {
+            let receipt = levels
+                .get(&id)
+                .ok_or(AccessError::Unauthorized)
+                .and_then(|level| {
+                    EntityAccessReceipt::try_new_authenticated_user(
+                        MacroUserIdStr(user_id.clone().into_owned()),
+                        Entity {
+                            entity_id: row_id.clone(),
+                            entity_type: EntityType::DatabaseRow,
+                        },
+                        EntityPermission::AccessLevel {
+                            access_level: *level,
+                        },
+                    )
+                });
+            receipts.insert(row_id.clone(), receipt);
+        }
+        receipts
     }
 
     async fn generate_email_thread_view_access_receipts(
@@ -392,7 +515,7 @@ where
         receipts
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
         bot_id: BotId,
@@ -425,7 +548,7 @@ where
         )
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_access_level(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -440,7 +563,13 @@ where
             | EntityType::Call
             | EntityType::CalendarEvent
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::DatabaseRow
+            | EntityType::ExternalChat
+            | EntityType::Form
+            | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
@@ -462,12 +591,11 @@ where
             EntityType::Team
             | EntityType::User
             | EntityType::ChannelMessage
-            | EntityType::Skill
-            | EntityType::ScheduledAction => Ok(None),
+            | EntityType::Skill => Ok(None),
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn check_access(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -486,7 +614,7 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn check_public_access(
         &self,
         entity_id: &str,
@@ -501,7 +629,7 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_entity_permission(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -510,14 +638,51 @@ where
         user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
         match entity_type {
+            EntityType::Team => {
+                let user_id = user_id.ok_or(AccessError::Unauthorized)?;
+                self.get_team_permission(user_id, entity_id).await
+            }
+            // Sessions answer a refusal more precisely than the rest, and say
+            // so in the log. A session is read the moment its id exists on a
+            // client - which is before its create has landed - so "no grant"
+            // here is as often a race as a refusal, and the two have to be
+            // told apart by whoever is looking: the caller, from the status,
+            // and us, from this event. Existence is only asked on the way to
+            // refusing, so the extra round trip never touches a granted read.
+            EntityType::AgentSession => {
+                let access = self
+                    .get_optimized_access(entity_id, user_id, entity_type)
+                    .await?;
+                let Some(access_level) = access else {
+                    let exists = self.repo.agent_session_exists(entity_id).await?;
+                    tracing::warn!(
+                        entity_id,
+                        entity_type = "agent_session",
+                        viewer = user_id.map_or("anonymous", AsRef::as_ref),
+                        session_exists = exists,
+                        "agent session access denied"
+                    );
+                    return Err(if exists {
+                        AccessError::Unauthorized
+                    } else {
+                        AccessError::NotFound("agent session")
+                    });
+                };
+                Ok(EntityPermission::AccessLevel { access_level })
+            }
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::DatabaseRow
+            | EntityType::ExternalChat
+            | EntityType::Form
+            | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -581,7 +746,7 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_crm_entity_permission_with_team(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -610,7 +775,7 @@ where
         ))
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_users_by_entity(
         &self,
         entity_id: &str,
@@ -620,19 +785,41 @@ where
             // Agent sessions grant their owner directly and their originating
             // channel as a channel source, both of which the generic accessor
             // query expands.
-            EntityType::Document
+            // A database's audience is exactly its `entity_access` rows, so it
+            // resolves the same way a document's does. So is a form's: a public
+            // audience is anyone with the link, which no list can name.
+            EntityType::ForeignEntity
+            | EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::AgentSession
             | EntityType::Initiative
             | EntityType::CrmCompany
-            | EntityType::CrmContact => {
+            | EntityType::CrmContact
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;
 
                 self.repo.get_entity_users(&entity_id, entity_type).await
+            }
+            // A row's audience is its database's: rows carry no grants.
+            EntityType::DatabaseRow => {
+                let row_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid row_id for get_users_by_entity")
+                })?;
+                match self.repo.get_database_row_database(&row_id).await? {
+                    Some(database_id) => {
+                        self.repo
+                            .get_entity_users(&database_id, EntityType::Database)
+                            .await
+                    }
+                    None => Ok(Vec::new()),
+                }
             }
             EntityType::Channel => {
                 let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
@@ -657,7 +844,7 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_call_channel(
         &self,
         call_id: &Uuid,
@@ -665,7 +852,7 @@ where
         self.repo.get_call_channel(call_id).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_call_channel_by_channel_id(
         &self,
         channel_id: &Uuid,
@@ -673,12 +860,21 @@ where
         self.repo.get_call_channel_by_channel_id(channel_id).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_user_team(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.repo.get_user_team(user_id).await
+    }
+}
+
+impl<R: AccessRepository> ScheduledActionGrants for EntityAccessServiceImpl<R> {
+    async fn accessible_scheduled_action_ids(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        self.repo.accessible_scheduled_action_ids(user_id).await
     }
 }
 
@@ -698,10 +894,19 @@ mod test;
 
 // Commenters can prompt the agent; viewers can inspect the response. Parent
 // ownership never confers session ownership or permission to delete it.
-fn session_permission_from_document(level: AccessLevel) -> AccessLevel {
+fn session_permission_from_parent(level: AccessLevel) -> AccessLevel {
     if level >= AccessLevel::Comment {
         AccessLevel::Edit
     } else {
         AccessLevel::View
+    }
+}
+
+impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
+    async fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_pipeline_access(user_id).await
     }
 }

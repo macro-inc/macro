@@ -54,12 +54,13 @@ const BUILD_DATE = new Date().toISOString().slice(0, 10);
 // so an unbuilt route 404s), but they set `noindex` and are kept out of the
 // sitemap — they are steps inside the signup flow, not landing pages.
 const STATIC_ROUTES = [
+  '/demo',
   '/jobs',
   '/terms',
   '/privacy',
+  '/delete-account',
   '/dpa',
   '/posts',
-  '/startups',
   '/tasks',
   '/email',
   '/documents',
@@ -69,6 +70,8 @@ const STATIC_ROUTES = [
   '/agents',
   '/github',
   '/pricing',
+  '/download',
+  '/tour',
   '/partners',
   '/partners/terms',
   '/migrate',
@@ -80,20 +83,23 @@ const STATIC_ROUTES = [
 // the build manifest so prerendered pages link their stylesheets up front (no
 // flash of unstyled content) and preload their chunks.
 const ROUTE_MODULES: Array<[RegExp, string]> = [
+  [/^\/demo$/, 'src/app/routes/RouteDemo.tsx'],
   [/^\/jobs$/, 'src/app/routes/RouteJobs.tsx'],
   [/^\/terms$/, 'src/app/routes/RouteTerms.tsx'],
   [/^\/privacy$/, 'src/app/routes/RoutePrivacy.tsx'],
+  [/^\/delete-account$/, 'src/app/routes/RouteDeleteAccount.tsx'],
   [/^\/dpa$/, 'src/app/routes/RouteDpa.tsx'],
-  [/^\/startups$/, 'src/app/routes/RouteStartups.tsx'],
   [/^\/tasks$/, 'src/app/routes/RouteTasks.tsx'],
   [/^\/email$/, 'src/app/routes/RouteEmail.tsx'],
-  [/^\/documents$/, 'src/app/routes/RouteDocuments.tsx'],
-  [/^\/channels$/, 'src/app/routes/RouteChannels.tsx'],
-  [/^\/calls$/, 'src/app/routes/RouteCalls.tsx'],
+  [/^\/documents$/, 'src/features/marketing/views/ProductDocumentsPage.tsx'],
+  [/^\/channels$/, 'src/features/marketing/views/ProductChannelsPage.tsx'],
+  [/^\/calls$/, 'src/features/marketing/views/ProductCallsPage.tsx'],
   [/^\/crm$/, 'src/app/routes/RouteCrm.tsx'],
-  [/^\/agents$/, 'src/app/routes/RouteAgents.tsx'],
-  [/^\/github$/, 'src/app/routes/RouteGithub.tsx'],
+  [/^\/agents$/, 'src/features/marketing/views/ProductAgentsPage.tsx'],
+  [/^\/github$/, 'src/features/marketing/views/ProductReviewsPage.tsx'],
   [/^\/pricing$/, 'src/app/routes/RoutePricing.tsx'],
+  [/^\/download$/, 'src/app/routes/RouteDownload.tsx'],
+  [/^\/tour$/, 'src/features/marketing/views/SalesPage.tsx'],
   [/^\/partners$/, 'src/app/routes/RoutePartners.tsx'],
   [/^\/partners\/terms$/, 'src/app/routes/RoutePartnerTerms.tsx'],
   [/^\/migrate$/, 'src/app/routes/RouteMigrate.tsx'],
@@ -105,6 +111,8 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
 
 interface ManifestChunk {
   file: string;
+  name?: string;
+  isDynamicEntry?: boolean;
   css?: string[];
   imports?: string[];
 }
@@ -115,16 +123,30 @@ function collectChunkAssets(
   manifest: Manifest,
   key: string
 ): { js: string[]; css: string[] } {
+  // Vite may emit a shared dynamic route under a generated _Name-hash.js key
+  // rather than its source path (CRM does this). Resolve that real entry too.
+  const candidates = manifest[key]
+    ? [key]
+    : Object.keys(manifest).filter(
+        (candidate) =>
+          manifest[candidate].isDynamicEntry &&
+          manifest[candidate].name === path.basename(key, path.extname(key))
+      );
+  if (candidates.length !== 1)
+    throw new Error(
+      `Expected one built route entry for ${key}, found ${candidates.length}`
+    );
   const js = new Set<string>();
   const css = new Set<string>();
   const visit = (k: string) => {
     const chunk = manifest[k];
-    if (!chunk || js.has(chunk.file)) return;
+    if (!chunk) throw new Error(`Missing static route dependency: ${k}`);
+    if (js.has(chunk.file)) return;
     js.add(chunk.file);
     for (const c of chunk.css ?? []) css.add(c);
     for (const imp of chunk.imports ?? []) visit(imp);
   };
-  visit(key);
+  visit(candidates[0]);
   return { js: [...js], css: [...css] };
 }
 
@@ -135,9 +157,9 @@ const ROUTE_LABELS: Record<string, string> = {
   '/jobs': 'Careers',
   '/terms': 'Terms',
   '/privacy': 'Privacy',
+  '/delete-account': 'Delete your account',
   '/dpa': 'Data Processing Agreement',
   '/posts': 'Blog',
-  '/startups': 'Startups',
   '/tasks': 'Tasks',
   '/email': 'Macro Mail',
   '/documents': 'Documents',
@@ -147,6 +169,8 @@ const ROUTE_LABELS: Record<string, string> = {
   '/agents': 'Agents',
   '/github': 'GitHub',
   '/pricing': 'Pricing',
+  '/download': 'Download',
+  '/tour': 'Macro tour',
   '/partners': 'Partner Program',
   '/partners/terms': 'Partner Program Terms',
   '/migrate': 'Switch your startup to Macro',
@@ -175,14 +199,14 @@ function sitemapHints(route: string): { priority: string; changefreq: string } {
   if (
     route === '/terms' ||
     route === '/privacy' ||
+    route === '/delete-account' ||
     route === '/dpa' ||
     route === '/partners/terms'
   )
     return { priority: '0.3', changefreq: 'yearly' };
   if (route === '/posts' || /^\/posts\/.+$/.test(route))
     return { priority: '0.6', changefreq: 'weekly' };
-  if (route === '/jobs' || route === '/startups')
-    return { priority: '0.7', changefreq: 'monthly' };
+  if (route === '/jobs') return { priority: '0.7', changefreq: 'monthly' };
   // Product/feature pages and pricing.
   return { priority: '0.8', changefreq: 'monthly' };
 }
@@ -276,7 +300,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
       '@type': 'Organization',
       name: 'Macro',
       url: `${BASE_URL}/`,
-      logo: `${BASE_URL}/og-image.jpg`,
+      logo: `${BASE_URL}/logo.png`,
       sameAs: [
         'https://x.com/macrodotcom',
         'https://github.com/macro-inc/macro',
@@ -481,9 +505,9 @@ function writeSitemapAndRobots(
 }
 
 const JOURNEY_SEO: PageSeo = {
-  title: 'Macro — One unified interface for all your work.',
+  title: 'Macro — The unified workspace for your company.',
   description:
-    'Your conversations, documents, and tools, together in one workspace. Explore Macro and build a connected home for your team’s work.',
+    'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
   path: '/',
 };
 

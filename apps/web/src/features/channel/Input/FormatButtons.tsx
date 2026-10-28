@@ -3,14 +3,14 @@ import type {
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import TextCodeIcon from '@phosphor/code.svg';
-import ListBulletsIcon from '@phosphor/list-bullets.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import ListNumbersIcon from '@phosphor/list-numbers.svg';
-import TextQuoteIcon from '@phosphor/quotes.svg';
-import TextBoldIcon from '@phosphor/text-b.svg';
-import TextItalicIcon from '@phosphor/text-italic.svg';
-import TextStrikethroughIcon from '@phosphor/text-strikethrough.svg';
+import TextCodeIcon from '@icon/system/regular/code.svg';
+import ListBulletsIcon from '@icon/system/regular/list-bullets.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import ListNumbersIcon from '@icon/system/regular/list-numbers.svg';
+import TextQuoteIcon from '@icon/system/regular/quotes.svg';
+import TextBoldIcon from '@icon/system/regular/text-b.svg';
+import TextItalicIcon from '@icon/system/regular/text-italic.svg';
+import TextStrikethroughIcon from '@icon/system/regular/text-strikethrough.svg';
 import { Button } from '@ui';
 import type { TextFormatType } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
@@ -104,9 +104,8 @@ type FormatButtonProps = {
 function FormatButton(props: FormatButtonProps) {
   return (
     <Button
+      tooltip={{ content: props.label, hotkey: props.hotkeyToken }}
       aria-label={props.label}
-      label={props.label}
-      hotkey={props.hotkeyToken}
       variant="ghost"
       size="icon-sm"
       class={props.active ? 'bg-active text-ink' : ''}

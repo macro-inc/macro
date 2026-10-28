@@ -34,5 +34,5 @@ export async function handlePullRequestUpdated(
 }
 
 export function invalidatePullRequestMentions(): void {
-  void queryClient.invalidateQueries({ queryKey: pullRequestMentionKeys._def });
+  queryClient.invalidateQueries({ queryKey: pullRequestMentionKeys._def });
 }

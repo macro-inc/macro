@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT written.import_id, written.kind, written.object, written.macro_id\n            FROM import_entity_written AS written\n            JOIN import_entity AS entity ON entity.id = written.import_id\n            WHERE entity.user_id = $1 AND written.import_id = ANY($2::uuid[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "import_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "object",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "macro_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8e011849907decbe84eabe0e674610c9da25f8676e931edf8efbdf956deff1ba"
+}

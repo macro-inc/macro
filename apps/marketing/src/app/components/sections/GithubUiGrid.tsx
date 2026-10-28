@@ -198,7 +198,7 @@ function DiffStat(props: { add: number; del: number; size?: number }) {
       style={{
         'align-items': 'center',
         display: 'inline-flex',
-        'font-family': "'rajdhani', body",
+        'font-family': "'Inter', body",
         'font-size': `${fs}px`,
         'font-weight': 700,
         gap: '6px',

@@ -1,10 +1,8 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
-import {
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { inlineWrappingMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -14,16 +12,20 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import AtIcon from '@phosphor/at.svg';
-import XIcon from '@phosphor/x.svg';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
-import { rowKeyForChannel, useChannelsRail } from './ChannelsRailContext';
+import {
+  type ChannelRailRow,
+  rowKeyForChannel,
+  useChannelsRail,
+} from './ChannelsRailContext';
 
 export type ChannelCallStatus = 'active' | 'incoming';
 
@@ -39,11 +41,8 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
-};
-
-export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  senderBucket: undefined,
+  /** The press before activation, for warming what the row opens. */
+  onPress?: (event: PointerEvent) => void;
 };
 
 /**
@@ -58,6 +57,8 @@ export function isPrimaryMouseDown(event: MouseEvent) {
 export function ChannelRailItemContextMenu(
   props: ParentProps<{
     channel: ChannelEntity;
+    /** The row the menu opens from; defaults to the channel's own row. */
+    rowId?: ChannelRailRow['id'];
     class?: string;
     /** Rail-specific items shown after the entity actions. */
     extraItems?: JSX.Element;
@@ -66,7 +67,13 @@ export function ChannelRailItemContextMenu(
   const rail = useChannelsRail();
   const actionList = toEntityActionListState({
     controller: rail.list,
-    getEntity: (row) => (row.kind === 'conversation' ? row.channel : undefined),
+    getEntity: (row) => {
+      if (row.kind === 'conversation') return row.channel;
+      if (row.kind === 'favorite' && row.favorite.entityType === 'channel') {
+        return rail.channelById(row.favorite.entityId);
+      }
+      return undefined;
+    },
   });
 
   return (
@@ -80,7 +87,7 @@ export function ChannelRailItemContextMenu(
       onOpenChange={(open) => {
         if (!open) return;
 
-        rail.list.focus.set(rowKeyForChannel(props.channel.id), {
+        rail.list.focus.set(props.rowId ?? rowKeyForChannel(props.channel.id), {
           reason: 'pointer',
           force: true,
         });
@@ -125,6 +132,7 @@ export function IncomingCallActions(props: {
   class?: string;
   layout?: 'compact' | 'wide';
 }) {
+  const userId = useUserId();
   const isWide = () => props.layout === 'wide';
 
   return (
@@ -138,30 +146,30 @@ export function IncomingCallActions(props: {
           )}
         >
           <Button
+            aria-label="Decline incoming call"
+            tooltip={{ content: 'Decline incoming call', disabled: isWide() }}
             variant="danger"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Decline incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              dismissIncomingCallEverywhere(callId());
+              dismissIncomingCallEverywhere(callId(), userId());
             }}
           >
             <XIcon class="size-3" />
             <Show when={isWide()}>Decline</Show>
           </Button>
           <Button
+            aria-label="Accept incoming call"
+            tooltip={{ content: 'Accept incoming call', disabled: isWide() }}
             variant="success"
             size={isWide() ? 'sm' : 'icon-xs'}
             fullWidth={isWide()}
             class={cn(isWide() && 'h-7 flex-1')}
-            label="Accept incoming call"
-            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -265,6 +273,7 @@ export function ConversationCard(props: ConversationCardProps) {
   return (
     <div
       id={props.id}
+      data-channel-conversation
       role="treeitem"
       tabIndex={-1}
       class={cn(
@@ -279,6 +288,7 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
+      onPointerDown={(event) => props.onPress?.(event)}
       onMouseDown={(event) => {
         if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}

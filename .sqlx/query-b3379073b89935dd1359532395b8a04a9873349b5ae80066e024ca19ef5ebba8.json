@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"count!\", min(created_at) AS oldest\n            FROM (\n                SELECT created_at FROM notification\n                WHERE created_at < $1\n                ORDER BY created_at, id\n                LIMIT $2\n            ) expired\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "oldest",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b3379073b89935dd1359532395b8a04a9873349b5ae80066e024ca19ef5ebba8"
+}

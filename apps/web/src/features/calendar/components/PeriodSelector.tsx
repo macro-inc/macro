@@ -1,10 +1,16 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import {
+  Button,
+  ButtonGroup,
+  Dropdown,
+  Hotkey,
+  Calendar as MiniCalendar,
+} from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CalendarPeriodView } from '../types';
@@ -48,12 +54,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
-  const activeView = createMemo<CalendarPeriodView>(
-    () =>
-      (calendarPager.activeDateInfo()?.view.type as
-        | CalendarPeriodView
-        | undefined) ?? calendarView.displaySettings.periodView
-  );
+  const activeView = calendarPager.periodView;
 
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
@@ -75,7 +76,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
-    if (calendarPager.activeDateInfo()?.view.type === view) return;
+    if (calendarPager.periodView() === view) return;
 
     calendarPager.changeView(view);
   };
@@ -135,7 +136,11 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function PeriodSelector(props: { isNarrow?: boolean }) {
+export function PeriodSelector(props: {
+  isNarrow?: boolean;
+  compact?: boolean;
+  grouped?: boolean;
+}) {
   const controls = createCalendarPeriodControls();
 
   return (
@@ -145,9 +150,10 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       placement="bottom-end"
     >
       <Dropdown.Trigger
+        as={props.grouped ? ButtonGroup.Button : Button}
         aria-label="Choose calendar view"
         variant="ghost"
-        size="lg"
+        size={props.grouped ? undefined : props.compact ? 'md' : 'lg'}
         class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())

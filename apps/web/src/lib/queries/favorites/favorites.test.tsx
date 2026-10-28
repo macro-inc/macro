@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   reorderFavoritesRest: vi.fn(),
 }));
 
+vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
+
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
   isFeatureEnabled: mocks.graphqlSoupEnabled,
@@ -190,7 +192,10 @@ describe('favorites transport', () => {
     const filter: FavoritesFilter = { entityType: ['channel'] };
     renderHook(() => useFavoritesData(filter));
 
-    expect(mocks.createGraphqlFavoritesQuery).toHaveBeenCalledWith(filter);
+    expect(mocks.createGraphqlFavoritesQuery).toHaveBeenCalledWith(
+      filter,
+      expect.any(Function)
+    );
     expect(mocks.getFavoritesRest).not.toHaveBeenCalled();
   });
 

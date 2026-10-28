@@ -11,7 +11,7 @@ struct RecordingScheduledActionReader {
 }
 
 impl ScheduledActionReadService for RecordingScheduledActionReader {
-    async fn list_owned(
+    async fn list_accessible(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ScheduledAction>, Report> {

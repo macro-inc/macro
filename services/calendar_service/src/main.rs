@@ -24,11 +24,15 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{AuthServiceUrl, ConnectionGatewayUrl};
+use macro_service_urls::{
+    AppServiceUrl, AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+};
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+mod scheduling_recovery;
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -126,6 +130,9 @@ async fn main() -> anyhow::Result<()> {
         calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
             PgCalendarRepository::new(db.clone()),
         ),
+        calendar_events::domain::changes::CalendarChangeLogRetention::new(
+            PgCalendarRepository::new(db.clone()),
+        ),
         config.calendar_sync_enabled,
         worker_cancellation_token.clone(),
     ));
@@ -149,6 +156,7 @@ async fn main() -> anyhow::Result<()> {
             reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
+            config.calendar_team_sharing_enabled,
         );
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -173,26 +181,158 @@ async fn main() -> anyhow::Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
-    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
-    let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
-        PgCalendarRepository::new(db.clone()),
-        GoogleCalendarClient::with_gate(
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .context("failed to build the google calendar mutation http client")?,
-            RedisCalendarRequestGate::new(rate_limiter),
+    let calendar_service = Arc::new(
+        CalendarService::new(PgCalendarRepository::new(db.clone()))
+            .with_team_sharing_enabled(config.calendar_team_sharing_enabled),
+    );
+    let calendar_team_service = Arc::new(
+        calendar_events::domain::team::CalendarTeamServiceImpl::with_notifier(
+            calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+            config.calendar_team_sharing_enabled,
         ),
-        CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
-        macro_event_broker.clone(),
-        ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
-    ));
+    );
+    let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
+    ))?
+    .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
+        redis_conn.clone(),
+        Arc::new(auth_service_client.clone()),
+    )));
+    if config.calendar_sync_enabled && config.outlook_sync_enabled {
+        let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
+            PgCalendarRepository::new(db.clone()),
+            outlook_provider.clone(),
+            CalendarTokenProviderAdapter::new(
+                redis_conn.clone(),
+                Arc::new(auth_service_client.clone()),
+            ),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+        )
+        .with_writes_enabled(config.outlook_writes_enabled);
+        let cancellation = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            loop {
+                let result = tokio::select! { _ = cancellation.cancelled() => break, result = sync.run_once() => result };
+                match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Outlook calendar synchronization will retry") }
+                tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+            }
+        });
+        let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
+            PgCalendarRepository::new(db.clone()),
+            macro_event_broker.clone(),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+        );
+        let cancellation = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            loop {
+                let result = tokio::select! { _ = cancellation.cancelled() => break, result = relay.run_once() => result };
+                match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Calendar projection publication will retry") }
+                tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+            }
+        });
+    }
+    let calendar_mutation_service = Arc::new(
+        CalendarMutationServiceImpl::new(
+            PgCalendarRepository::new(db.clone()),
+            calendar_events::domain::providers::CalendarProviders {
+                outlook: outlook_provider,
+                google: GoogleCalendarClient::with_gate(
+                    reqwest::Client::builder()
+                        .timeout(Duration::from_secs(30))
+                        .build()
+                        .context("failed to build the google calendar mutation http client")?,
+                    RedisCalendarRequestGate::new(rate_limiter),
+                ),
+            },
+            CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
+            macro_event_broker.clone(),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client,
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+        )
+        .with_outlook_writes_enabled(config.outlook_writes_enabled),
+    );
 
+    if config.calendar_sync_enabled && config.outlook_writes_enabled {
+        let service = calendar_mutation_service.clone();
+        let cancellation = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            use calendar_events::domain::replacement::CalendarReplacementService;
+            loop {
+                tokio::select! {
+                    _ = cancellation.cancelled() => return,
+                    result = service.recover_replacements() => {
+                        if let Err(error) = result { tracing::error!(error=?error,"calendar replacement recovery failed"); }
+                    }
+                }
+                tokio::select! {
+                    _ = cancellation.cancelled() => return,
+                    _ = tokio::time::sleep(Duration::from_secs(15)) => {}
+                }
+            }
+        });
+    }
+
+    let meeting_links = Arc::new(
+        calendar_scheduling::outbound::meeting_links::HttpMeetingLinks::new(
+            DocumentStorageServiceUrl::new()?.as_str(),
+            AppServiceUrl::new()?.as_str(),
+            config.internal_api_key.to_string(),
+        ),
+    );
+    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
+        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
+        calendar_scheduling::outbound::macro_services::MacroCalendars::with_meeting_links(
+            calendar_service.clone(),
+            calendar_mutation_service.clone(),
+            meeting_links.clone(),
+            match config.environment {
+                Environment::Production => Some("https://macro.com".into()),
+                Environment::Develop => Some("https://dev.macro.com".into()),
+                Environment::Local => None,
+            },
+        ),
+        calendar_scheduling::outbound::macro_services::MacroDirectory(
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+    ));
+    if config.calendar_sync_enabled {
+        worker_tracker.spawn(scheduling_recovery::run(
+            scheduling_service.clone(),
+            worker_cancellation_token.clone(),
+        ));
+    }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
         config: Arc::new(config),
         authorization_state,
         calendar_service,
+        calendar_notes: Arc::new(calendar_events::domain::notes::MeetingNotes::new(
+            calendar_events::outbound::pg_notes::PgNoteRepository::new(db.clone()),
+        )),
+        note_access: Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db.clone()),
+            ),
+        ),
         calendar_mutation_service,
+        calendar_team_service,
+        scheduling_service,
+        meeting_links,
     })
     .await;
 

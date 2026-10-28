@@ -1,3 +1,7 @@
+mod purge_owned_entity;
+
+pub(crate) use purge_owned_entity::OwnedPurgeState;
+
 use super::{
     context::ApiContext,
     documents::{export_document, get_document_version},
@@ -14,7 +18,8 @@ use super::{
     user::populate_items,
 };
 use crate::api::context::{
-    AuthorizationService, DocumentService, EntityAccessService, ProjectService,
+    AuthorizationService, DocumentService, DssChatPurgeService, DssDocumentPurger,
+    EntityAccessService, ProjectService,
 };
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
@@ -68,19 +73,20 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}/export",
-            get(export_document::handler),
+            get(export_document::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/text",
-            get(get_document_text::handler),
+            get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/full_pdf_modification_data",
-            get(get_full_pdf_modification_data::handler),
+            get(get_full_pdf_modification_data::handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/location",
-            get(location::get_location_handler),
+            get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/location_v3",
@@ -94,7 +100,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}/permissions",
-            get(get_document_permissions::get_document_permissions_handler),
+            get(get_document_permissions::get_document_permissions_handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/access_level",
@@ -120,15 +127,17 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}",
-            put(save_document::save_document_handler),
+            put(save_document::save_document_handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/{document_version_id}",
-            get(get_document_version::handler),
+            get(get_document_version::handler).layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/{document_version_id}/key",
-            get(get_document_key::get_document_key_handler),
+            get(get_document_key::get_document_key_handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/{document_id}/snapshot",
@@ -204,6 +213,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))
         .route("/validate_item_ids", post(validate_item_ids::handler))
+        .route(
+            purge_owned_entity::ROUTE,
+            delete(
+                purge_owned_entity::handler::<
+                    DssDocumentPurger,
+                    DssChatPurgeService,
+                    ProjectService,
+                >,
+            ),
+        )
         .route("/health", get(health_handler))
 }
 

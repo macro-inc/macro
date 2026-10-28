@@ -22,6 +22,47 @@
 	padding: 0.5rem;
 }
 
+.calendar-view .fc .fc-daygrid-day:has([data-calendar-loading-skeleton]) {
+	position: relative;
+}
+
+/* Neighboring pages keep static loading feedback, without offscreen animation. */
+.pager-page[aria-hidden="true"] .calendar-view [data-calendar-loading-placeholder] {
+	animation: none;
+}
+@keyframes calendar-skeleton-pulse {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+/* Commit real event layout under the skeletons, then reveal both layers together. */
+.calendar-view-host[data-calendar-loading-state="visible"] .fc-event:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event) {
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+@keyframes calendar-event-enter {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.calendar-view [data-calendar-loading-placeholder] {
+		animation: calendar-skeleton-pulse 1.8s ease-in-out infinite;
+	}
+	.calendar-view-host[data-calendar-loading-state="revealing"] .fc-event:not(.fc-event-mirror) {
+		animation: calendar-event-enter 180ms ease-out;
+	}
+}
+
 .calendar-view .fc {
 	color: var(--color-ink);
 	font-family: inherit;

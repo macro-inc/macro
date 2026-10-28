@@ -14,7 +14,7 @@ import {
   createNotificationSource,
   setDoneOverride,
 } from '../notification-source';
-import type { UnifiedNotification } from '../types';
+import { type UnifiedNotification, unifiedNotificationSchema } from '../types';
 
 const mocks = vi.hoisted(() => ({
   graphqlCacheEnabled: true,
@@ -460,6 +460,113 @@ describe('createNotificationSource', () => {
     }
   );
 
+  it('tells an entity-wide mark seen which notifications it expects to change', async () => {
+    mocks.graphqlEnabled = true;
+    const { toNotificationEntityRef, updateNotificationsForEntities } =
+      await import('@queries/notification/entity-mutations');
+    vi.mocked(toNotificationEntityRef).mockReturnValue({
+      type: 'document',
+      id: 'doc',
+    });
+    vi.mocked(updateNotificationsForEntities).mockResolvedValue([]);
+    const unseen = notification('expected-unseen', 'document', 'doc');
+    const seen = {
+      ...notification('already-seen', 'document', 'doc'),
+      state: 'seen' as const,
+    };
+    mocks.notificationsQuery = {
+      data: [unseen, seen],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await markNotificationsForEntityAsRead(source, {
+        type: 'document',
+        id: 'doc',
+      });
+      // A reply without one of these means this tab was stale.
+      expect(updateNotificationsForEntities).toHaveBeenCalledWith({
+        entities: [{ type: 'document', id: 'doc' }],
+        operation: 'MARK_SEEN',
+        expectedNotificationIds: ['expected-unseen'],
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('expects nothing from a feed that has not started, without starting it', async () => {
+    mocks.graphqlEnabled = true;
+    const { toNotificationEntityRef, updateNotificationsForEntities } =
+      await import('@queries/notification/entity-mutations');
+    vi.mocked(toNotificationEntityRef).mockReturnValue({
+      type: 'document',
+      id: 'doc',
+    });
+    vi.mocked(updateNotificationsForEntities).mockResolvedValue([]);
+    const read = vi.fn(() => [notification('unseen', 'document', 'doc')]);
+    mocks.notificationsQuery = {
+      isStarted: false,
+      get data() {
+        return read();
+      },
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await markNotificationsForEntityAsRead(source, {
+        type: 'document',
+        id: 'doc',
+      });
+      expect(updateNotificationsForEntities).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedNotificationIds: [] })
+      );
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('can release a failed reversal to authoritative state without clearing newer intent', () => {
+    mocks.graphqlEnabled = true;
+    const row: UnifiedNotification = {
+      ...notification('partial-reversal', 'document', 'task'),
+      state: 'seen',
+    };
+    mocks.notificationsQuery = {
+      data: [row],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      setDoneOverride([row.id], true);
+      const inverse = setDoneOverride([row.id], false);
+      inverse.release();
+      expect(source.notifications()[0].state).toBe('seen'); // not the prior done override
+
+      const older = setDoneOverride([row.id], true);
+      setDoneOverride([row.id], false);
+      row.state = 'done';
+      older.release();
+      expect(source.notifications()[0].state).toBe('seen'); // newer local Undo still owns the id
+    } finally {
+      setDoneOverride([row.id], undefined);
+      dispose();
+    }
+  });
+
   it('undo reopens a GraphQL-attached notification whose cached server state is already done', () => {
     mocks.graphqlEnabled = true;
     mocks.graphqlCacheEnabled = true;
@@ -751,6 +858,7 @@ describe('createNotificationSource', () => {
         isFetching: false,
       };
       let runs = 0;
+      let first: Promise<unknown> | undefined;
       const { source, dispose } = createRoot((dispose) => {
         const source = createNotificationSource(
           {} as ConnectionGatewayWebsocket
@@ -759,9 +867,10 @@ describe('createNotificationSource', () => {
           runs += 1;
           // Bound a regression so an accidental subscription cannot loop the test.
           if (runs > 1) return;
-          void (operation === 'seen'
-            ? source.bulkMarkAsRead([row])
-            : source.bulkMarkAsDone([row]));
+          first =
+            operation === 'seen'
+              ? source.bulkMarkAsRead([row])
+              : source.bulkMarkAsDone([row]);
         });
         return { source, dispose };
       });
@@ -770,6 +879,7 @@ describe('createNotificationSource', () => {
         await (operation === 'seen'
           ? source.bulkMarkAsRead([row])
           : source.bulkMarkAsDone([row]));
+        await first;
         await Promise.resolve();
         expect(runs).toBe(1);
       } finally {
@@ -1156,4 +1266,24 @@ describe('createNotificationSource', () => {
       dispose();
     }
   });
+});
+
+it('accepts the independent external chat notification through the generated wire schema', () => {
+  const row: UnifiedNotification = {
+    ...notification(
+      '019a061e-0000-7000-8000-000000000003',
+      'external_chat',
+      '019a061e-0000-7000-8000-000000000001'
+    ),
+    notification_event_type: 'external_chat_message',
+    notification_metadata: {
+      tag: 'external_chat_message',
+      content: {
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
+        messageId: '019a061e-0000-7000-8000-000000000002',
+      },
+    },
+  };
+  expect(unifiedNotificationSchema.safeParse(row).success).toBe(true);
 });

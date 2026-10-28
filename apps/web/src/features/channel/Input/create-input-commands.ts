@@ -1,3 +1,6 @@
+import { hapticImpact } from '@core/mobile/haptics';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import type { Accessor } from 'solid-js';
 import type {
   InputAttachmentData,
@@ -23,10 +26,16 @@ type CreateInputCommandsDeps = {
 export function createInputCommands(
   deps: CreateInputCommandsDeps
 ): InputCommands {
+  const reportCallbackError = (error: unknown) =>
+    Telemetry.error(error, { surface: 'channel-input' });
+
   const removeAttachment = (attachment: InputAttachmentData) => {
     deps.removeTrackedAttachment(attachment.id);
     const current = deps.snapshot();
-    void deps.callbacks?.onRemoveAttachment?.(attachment, current);
+    fireAndForget(
+      deps.callbacks?.onRemoveAttachment?.(attachment, current),
+      'channel-input'
+    );
   };
 
   return {
@@ -36,6 +45,7 @@ export function createInputCommands(
 
       const current = deps.snapshot();
       if (!hasSendableInputContent(current)) return false;
+      hapticImpact('light');
       deps.setIsSending(true);
       try {
         await deps.callbacks.onSend(current);
@@ -53,7 +63,9 @@ export function createInputCommands(
     toggleFormatRibbon: () => {
       deps.setShowFormatRibbon((open) => {
         const next = !open;
-        deps.callbacks?.onToggleFormatRibbon?.(next);
+        Promise.resolve(deps.callbacks?.onToggleFormatRibbon?.(next)).catch(
+          reportCallbackError
+        );
         return next;
       });
     },
@@ -61,7 +73,9 @@ export function createInputCommands(
       const current = deps.snapshot();
       deps.reset();
       deps.clearComposer?.();
-      deps.callbacks?.onClose?.(current);
+      Promise.resolve(deps.callbacks?.onClose?.(current)).catch(
+        reportCallbackError
+      );
     },
     removeAttachment,
   };

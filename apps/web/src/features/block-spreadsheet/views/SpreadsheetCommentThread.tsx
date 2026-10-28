@@ -7,6 +7,7 @@ import { Show } from 'solid-js';
 export function SpreadsheetCommentThread(props: {
   data: MessageListItem;
   canWrite: boolean;
+  canModerate?: boolean;
   targetId: string | null;
   onClearTarget: () => void;
   buildLink: (message: MessageData) => string;
@@ -17,6 +18,7 @@ export function SpreadsheetCommentThread(props: {
       <MessageThread
         data={props.data}
         canWrite={props.canWrite}
+        canModerate={props.canModerate}
         targetId={props.targetId}
         onClearTarget={props.onClearTarget}
         buildLink={props.buildLink}

@@ -1,3 +1,5 @@
+import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
+import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
@@ -8,7 +10,6 @@ import {
 import {
   EntityIcon,
   type EntityIconSelector,
-  isArchiveType,
 } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -21,8 +22,8 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { BuildEntityDataArgs } from '@entity';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -123,8 +124,10 @@ export function StaticSplitLabel(props: {
                   >
                     <InlineTitleEditor
                       value={props.label}
-                      placeholder="Untitled"
-                      ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                      placeholder={t('splitMenu.untitled')}
+                      ariaLabel={
+                        props.renameAriaLabel ?? t('entityActions.rename')
+                      }
                       onRename={onRename()}
                       class="text-sm"
                       autofocus
@@ -206,15 +209,15 @@ export function SplitPermissionsBadge() {
   const showBadge = () => !canEdit();
 
   const tooltip = () => {
-    if (!canView()) return 'No Access';
-    if (canComment()) return 'Comment Only';
-    return 'View Only';
+    if (!canView()) return t('splitMenu.noAccess');
+    if (canComment()) return t('splitMenu.commentOnly');
+    return t('splitMenu.viewOnly');
   };
 
   const text = () => {
-    if (!canView()) return 'no access';
-    if (canComment()) return 'comment only';
-    return 'viewer';
+    if (!canView()) return t('splitMenu.badgeNoAccess');
+    if (canComment()) return t('splitMenu.badgeCommentOnly');
+    return t('splitMenu.badgeViewer');
   };
 
   return (
@@ -232,6 +235,8 @@ export function BlockItemSplitLabel(props: {
   badges?: JSX.Element;
   /** Rendered after the file name. */
   trailingBadges?: JSX.Element;
+  /** Replaces the static name, e.g. with an inline title editor. */
+  title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   if (!isInBlock())
@@ -243,12 +248,8 @@ export function BlockItemSplitLabel(props: {
   const isOwner = useIsDocumentOwner();
 
   const targetType = () => {
-    // archive files have a special icon
     if (blockName === 'unknown') {
-      const fileType = blockMetadataSignal()?.fileType;
-      if (fileType && isArchiveType(fileType)) {
-        return 'archive';
-      }
+      return blockMetadataSignal()?.fileType ?? blockName;
     }
     return blockName;
   };
@@ -281,10 +282,37 @@ export function BlockItemSplitLabel(props: {
             {props.icon}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
-          <SplitLabel
-            label={displayName() ?? ''}
-            lockRename={!isOwner() || props.lockRename}
-          />
+          <Show
+            when={props.title}
+            fallback={
+              <Show
+                when={blockMetadataSignal()}
+                fallback={
+                  <SplitLabel
+                    label={displayName() ?? ''}
+                    lockRename={!isOwner() || props.lockRename}
+                  />
+                }
+              >
+                {(metadata) => (
+                  <DocumentTitleHoverCard
+                    documentId={metadata().documentId}
+                    name={displayName() ?? ''}
+                    ownerId={metadata().owner}
+                    createdAt={metadata().createdAt}
+                    updatedAt={metadata().updatedAt}
+                  >
+                    <SplitLabel
+                      label={displayName() ?? ''}
+                      lockRename={!isOwner() || props.lockRename}
+                    />
+                  </DocumentTitleHoverCard>
+                )}
+              </Show>
+            }
+          >
+            {(title) => title()}
+          </Show>
           {props.trailingBadges}
           <div
             class="shrink-0 flex items-center h-full"

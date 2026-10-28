@@ -53,6 +53,9 @@ it('offers the owning team on CRM records and contacts on documents', () => {
     setParent({ type: 'document', id: 'document' });
     expect(ids()).toEqual(['macro|contact@example.com']);
 
+    setParent({ type: 'call', id: 'call' });
+    expect(ids()).toEqual(['macro|contact@example.com']);
+
     setParent({ type: 'channel', id: 'channel' });
     expect(ids()).toEqual(['macro|member@example.com']);
     dispose();

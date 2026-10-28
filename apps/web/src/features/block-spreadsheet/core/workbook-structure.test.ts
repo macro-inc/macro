@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
-import { changeWorkbookAxis } from '@macro-inc/spreadsheet/workbook-structure';
+import {
+  changeWorkbookAxis,
+  moveWorkbookRange,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
 
@@ -22,7 +25,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
       B2: { value: '=SUM($A$1:A2)' },
       C1: { value: '=A1', format: 'text' },
     },
-    layout: { rowCount: 200, columnWidths: { 0: 180, 1: 90 } },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: { 0: 180, 1: 90 } },
     metadata: {
       hiddenRows: [1],
       hiddenColumns: [1],
@@ -37,7 +40,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
     id: 'two',
     name: 'Model',
     cells: { A1: { value: '=Inputs!A2+Inputs!$A$1' }, A2: { value: '="A2"' } },
-    layout: { rowCount: 200, columnWidths: {} },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
   },
 ];
 describe('row and column structure', () => {
@@ -103,7 +106,7 @@ describe('row and column structure', () => {
   });
   it('refuses to push occupied trailing cells beyond limits without modifying input', () => {
     const sheets = workbook();
-    sheets[0].cells.Z1 = { value: 'Keep me' };
+    sheets[0].cells.XFD1 = { value: 'Keep me' };
     const before = JSON.stringify(sheets);
     expect(() =>
       changeWorkbookAxis(sheets, {
@@ -129,6 +132,214 @@ describe('row and column structure', () => {
     expect(next[0].metadata?.merges).toEqual(['C2:D4']);
     expect(next[0].metadata?.hiddenRows).toEqual([3]);
   });
+  it('moves notes, rule ranges and rule formulas with their cells', () => {
+    const sheets = workbook();
+    sheets[0].metadata = {
+      notes: { A1: 'Header', A3: 'Removed', B5: 'Kept' },
+      conditionalFormats: [
+        {
+          range: 'A2:A10 C4',
+          type: 'expression',
+          formulas: ['$A2>$B$1'],
+        },
+        { range: 'D3', type: 'containsBlanks' },
+        {
+          range: 'E1:E9',
+          type: 'colorScale',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$6' }],
+          colors: ['#FFFFFF', '#00FF00'],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99999', type: 'list', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G6', type: 'whole', formulas: ['$B$6', '100'] },
+      ],
+      drawings: [
+        {
+          id: 'chart',
+          type: 'chart',
+          from: { row: 4, column: 2, x: 5, y: 6 },
+          to: { row: 9, column: 6, x: 7, y: 8 },
+          chart: {
+            plots: [{ kind: 'column', series: [{ values: 1, categories: 0 }] }],
+            references: ['Inputs!$A$4:$A$9', "'Inputs'!$B$4:$B$9"],
+          },
+        },
+        {
+          id: 'logo',
+          type: 'image',
+          image: '0123456789abcdef',
+          from: { row: 2, column: 0, x: 3, y: 4 },
+          width: 120,
+          height: 40,
+        },
+      ],
+    };
+    const deleted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 2,
+      count: 1,
+      kind: 'delete',
+    });
+    expect(deleted[0].metadata).toMatchObject({
+      notes: { A1: 'Header', B4: 'Kept' },
+      conditionalFormats: [
+        { range: 'A2:A9 C3', formulas: ['$A2>$B$1'] },
+        {
+          range: 'E1:E8',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$5' }],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99998', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G5', formulas: ['$B$5', '100'] },
+      ],
+    });
+    expect(deleted[0].metadata?.conditionalFormats).toHaveLength(2);
+    // The image's row was deleted: it moves to where the row was.
+    expect(deleted[0].metadata?.drawings).toMatchObject([
+      {
+        id: 'chart',
+        from: { row: 3, column: 2, x: 5, y: 6 },
+        to: { row: 8, column: 6, x: 7, y: 8 },
+        chart: { references: ['Inputs!$A$3:$A$8', 'Inputs!$B$3:$B$8'] },
+      },
+      { id: 'logo', from: { row: 2, column: 0, x: 3, y: 0 } },
+    ]);
+    // Rows inserted above move a rule; its range is clipped at the sheet's
+    // last row instead of blocking the insertion.
+    const inserted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 0,
+      count: 2,
+      kind: 'insert',
+    });
+    expect(inserted[0].metadata?.conditionalFormats?.[0]).toMatchObject({
+      range: 'A4:A12 C6',
+      formulas: ['$A4>$B$3'],
+    });
+    expect(inserted[0].metadata?.validations?.[0].range).toBe('F4:F100000');
+    expect(inserted[0].metadata?.drawings?.[0]).toMatchObject({
+      from: { row: 6 },
+      to: { row: 11 },
+      chart: { references: ['Inputs!$A$6:$A$11', 'Inputs!$B$6:$B$11'] },
+    });
+    // Another sheet's rows move rules that refer to them.
+    const model = changeWorkbookAxis(sheets, {
+      sheetId: 'two',
+      axis: 'row',
+      index: 0,
+      count: 1,
+      kind: 'insert',
+    });
+    expect(model[0].metadata?.validations?.[0]).toMatchObject({
+      range: 'F2:F99999',
+      formulas: ['Model!$A$2:$A$5'],
+    });
+  });
+});
+
+it('moves the cells shapes show with them, and keeps the text of deleted ones', () => {
+  const sheets = workbook();
+  const linked = (link: string) => ({
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    text: { paragraphs: [{ runs: [{ text: '42' }] }], link },
+  });
+  sheets[0].metadata = {
+    drawings: [
+      {
+        id: 'total',
+        type: 'shape',
+        from: { row: 0, column: 3, x: 0, y: 0 },
+        width: 100,
+        height: 40,
+        shape: { parts: [linked('$B$2'), linked('Model!$A$3')] },
+      },
+    ],
+  };
+  const inserted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'insert',
+  });
+  const links = (result: typeof sheets) =>
+    result[0].metadata?.drawings?.flatMap((drawing) =>
+      drawing.type === 'shape'
+        ? drawing.shape.parts.map((part) => part.text?.link)
+        : []
+    );
+  expect(links(inserted)).toEqual(['$B$4', 'Model!$A$3']);
+  // A shape whose cell is deleted keeps the text it showed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 2,
+    count: 1,
+    kind: 'delete',
+  });
+  expect(links(deleted)).toEqual(['$B$2', undefined]);
+  expect(deleted[0].metadata?.drawings?.[0]).toMatchObject({
+    shape: {
+      parts: [{}, { text: { paragraphs: [{ runs: [{ text: '42' }] }] } }],
+    },
+  });
+});
+
+it('moves pivot tables with their cells and source, and drops ones without a source', () => {
+  const sheets = workbook();
+  const pivot = (location: string, source: string) => ({
+    table: '<pivotTableDefinition name="Summary"/>',
+    cache: '<pivotCacheDefinition/>',
+    location,
+    source,
+  });
+  sheets[0].metadata = {
+    pivotTables: [
+      pivot('H3:I8', 'Model!$A$1:$B$4'),
+      pivot('K1', "'Inputs'!$A:$B"),
+    ],
+  };
+  // Rows of the source's sheet move the source; the table stays.
+  const model = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 0,
+    count: 1,
+    kind: 'insert',
+  });
+  expect(model[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H3:I8', source: 'Model!$A$2:$B$5' },
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
+  // Rows of the table's sheet move it; one whose cells all go is removed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(deleted[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H1:I6', source: 'Model!$A$1:$B$4' },
+  ]);
+  // Without its source cells, a pivot table keeps only its values.
+  const gone = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'column',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(gone[0].metadata?.pivotTables).toMatchObject([
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
 });
 
 it.each([
@@ -152,3 +363,268 @@ it.each([
     expect(next[0].cells[axis === 'row' ? 'C2' : 'B3'].value).toBe(expected);
   }
 );
+
+describe('moving a range of cells', () => {
+  it('moves cells with their formats and points references from every sheet at them', () => {
+    const before = workbook();
+    before[0].cells.D1 = { value: '=A1*2+A3' };
+    before[0].cells.D2 = { value: '=SUM(A1:A3)' };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 0 },
+      rows: 4,
+      columns: 2,
+    });
+    expect(next[0].cells.A1).toBeUndefined();
+    expect(next[0].cells.A2).toBeUndefined();
+    expect(next[0].cells.C5).toEqual({ value: '10', bold: true });
+    expect(next[0].cells.C6).toEqual({ value: '20' });
+    expect(next[0].cells.B2.value).toBe('=SUM($C$5:C6)');
+    expect(next[0].cells.D1.value).toBe('=C5*2+A3');
+    // A range follows only when all of it moves.
+    expect(next[0].cells.D2.value).toBe('=SUM(A1:A3)');
+    expect(next[0].cells.C1).toEqual({ value: '=A1', format: 'text' });
+    expect(next[1].cells.A1.value).toBe('=Inputs!C6+Inputs!$C$5');
+    expect(next[0].metadata?.definedNames?.[0].formula).toBe(
+      'Inputs!$C$5:$C$6'
+    );
+    expect(before[0].cells.A1).toEqual({ value: '10', bold: true });
+  });
+
+  it('keeps the references inside moved formulas on the same cells', () => {
+    const before = workbook();
+    before[0].cells.D1 = { value: '=B2*2' };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 1, left: 1, bottom: 1, right: 1 },
+      rows: 8,
+      columns: 3,
+    });
+    expect(next[0].cells.B2).toBeUndefined();
+    expect(next[0].cells.E10.value).toBe('=SUM($A$1:A2)');
+    expect(next[0].cells.D1.value).toBe('=E10*2');
+  });
+
+  it('moves a block with formulas that refer within it, preserving sheet names as written', () => {
+    const before: SpreadsheetWorkbookSheet[] = [
+      {
+        id: 'one',
+        name: 'My Data',
+        cells: {
+          A1: { value: '5' },
+          A2: { value: '=A1+1' },
+          A3: { value: "=SUM('My Data'!A1:A2)" },
+        },
+        layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+      },
+      {
+        id: 'two',
+        name: 'Report',
+        cells: {
+          A1: { value: "= 'my data'!A3 * 'My Data'!$A$1" },
+          A2: { value: '=A3' },
+        },
+        layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+      },
+    ];
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 2, right: 0 },
+      rows: 0,
+      columns: 1,
+    });
+    expect(next[0].cells).toEqual({
+      B1: { value: '5' },
+      B2: { value: '=B1+1' },
+      B3: { value: "=SUM('My Data'!B1:B2)" },
+    });
+    expect(next[1].cells.A1.value).toBe("= 'my data'!B3 * 'My Data'!$B$1");
+    // An unqualified reference on another sheet names that sheet.
+    expect(next[1].cells.A2.value).toBe('=A3');
+  });
+
+  it('replaces the destination, and its references become #REF!', () => {
+    const before = workbook();
+    before[0].cells = {
+      A1: { value: '1' },
+      A2: { value: '2' },
+      A3: { value: '3' },
+      C1: { value: 'old', fillColor: '#ff0000' },
+      C2: { value: 'old' },
+      D1: { value: '=C1' },
+      D2: { value: '=SUM(C1:C2)' },
+      D3: { value: '=SUM(C1:C9)' },
+      D4: { value: '=A3' },
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].cells.C1).toEqual({ value: '1' });
+    expect(next[0].cells.C2).toEqual({ value: '2' });
+    expect(next[0].cells.D1.value).toBe('=#REF!');
+    expect(next[0].cells.D2.value).toBe('=SUM(#REF!)');
+    expect(next[0].cells.D3.value).toBe('=SUM(C1:C9)');
+    expect(next[0].cells.D4.value).toBe('=A3');
+  });
+
+  it('moves a range onto part of itself', () => {
+    const before = workbook();
+    before[0].cells = {
+      A1: { value: '1' },
+      A2: { value: '2' },
+      A3: { value: '3' },
+      A4: { value: '4' },
+      B1: { value: '=A2+A4' },
+      B2: { value: '=SUM(A1:A3)' },
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 2, right: 0 },
+      rows: 1,
+      columns: 0,
+    });
+    expect(next[0].cells.A1).toBeUndefined();
+    expect(next[0].cells.A2).toEqual({ value: '1' });
+    expect(next[0].cells.A3).toEqual({ value: '2' });
+    expect(next[0].cells.A4).toEqual({ value: '3' });
+    expect(next[0].cells.B1.value).toBe('=A3+#REF!');
+    expect(next[0].cells.B2.value).toBe('=SUM(A2:A4)');
+  });
+
+  it('moves notes, merges, arrays and rules with their cells and splits rules that partly move', () => {
+    const before = workbook();
+    before[0].metadata = {
+      notes: { A1: 'Moves', C1: 'Replaced', E5: 'Stays' },
+      merges: ['A1:B1', 'E7:F7'],
+      arrayFormulas: { A2: 'A2:B2' },
+      validations: [
+        { range: 'A1:A10', type: 'list', formulas: ['"Yes,No"'] },
+        { range: 'C2', type: 'whole', formulas: ['$A$1', '100'] },
+      ],
+      conditionalFormats: [
+        { range: 'B1:B2', type: 'expression', formulas: ['$B1>$A$2'] },
+      ],
+      drawings: [
+        {
+          id: 'chart',
+          type: 'chart',
+          from: { row: 4, column: 2, x: 0, y: 0 },
+          to: { row: 9, column: 6, x: 0, y: 0 },
+          chart: {
+            plots: [{ kind: 'column', series: [{ values: 0 }] }],
+            references: ['Inputs!$A$1:$B$2'],
+          },
+        },
+      ],
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 1 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].metadata).toMatchObject({
+      notes: { C1: 'Moves', E5: 'Stays' },
+      merges: ['C1:D1', 'E7:F7'],
+      arrayFormulas: { C2: 'C2:D2' },
+      validations: [
+        { range: 'A3:A10', formulas: ['"Yes,No"'] },
+        { range: 'C1:C2', formulas: ['"Yes,No"'] },
+      ],
+      conditionalFormats: [{ range: 'D1:D2', formulas: ['$D1>$C$2'] }],
+      drawings: [
+        {
+          from: { row: 4, column: 2 },
+          chart: { references: ['Inputs!$C$1:$D$2'] },
+        },
+      ],
+    });
+    // The validation on C2 was replaced by the moved cells' rule.
+    expect(next[0].metadata?.validations).toHaveLength(2);
+  });
+
+  it('refuses to split a merged cell without changing the workbook', () => {
+    const sheets = workbook();
+    const before = JSON.stringify(sheets);
+    expect(() =>
+      moveWorkbookRange(sheets, {
+        sheetId: 'one',
+        source: { top: 2, left: 2, bottom: 2, right: 2 },
+        rows: 3,
+        columns: 0,
+      })
+    ).toThrow('This move would split a merged cell.');
+    expect(() =>
+      moveWorkbookRange(sheets, {
+        sheetId: 'one',
+        source: { top: 0, left: 0, bottom: 0, right: 0 },
+        rows: 2,
+        columns: 3,
+      })
+    ).toThrow('This move would split a merged cell.');
+    expect(JSON.stringify(sheets)).toBe(before);
+  });
+
+  it('moves whole-row references with rows selected by their headers and grows the sheet to fit', () => {
+    const sheets = workbook();
+    sheets[0].cells = {
+      A1: { value: '1' },
+      A10: { value: '=SUM(1:2)+SUM($1:$1)+SUM(A:A)' },
+    };
+    sheets[0].metadata = undefined;
+    const next = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 25 },
+      rows: 250,
+      columns: 0,
+    });
+    expect(next[0].cells.A251).toEqual({ value: '1' });
+    expect(next[0].cells.A10.value).toBe(
+      '=SUM(251:252)+SUM($251:$251)+SUM(A:A)'
+    );
+    expect(next[0].layout).toMatchObject({ rowCount: 252, columnCount: 26 });
+  });
+
+  it('moves whole-column references with columns selected by their headers', () => {
+    const sheets = workbook();
+    sheets[0].cells = {
+      A1: { value: '1' },
+      D1: { value: '=SUM(A:A)+SUM($A:$A)+SUM(1:1)+SUM(A1:B1)' },
+    };
+    sheets[0].metadata = undefined;
+    const next = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 199, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].cells.C1).toEqual({ value: '1' });
+    expect(next[0].cells.D1.value).toBe(
+      '=SUM(C:C)+SUM($C:$C)+SUM(1:1)+SUM(A1:B1)'
+    );
+    // A column that is not the whole sheet height leaves A:A where it is.
+    const partial = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 198, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(partial[0].cells.D1.value).toBe(
+      '=SUM(A:A)+SUM($A:$A)+SUM(1:1)+SUM(A1:B1)'
+    );
+  });
+
+  it.each([
+    { top: 0, left: 0, bottom: 0, right: 0, rows: 0, columns: 0 },
+    { top: 0, left: 0, bottom: 0, right: 0, rows: -1, columns: 0 },
+    { top: 99_999, left: 0, bottom: 99_999, right: 0, rows: 1, columns: 0 },
+    { top: 1, left: 0, bottom: 0, right: 0, rows: 1, columns: 0 },
+  ])('rejects an invalid move %o', ({ rows, columns, ...source }) => {
+    expect(() =>
+      moveWorkbookRange(workbook(), { sheetId: 'one', source, rows, columns })
+    ).toThrow('Invalid cell range.');
+  });
+});

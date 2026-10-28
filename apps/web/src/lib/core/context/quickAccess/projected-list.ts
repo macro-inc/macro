@@ -1,8 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   CacheHost,
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   createEffect,
@@ -22,9 +24,11 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'skill',
   'chat',
   'project',
+  'email',
   'channel',
   'dm',
   'crm_company',
+  'crm_contact',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -51,6 +55,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   /** Visible fallback rows; duplicates do not grow the combined menu. */
   existingItems?: Accessor<readonly T[]>;
+  /** Snapshot of source availability; reading it must not trigger a new request. */
+  sourceAttributes?: Accessor<Record<string, number>>;
   /** Keep already-materialized matches visible while a new query is pending. */
   filterPreviousItems?: (items: T[], query: string) => T[];
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
@@ -64,8 +70,11 @@ export function createProjectedList<T extends { id: string }>(options: {
   const [items, setItems] = createSignal<T[]>([]);
   const [hasMore, setHasMore] = createSignal(false);
   const [loading, setLoading] = createSignal<'idle' | 'initial' | 'more'>(
-    'idle'
+    untrack(() =>
+      options.enabled?.() !== false && buckets().length > 0 ? 'initial' : 'idle'
+    )
   );
+  const [error, setError] = createSignal<unknown>();
   let current: Request | undefined;
   onCleanup(() => {
     current = undefined;
@@ -77,7 +86,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     if (request.refreshPending) {
       // Publish the completed window before replaying changes received during
       // search/materialization (or a load-more operation).
-      void fetchPages(request, request.pages, false);
+      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
     } else {
       setLoading('idle');
     }
@@ -106,17 +115,41 @@ export function createProjectedList<T extends { id: string }>(options: {
     let foundNewRow = false;
     let cursor = append ? request.cursor : undefined;
     let pages = append ? request.pages : 0;
+    const span = Telemetry.span('quick_access.search');
+    span.setAttr('search.buckets', request.buckets.join(','));
+    span.setAttr('search.query_length', request.query.length);
+    span.setAttr('search.append', append);
     try {
+      for (const [key, value] of Object.entries(
+        untrack(() => options.sourceAttributes?.() ?? {})
+      )) {
+        span.setAttr(key, value);
+      }
       do {
-        const page = await options.host.search({
-          profile: 'quick-access-v1',
-          buckets: request.buckets,
-          query: request.query,
-          limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
-          ...(cursor ? { cursor } : {}),
-        });
+        const page = await span.span(
+          'quick_access.search_page',
+          async (span) => {
+            span.setAttr('search.buckets', request.buckets.join(','));
+            span.setAttr('search.query_length', request.query.length);
+            const result = await options.host.search({
+              profile: 'quick-access-v1',
+              buckets: request.buckets,
+              query: request.query,
+              limit: request.query ? SEARCH_LIMIT : BROWSE_PAGE_SIZE,
+              ...(cursor ? { cursor } : {}),
+            });
+            span.setAttr('search.result_count', result.documents.length);
+            return result;
+          }
+        );
         if (current !== request) return;
-        const materialized = await options.materialize(page.documents);
+        const materialized = await span.span(
+          'quick_access.materialize',
+          async (span) => {
+            span.setAttr('search.result_count', page.documents.length);
+            return options.materialize(page.documents);
+          }
+        );
         if (current !== request) return;
         for (const item of materialized) {
           merged.set(item.id, item);
@@ -135,16 +168,20 @@ export function createProjectedList<T extends { id: string }>(options: {
       );
       request.cursor = cursor;
       request.pages = pages;
+      setError(undefined);
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
     } catch (error) {
+      span.error('Quick Access cache search failed');
       if (current !== request) return;
+      setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
       // The mentions page loader guards automatic retries at the same frontier.
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
+      span.end();
       finishRequest(request);
     }
   };
@@ -164,13 +201,18 @@ export function createProjectedList<T extends { id: string }>(options: {
       // A cache revision is not a new search. Replacing an in-flight request
       // here starves results when hydration is faster than cache reads.
       if (previous.busy) previous.refreshPending = true;
-      else void fetchPages(previous, previous.pages, false);
+      else
+        fireAndForget(
+          fetchPages(previous, previous.pages, false),
+          'quick-access'
+        );
       return;
     }
 
     // Genuine query/bucket changes, disabling, and disposal still fence off
     // obsolete responses and their queued refreshes.
     current = undefined;
+    setError(undefined);
     setHasMore(false);
     const sameBuckets =
       previous?.buckets.length === activeBuckets.length &&
@@ -194,11 +236,12 @@ export function createProjectedList<T extends { id: string }>(options: {
       refreshPending: false,
     };
     current = request;
-    void fetchPages(request, request.pages, false);
+    fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
   });
 
   return {
     items,
+    error,
     hasMore,
     isLoading: () => loading() === 'initial',
     isLoadingMore: () => loading() === 'more',

@@ -1,0 +1,18 @@
+---
+title: ListBookings
+description: >-
+  Read every booking starting in a half-open timestamp range for personal or
+  team Booking Links.
+---
+
+# ListBookings
+
+Read every booking starting in a half-open timestamp range for personal or team Booking Links. Returns IDs, status, hosts, guest details, answers, attendance and reschedule history; use these IDs to manage meetings. Both timestamps are required, with an explicit UTC offset. Maximum range 733 days. Oversized result sets fail rather than silently truncating: narrow the range. Use GetBookingInsights for aggregate statistics.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Existing team ID, or null for personal bookings. |
+| `from` | string | Yes | Inclusive start timestamp. |
+| `to` | string | Yes | Exclusive end timestamp. |

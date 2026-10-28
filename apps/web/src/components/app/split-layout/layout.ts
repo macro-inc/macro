@@ -11,11 +11,17 @@ import type {
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
+  ReplaceAllSplitsOptions,
   SplitContent,
 } from './layoutManager';
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
+
+  /** Warms a destination on navigation intent (hover, focus) without opening it. */
+  function preloadContent(content: SplitContent) {
+    globalSplitManager()?.preloadContent(content);
+  }
 
   function openWithSplit(
     content: SplitContent,
@@ -109,7 +115,7 @@ export function useSplitLayout() {
 
   function replaceAllSplits(
     content: SplitContent,
-    options?: { referredFrom?: ReferredFrom }
+    options?: ReplaceAllSplitsOptions
   ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
@@ -138,6 +144,7 @@ export function useSplitLayout() {
 
   return {
     openWithSplit,
+    preloadContent,
     getSplitCount,
     replaceOrInsertSplit,
     replaceSplit,

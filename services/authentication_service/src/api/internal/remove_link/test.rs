@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::internal::fusionauth_fixture;
 use axum::extract::{self, FromRequestParts};
 use axum::http::Request;
 use url::Url;
@@ -37,6 +38,22 @@ fn find_idp_link_returns_none_when_absent() {
     let links = vec![link("gab@macro.com", "google-primary")];
 
     assert!(find_idp_link(links, "missing@macro.com").is_none());
+}
+
+#[tokio::test]
+async fn removing_a_deleted_users_link_succeeds() {
+    let (_server, auth_client) = fusionauth_fixture::without_user("deleted-user").await;
+
+    let response = remove_link(
+        &auth_client,
+        "deleted-user",
+        "inbox@macro.com",
+        fusionauth_fixture::GMAIL_IDP_NAME,
+    )
+    .await
+    .expect("a deleted user has no link left to remove");
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]

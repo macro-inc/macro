@@ -62,13 +62,24 @@ fn dual_kind_document_claims_are_rejected() {
 }
 
 #[test]
-fn surface_writes_require_edit_without_changing_document_comment_behavior() {
-    assert!(AccessLevel::Comment.can_edit_for(SessionKind::Document));
-    assert!(!AccessLevel::View.can_edit_for(SessionKind::Document));
+fn document_comment_grants_write_only_comment_marks_and_surfaces_require_edit() {
+    assert_eq!(
+        AccessLevel::Comment.write_access_for(SessionKind::Document),
+        WriteAccess::CommentMarks
+    );
+    assert_eq!(
+        AccessLevel::View.write_access_for(SessionKind::Document),
+        WriteAccess::None
+    );
     for level in [AccessLevel::View, AccessLevel::Comment] {
-        assert!(!level.can_edit_for(SessionKind::Surface));
+        assert_eq!(
+            level.write_access_for(SessionKind::Surface),
+            WriteAccess::None
+        );
     }
-    for level in [AccessLevel::Edit, AccessLevel::Owner, AccessLevel::Admin] {
-        assert!(level.can_edit_for(SessionKind::Surface));
+    for kind in [SessionKind::Document, SessionKind::Surface] {
+        for level in [AccessLevel::Edit, AccessLevel::Owner, AccessLevel::Admin] {
+            assert_eq!(level.write_access_for(kind), WriteAccess::Full);
+        }
     }
 }

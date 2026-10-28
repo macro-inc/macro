@@ -9,6 +9,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::domain::{models::GithubLink, ports::GithubRepo};
@@ -17,24 +18,64 @@ use crate::domain::{models::GithubLink, ports::GithubRepo};
 #[derive(Clone)]
 pub struct PgGithubRepo {
     pool: PgPool,
+    locks: PgPool,
 }
 
 impl PgGithubRepo {
     /// Create a new repository backed by the given connection pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        // Locks span external HTTP calls; keep waiters out of the data pool.
+        let locks = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect_lazy_with(
+                (*pool.connect_options())
+                    .clone()
+                    .options([("lock_timeout", "5s"), ("statement_timeout", "10s")]),
+            );
+        Self { locks, pool }
+    }
+
+    async fn lock(
+        pool: &PgPool,
+        key: &str,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, sqlx::Error> {
+        let mut guard = pool.begin().await?;
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *guard)
+            .await?;
+        Ok(guard)
     }
 }
 
 impl GithubRepo for PgGithubRepo {
     type Err = sqlx::Error;
+    type LinkGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+
+    #[tracing::instrument(skip(self, user_id), err)]
+    async fn lock_user_link(&self, user_id: &str) -> Result<Self::LinkGuard, Self::Err> {
+        Self::lock(&self.locks, &format!("github-link-user:{user_id}")).await
+    }
+
+    #[tracing::instrument(skip(self, guard), err)]
+    async fn lock_github_account(
+        &self,
+        guard: &mut Self::LinkGuard,
+        github_user_id: &str,
+    ) -> Result<(), Self::Err> {
+        let key = format!("github-link-account:{github_user_id}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut **guard)
+            .await?;
+        Ok(())
+    }
 
     #[tracing::instrument(skip(self), err)]
     async fn get_github_link_by_user_id<'a>(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'a>>,
-    ) -> Result<GithubLink, Self::Err> {
-        let link = sqlx::query!(
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        sqlx::query!(
         r#"
         SELECT id, macro_id, fusionauth_user_id as "fusionauth_user_id: Uuid", github_username, github_user_id, created_at, updated_at
         FROM github_links
@@ -54,20 +95,15 @@ impl GithubRepo for PgGithubRepo {
                 updated_at: r.updated_at,
             }))
         .fetch_optional(&self.pool)
-        .await?;
-
-        match link {
-            Some(l) => Ok(l),
-            None => Err(sqlx::Error::RowNotFound),
-        }
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn get_github_link_by_github_user_id(
         &self,
         github_user_id: &str,
-    ) -> Result<GithubLink, Self::Err> {
-        let link = sqlx::query!(
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        sqlx::query!(
         r#"
         SELECT id, macro_id, fusionauth_user_id as "fusionauth_user_id: Uuid", github_username, github_user_id, created_at, updated_at
         FROM github_links
@@ -89,12 +125,7 @@ impl GithubRepo for PgGithubRepo {
                 updated_at: r.updated_at,
             }))
         .fetch_optional(&self.pool)
-        .await?;
-
-        match link {
-            Some(l) => Ok(l),
-            None => Err(sqlx::Error::RowNotFound),
-        }
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -164,6 +195,28 @@ impl GithubRepo for PgGithubRepo {
               .execute(&self.pool)
               .await?;
 
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn reassign_github_grant(
+        &self,
+        github_user_id: &str,
+        previous_owner: &uuid::Uuid,
+        new_owner: &uuid::Uuid,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE github_links
+            SET fusionauth_user_id = $3, updated_at = NOW()
+            WHERE github_user_id = $1 AND fusionauth_user_id = $2
+            "#,
+            github_user_id,
+            previous_owner,
+            new_owner,
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

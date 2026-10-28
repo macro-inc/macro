@@ -19,6 +19,10 @@ import {
   type MessageData,
 } from '../Message';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
+import {
+  type MessageElementMount,
+  notifyElementOnMount,
+} from './message-element-lifecycle';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadReplyMonorail } from './ThreadReplyMonorail';
 import { ThreadReplyRail } from './ThreadReplyRail';
@@ -36,6 +40,7 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  onMessageMount?: MessageElementMount;
   onReady?: (handle: ThreadReplyListHandle) => void;
   positionTarget?: (
     threadRow: HTMLElement,
@@ -50,6 +55,7 @@ export function ThreadReplyList(props: {
   onSelectReply?: (replyId: string) => void;
   /** Keep replies on the root's rail instead of branching each one off it. */
   monorail?: boolean;
+  hideRail?: boolean;
   /** An inline composer or footer continues the rail after the replies. */
   railContinues?: boolean;
 }) {
@@ -95,26 +101,31 @@ export function ThreadReplyList(props: {
           <div
             ref={(element) => {
               replyElements.set(id, element);
+              notifyElementOnMount(props.onMessageMount, id, element);
             }}
             class="relative"
           >
-            <Show
-              when={props.monorail}
-              fallback={
-                <ThreadReplyRail
-                  grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
-                  terminal={
-                    !props.railContinues &&
-                    listMetaByReplyId()[id].index >= lastAvatarIndex()
-                  }
-                />
-              }
-            >
-              <Show when={listMetaByReplyId()[id].index <= lastAvatarIndex()}>
-                <ThreadReplyMonorail
-                  grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
-                  terminal={listMetaByReplyId()[id].index === lastAvatarIndex()}
-                />
+            <Show when={!props.hideRail}>
+              <Show
+                when={props.monorail}
+                fallback={
+                  <ThreadReplyRail
+                    grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
+                    terminal={
+                      !props.railContinues &&
+                      listMetaByReplyId()[id].index >= lastAvatarIndex()
+                    }
+                  />
+                }
+              >
+                <Show when={listMetaByReplyId()[id].index <= lastAvatarIndex()}>
+                  <ThreadReplyMonorail
+                    grouped={listMetaByReplyId()[id].isGroupedWithPrevious}
+                    terminal={
+                      listMetaByReplyId()[id].index === lastAvatarIndex()
+                    }
+                  />
+                </Show>
               </Show>
             </Show>
             <MarkMessageNotifications messageId={id} parent={props.parent}>

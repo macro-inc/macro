@@ -73,3 +73,38 @@ fn invalid_metadata_does_not_attach_an_unrelated_ambient_context() {
         assert_eq!(child.context().span().span_context().trace_id(), before);
     }
 }
+
+#[test]
+fn async_delivery_links_to_producer_without_replacing_its_own_parent() {
+    opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let producer = tracing::info_span!(parent: None, "producer");
+    let expected = producer.context().span().span_context().clone();
+    let mut meta = Map::new();
+    inject(&producer, &mut meta);
+    let delivery = tracing::info_span!(parent: None, "delivery");
+    let original = delivery.context().span().span_context().trace_id();
+    link(&delivery, Some(&meta));
+    assert_eq!(
+        delivery.context().span().span_context().trace_id(),
+        original
+    );
+    drop(delivery);
+    drop(producer);
+    provider.force_flush().unwrap();
+    let spans = exporter.get_finished_spans().unwrap();
+    let delivery = spans.iter().find(|span| span.name == "delivery").unwrap();
+    assert_eq!(delivery.links.links.len(), 1);
+    let linked = &delivery.links.links[0].span_context;
+    assert_eq!(linked.trace_id(), expected.trace_id());
+    assert_eq!(linked.span_id(), expected.span_id());
+    assert_eq!(linked.trace_flags(), expected.trace_flags());
+    assert_eq!(linked.trace_state(), expected.trace_state());
+    assert!(linked.is_remote());
+}

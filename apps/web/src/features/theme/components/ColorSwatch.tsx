@@ -3,7 +3,6 @@ export function ColorSwatch(props: { width: string; color: string }) {
     <div
       class="theme-color-swatch"
       style="
-        transition: border-color var(--transition);
         border: 1px solid var(--color-edge-muted);
         border-radius: 2px;
         padding: 3px;

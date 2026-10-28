@@ -2,6 +2,8 @@ import { mergeRefs } from '@solid-primitives/refs';
 import {
   createRenderEffect,
   createSignal,
+  onCleanup,
+  onMount,
   type ParentProps,
   type Setter,
   Show,
@@ -16,8 +18,22 @@ import {
 export function SplitToolbar(props: {
   ref: Setter<HTMLDivElement | null>;
   collapseController: PriorityCollapseController;
+  onContentChange: (hasContent: boolean) => void;
 }) {
   const panel = useSplitPanelOrThrow();
+
+  onMount(() => {
+    const { toolbarLeft, toolbarRight } = panel.layoutRefs;
+    const checkContent = () =>
+      props.onContentChange(
+        Boolean(toolbarLeft?.hasChildNodes() || toolbarRight?.hasChildNodes())
+      );
+    checkContent();
+    const observer = new MutationObserver(checkContent);
+    if (toolbarLeft) observer.observe(toolbarLeft, { childList: true });
+    if (toolbarRight) observer.observe(toolbarRight, { childList: true });
+    onCleanup(() => observer.disconnect());
+  });
 
   // Layout / spacing / border / min-height live on <Panel.Toolbar> in
   // SplitPanel. This wrapper only mounts the portal targets so consumers

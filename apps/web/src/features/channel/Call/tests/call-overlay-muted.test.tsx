@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type Setter } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,6 +50,16 @@ vi.mock('../CallContext', () => ({
 
 vi.mock('../CallControls/CallControls', () => ({
   CallControls: () => null,
+}));
+
+vi.mock('../chat/CallChat', () => ({
+  default: (props: { callId: string; open: boolean; onClose: () => void }) => (
+    <aside hidden={!props.open} aria-label="Call chat">
+      <p>{props.callId}</p>
+      <input aria-label="Message this call" />
+      <button onClick={props.onClose}>Close sidebar</button>
+    </aside>
+  ),
 }));
 
 vi.mock('../TrackView', () => ({
@@ -118,6 +128,7 @@ function setUpCallState(
 
   mocks.callContext = {
     activeChannelId: channelId,
+    activeCallId: () => 'call-id',
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
     isConnecting: () => false,
@@ -172,6 +183,54 @@ describe('CallOverlay muted microphone badges', () => {
       screen.getByRole('status', { name: 'Taylor Guest is muted' })
     ).toBeTruthy();
     expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('opens chat for a standalone meeting without a channel', async () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => (
+      <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    expect(
+      await screen.findByRole('textbox', { name: 'Message this call' })
+    ).toBeTruthy();
+    expect(screen.getByText('call-id')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('does not mount authenticated message queries for a guest', () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => <CallOverlay onLeave={() => undefined} showChat={false} />);
+    expect(screen.queryByRole('button', { name: 'Open chat' })).toBeNull();
+    expect(
+      screen.queryByRole('complementary', { name: 'Call chat' })
+    ).toBeNull();
+  });
+
+  it('opens the call thread without remounting video and restores focus when closed', async () => {
+    setUpCallState();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const video = screen.getByTestId('track-local-camera');
+    const toggle = screen.getByRole('button', { name: 'Open chat' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    const composer = await screen.findByRole('textbox', {
+      name: 'Message this call',
+    });
+    fireEvent.input(composer, { target: { value: 'Draft' } });
+    expect(screen.getByText('call-id')).toBeTruthy();
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
+      composer
+    );
+    expect((composer as HTMLInputElement).value).toBe('Draft');
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
   });
 
   it('shows local mute state on both the full tile and local PIP', () => {

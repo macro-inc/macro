@@ -1,5 +1,6 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useMessageActions } from '@queries/messages/document-messages';
 import type { CreateUnthreadedAnchorRequest } from '@service-storage/generated/schemas/createUnthreadedAnchorRequest';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
@@ -83,7 +84,7 @@ export function useCreateFreeMessageComment() {
       wasDeleted: placeable.wasDeleted,
       shouldLockOnSave: placeable.shouldLockOnSave,
     });
-    void annotations.commands.refetchAnchors();
+    fireAndForget(annotations.commands.refetchAnchors(), 'pdf-comments');
     return message;
   };
 }
@@ -99,7 +100,7 @@ export function useAttachHighlightMessageComment() {
       anchor: { type: 'pdf_highlight', anchor_id: uuid },
     });
     annotations.commands.attachAnchorRoot(uuid, message.id);
-    void annotations.commands.refetchAnchors();
+    fireAndForget(annotations.commands.refetchAnchors(), 'pdf-comments');
     return message;
   };
 }
@@ -125,7 +126,7 @@ export function useCreateHighlightMessageComment() {
         ...anchor,
         rootId: message.id,
       });
-      void annotations.commands.refetchAnchors();
+      fireAndForget(annotations.commands.refetchAnchors(), 'pdf-comments');
       return message;
     } catch (error) {
       // The highlight was saved; keep it visible without a discussion.
@@ -150,6 +151,6 @@ export function useDeleteMessageThread() {
   return async (rootId: string) => {
     await messages.deleteThread(rootId);
     annotations.commands.applyThreadDeleted(rootId);
-    void annotations.commands.refetchAnchors();
+    fireAndForget(annotations.commands.refetchAnchors(), 'pdf-comments');
   };
 }

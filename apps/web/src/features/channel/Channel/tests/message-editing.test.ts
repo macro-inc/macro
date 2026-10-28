@@ -1,4 +1,4 @@
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { MessageAttachment } from '@service-storage/generated/schemas/messageAttachment';
 import { describe, expect, it, vi } from 'vitest';
 import type { InputAttachmentData, InputSnapshot } from '../../Input/types';
 
@@ -19,8 +19,8 @@ import {
 } from '../message-editing';
 
 function attachment(
-  overrides: Partial<ApiMessageAttachment> & { entity_id: string }
-): ApiMessageAttachment {
+  overrides: Partial<MessageAttachment> & { entity_id: string }
+): MessageAttachment {
   return {
     id: `att-${overrides.entity_id}`,
     entity_type: 'document',

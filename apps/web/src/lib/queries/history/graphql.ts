@@ -134,6 +134,17 @@ export async function materializeCachedGraphqlHistoryItems(
   });
 }
 
+/** Buckets consumed by history and its hydration subscription. */
+export const HISTORY_SEARCH_BUCKETS = [
+  'document',
+  'note',
+  'task',
+  'snippet',
+  'skill',
+  'chat',
+  'project',
+] as const;
+
 /** Reads a bounded recent history through the indexed search projection, then
  * materializes only those final normalized entity keys. */
 export async function readCachedGraphqlHistoryItems(
@@ -141,15 +152,7 @@ export async function readCachedGraphqlHistoryItems(
 ): Promise<HistoryItem[]> {
   const page = await cacheHost.search({
     profile: 'quick-access-v1',
-    buckets: [
-      'document',
-      'note',
-      'task',
-      'snippet',
-      'skill',
-      'chat',
-      'project',
-    ],
+    buckets: [...HISTORY_SEARCH_BUCKETS],
     query: '',
     limit: 500,
   });

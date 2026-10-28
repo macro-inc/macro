@@ -1,10 +1,16 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { useIsAuthenticated } from '@core/context/user';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import {
+  type HistoryItemType,
+  type ItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import {
+  keepPreviousData,
   type QueryClient,
   queryOptions,
   type Updater,
@@ -15,7 +21,10 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
-import { readCachedGraphqlHistoryItems } from './graphql';
+import {
+  HISTORY_SEARCH_BUCKETS,
+  readCachedGraphqlHistoryItems,
+} from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
 import type { HistoryItem } from './types';
@@ -91,11 +100,39 @@ type HistoryQueryKey =
   | typeof historyKeys.list.queryKey
   | typeof historyKeys.graphqlList.queryKey;
 
+type HistoryGraphqlCacheHost = NonNullable<
+  ReturnType<typeof getGraphqlSoupCacheHost>
+>;
+
+// Cached options outlive the hook. The host is the app-level cache service,
+// not component state, so the factory may close over it.
+function cachedGraphqlHistoryQueryOptions(cacheHost: HistoryGraphqlCacheHost) {
+  return {
+    queryKey: historyKeys.graphqlList.queryKey,
+    queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    refetchOnMount: 'always' as const,
+    reconcile: 'id' as const,
+  };
+}
+
+const restHistoryQueryOptions = {
+  queryKey: historyKeys.list.queryKey,
+  queryFn: fetchHistory,
+  staleTime: HISTORY_STALE_TIME,
+  gcTime: HISTORY_GC_TIME,
+  placeholderData: keepPreviousData,
+  reconcile: 'id' as const,
+};
+
 export function useHistoryQuery() {
+  const authenticated = useIsAuthenticated();
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
-    if (!graphqlSoupFlag().enabled) return undefined;
+    if (authenticated() !== true || !graphqlSoupFlag().enabled)
+      return undefined;
     const cacheHost = getGraphqlSoupCacheHost();
     return cacheHost?.disabled ? undefined : cacheHost;
   };
@@ -104,11 +141,14 @@ export function useHistoryQuery() {
     const host = graphqlCacheHost();
     if (!host) return;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () =>
-        activeQueryClient.invalidateQueries(
-          { queryKey: historyKeys.graphqlList.queryKey },
-          { cancelRefetch: false }
-        )
+      subscribeToVisibleCacheChanges(
+        host,
+        () =>
+          activeQueryClient.invalidateQueries(
+            { queryKey: historyKeys.graphqlList.queryKey },
+            { cancelRefetch: false }
+          ),
+        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
       )
     );
   });
@@ -120,24 +160,11 @@ export function useHistoryQuery() {
     HistoryQueryKey
   >(() => {
     const cacheHost = graphqlCacheHost();
-    if (cacheHost) {
-      return {
-        queryKey: historyKeys.graphqlList.queryKey,
-        queryFn: () => readCachedGraphqlHistoryItems(cacheHost),
-        placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-        staleTime: Infinity,
-        refetchOnMount: 'always' as const,
-        reconcile: 'id',
-      };
-    }
-
     return {
-      queryKey: historyKeys.list.queryKey,
-      queryFn: fetchHistory,
-      staleTime: HISTORY_STALE_TIME,
-      gcTime: HISTORY_GC_TIME,
-      placeholderData: (prev: HistoryQueryFnResult | undefined) => prev,
-      reconcile: 'id',
+      ...(cacheHost
+        ? cachedGraphqlHistoryQueryOptions(cacheHost)
+        : restHistoryQueryOptions),
+      enabled: authenticated() === true,
     };
   });
 }
@@ -161,7 +188,7 @@ export async function refetchHistory(): Promise<void> {
 
 type UpsertToHistoryParams = {
   itemId: string;
-  itemType: ItemType;
+  itemType: HistoryItemType;
 };
 
 type UpsertToHistoryContext = {
@@ -227,7 +254,7 @@ export function useUpsertToHistoryMutation(
  * Prefer `useUpsertToHistoryMutation` when inside a component.
  */
 export async function postNewHistoryItem(
-  itemType: ItemType,
+  itemType: HistoryItemType,
   itemId: string
 ): Promise<boolean> {
   const maybeAdded = await storageServiceClient.upsertItemToUserHistory({
@@ -285,7 +312,7 @@ async function _insertProjectIntoHistory(projectId: string) {
   const newData: HistoryItem[] = [];
   const ids = [projectId];
 
-  storageServiceClient.upsertItemToUserHistory({
+  await storageServiceClient.upsertItemToUserHistory({
     itemId: projectId,
     itemType: 'project',
   });

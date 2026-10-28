@@ -1,0 +1,19 @@
+---
+title: CommentOnText
+description: >-
+  Start an inline comment on a passage of a Macro markdown or Word (DOCX)
+  document on behalf of the user, anchored to the quoted text.
+---
+
+# CommentOnText
+
+Start an inline comment on a passage of a Macro markdown or Word (DOCX) document on behalf of the user, anchored to the quoted text. Only use this when explicitly asked to comment on specific text. Quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. For a comment on a document as a whole, or a reply in an existing thread, use Comment. Comments made here stay in Macro and are not written into a Word file; for comments that must travel with a Word document to its recipient (a redline for a counterparty), use EditWordDocument's addComment operation instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | The id of the document to comment on. |
+| `content` | string | Yes | Comment content in macro markdown format. This uses the same syntax as markdown documents. |
+| `quote` | string | Yes | The passage to comment on, quoted exactly as the document reads: plain text without markdown syntax such as ** or link brackets. Keep it to the words the comment is about; a longer quote is more likely to be unique. |
+| `occurrence` | integer | No | Which appearance of the quoted passage to comment on, counting from 1 in document order. Only needed when the passage appears more than once. |

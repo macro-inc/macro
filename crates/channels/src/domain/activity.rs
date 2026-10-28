@@ -16,6 +16,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::broker_events::ChannelTopicEvent;
+use messages::domain::models::MessageParent;
+use messages::outbound::broker::MessageTopicEvent;
 
 /// Channel-exclusive actions. Common lifecycle actions go through
 /// [`Activity::common`] and need no representation here.
@@ -23,6 +25,10 @@ use super::broker_events::ChannelTopicEvent;
 pub enum ChannelAction {
     /// A message was posted in the channel.
     Messaged,
+    /// A channel's display name changed.
+    Renamed(::activity::domain::models::NameChange),
+    /// A channel's profile picture changed.
+    PictureChanged,
     /// A principal was added to the channel.
     ParticipantAdded {
         /// The added principal.
@@ -55,6 +61,8 @@ impl DomainActivity for ChannelActivity {
     fn into_action(self) -> Action {
         match self.action {
             ChannelAction::Messaged => Action::Messaged,
+            ChannelAction::Renamed(change) => Action::Renamed(change),
+            ChannelAction::PictureChanged => Action::PictureChanged,
             ChannelAction::ParticipantAdded { participant } => {
                 Action::ParticipantAdded(ParticipantChange { participant })
             }
@@ -115,6 +123,82 @@ fn participant_activities(
     )
 }
 
+/// Maps one `macro.messages` fact to channel activity.
+///
+/// Message facts carry their parent; only channel parents are channel
+/// activity. Document discussions record no activity, as their comments never
+/// did. Exhaustive on purpose: a new fact fails compilation here until someone
+/// classifies it or explicitly drops it.
+pub fn ingest_message_event(event_id: Uuid, event: &MessageTopicEvent) -> Ingest {
+    let now = || event_time(event_id);
+    let common = |actor: Actor<'static>, channel_id: Uuid, at: DateTime<Utc>| {
+        Ingest::Insert(vec![Activity::common(
+            event_id,
+            0,
+            actor,
+            None,
+            EntityType::Channel,
+            channel_id.to_string(),
+            CommonAction::Edited,
+            at,
+        )])
+    };
+    let channel = |parent: &MessageParent| match parent {
+        MessageParent::Channel(channel_id) => Some(*channel_id),
+        _ => None,
+    };
+    match event {
+        MessageTopicEvent::Posted(m) => {
+            let Some(channel_id) = channel(&m.parent) else {
+                return Ingest::Ignore;
+            };
+            // For agent (bot) messages, `triggered_by` is the user whose
+            // authority the message was sent under — the activity's subject.
+            let on_behalf_of = m.triggered_by.as_deref().and_then(|id: &str| {
+                MacroUserIdStr::try_from(id.to_string())
+                    .inspect_err(|e| {
+                        // Fall back to the sender as subject, but loudly: the
+                        // triggering user's activity is being misattributed.
+                        tracing::warn!(error=?e, triggered_by=id, "unparseable triggered_by");
+                    })
+                    .ok()
+            });
+            Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
+                m.sender.clone(),
+                on_behalf_of,
+                channel_id,
+                ChannelAction::Messaged,
+                m.created_at,
+            )])
+        }
+        MessageTopicEvent::Patched(m) => match channel(&m.parent) {
+            Some(channel_id) => common(m.actor.clone(), channel_id, m.updated_at),
+            None => Ingest::Ignore,
+        },
+        // Deleting a message mutates the channel's content.
+        MessageTopicEvent::Deleted(m) => match channel(&m.parent) {
+            Some(channel_id) => common(
+                m.actor.clone(),
+                channel_id,
+                m.deleted_at.unwrap_or_else(now),
+            ),
+            None => Ingest::Ignore,
+        },
+        MessageTopicEvent::AttachmentCreated(m) => match channel(&m.parent) {
+            Some(channel_id) => common(m.actor.clone(), channel_id, now()),
+            None => Ingest::Ignore,
+        },
+        MessageTopicEvent::AttachmentRemoved(m) => match channel(&m.parent) {
+            Some(channel_id) => common(m.actor.clone(), channel_id, now()),
+            None => Ingest::Ignore,
+        },
+        // Derivative of the posted fact (the full mention list travels there).
+        MessageTopicEvent::Mentioned(_) => Ingest::Ignore,
+    }
+}
+
 impl ActivitySource for ChannelTopicEvent {
     /// Maps one `macro.channels` event to its ingest outcome.
     ///
@@ -147,55 +231,30 @@ impl ActivitySource for ChannelTopicEvent {
                 CommonAction::Created,
                 now(),
             )]),
-            ChannelTopicEvent::Updated(m) => common(
+            ChannelTopicEvent::Updated(m) if m.previous_name == m.channel_name => Ingest::Ignore,
+            ChannelTopicEvent::Updated(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
                 Actor::new_from_user(m.actor.clone()),
-                CommonAction::Edited,
+                None,
                 m.channel_id,
+                ChannelAction::Renamed(::activity::domain::models::NameChange {
+                    from: m.previous_name.clone(),
+                    to: m.channel_name.clone(),
+                }),
                 now(),
-            ),
+            )]),
+            ChannelTopicEvent::PictureChanged(m) => Ingest::Insert(vec![exclusive(
+                event_id,
+                0,
+                Actor::new_from_user(m.actor.clone()),
+                None,
+                m.channel_id,
+                ChannelAction::PictureChanged,
+                now(),
+            )]),
             ChannelTopicEvent::Deleted(m) => {
                 common(m.actor.clone(), CommonAction::Deleted, m.channel_id, now())
-            }
-            ChannelTopicEvent::MessagePosted(m) => {
-                // For agent (bot) messages, `triggered_by` is the user whose
-                // authority the message was sent under — the activity's subject.
-                let on_behalf_of = m.triggered_by.as_deref().and_then(|id| {
-                    MacroUserIdStr::try_from(id.to_string())
-                        .inspect_err(|e| {
-                            // Fall back to the sender as subject, but loudly: the
-                            // triggering user's activity is being misattributed.
-                            tracing::warn!(error=?e, triggered_by=id, "unparseable triggered_by");
-                        })
-                        .ok()
-                });
-                Ingest::Insert(vec![exclusive(
-                    event_id,
-                    0,
-                    m.sender.clone(),
-                    on_behalf_of,
-                    m.channel_id,
-                    ChannelAction::Messaged,
-                    m.created_at,
-                )])
-            }
-            ChannelTopicEvent::MessagePatched(m) => common(
-                m.actor.clone(),
-                CommonAction::Edited,
-                m.channel_id,
-                m.updated_at,
-            ),
-            // Deleting a message mutates the channel's content.
-            ChannelTopicEvent::MessageDeleted(m) => common(
-                m.actor.clone(),
-                CommonAction::Edited,
-                m.channel_id,
-                m.deleted_at.unwrap_or_else(now),
-            ),
-            ChannelTopicEvent::MessageAttachmentCreated(m) => {
-                common(m.actor.clone(), CommonAction::Edited, m.channel_id, now())
-            }
-            ChannelTopicEvent::MessageAttachmentRemoved(m) => {
-                common(m.actor.clone(), CommonAction::Edited, m.channel_id, now())
             }
             ChannelTopicEvent::ParticipantAdded(m) => participant_activities(
                 event_id,
@@ -213,8 +272,6 @@ impl ActivitySource for ChannelTopicEvent {
                 now(),
                 |participant| ChannelAction::ParticipantRemoved { participant },
             ),
-            // Derivative of MessagePosted (the full mention list travels there).
-            ChannelTopicEvent::Mentioned(_) => Ingest::Ignore,
         }
     }
 }

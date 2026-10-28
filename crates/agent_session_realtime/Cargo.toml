@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "agent_session_realtime"
+publish = false
+version = "0.1.0"
+
+[features]
+# The Redis Stream publisher and consumer; without it only the ports and the
+# fan-out service compile, for the GraphQL schema crate.
+default = ["redis"]
+redis = [
+  "dep:chrono",
+  "dep:macro_uuid",
+  "dep:redis",
+  "dep:serde_json",
+]
+
+[dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+broadcast = { path = "../broadcast" }
+chrono = { workspace = true, optional = true }
+macro_uuid = { path = "../macro_uuid", optional = true }
+redis = { workspace = true, optional = true, features = [
+  "aio",
+  "streams",
+  "tokio-comp",
+] }
+rootcause = { workspace = true }
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+chrono = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
+macro_uuid = { path = "../macro_uuid" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

@@ -1,9 +1,11 @@
 //! Typed input objects and lossless transport-to-domain conversion.
 
 use async_graphql::{Enum, ID, InputObject, MaybeUndefined};
+use graphql_common::parse_id;
 use graphql_permission::GraphqlEntityAccessLevel;
+use graphql_properties::GraphqlSetPropertyValue;
 use initiative::domain::{
-    models::{CreateInitiativeRequest, UpdateInitiativeRequest},
+    models::{CreateInitiativeRequest, InitialPropertyValue, UpdateInitiativeRequest},
     reads::InitiativeTasksRequest,
 };
 use models_permissions::share_permission::{
@@ -40,16 +42,43 @@ pub struct CreateInitiativeInput {
     pub member_ids: Option<Vec<String>>,
     /// Whether to share with the owner's team, defaulting to true.
     pub share_with_team: Option<bool>,
+    /// Initial property values, set in the same create; a rejected value fails it.
+    pub property_values: Option<Vec<InitialPropertyValueInput>>,
 }
 
-impl From<CreateInitiativeInput> for CreateInitiativeRequest {
-    fn from(value: CreateInitiativeInput) -> Self {
-        Self {
+/// One property value set when an initiative is created.
+#[derive(InputObject)]
+pub struct InitialPropertyValueInput {
+    /// Property definition to set.
+    pub property_definition_id: ID,
+    /// Value, in the same shape `setEntityProperty` accepts.
+    pub value: GraphqlSetPropertyValue,
+}
+
+impl TryFrom<CreateInitiativeInput> for CreateInitiativeRequest {
+    type Error = async_graphql::Error;
+
+    fn try_from(value: CreateInitiativeInput) -> async_graphql::Result<Self> {
+        Ok(Self {
             name: value.name,
             description: value.description,
             member_ids: value.member_ids,
             share_with_team: value.share_with_team,
-        }
+            property_values: value
+                .property_values
+                .unwrap_or_default()
+                .into_iter()
+                .map(|input| {
+                    Ok(InitialPropertyValue {
+                        property_definition_id: parse_id(
+                            input.property_definition_id,
+                            "propertyDefinitionId",
+                        )?,
+                        value: input.value.try_into_model()?,
+                    })
+                })
+                .collect::<async_graphql::Result<_>>()?,
+        })
     }
 }
 
@@ -180,3 +209,6 @@ impl From<UpdateInitiativeInput> for UpdateInitiativeRequest {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

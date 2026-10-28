@@ -34,7 +34,10 @@
 .mail-sidebar h3 { margin: 0; }
 .mail-main { flex: 1; min-width: 0; container: mail-list / inline-size; }
 .mail-rows { padding-bottom: 28px; }
-.mail-row { width: calc(100% - 8px); border: 0; background: transparent; font-family: inherit; margin-bottom: 4px; }
+.mail-row { width: calc(100% - 8px); border: 0; background: transparent; font-family: inherit; min-height: 40px; margin-bottom: 0; }
+.mail-row:hover { background: var(--color-list-hover, var(--color-active)); }
+.mail-row[data-unread=true] .mail-row-content { font-weight: 600; }
+.mail-row-narrow .mail-row-tags { margin-top: 5px; }
 .mail-row:focus-visible { outline: 1px solid var(--color-ink-muted); outline-offset: -1px; }
 .mail-row.soup-row-wide { --soup-row-padding-l: .5rem; --soup-row-indicator-width: 1rem; --soup-row-column-gap: .5rem; }
 .mail-date-group { padding: 7px 32px 5px; }
@@ -57,7 +60,6 @@
 .mail-recipient-option { position: absolute; z-index: 1; top: 94px; left: 8px; right: 8px; padding: 12px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--color-edge-muted); border-radius: 8px; background: var(--color-panel); color: var(--color-ink); box-shadow: 0 5px 20px #0006; font-size: 14px; }
 .mail-typing-caret { border-right: 1px solid var(--color-accent); margin-left: 2px; }
 .mail-demo-controls { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 12px; color: var(--color-ink-muted); }
-.mail-demo-controls > span { font: 400 12px/1.5 'Inter Variable', Inter, sans-serif; margin-left: 8px; color: #737373; }
 .mail-channel { min-height: 718px; padding-bottom: 100px; display: flex; flex-direction: column; }
 .mail-channel-messages { flex: 1; display: flex; align-items: flex-end; padding: 28px 32px; }
 .mail-channel-messages .homepage-conversation { width: min(660px, 100%); margin: 0 auto; font-size: 14px; }
@@ -101,7 +103,6 @@
   .mail-channel-composer { padding: 0 12px 16px; }
   .mail-share-scrim { padding: 10px; }
   .mail-demo-controls { flex-wrap: wrap; }
-  .mail-demo-controls > span { flex-basis: 100%; margin: 0; text-align: center; }
 }
 
 /* Keep the public site's unlayered button reset out of the frozen app UI.
@@ -116,7 +117,7 @@
 
 .homepage-email-app-surface {
   position: relative; display: flex; flex-direction: column;
-  min-height: var(--homepage-email-height, 560px); padding: 16px;
+  min-height: var(--homepage-email-height, 500px); padding: 16px;
 }
 .homepage-email-app-toolbar {
   display: flex; flex: none; align-items: center; justify-content: flex-end;
@@ -129,3 +130,10 @@
 
 /* Preserve dark arrow contrast when the shared button's generic hover applies. */
 .feature-page [data-input-action=send]:not(:disabled) { color: var(--color-composer-action-ink); }
+
+/* Keep sender names readable when the same email opens in a narrow split. */
+.mail-message-content { container: mail-message / inline-size; }
+@container mail-message (max-width: 320px) {
+  .mail-message-recipient { display: none; }
+  .mail-message-text { padding-right: 0; }
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT github_key\n            FROM github_pull_request\n            WHERE repository_id = $1 AND number = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a99d4d5ff6c6f2dfc87cb6b14b4b6dc0b57f7f540408aa20d48965e510244c65"
+}

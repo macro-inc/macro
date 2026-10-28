@@ -2,6 +2,7 @@ import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64
 import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-html';
 import { ReplyInputView } from '@app/features/email-compose/views/reply-input';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Layer } from '@ui';
 import {
   type Accessor,
@@ -21,8 +22,10 @@ interface ThreadReplyInputProps {
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
-  mobileDrawer?: {
+  mobileCompose?: {
+    portalMount: Accessor<HTMLDivElement | undefined>;
     onClose: () => void;
+    registerClose: (handler: () => void) => void;
   };
 }
 
@@ -67,13 +70,32 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     return decodedHtml;
   });
 
-  async function afterSend(newMessageId: string | null) {
+  function focusMessage(id: string) {
+    ctx.messages.setFocused(id);
+    const message = ctx
+      .messagesContainerRef()
+      ?.querySelector<HTMLElement>(
+        `[data-message-body-id="${CSS.escape(id)}"]`
+      );
+    const card = message?.closest<HTMLElement>('[tabindex="0"]');
+    card?.focus({ preventScroll: true });
+    return !!card;
+  }
+
+  async function afterSend(
+    newMessageId: string | null,
+    sent?: { queuedOffline: boolean }
+  ) {
     // Collapse the input after sending (Gmail-style).
     props.setShowReply?.(false);
 
+    if (sent?.queuedOffline) {
+      (ctx.returnToList ?? viewContext.composeHost?.goBack)?.();
+      return;
+    }
     if (!newMessageId) return;
 
-    ctx.messages.setFocused(newMessageId);
+    focusMessage(newMessageId);
     await ctx.query.refetch();
     revealMessageAfterLayout(
       newMessageId,
@@ -86,9 +108,13 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     <Show when={ctx.drafts.initialDraftsSettled()}>
       <Show when={seedKey()} keyed>
         {(seed) => (
-          <Layer depth={props.mobileDrawer ? 0 : 2}>
+          <Layer depth={props.mobileCompose ? 0 : 2}>
             <ReplyInputView
               context={viewContext.compose}
+              onReloadDraft={() => {
+                setEngaged(false);
+                fireAndForget(ctx.query.refetch(), 'thread-reply-input');
+              }}
               host={viewContext.composeHost}
               session={{
                 thread: ctx.thread,
@@ -121,15 +147,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
                       ? ctx.messages.list().at(-1)?.db_id
                       : ctx.messages.focusedId();
                   if (!id) return false;
-                  ctx.messages.setFocused(id);
-                  const message = ctx
-                    .messagesContainerRef()
-                    ?.querySelector<HTMLElement>(
-                      `[data-message-body-id="${CSS.escape(id)}"]`
-                    );
-                  const card = message?.closest<HTMLElement>('[tabindex="0"]');
-                  card?.focus();
-                  return !!card;
+                  return focusMessage(id);
                 },
               }}
               sourceEntityId={
@@ -144,11 +162,15 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               formSeed={seed}
               onEngaged={() => setEngaged(true)}
               sideEffectOnSend={afterSend}
-              onMarkDone={ctx.archiveThread}
+              onMarkDone={(options) =>
+                options?.navigate
+                  ? ctx.archiveThreadAndAdvance(options)
+                  : ctx.archiveThread(options)
+              }
               setShowReply={props.setShowReply}
               markdownDomRef={props.markdownDomRef}
               unframed={props.unframed}
-              mobileDrawer={props.mobileDrawer}
+              mobileCompose={props.mobileCompose}
               isEditingExisting={
                 props.replyingTo() == null && props.draft != null
               }

@@ -1,6 +1,4 @@
-/* Partner terms sit in the blog article chrome (posts-shell / posts-article)
-   so they share Cyber Reader and the post measure. Headings already carry
-   their legal numbers, so suppress the FIG-style counters post-body adds. */
+
 .partners-terms-body h2::before,
 .partners-terms-body h3::before {
   content: none;
@@ -9,7 +7,7 @@
 
 .partners-terms-body h4 {
   color: var(--c0);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 17px;
   font-weight: 400;
   letter-spacing: -0.012em;

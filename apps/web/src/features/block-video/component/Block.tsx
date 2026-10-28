@@ -10,7 +10,7 @@ export default function BlockVideo() {
   return (
     <DocumentBlockContainer>
       <div class="size-full select-none overscroll-none overflow-hidden flex flex-col relative">
-        <SidePanel.Layout defaultOpen={false}>
+        <SidePanel.Layout defaultOpen={false} floating>
           <FileSidePanelSections />
           <div class="flex size-full min-w-0 flex-col overflow-hidden">
             <div class="relative">

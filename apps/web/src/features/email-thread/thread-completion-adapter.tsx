@@ -6,13 +6,16 @@ import {
 } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { compositeEntity, setDoneOverride } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   trackExternalThreadArchive,
   useUndoableArchiveThreadMutation,
@@ -32,7 +35,6 @@ import {
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
 import type { Accessor } from 'solid-js';
-
 import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
@@ -48,6 +50,7 @@ export function createThreadCompletionAdapter(
   | 'markThreadNotDone'
 > {
   const notificationSource = useGlobalNotificationSource();
+  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
 
@@ -82,9 +85,12 @@ export function createThreadCompletionAdapter(
               label: 'Undo',
               icon: ArrowCounterClockwise,
               onClick: () => {
-                handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
-                });
+                fireAndForget(
+                  handle.undo({
+                    onError: () => toast.failure('Failed to undo'),
+                  }),
+                  'email-thread'
+                );
               },
             },
           ],
@@ -108,9 +114,12 @@ export function createThreadCompletionAdapter(
               : bulkMarkNotificationsAsUndone(ids)
           ).catch(() => setDoneOverride(ids, undefined));
         }
-        if (disposition() !== 'queued') {
+        if (!graphqlSoup().enabled && disposition() !== 'queued') {
           if (!nowArchived) {
-            void refetchSoupEntity(params.threadId, 'emailThread');
+            fireAndForget(
+              refetchSoupEntity(params.threadId, 'emailThread'),
+              'email-thread'
+            );
           }
           invalidateAllSoup();
         }
@@ -139,16 +148,13 @@ export function createThreadCompletionAdapter(
     return thread ? !thread.inbox_visible : false;
   };
 
-  // Doneness is derived, not stored: `inbox_visible` is recomputed from the
-  // thread's messages as "some message has INBOX and not SENT", and the inbox
-  // view additionally requires an inbound message. A thread with only sent
-  // messages can satisfy neither, so it is permanently done — unarchiving it
-  // reverts on the next recompute and meanwhile labels its sent messages
-  // INBOX, in Gmail too. Only offer the reversal when it can hold.
+  // GraphQL validates received-message history on the server. An archived
+  // received thread may have no inbox-sorting timestamp, and a paginated
+  // message snapshot cannot prove it is sent-only. Keep REST's existing gate.
   const canMarkThreadNotDone = () => {
     const thread = threadSource();
-    if (!thread) return false;
-    return !thread.inbox_visible && thread.latest_inbound_message_ts != null;
+    if (!thread || thread.inbox_visible) return false;
+    return graphqlSoup().enabled || thread.latest_inbound_message_ts != null;
   };
 
   // Resolve a thread's soup representation for the mark-done / mark-not-done
@@ -183,10 +189,13 @@ export function createThreadCompletionAdapter(
         : undefined);
 
     if (entity && markNotDoneAction.canExecute(entity)) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markNotDoneAction.execute([entity]),
-        false
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markNotDoneAction.execute([entity]),
+          false
+        ),
+        'email-thread'
       );
     } else {
       // No soup entity to drive the action from — the mark-done removal
@@ -232,8 +241,13 @@ export function createThreadCompletionAdapter(
                 toast.failure('Failed to mark as not done');
               }
             }
-            if (disposition !== 'queued') {
-              void refetchSoupEntity(threadId, 'emailThread');
+            // GraphQL owns its normalized write and durable revalidation;
+            // keep the legacy REST Soup reconciliation on the REST path only.
+            if (!graphqlSoup().enabled && disposition !== 'queued') {
+              fireAndForget(
+                refetchSoupEntity(threadId, 'emailThread'),
+                'email-thread'
+              );
               invalidateAllSoup();
             }
           },
@@ -279,31 +293,40 @@ export function createThreadCompletionAdapter(
     if (!entity) return false;
 
     if (opts?.navigate !== false && soup && selectedRow) {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.executeWithSoup(
-          [entity],
-          soup,
-          ({ entity: nextEntity }) => {
-            const splitHandle = splitPanel?.handle;
-            if (!splitHandle) return;
-            if (!nextEntity) {
-              return;
-            }
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.executeWithSoup(
+            [entity],
+            soup,
+            ({ entity: nextEntity }) => {
+              const splitHandle = splitPanel?.handle;
+              if (!splitHandle) return;
+              if (!nextEntity) {
+                return;
+              }
 
-            void openEntityInSplitFromUnifiedList(nextEntity, {
-              splitHandle,
-              mergeHistory: !isTouchDevice(),
-              referredFrom: splitHandle.referredFrom(),
-            });
-          },
-          markDoneOpts
-        )
+              fireAndForget(
+                openEntityInSplitFromUnifiedList(nextEntity, {
+                  splitHandle,
+                  mergeHistory: !isTouchDevice(),
+                  referredFrom: splitHandle.referredFrom(),
+                }),
+                'email-thread'
+              );
+            },
+            markDoneOpts
+          )
+        ),
+        'email-thread'
       );
     } else {
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.execute([entity], undefined, markDoneOpts)
+      fireAndForget(
+        trackExternalThreadArchive(
+          thread.db_id,
+          markAsDoneAction.execute([entity], undefined, markDoneOpts)
+        ),
+        'email-thread'
       );
     }
 

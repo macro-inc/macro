@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CellCopy } from '../core/calculation';
 import {
@@ -82,6 +82,50 @@ function setup(
 }
 
 describe('spreadsheet grid editing', () => {
+  it('inserts checkboxes, toggles them with Space, and unchecks then removes them with Delete', () => {
+    const { grid, key, cells, setCanEdit } = setup({
+      A2: { value: 'TRUE' },
+    });
+    grid.selectRange({ row: 0, column: 0 }, { row: 2, column: 0 });
+    grid.insertCheckboxes();
+    expect(cells()).toEqual({
+      A1: { value: 'FALSE', checkbox: true },
+      A2: { value: 'TRUE', checkbox: true },
+      A3: { value: 'FALSE', checkbox: true },
+    });
+    expect(key(' ').defaultPrevented).toBe(true);
+    expect(grid.editing()).toBeUndefined();
+    expect(['A1', 'A2', 'A3'].map((address) => cells()[address].value)).toEqual(
+      ['TRUE', 'TRUE', 'TRUE']
+    );
+    key(' ');
+    expect(['A1', 'A2', 'A3'].map((address) => cells()[address].value)).toEqual(
+      ['FALSE', 'FALSE', 'FALSE']
+    );
+
+    grid.select({ row: 1, column: 0 });
+    key(' ');
+    expect(cells().A2.value).toBe('TRUE');
+    grid.select({ row: 1, column: 1 });
+    key(' ');
+    expect(grid.editing()).toBe('cell');
+    expect(grid.draft()).toBe(' ');
+    grid.cancel();
+
+    grid.selectRange({ row: 0, column: 0 }, { row: 2, column: 0 });
+    key('Delete');
+    expect(cells().A2).toEqual({ value: 'FALSE', checkbox: true });
+    key('Backspace');
+    expect(cells().A2).toEqual({ value: '', checkbox: false });
+
+    grid.select({ row: 4, column: 0 });
+    grid.insertCheckboxes();
+    setCanEdit(false);
+    key(' ');
+    expect(cells().A5).toEqual({ value: 'FALSE', checkbox: true });
+    expect(grid.editing()).toBeUndefined();
+  });
+
   it('keeps Home and typing into a whole-row/column selection out of hidden cells', () => {
     const { grid, key, setHiddenRows, setHiddenColumns, cells } = setup();
     setHiddenRows([0]);
@@ -407,6 +451,23 @@ describe('spreadsheet clipboard and formatting', () => {
       B1: { value: '=A1*2', format: 'percent', bold: true },
     });
   });
+
+  it('formats a captured range after the selection has moved', () => {
+    const { grid, cells } = setup({
+      A1: { value: '1' },
+      A2: { value: '2' },
+      C3: { value: '3' },
+    });
+    grid.selectRange({ row: 0, column: 0 }, { row: 1, column: 0 });
+    const captured = grid.selection();
+    grid.selectRange({ row: 2, column: 2 }, { row: 2, column: 2 });
+    grid.format({ format: 'date', numberFormat: 'yyyy-mm-dd' }, captured);
+    expect(cells()).toEqual({
+      A1: { value: '1', format: 'date', numberFormat: 'yyyy-mm-dd' },
+      A2: { value: '2', format: 'date', numberFormat: 'yyyy-mm-dd' },
+      C3: { value: '3' },
+    });
+  });
 });
 
 describe('spreadsheet read-only permissions', () => {
@@ -514,7 +575,7 @@ describe('formula-aware copy coordination', () => {
       });
       const view = setup({ A1: { value: '=B1' } }, () => pending);
       view.setRowCount(300);
-      view.grid.fill(
+      const filling = view.grid.fill(
         { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } },
         { anchor: { row: 0, column: 0 }, focus: { row: 299, column: 0 } }
       );
@@ -529,6 +590,7 @@ describe('formula-aware copy coordination', () => {
         focus: { row: 0, column: 0 },
       });
       expect(view.grid.notice()).toBe('');
+      await filling;
     }
   );
 
@@ -632,6 +694,9 @@ function crossSheetSetup() {
       },
     });
     const [canEdit, setCanEdit] = createSignal(true);
+    // Subscribing before the controller makes row-count reactions run before
+    // its tab-change handling, an order the store's subscriptions can produce.
+    const rowCount = createMemo(() => (sheetId() === 'summary' ? 300 : 200));
     const setSheetCells = vi.fn((id: string, edits: SpreadsheetCellEdits) => {
       if (!sheets().some((sheet) => sheet.id === id)) return;
       const cells = { ...books()[id] };
@@ -648,6 +713,7 @@ function crossSheetSetup() {
       setSheetCells,
       setCells: (edits) => setSheetCells(sheetId(), edits),
       canEdit,
+      rowCount,
       undo: () => {},
       redo: () => {},
     });
@@ -685,6 +751,25 @@ describe('cross-sheet formula editing', () => {
     expect(view.books().inputs.B4.value).toBe('leave me');
     expect(view.sheetId()).toBe('summary');
     expect(view.grid.activeAddress()).toBe('B4');
+  });
+
+  it('keeps a draft from a row the picked sheet does not have and returns to it on commit', () => {
+    const view = crossSheetSetup();
+    view.grid.select({ row: 249, column: 2 });
+    view.grid.beginEdit('cell', '=IF(D2 <');
+    view.grid.switchSheet('inputs');
+    expect(view.sheetId()).toBe('inputs');
+    expect(view.grid.editing()).toBe('formula');
+    expect(view.grid.editingAddress()).toBe('C250');
+    expect(view.grid.beginReference({ row: 3, column: 1 })).toBe(true);
+    view.grid.endReference();
+    expect(view.grid.draft()).toBe("=IF(D2 <'Owner''s budget'!B4");
+    view.grid.commit();
+    expect(view.books().summary.C250.value).toBe(
+      "=IF(D2 <'Owner''s budget'!B4"
+    );
+    expect(view.sheetId()).toBe('summary');
+    expect(view.grid.activeAddress()).toBe('C250');
   });
 
   it('replaces a prior reference when choosing another sheet and omits the qualifier on the origin', () => {
@@ -777,4 +862,49 @@ it('moves from the active cell after whole-row or whole-column selections, not t
   grid.selectRange({ row: 4, column: 0 }, { row: 4, column: 25 });
   key('ArrowRight');
   expect(grid.activeAddress()).toBe('B5');
+});
+
+it('highlights the draft references that fall on the sheet being shown', () => {
+  const view = createRoot((dispose) => {
+    cleanups.push(dispose);
+    const [sheetId, setSheetId] = createSignal('sheet1');
+    const grid = createGridController({
+      cells: () => ({}),
+      sheetId,
+      sheets: () => [
+        { id: 'sheet1', name: 'Sheet1' },
+        { id: 'sheet2', name: "Owner's budget" },
+      ],
+      setActiveSheet: setSheetId,
+      setSheetCells: vi.fn(),
+      canEdit: () => true,
+      rowCount: () => 20,
+      columnCount: () => 5,
+      setCells: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+    });
+    return { grid, setSheetId };
+  });
+  const { grid } = view;
+  expect(grid.referenceHighlights()).toEqual([]);
+
+  grid.beginEdit('cell', "=SUM(A1:B2)+'Owner''s budget'!C3+D:D+$a$1:b2");
+  const [first, other, column, repeat] = grid.draftReferences();
+  expect(repeat.color).toBe(first.color);
+  expect(other.color).not.toBe(first.color);
+  expect(grid.referenceHighlights()).toEqual([
+    { color: first.color, bounds: { top: 0, bottom: 1, left: 0, right: 1 } },
+    { color: column.color, bounds: { top: 0, bottom: 19, left: 3, right: 3 } },
+    { color: first.color, bounds: { top: 0, bottom: 1, left: 0, right: 1 } },
+  ]);
+
+  grid.switchSheet('sheet2');
+  expect(grid.referenceHighlights()).toEqual([
+    { color: other.color, bounds: { top: 2, bottom: 2, left: 2, right: 2 } },
+  ]);
+
+  grid.cancel();
+  expect(grid.draftReferences()).toEqual([]);
+  expect(grid.referenceHighlights()).toEqual([]);
 });

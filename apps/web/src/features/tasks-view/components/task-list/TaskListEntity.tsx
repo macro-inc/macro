@@ -25,6 +25,7 @@ import {
   useListLayout,
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
+import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
@@ -37,7 +38,6 @@ import {
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
 import {
-  children,
   createEffect,
   createSignal,
   type JSX,
@@ -52,7 +52,11 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   rowId?: string;
   showUnrollNotifications?: boolean;
-  projectSlot?: JSX.Element;
+  /** Show the Project column (Projects enabled). */
+  showProject?: boolean;
+  referencePropertyIds?: readonly string[];
+  /** Called when "filter by tag" is clicked on an entity row tag. */
+  onFilterByTag?: (optionId: string) => void;
 };
 
 function MaybeEntityRow(props: {
@@ -115,9 +119,6 @@ export function TaskListEntity(props: TaskListEntityProps) {
 
   const showContentHits = () => showHitSnippet();
 
-  // Resolved once: both layouts render it and the grid checks it exists.
-  const projectSlot = children(() => props.projectSlot);
-
   const layoutProps = () => ({
     entity: props.entity,
     checked: props.checked,
@@ -131,7 +132,9 @@ export function TaskListEntity(props: TaskListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
-    projectSlot: projectSlot(),
+    showProject: props.showProject,
+    referencePropertyIds: props.referencePropertyIds,
+    onFilterByTag: props.onFilterByTag,
   });
 
   const draggable = createEntityDraggable({
@@ -186,8 +189,16 @@ export function TaskListEntity(props: TaskListEntityProps) {
             config={props.entityRowConfig}
           >
             <NarrowLayout {...layoutProps()} />
-            <Show when={projectSlot()}>
-              <div class="ml-8 pb-1 text-xs">{projectSlot()}</div>
+            <Show when={props.referencePropertyIds}>
+              {(ids) => (
+                <div class="px-3 pb-1">
+                  <EntityReferenceProperties
+                    entity={props.entity}
+                    propertyIds={ids()}
+                    compact
+                  />
+                </div>
+              )}
             </Show>
           </MaybeEntityRow>
         </Match>

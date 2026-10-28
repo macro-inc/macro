@@ -4,6 +4,8 @@ import type { EmailMessage } from '../../email-message/core/email-message';
 export interface EmailThread {
   access_level: 'view' | 'comment' | 'edit' | 'owner';
   db_id: string;
+  created_at?: string;
+  updated_at?: string;
   inbox_visible: boolean;
   is_read: boolean;
   latest_inbound_message_ts?: string | null;

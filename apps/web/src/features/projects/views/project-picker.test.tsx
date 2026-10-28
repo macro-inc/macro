@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ProjectPicker } from './project-picker';
 
@@ -56,6 +57,36 @@ it('closes, then assigns only the given tasks', async () => {
   expect(close).toHaveBeenCalledOnce();
   expect(mock.assignTasks).toHaveBeenCalledWith('editable', ['task']);
   await Promise.resolve();
+  expect(mock.failure).not.toHaveBeenCalled();
+});
+
+it('assigns every selected task after the picker closes', async () => {
+  mock.assignTasks.mockResolvedValue([
+    { taskId: 'task-a' },
+    { taskId: 'task-b' },
+  ]);
+  const [assigning, setAssigning] = createSignal<{ ids: string[] } | undefined>(
+    { ids: ['task-a', 'task-b'] }
+  );
+
+  render(() => (
+    <Show when={assigning()}>
+      {(current) => (
+        <ProjectPicker
+          taskIds={current().ids}
+          onClose={() => setAssigning(undefined)}
+        />
+      )}
+    </Show>
+  ));
+
+  fireEvent.click(screen.getByText('Editable'));
+  await vi.waitFor(() =>
+    expect(mock.assignTasks).toHaveBeenCalledWith('editable', [
+      'task-a',
+      'task-b',
+    ])
+  );
   expect(mock.failure).not.toHaveBeenCalled();
 });
 

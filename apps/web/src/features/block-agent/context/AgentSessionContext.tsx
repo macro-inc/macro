@@ -1,5 +1,6 @@
 /** Feature-owned session state and its provider/consumer boundary. */
 
+import type { InteractionController } from '@app/features/agent-interactions/context/interaction';
 import type { IssueResult } from '@core/agent-session/AgentSession';
 import type {
   FoldedMessage,
@@ -12,10 +13,10 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
 import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
-import type { InteractionController } from './interaction';
 
 export type AgentSessionState = {
   /** The viewer and display-name lookup supplied by production composition. */
@@ -29,6 +30,8 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  /** Unsent context from the action that opened this session. */
+  initialInput?: string;
   startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
@@ -38,6 +41,12 @@ export type AgentSessionState = {
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
+  /** Optional in galleries/replays; production reports actual answer rendering. */
+  observeRenderedText?: (
+    sessionId: string,
+    turn: number,
+    element: HTMLElement
+  ) => (() => void) | undefined;
   loadFailed: Accessor<boolean>;
   /** The load failed because the viewer is not a participant (401/403). */
   accessDenied: Accessor<boolean>;
@@ -65,17 +74,25 @@ export type AgentSessionState = {
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
-   * Send the next queued message now: stop the running turn, and show the
-   * queue head as sent under the id the server already holds it by. The
-   * server dispatches it when the turn actually ends, and that row promotes
-   * the speculation in place. No-op with nothing queued, and while the head
-   * a previous call showed as sent is still unconfirmed (`turn` reads
-   * `starting`): a stop posted then would end the turn already ending, and
-   * the server would dispatch that head, not the next one.
+   * Force-send the oldest queued message: the same as {@link steer} on the
+   * queue head. No-op with nothing queued.
    */
   sendNext: () => void;
+  /**
+   * Force-send one queued message: show it as sent at once, move it to the
+   * front of the queue, and cancel the turn in flight so it runs next.
+   * Consecutive presses all apply at once and steer in press order.
+   */
+  steer: (actionId: string) => void;
+  /** Queued messages whose force-send the server refused; still queued. */
+  steerFailed: Accessor<ReadonlySet<string>>;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
+  /**
+   * Tool calls held until the session's owner approves them, made in turns
+   * somebody else prompted.
+   */
+  toolApprovals: ToolApprovalController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —

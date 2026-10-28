@@ -10,7 +10,7 @@ function FigLabel(props: { children: JSX.Element }) {
     <span
       style={{
         color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
-        'font-family': 'rajdhani, body',
+        'font-family': 'Inter, body',
         'font-size': mobile() ? '11px' : '12px',
         'font-weight': '700',
         'letter-spacing': '0.14em',

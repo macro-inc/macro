@@ -1,23 +1,27 @@
-const mocks = vi.hoisted(() => ({
-  remindersEnabled: true,
-  success: vi.fn(),
-  writeText: vi.fn(),
-}));
+import {
+  createRoutesManifest,
+  decodePane,
+  type SplitRoutes,
+} from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
+import {
+  appRoute,
+  emailSplitRoute,
+  emailThreadRoute,
+  legacyContentRoute,
+  notFoundRoute,
+} from '@app/routes/routes';
+import { createMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import type { EmailEntity } from '@entity';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeCopyLinkAction } from './make-copy-link-action';
 
-vi.mock('@app/features/calendar-view/copy-event-mention', () => ({
-  copyCalendarEventMentionTarget: vi.fn(),
+vi.mock('@components/app/split-layout/componentRegistry', () => ({
+  resolveComponent: vi.fn(() => ({ type: 'mock-component' })),
 }));
-vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: mocks.success },
-}));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableReminders: { key: 'enable-reminders' },
-  isFeatureEnabled: () => mocks.remindersEnabled,
-}));
-vi.mock('@core/util/url', () => ({
-  buildSimpleEntityUrl: ({ type, id }: { type: string; id: string }) =>
-    `https://macro.com/app/${type}/${id}`,
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
   ws: { addEventListener: vi.fn(), send: vi.fn() },
@@ -25,47 +29,78 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
-vi.mock('@service-storage/websocket', () => ({
-  storageWS: { reconnectIfDisconnected: vi.fn() },
-  createWebSocketJob: vi.fn(),
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: vi.fn(), failure: vi.fn() },
 }));
-vi.mock('../utils', () => ({ calendarEventLinkTarget: vi.fn() }));
 
-import type { EntityData } from '@entity';
-import { beforeEach, expect, it, vi } from 'vitest';
-import { makeCopyLinkAction } from './make-copy-link-action';
+const routes = createRoutesManifest({
+  definitions: [
+    {
+      ...appRoute,
+      children: [
+        { ...emailSplitRoute, children: [emailThreadRoute] },
+        legacyContentRoute,
+        notFoundRoute,
+      ],
+    },
+  ],
+  defaultRoute: () => paneRoute({ id: emailSplitRoute.id, params: {} }),
+} satisfies SplitRoutes);
+const resolveMention = createMacroMentionLinkResolver(routes);
 
-const reminder = {
-  id: 'reminder-1',
-  type: 'reminder',
-  name: 'Review route links',
-} as EntityData;
+const threadId = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e3f';
+const thread: EmailEntity = {
+  type: 'email',
+  id: threadId,
+  name: 'hello from my outlook to your outlook',
+  ownerId: 'macro|teo@macro.com',
+  isRead: true,
+  isDraft: false,
+  isImportant: true,
+  done: false,
+};
+
+const writeText = vi.fn<(text: string) => Promise<void>>();
 
 beforeEach(() => {
-  mocks.remindersEnabled = true;
-  mocks.success.mockClear();
-  mocks.writeText.mockClear();
-  vi.stubGlobal('navigator', { clipboard: { writeText: mocks.writeText } });
+  writeText.mockReset().mockResolvedValue(undefined);
+  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 });
 
-it('copies the canonical reminder route while the feature is enabled', async () => {
-  const action = makeCopyLinkAction();
-
-  expect(action.canExecute(reminder)).toBe(true);
-  await action.execute([reminder]);
-
-  expect(mocks.writeText).toHaveBeenCalledExactlyOnceWith(
-    'https://macro.com/app/reminder/reminder-1'
-  );
-  expect(mocks.success).toHaveBeenCalledWith('Link copied to clipboard');
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
-it('does not expose a reminder route while the feature is disabled', async () => {
-  mocks.remindersEnabled = false;
-  const action = makeCopyLinkAction();
+const copiedLink = () => {
+  expect(writeText).toHaveBeenCalledOnce();
+  return writeText.mock.calls[0]![0];
+};
 
-  expect(action.canExecute(reminder)).toBe(false);
-  await action.execute([reminder]);
+const expectOpensThread = (link: string) => {
+  const url = new URL(link);
+  expect(url.origin).toBe(window.location.origin);
+  const segments = url.pathname.split('/').filter(Boolean);
+  expect(segments[0]).toBe('app');
+  const leaf = decodePane(routes, segments.slice(1))?.matches.at(-1);
+  expect(leaf && { id: leaf.id, params: leaf.params }).toEqual({
+    id: emailThreadRoute.id,
+    params: { threadId },
+  });
+  expect(resolveMention(link)).toEqual({
+    id: threadId,
+    block: 'email',
+    params: {},
+  });
+};
 
-  expect(mocks.writeText).not.toHaveBeenCalled();
+describe('copy link for an email thread', () => {
+  it('copies a link the router opens as the thread', async () => {
+    await makeCopyLinkAction().execute([thread]);
+    expectOpensThread(copiedLink());
+  });
+
+  it('copies the same link from the thread menu without a list entity', async () => {
+    await makeCopyLinkAction().executeByBlock(threadId, 'email');
+    expectOpensThread(copiedLink());
+  });
 });

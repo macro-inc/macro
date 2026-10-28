@@ -101,6 +101,8 @@ export type RestoreSnapshotOptions = {
 };
 
 export type InputHandle = {
+  /** Read the current draft, including restored persisted content. */
+  snapshot: () => InputSnapshot;
   clear: () => void;
   focus: () => void;
   send: () => Promise<boolean>;

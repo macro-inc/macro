@@ -1,6 +1,6 @@
 .wos-post {
   color: var(--c4);
-  font-family: 'cyberreader', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .wos-post,
@@ -21,11 +21,6 @@
 .wos-highlight {
   color: var(--c0);
   font-weight: 600;
-}
-
-/* The essay is one long run of paragraphs, so give them a little more air */
-.wos-post p {
-  line-height: 1.75;
 }
 
 /* Pointer to the repo the post is about */

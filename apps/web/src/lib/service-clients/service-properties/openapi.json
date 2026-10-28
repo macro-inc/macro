@@ -1177,6 +1177,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -1185,6 +1186,21 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "EnsureTagSetRequest": {
         "type": "object",
@@ -1420,6 +1436,8 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
           "INITIATIVE",
           "PROJECT",
@@ -1504,6 +1522,17 @@
               "type": {
                 "type": "string",
                 "enum": ["date"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A span from a start date-time to an end one.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
               }
             }
           },
@@ -1619,6 +1648,7 @@
           "display_name",
           "data_type",
           "is_multi_select",
+          "specific_entity_type",
           "created_at",
           "updated_at",
           "is_system",
@@ -1780,6 +1810,7 @@
           "property_definition_id",
           "display_order",
           "value",
+          "color",
           "created_at",
           "updated_at"
         ],
@@ -1906,7 +1937,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -1916,7 +1962,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyScope": {
         "type": "string",
@@ -1931,6 +1977,7 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
           "DOCUMENT",
           "INITIATIVE",
           "PROJECT",
@@ -2014,6 +2061,21 @@
                 "type": "string",
                 "format": "date-time",
                 "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
               }
             }
           },
@@ -2149,6 +2211,20 @@
               "value": {
                 "type": "string",
                 "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date range value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange"
               }
             }
           },

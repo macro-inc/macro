@@ -38,9 +38,6 @@ export function cubeSilhouette(
   );
 }
 
-// Interior face-division edges. Kept lighter than the vibrant outer silhouette
-// but bright enough that the cubes read as see-through wireframes (strokes over
-// fills) rather than solid shaded blocks.
 export const FAINT_EDGE = 'color-mix(in srgb, currentColor 45%, transparent)';
 
 export type Vec2 = { x: number; y: number };

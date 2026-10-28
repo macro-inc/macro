@@ -7,6 +7,7 @@ import {
   singleLinePlugin,
   tagsPlugin,
 } from '@core/component/LexicalMarkdown/plugins/';
+import { $selectDocumentStart } from '@core/component/LexicalMarkdown/plugins/block-decorator-navigation';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $getCaretRect,
@@ -16,11 +17,12 @@ import {
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { createRenameDssEntityMutation } from '@entity';
 import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   $createParagraphNode,
@@ -33,6 +35,7 @@ import {
   KEY_ARROW_RIGHT_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
+  KEY_TAB_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 import {
@@ -94,11 +97,9 @@ function titleNavigationPlugin(
           if (!isRectFlushWith(caret, rect, 'bottom', 5)) return false;
 
           event?.preventDefault();
-          documentEditor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            firstChild?.selectStart();
-          });
+          // A node selection places no DOM caret, so focus the body first.
+          documentEditor.getRootElement()?.focus({ preventScroll: true });
+          documentEditor.update($selectDocumentStart);
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -118,11 +119,24 @@ function titleNavigationPlugin(
             return false;
 
           event?.preventDefault();
-          documentEditor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            firstChild?.selectStart();
-          });
+          // A node selection places no DOM caret, so focus the body first.
+          documentEditor.getRootElement()?.focus({ preventScroll: true });
+          documentEditor.update($selectDocumentStart);
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
+      ),
+      // Press tab in the title. Without this the browser moves focus to the
+      // tag controls below the title instead of the body.
+      titleEditor.registerCommand(
+        KEY_TAB_COMMAND,
+        (event: KeyboardEvent) => {
+          if (ignoreArrows()) return true;
+          if (event.shiftKey) return false;
+
+          event.preventDefault();
+          documentEditor.getRootElement()?.focus({ preventScroll: true });
+          documentEditor.update($selectDocumentStart);
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -192,6 +206,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const debouncedFlushRename = debounce(flushPendingRename, 400);
+  // Unmount cancels the debounce timer, so save a pending rename now.
+  onCleanup(flushPendingRename);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -203,6 +219,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       return canEdit() ?? false;
     }),
   });
+  onCleanup(cleanup);
 
   initializeEditorEmpty(editor);
 
@@ -228,7 +245,10 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
         insertTags: false,
         onCreateTag: (tag) => {
           if (!canEdit()) return;
-          void documentTags.applyTag(tag.scope, tag.optionId);
+          fireAndForget(
+            documentTags.applyTag(tag.scope, tag.optionId),
+            'document-tags'
+          );
         },
       })
     )
@@ -265,9 +285,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
-      debouncedFlushRename.clear();
-      flushPendingRename();
-      cleanup();
       el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);
     });

@@ -87,7 +87,7 @@ const tileStyle = (size: number): JSX.CSSProperties => ({
 
 const captionStyle: JSX.CSSProperties = {
   color: 'var(--c4)',
-  'font-family': 'rajdhani, body',
+  'font-family': 'Inter, body',
   'font-size': '12px',
   'font-weight': '600',
   'letter-spacing': '0.08em',

@@ -54,3 +54,34 @@ fn channel_only_entity_type_filter_excludes_other_types() {
     assert!(!filters.should_include_projects);
     assert!(!filters.should_include_call_records);
 }
+
+#[test]
+fn design_files_are_searchable_but_other_vector_files_are_not() {
+    for design in [FileType::Fig, FileType::Psd, FileType::Psb, FileType::Ai] {
+        assert!(is_searchable_file_type(&design), "{design}");
+    }
+    assert!(is_searchable_file_type(&FileType::Md));
+    assert!(!is_searchable_file_type(&FileType::Eps));
+    assert!(!is_searchable_file_type(&FileType::Dwg));
+    assert!(!is_searchable_file_type(&FileType::Pptx));
+
+    let mut filters = EntityFilters::default();
+    filters.document_filters.file_types = vec![
+        "fig".into(),
+        "ai".into(),
+        "eps".into(),
+        "psd".into(),
+        "pdf".into(),
+    ];
+    let expanded = SearchEntityFilters::from(filters)
+        .document_filters
+        .file_types;
+    assert_eq!(expanded, ["fig", "ai", "psd", "pdf"]);
+
+    let mut filters = EntityFilters::default();
+    filters.document_filters.file_types = vec!["assoc:vector".into()];
+    let expanded = SearchEntityFilters::from(filters)
+        .document_filters
+        .file_types;
+    assert_eq!(expanded, ["ai", "fig", "psd", "psb"]);
+}

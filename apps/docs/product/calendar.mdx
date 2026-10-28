@@ -14,15 +14,19 @@ Open it from **Calendar** in the sidebar, or press <kbd>g</kbd> \+ <kbd>r</kbd>.
 
 ### Connecting your calendar
 
-Connect your calendar by going to **Settings → Connections**, finding the account you want, and clicking **Enable calendar**.
+Connect your calendar in **Settings → Calendar**. Click **Connect calendar** next to an email account you've already linked, or **Connect account** to add a new Google account. You can also click **Enable calendar** next to an account in **Settings → Email**.
 
-Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to enable calendar for each account separately.** Every linked inbox in **Settings → Connections** carries its own **Enable calendar** button.
+Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to connect the calendar for each account separately.**
 
-Use the settings gear in the calendar topbar to toggle each calendar on or off, so you can view several at once or focus on just one.
+In **Settings → Calendar** you can show or hide each account's calendars and pick their colors. The settings gear in the calendar topbar also toggles each calendar on or off, so you can view several at once or focus on just one.
 
 <Frame>
-  ![The Connections settings page, with an Enable calendar button beside a linked Gmail account](/images/connect_email.png)
+  ![The Email settings page, with an Enable calendar button beside a linked Gmail account](/images/connect_email.png)
 </Frame>
+
+### Booking links
+
+**Copy booking link** in the calendar topbar copies your personal booking link. Links are managed in **Settings → Booking links**. See [Booking links](/product/booking-links).
 
 ### Creating and editing events
 
@@ -64,6 +68,7 @@ You can use the same tools over Macro's MCP server:
 
 - [`ListCalendars`](/AI/mcp/tools/list-calendars)
 - [`ListCalendarEvents`](/AI/mcp/tools/list-calendar-events)
+- [`ReadCalendarEvent`](/AI/mcp/tools/read-calendar-event)
 - [`CreateCalendarEvent`](/AI/mcp/tools/create-calendar-event)
 - [`UpdateCalendarEvent`](/AI/mcp/tools/update-calendar-event)
 - [`DeleteCalendarEvent`](/AI/mcp/tools/delete-calendar-event)
@@ -72,6 +77,6 @@ To connect it, go to **Settings → MCP server**.
 
 ### Turning calendar off
 
-You can turn calendar off for a single account from **Settings → Connections**, or from the calendar's settings menu.
+You can turn calendar off for a single account with **Disconnect** in **Settings → Calendar**, or from the calendar's settings menu.
 
 Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.

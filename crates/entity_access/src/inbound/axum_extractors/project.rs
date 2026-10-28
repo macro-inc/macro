@@ -17,6 +17,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -54,7 +55,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
@@ -68,6 +69,7 @@ where
         let project_context: Extension<BasicProject> = parts
             .extract()
             .await
+            .inspect_err(|error| tracing::error!(error=?error, "project context missing"))
             .map_err(|_| ExtractorError::Internal)?;
 
         if matches!(

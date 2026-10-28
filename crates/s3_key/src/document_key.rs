@@ -17,11 +17,49 @@ pub const PDF_EXTENSION: &str = "pdf";
 /// The file extension for DOCX files.
 pub const DOCX_EXTENSION: &str = "docx";
 
+/// The file name used for legacy Office files upgraded to their OpenXML
+/// equivalents (`.doc` → `upgraded.docx`, `.ppt` → `upgraded.pptx`,
+/// `.xls` → `upgraded.xlsx`).
+pub const UPGRADED_DOCUMENT_FILE_NAME: &str = "upgraded";
+
+/// The OpenXML format a legacy Office document is upgraded to.
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum UpgradedOfficeFormat {
+    /// Word, upgraded from `.doc`.
+    Docx,
+    /// PowerPoint, upgraded from `.ppt`.
+    Pptx,
+    /// Excel, upgraded from `.xls`.
+    Xlsx,
+}
+
+impl UpgradedOfficeFormat {
+    /// The file extension of the upgraded format.
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Docx => DOCX_EXTENSION,
+            Self::Pptx => "pptx",
+            Self::Xlsx => "xlsx",
+        }
+    }
+
+    fn from_extension(extension: &str) -> Option<Self> {
+        match extension {
+            DOCX_EXTENSION => Some(Self::Docx),
+            "pptx" => Some(Self::Pptx),
+            "xlsx" => Some(Self::Xlsx),
+            _ => None,
+        }
+    }
+}
+
 /// Represents an S3 key in the document storage bucket.
 ///
 /// Covers all known key shapes:
 /// - `Versioned`: `{owner}/{document_id}/{version_id}` — a specific document version
 /// - `ConvertedPdf`: `{owner}/{document_id}/converted.pdf` — a DOCX converted to PDF
+/// - `UpgradedOffice`: `{owner}/{document_id}/upgraded.{docx|pptx|xlsx}` — a legacy
+///   Office file converted to OpenXML
 /// - `TempDocx`: `temp_files/{document_id}.docx` — a temporary DOCX export
 /// - `SyncServiceSnapshot`: `sync_service_snapshot/{document_id}` — a cached CRDT snapshot
 /// - `BomPart`: `{sha}` — a content-addressable BOM part from DOCX uploads
@@ -45,6 +83,16 @@ pub enum DocumentKey {
         owner_segment: String,
         /// The document ID.
         document_id: String,
+    },
+    /// A legacy Office file upgraded to OpenXML:
+    /// `{owner}/{document_id}/upgraded.{docx|pptx|xlsx}`
+    UpgradedOffice {
+        /// The owner segment, an owner principal string.
+        owner_segment: String,
+        /// The document ID.
+        document_id: String,
+        /// The upgraded format.
+        format: UpgradedOfficeFormat,
     },
     /// A temporary DOCX export: `temp_files/{document_id}.docx`
     TempDocx {
@@ -126,10 +174,20 @@ impl DocumentKey {
 
                 let converted_pdf_suffix =
                     format!("{CONVERTED_DOCUMENT_FILE_NAME}.{PDF_EXTENSION}");
+                let upgraded_format = tail
+                    .strip_prefix(UPGRADED_DOCUMENT_FILE_NAME)
+                    .and_then(|rest| rest.strip_prefix('.'))
+                    .and_then(UpgradedOfficeFormat::from_extension);
                 if tail == converted_pdf_suffix {
                     Ok(Self::ConvertedPdf {
                         owner_segment,
                         document_id,
+                    })
+                } else if let Some(format) = upgraded_format {
+                    Ok(Self::UpgradedOffice {
+                        owner_segment,
+                        document_id,
+                        format,
                     })
                 } else {
                     let version_id: i64 = tail.parse().context(format!(
@@ -156,6 +214,7 @@ impl DocumentKey {
         match self {
             Self::Versioned { document_id, .. }
             | Self::ConvertedPdf { document_id, .. }
+            | Self::UpgradedOffice { document_id, .. }
             | Self::TempDocx { document_id }
             | Self::SyncServiceSnapshot { document_id } => Some(document_id),
             Self::BomPart { .. } => None,
@@ -165,9 +224,9 @@ impl DocumentKey {
     /// Returns the owner segment for the key shapes that carry one.
     pub fn owner_segment(&self) -> Option<&str> {
         match self {
-            Self::Versioned { owner_segment, .. } | Self::ConvertedPdf { owner_segment, .. } => {
-                Some(owner_segment)
-            }
+            Self::Versioned { owner_segment, .. }
+            | Self::ConvertedPdf { owner_segment, .. }
+            | Self::UpgradedOffice { owner_segment, .. } => Some(owner_segment),
             Self::TempDocx { .. } | Self::SyncServiceSnapshot { .. } | Self::BomPart { .. } => None,
         }
     }
@@ -197,6 +256,11 @@ impl DocumentKey {
         matches!(self, Self::ConvertedPdf { .. })
     }
 
+    /// Returns `true` if this is an upgraded legacy Office key.
+    pub fn is_upgraded_office(&self) -> bool {
+        matches!(self, Self::UpgradedOffice { .. })
+    }
+
     /// Returns the version ID as a string suitable for `SearchExtractorMessage`.
     ///
     /// - `Versioned` → the integer version ID as a string
@@ -206,7 +270,10 @@ impl DocumentKey {
         match self {
             Self::Versioned { version_id, .. } => Some(version_id.to_string()),
             Self::ConvertedPdf { .. } => Some(CONVERTED_DOCUMENT_FILE_NAME.to_string()),
-            Self::TempDocx { .. } | Self::SyncServiceSnapshot { .. } | Self::BomPart { .. } => None,
+            Self::UpgradedOffice { .. }
+            | Self::TempDocx { .. }
+            | Self::SyncServiceSnapshot { .. }
+            | Self::BomPart { .. } => None,
         }
     }
 
@@ -226,6 +293,16 @@ impl DocumentKey {
                 document_id,
                 CONVERTED_DOCUMENT_FILE_NAME,
                 Some(PDF_EXTENSION),
+            ),
+            Self::UpgradedOffice {
+                owner_segment,
+                document_id,
+                format,
+            } => build_document_key_from_segment(
+                owner_segment,
+                document_id,
+                UPGRADED_DOCUMENT_FILE_NAME,
+                Some(format.extension()),
             ),
             Self::TempDocx { document_id } => build_temp_docx_key(document_id),
             Self::SyncServiceSnapshot { document_id } => {
@@ -290,6 +367,21 @@ pub fn build_docx_to_pdf_converted_document_key(owner: &Owner, document_id: &str
         document_id,
         CONVERTED_DOCUMENT_FILE_NAME,
         Some(PDF_EXTENSION),
+    )
+}
+
+/// Builds the S3 key a legacy Office document's OpenXML upgrade is written to.
+/// Format: `{owner}/{document_id}/upgraded.{docx|pptx|xlsx}`
+pub fn build_upgraded_office_document_key(
+    owner: &Owner,
+    document_id: &str,
+    format: UpgradedOfficeFormat,
+) -> String {
+    build_document_key_from_segment(
+        &owner_segment(owner),
+        document_id,
+        UPGRADED_DOCUMENT_FILE_NAME,
+        Some(format.extension()),
     )
 }
 

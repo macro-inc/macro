@@ -1,4 +1,7 @@
-import { useListDetailNavigation } from '@app/components/list';
+import {
+  type ListDetailNavigation,
+  useListDetailNavigation,
+} from '@app/components/list';
 import type {
   EmailThreadCommands,
   EmailThreadListNavigation,
@@ -8,12 +11,17 @@ import type { EntityData } from '@entity';
 import type { Accessor } from 'solid-js';
 import { useEmailView } from './email-view-context';
 import type { EmailDataSourceItem } from './queries/use-email-query';
+import { useEmailReaderPane } from './reader-pane';
 
 /** Keeps thread triage inside the Email view's filtered navigation stack. */
 export function useEmailDetailListNavigation(
   threadId: Accessor<string>
-): EmailThreadListNavigation {
-  const { source, openThread } = useEmailView();
+): EmailThreadListNavigation &
+  Pick<ListDetailNavigation<EntityData>, 'navigate'> {
+  const { source, openThread, list } = useEmailView();
+  // Beside the list, the reader steps like the list cursor: the cursor moves
+  // with it and each step replaces history instead of adding an entry.
+  const inPane = useEmailReaderPane() !== undefined;
   const navigation = useListDetailNavigation<EmailDataSourceItem, EntityData>({
     currentId: threadId,
     source,
@@ -25,18 +33,34 @@ export function useEmailDetailListNavigation(
       row.kind === 'load-more' ? source.loadMore : undefined,
     open: (entity) => {
       if (entity.type !== 'email') return;
-      openThread({ id: entity.id, fallbackName: entity.name });
+      const thread = { id: entity.id, fallbackName: entity.name };
+      if (!inPane) {
+        openThread(thread);
+        return;
+      }
+      const row = source
+        .items()
+        .find((item) => item.kind === 'entity' && item.entity.id === entity.id);
+      if (row) list.focus.set(row.id, { reason: 'programmatic' });
+      openThread(thread, { replace: true });
     },
     onError: () => toast.failure('Unable to open the next or previous email'),
   });
 
   return {
     ...navigation,
-    markDone: (archiveThread: EmailThreadCommands['archiveThread']) => {
-      void navigation.navigate(1, {
+    // A saved reminder hides the thread; navigation follows its old position.
+    afterReminderSaved: () => navigation.navigate(1, { fallbackDirection: -1 }),
+    markDone: async (
+      archiveThread: EmailThreadCommands['archiveThread'],
+      requested?: string
+    ) => {
+      if (requested !== undefined && requested !== threadId()) return false;
+      let archived = false;
+      await navigation.navigate(1, {
         fallbackDirection: -1,
-        beforeOpen: (next, current) =>
-          archiveThread({
+        beforeOpen: (next, current) => {
+          archived = archiveThread({
             navigate: false,
             nextEntityId: next?.id,
             navigateBack:
@@ -45,8 +69,11 @@ export function useEmailDetailListNavigation(
                     navigation.open(current);
                   }
                 : undefined,
-          }),
+          });
+          return archived;
+        },
       });
+      return archived;
     },
   };
 }

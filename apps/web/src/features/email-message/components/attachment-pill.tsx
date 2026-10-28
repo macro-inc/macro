@@ -1,9 +1,9 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { isCalendarFile } from '../core/email-message';
 
 const mimeToFileExtTypeMap = new Map<string, string>(
   Object.values(FileTypeMap).map((value) => [value.mime, value.extension])
@@ -13,16 +13,23 @@ type EmailAttachmentPillProps = {
   attachment: { fileName: string; mimeType?: string };
   removable?: boolean;
   onRemove?: () => void;
-  onClick?: () => void;
+  /** Receives the chip, so a dialog it opens can return focus to it. */
+  onClick?: (chip: HTMLElement) => void;
 };
 
 export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   let parentDiv!: HTMLDivElement;
 
-  const fileType = () =>
-    props.attachment.mimeType
-      ? (mimeToFileExtTypeMap.get(props.attachment.mimeType) as FileType)
-      : undefined;
+  const fileType = () => {
+    if (isCalendarFile(props.attachment.fileName, props.attachment.mimeType)) {
+      return 'ics';
+    }
+    const mimeType = props.attachment.mimeType
+      ?.split(';')[0]
+      .trim()
+      .toLowerCase();
+    return mimeType ? mimeToFileExtTypeMap.get(mimeType) : undefined;
+  };
 
   return (
     <div
@@ -36,16 +43,17 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
         component={props.onClick ? 'button' : 'div'}
         type={props.onClick ? 'button' : undefined}
         class="flex min-w-0 flex-1 items-center text-left"
-        onClick={props.onClick}
+        onClick={(event: MouseEvent) => {
+          if (event.currentTarget instanceof HTMLElement) {
+            props.onClick?.(event.currentTarget);
+          }
+        }}
         onKeyDown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
         }}
       >
         <Show when={fileType() !== undefined || props.attachment.mimeType}>
-          <EntityIcon
-            targetType={fileType() ?? (props.attachment.mimeType as FileType)}
-            size="xs"
-          />
+          <EntityIcon targetType={fileType()} size="xs" />
         </Show>
         <span class="ph-no-capture truncate ml-1">
           {props.attachment.fileName}

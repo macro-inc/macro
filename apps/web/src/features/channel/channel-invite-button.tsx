@@ -1,11 +1,11 @@
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, cn } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { ChannelInviteModal } from './views/channel-invite-modal';
 
@@ -25,19 +25,17 @@ export function ChannelInviteButton(props: {
 
   return (
     <Show when={canInvite()}>
-      <Button
-        // On touch the button sits inside a floating header island, which
-        // already draws the glass pill; an outline border inside it doubles up.
-        variant={isTouchDevice() ? 'ghost' : 'outline'}
-        size="sm"
-        label="Invite people"
-        tooltip="Invite people"
-        class={cn(isTouchDevice() && 'active:bg-transparent')}
-        onClick={() => setOpen(true)}
-      >
-        <UserPlusIcon />
-        <span class="hidden sm:inline">Invite</span>
-      </Button>
+      <HeaderActionGroup label="Sharing">
+        <HeaderActionButton
+          grouped
+          label="Invite"
+          icon={
+            <UserPlusIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
+          tooltip="Invite people"
+          onClick={() => setOpen(true)}
+        />
+      </HeaderActionGroup>
       <Suspense>
         <Show when={open()}>
           <ChannelInviteDialog

@@ -1,18 +1,16 @@
 use entity_access_db_utils::EntityType;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
 };
-use rootcause::prelude::*;
 use share_permission_db_utils::{InsertChannelSharePermissionResult, team_share};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id};
-use crate::domain::models::{
-    DescriptionDocumentId, InitiativeError, InitiativeId, LockstepTeamShareFacts,
-};
+use super::{AdapterError, GrantTargets, map_sqlx};
+use crate::domain::models::{InitiativeError, InitiativeId};
 
 pub(super) struct ShareTarget<'a> {
     entity_id: Uuid,
@@ -25,14 +23,6 @@ impl<'a> ShareTarget<'a> {
         Self {
             entity_id: targets.initiative_id(),
             entity_type: EntityType::Initiative,
-            share_permission_id,
-        }
-    }
-
-    pub(super) fn description(targets: &GrantTargets, share_permission_id: &'a str) -> Self {
-        Self {
-            entity_id: targets.description_id(),
-            entity_type: EntityType::Document,
             share_permission_id,
         }
     }
@@ -79,27 +69,6 @@ pub(super) async fn insert_share_permission(
     }
 
     Ok(row.id)
-}
-
-pub(super) async fn description_share_permission_id(
-    tx: &mut Transaction<'_, Postgres>,
-    id: DescriptionDocumentId,
-) -> Result<String, InitiativeError> {
-    sqlx::query_scalar!(
-        r#"
-        SELECT "sharePermissionId"
-        FROM "DocumentPermission"
-        WHERE "documentId" = $1
-        "#,
-        id.to_string(),
-    )
-    .fetch_optional(tx.as_mut())
-    .await
-    .map_err(AdapterError::Sqlx)
-    .map_err(map_sqlx)?
-    .ok_or_else(|| {
-        InitiativeError::Internal(report!("description document {id} has no share permission"))
-    })
 }
 
 pub(super) async fn apply_share_patch(
@@ -248,18 +217,18 @@ async fn update_channel_share_access(
     Ok(result.rows_affected() > 0)
 }
 
-pub(super) async fn get_lockstep_team_share_facts(
+pub(super) async fn get_team_share_facts(
     pool: &PgPool,
     id: InitiativeId,
-) -> Result<LockstepTeamShareFacts, InitiativeError> {
+) -> Result<TeamShareFacts, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
-    let description_document_id = sqlx::query_scalar!(
+    sqlx::query_scalar!(
         r#"
-        SELECT description_document_id
+        SELECT id
         FROM initiative
         WHERE id = $1
         "#,
@@ -270,15 +239,7 @@ pub(super) async fn get_lockstep_team_share_facts(
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?
     .ok_or(InitiativeError::NotFound)?;
-    let targets = GrantTargets::new(
-        id,
-        parse_description_document_id(id.as_uuid(), &description_document_id)?,
-    );
-    let initiative = team_share::load_facts(&mut tx, &targets.initiative_entity())
-        .await
-        .map_err(AdapterError::TeamShare)
-        .map_err(map_sqlx)?;
-    let description = team_share::load_facts(&mut tx, &targets.description_entity())
+    let facts = team_share::load_facts(&mut tx, &GrantTargets::new(id).initiative_entity())
         .await
         .map_err(AdapterError::TeamShare)
         .map_err(map_sqlx)?;
@@ -286,10 +247,7 @@ pub(super) async fn get_lockstep_team_share_facts(
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
-    Ok(LockstepTeamShareFacts {
-        initiative,
-        description,
-    })
+    Ok(facts)
 }
 
 pub(super) async fn get_team_default_link_share(

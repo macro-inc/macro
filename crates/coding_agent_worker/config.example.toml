@@ -39,3 +39,10 @@ args = ["acp"]
 path = "/workspace"
 # Informational: having the repo cloned at `path` is the operator's job.
 repo_url = "https://github.com/macro-inc/macro"
+
+# Optional defaults for the one native Herdr configuration (also editable in the TUI).
+# [herdr]
+# model = "sonnet"            # Omit to use the installed agent's default.
+# arguments = []              # Native CLI arguments, one word per element.
+# storage_path = "/path/to/agents" # Omit for ~/.macrod/herdr/<harness-id>.
+# focus = true               # false opens new sessions in the background.

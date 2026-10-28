@@ -1,10 +1,11 @@
 import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
-import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
-import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
-import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
-import CalendarX from '@phosphor-icons/core/regular/calendar-x.svg';
-import VideoCamera from '@phosphor-icons/core/regular/video-camera.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarDots from '@icon/system/regular/calendar-dots.svg';
+import CalendarPlus from '@icon/system/regular/calendar-plus.svg';
+import CalendarX from '@icon/system/regular/calendar-x.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
+import { Tooltip } from '@ui';
 import { format, isSameDay, subDays } from 'date-fns';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -90,7 +91,7 @@ const EventDetails = (props: {
         </div>
       </Tool.ListItem>
     </button>
-    <Show when={props.event.conferenceUrl}>
+    <Show when={props.event.macroCallUrl ?? props.event.conferenceUrl}>
       {(url) => (
         <Tool.ListItem icon={<VideoCamera class="size-4" />}>
           <a
@@ -225,6 +226,25 @@ export const createCalendarEventHandler = createToolRenderer({
   },
 });
 
+/**
+ * `CreateConfirmedCalendarEvent` creates on a confirmation the user already
+ * gave in a conversation thread, so there is no pending composer and no
+ * review to render: the response is the created event itself, shown the way
+ * `CreateCalendarEvent` shows its finished create.
+ */
+export const createConfirmedCalendarEventHandler = createToolRenderer({
+  name: 'CreateConfirmedCalendarEvent',
+  render: (ctx) => (
+    <CalendarMutationCard
+      event={ctx.response?.data}
+      icon={CalendarPlus}
+      label="Create calendar event"
+      renderContext={ctx.renderContext}
+      title={ctx.tool.data.title}
+    />
+  ),
+});
+
 export const updateCalendarEventHandler = createToolRenderer({
   name: 'UpdateCalendarEvent',
   render: (ctx) => {
@@ -256,6 +276,18 @@ export const updateCalendarEventHandler = createToolRenderer({
   },
 });
 
+export const addSharedCalendarEventHandler = createToolRenderer({
+  name: 'AddSharedCalendarEvent',
+  render: (ctx) => (
+    <CalendarMutationCard
+      event={ctx.response?.data}
+      icon={CalendarPlus}
+      label="Add to calendar"
+      renderContext={ctx.renderContext}
+    />
+  ),
+});
+
 export const deleteCalendarEventHandler = createToolRenderer({
   name: 'DeleteCalendarEvent',
   render: (ctx) => (
@@ -264,6 +296,26 @@ export const deleteCalendarEventHandler = createToolRenderer({
         <span class="min-w-0 truncate">Delete calendar event</span>
         <Show when={ctx.response}>
           <span class="shrink-0 text-xs text-ink-extra-muted">Deleted</span>
+        </Show>
+      </div>
+    </BaseTool>
+  ),
+});
+
+export const readCalendarEventHandler = createToolRenderer({
+  name: 'ReadCalendarEvent',
+  render: (ctx) => (
+    <BaseTool icon={CalendarDots} renderContext={ctx.renderContext} type="call">
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+        <span class="shrink-0">Read calendar event</span>
+        <Show when={ctx.response?.data}>
+          {(event) => (
+            <Tooltip label={event().title} as="span" class="min-w-0">
+              <span class="min-w-0 truncate text-xs text-ink-extra-muted">
+                {event().title}
+              </span>
+            </Tooltip>
+          )}
         </Show>
       </div>
     </BaseTool>

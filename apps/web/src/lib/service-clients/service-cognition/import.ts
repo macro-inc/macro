@@ -13,6 +13,13 @@ import {
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  aiUsageErrorResponseHandler,
+} from '../ai-usage-limit';
+import type { NotionImportReport } from './generated/schemas';
+
+export type { NotionImportReport } from './generated/schemas';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -33,7 +40,9 @@ function importFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 
-export type ImportSource = 'linear' | 'notion' | 'slack';
+import type { ImportKind, ImportSource } from './generated/schemas';
+
+export type { ImportKind, ImportSource } from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'
@@ -41,7 +50,7 @@ export type ImportEntityStatus =
   | 'imported'
   | 'discarded';
 
-export type ImportInitiator = 'onboarding' | 'chat';
+export type ImportInitiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type ImportRunStatus =
   | 'running'
@@ -81,6 +90,9 @@ export type SlackChannelMeta = {
   channel_id?: string | null;
   purpose?: string | null;
   participants?: SlackParticipant[];
+  member_count?: number | null;
+  archived?: boolean;
+  members_resolved?: boolean;
 };
 
 /** One row of the import ledger. */
@@ -90,7 +102,12 @@ export type ImportEntity = {
   user_id: string;
   team_id?: string | null;
   source: ImportSource;
+  kind: ImportKind;
   foreign_id: string;
+  /** The row this item was imported under, when it was part of a tree. */
+  parent_id?: string | null;
+  /** The agent session review that approved importing it, if any. */
+  review_id?: string | null;
   status: ImportEntityStatus;
   initiator: ImportInitiator;
   /** Per-source metadata; shape keyed by `source` (see the Meta types). */
@@ -102,11 +119,10 @@ export type ImportEntity = {
   updated_at: string;
 };
 
-/** Gather-run state for one source. */
+/** Discovery-run state for one source. */
 export type ImportRun = {
   source: ImportSource;
   status: ImportRunStatus;
-  auto_import: boolean;
   error?: string | null;
   updated_at: string;
 };
@@ -122,29 +138,54 @@ export type RunImportOutcome = {
 };
 
 export const importClient = {
-  /** Gather runs plus visible ledger rows for the authenticated user. */
+  /** Report on the selected reviewed workspace source. */
+  async getWorkspaceReport(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}`,
+      { method: 'GET' }
+    );
+  },
+  /** Stop this source only, preserving completed entities. */
+  async cancelWorkspace(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}/cancel`,
+      { method: 'POST' }
+    );
+  },
+  /** Discovery runs plus visible ledger rows for the authenticated user. */
   async getState() {
     return await importFetch<ImportState>('/import/state', { method: 'GET' });
   },
 
   /** Accept staged rows (starts import jobs) and/or discard staged rows. */
   async runImport(args: { import_ids: string[]; discard_ids: string[] }) {
-    return await importFetch<RunImportOutcome>('/import/run', {
+    return await fetchWithToken<RunImportOutcome, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/import/run`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
+  },
+
+  /** Discover candidates for manual selection. */
+  async discover(source: ImportSource) {
+    return await importFetch(`/import/runs/${source}/discover`, {
       method: 'POST',
-      body: JSON.stringify(args),
     });
   },
 
-  /** Restart a failed gather run for one source. */
-  async retryGather(source: ImportSource) {
-    return await importFetch(`/import/runs/${source}/retry`, {
-      method: 'POST',
+  /** Where the Notion workspace import stands. */
+  async getNotionReport() {
+    return await importFetch<NotionImportReport>('/import/notion', {
+      method: 'GET',
     });
   },
 
-  /** Dismiss one source's import section. */
-  async dismissRun(source: ImportSource) {
-    return await importFetch(`/import/runs/${source}/dismiss`, {
+  /** Stop planning or writing the Notion workspace import. */
+  async cancelNotion() {
+    return await importFetch<NotionImportReport>('/import/notion/cancel', {
       method: 'POST',
     });
   },

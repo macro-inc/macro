@@ -1,9 +1,6 @@
 /// Domain models for CRM records
 pub mod model;
 
-/// Domain and wire models for CRM comment threads
-pub mod comment;
-
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]
@@ -26,9 +23,32 @@ pub mod stages;
 #[cfg(feature = "ports")]
 pub mod auth;
 
+/// Links archived calls to the CRM records of the people on them
+#[cfg(feature = "call_link")]
+pub mod call_links;
+
 /// Port + domain types for CRM company search (name/domain)
 #[cfg(feature = "search")]
 pub mod search_repo;
 /// The CRM search service trait and implementation
 #[cfg(feature = "search")]
 pub mod search_service;
+
+/// The CRM records an associated-items query matches against.
+#[cfg(feature = "ports")]
+pub mod association;
+/// Contact listing models shared by Soup and the CRM service.
+#[cfg(feature = "ports")]
+pub mod contact_listing;
+/// CRM CSV files: parsing companies and pipeline entries, and writing exports.
+#[cfg(feature = "ports")]
+pub mod crm_csv;
+/// CSV imports and exports of companies and pipelines, for agents.
+#[cfg(feature = "ports")]
+pub mod crm_transfer;
+/// Pipeline use cases addressed by record, field name and stage label.
+#[cfg(feature = "ports")]
+pub mod pipeline_workflows;
+/// CRM pipelines and their lifecycle.
+#[cfg(feature = "ports")]
+pub mod pipelines;

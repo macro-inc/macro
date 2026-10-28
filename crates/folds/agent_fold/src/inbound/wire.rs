@@ -1,0 +1,139 @@
+//! The reader-facing envelopes around the serializable domain vocabulary.
+//!
+//! The renderable message, tool, permission, and metadata types live in
+//! [`crate::domain::model`] and define their wire representation directly.
+//! This module only adds transport context the domain does not own: the
+//! session that scopes a message id, and whether a streamed message is new or
+//! updated.
+//!
+//! Kept apart from [`crate::inbound::wasm`], which is wasm32-only, so the
+//! native `export_types` binary can generate the browser's TypeScript contract.
+
+use crate::domain::log::AgentSessionId;
+use crate::domain::model::{
+    Author, FoldEvent, FoldedMessage as ModelFoldedMessage, MessagePart, Segment, SessionMetadata,
+    StopReason, TurnPhase,
+};
+use serde::Serialize;
+use specta::Type;
+
+#[cfg(test)]
+mod test;
+
+/// One renderable message, scoped to its agent session for its reader.
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FoldedMessage {
+    /// Session that scopes this message id.
+    agent_session_id: String,
+    /// The turn within the session, assigned in log order from zero.
+    turn: u32,
+    /// Who produced the message.
+    author: Author,
+    /// The id the control endpoint returned for the action that derived this
+    /// message, for correlation. Absent on agent messages and on frames the
+    /// control plane did not mint.
+    request_id: Option<String>,
+    /// Ordered renderable content. Never empty.
+    parts: Vec<MessagePart>,
+    /// How the turn ended, absent while it remains in flight.
+    stop: Option<StopReason>,
+    /// Derived from an action this client issued that the log has not yet
+    /// confirmed. A reader shows it as sending; it flips off in place when
+    /// the confirmed frame arrives.
+    pending: bool,
+    /// How an agent's reply reads as a conversation, the same boundaries the
+    /// server posts channel messages by. Empty on a user's message.
+    segments: Vec<Segment>,
+    /// What an agent's unfinished reply is doing now; absent once its turn
+    /// has ended and on a user's message.
+    phase: Option<TurnPhase>,
+    /// When a user's prompt was posted, RFC 3339. Absent on agent and control
+    /// messages, until the log confirms a prompt, and on history a runtime
+    /// replayed on load.
+    posted_at: Option<String>,
+}
+
+impl FoldedMessage {
+    /// Build the browser form of `message`, keyed to `session`.
+    #[must_use]
+    pub fn new(session: AgentSessionId, message: ModelFoldedMessage) -> Self {
+        let parts = message.parts.into_inner();
+        let closed = message.stop.is_some();
+        let (segments, phase) = if matches!(message.author, Author::Agent) {
+            (
+                crate::domain::model::segments(&parts, closed),
+                crate::domain::model::phase(&parts, closed),
+            )
+        } else {
+            (Vec::new(), None)
+        };
+        Self {
+            agent_session_id: session.to_string(),
+            turn: message.id.0,
+            author: message.author,
+            request_id: message.request_id.map(|id| id.to_string()),
+            parts,
+            stop: message.stop,
+            pending: message.pending,
+            segments,
+            phase,
+            posted_at: message.posted_at.map(|at| at.to_rfc3339()),
+        }
+    }
+}
+
+/// One change a pushed frame implied.
+///
+/// Payloads are carried whole rather than as deltas: a reader replaces the
+/// message under the same session, turn, and author, or replaces its metadata
+/// outright.
+#[derive(Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FoldedStreamEvent {
+    /// A message derived for the first time.
+    New {
+        /// The message as it now stands.
+        message: FoldedMessage,
+    },
+    /// A previously reported message, changed.
+    Update {
+        /// The message as it now stands.
+        message: FoldedMessage,
+    },
+    /// Replace all messages for this session, including removal of old rows.
+    Replace {
+        /// The complete committed conversation.
+        messages: Vec<FoldedMessage>,
+    },
+    /// The session's metadata changed; here it is in full.
+    Metadata {
+        /// The metadata as it now stands.
+        metadata: SessionMetadata,
+    },
+}
+
+impl FoldedStreamEvent {
+    /// Build the browser form of `event`, keyed to `session`.
+    #[must_use]
+    pub fn new(session: AgentSessionId, event: FoldEvent<'_>) -> Self {
+        match event {
+            FoldEvent::NewMessage(message) => Self::New {
+                message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MessageUpdate(message) => Self::Update {
+                message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MessagesReplaced(messages) => Self::Replace {
+                messages: messages
+                    .into_owned()
+                    .into_iter()
+                    .map(|message| FoldedMessage::new(session, message))
+                    .collect(),
+            },
+            FoldEvent::MetadataUpdated(metadata) => Self::Metadata {
+                metadata: metadata.into_owned(),
+            },
+        }
+    }
+}

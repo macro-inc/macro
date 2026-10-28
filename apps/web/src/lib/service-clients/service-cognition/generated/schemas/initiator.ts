@@ -15,4 +15,6 @@ export type Initiator = (typeof Initiator)[keyof typeof Initiator];
 export const Initiator = {
   onboarding: 'onboarding',
   chat: 'chat',
+  archive: 'archive',
+  manual: 'manual',
 } as const;

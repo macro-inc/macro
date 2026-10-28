@@ -23,8 +23,11 @@ use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::services_for_mode;
+use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
+
+#[cfg(test)]
+mod test;
 
 /// The one Rust service with a second listener: the agent egress proxy inside
 /// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
@@ -87,33 +90,7 @@ pub fn generate(
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
         };
-        // Named instances need their own host ports (replacing the base ports —
-        // emitted as `!override` in apply_tags). Only the self-contained local
-        // stacks remap; dev inherits the base-compose ports.
-        let mut ports = Vec::new();
-        if mode.spec().runs_local_infra
-            && !instance.is_default()
-            && let Some(port) = svc.host_port
-        {
-            ports.push(format!("{}:8080", instance.port(port)));
-        }
-        // The agent egress proxy is the harness's second listener, and the one
-        // service port a party outside the compose network has to reach: the
-        // egress tunnel forwards Cursor's cloud to this host port. Published on
-        // every local instance, default included - the base compose publishes
-        // nothing for the harness.
-        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
-            ports.push(format!(
-                "{}:{EGRESS_CONTAINER_PORT}",
-                instance.port(Port::AgentHarnessEgress)
-            ));
-        }
-        if mode.spec().runs_local_infra && svc.compose_name == "preview_gateway" {
-            if instance.is_default() {
-                ports.push(format!("{}:8080", instance.port(Port::PreviewControl)));
-            }
-            ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
-        }
+        let ports = published_ports(mode, instance, svc);
         if !ports.is_empty() {
             s.ports = dct::Ports::Short(ports);
         }
@@ -198,6 +175,28 @@ pub fn generate(
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
+}
+
+fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Vec<String> {
+    let mut ports = Vec::new();
+    if !mode.spec().runs_local_infra {
+        return ports;
+    }
+    // Named instances replace inherited bindings. The harness has no base
+    // binding, so the default instance must publish its API port too.
+    if (!instance.is_default() || service.compose_name == EGRESS_SERVICE)
+        && let Some(port) = service.host_port
+    {
+        ports.push(format!("{}:8080", instance.port(port)));
+    }
+    if service.compose_name == EGRESS_SERVICE {
+        ports.push(format!(
+            "{}:{EGRESS_CONTAINER_PORT}",
+            instance.port(Port::AgentHarnessEgress)
+        ));
+        ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+    }
+    ports
 }
 
 fn add_sdk_webhook_relay(
@@ -342,7 +341,8 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) {
-    // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
+    // This per-instance directory belongs only to FusionAuth. Private SELinux
+    // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
         environment: kv(&[(
             "FUSIONAUTH_APP_KICKSTART_FILE",
@@ -351,7 +351,7 @@ fn add_local_infra(
         volumes: vec![
             dct::Volumes::Simple("fusionauth_config:/usr/local/fusionauth/config".to_string()),
             dct::Volumes::Simple(format!(
-                "{}:/usr/local/fusionauth/kickstart:ro",
+                "{}:/usr/local/fusionauth/kickstart:ro,Z",
                 kickstart_dir(instance).display()
             )),
         ],
@@ -489,6 +489,18 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
                 }
             }
         }
+    }
+    // Generated companions do not inherit the base compose's common settings.
+    // Apply after adding aux overrides so every generated service is covered.
+    for service in services.values_mut().filter_map(Value::as_mapping_mut) {
+        service.insert(
+            "logging".into(),
+            serde_yaml::to_value(serde_json::json!({
+                "driver": "json-file",
+                "options": { "max-size": "20m", "max-file": "3" }
+            }))
+            .expect("logging configuration is serializable"),
+        );
     }
 }
 

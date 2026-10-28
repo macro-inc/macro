@@ -151,6 +151,13 @@ fn pending_human_interactions_are_nonterminal() {
             }}),
             RoutinePendingReason::Elicitation,
         ),
+        (
+            json!({"method": "_macro/tool_approval", "params": {
+                "approvalId": "a1", "serverSlug": "macro", "serverName": "Macro",
+                "toolName": "WebSearch", "arguments": {}, "status": "pending"
+            }}),
+            RoutinePendingReason::Permission,
+        ),
     ] {
         assert_eq!(
             action_status(

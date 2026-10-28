@@ -1,13 +1,14 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import RssIcon from '@phosphor/rss.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import RssIcon from '@icon/system/regular/rss.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { Checkbox } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
 
 interface SourceControlsProps {
+  ref?: (element: HTMLUListElement) => void;
   sources: CalendarSource[];
   isVisible: (sourceId: string) => boolean;
   onVisibilityChange: (sourceId: string, visible: boolean) => void;
@@ -35,7 +36,7 @@ export function SourceControls(props: SourceControlsProps) {
     });
 
   return (
-    <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+    <ul ref={props.ref} class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
       <For each={groups()}>
         {(group) => {
           const visibleCount = () =>
@@ -79,7 +80,7 @@ export function SourceControls(props: SourceControlsProps) {
                 </Checkbox>
                 <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
                   <ViewSidebar.Control
-                    label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
+                    aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
                     aria-expanded={expanded()}
                     onClick={() => toggleExpanded(group.key)}
                   >
@@ -114,12 +115,13 @@ export function SourceControls(props: SourceControlsProps) {
                           <Show when={source.syncError}>
                             {(error) => (
                               <span
-                                title={`Sync failed: ${error()}`}
+                                title={`Calendar needs attention: ${error()}`}
                                 class="flex shrink-0 text-alert-ink"
                               >
                                 <WarningIcon
+                                  aria-hidden={false}
                                   class="size-3"
-                                  aria-label={`Sync failed: ${error()}`}
+                                  aria-label={`Calendar needs attention: ${error()}`}
                                 />
                               </span>
                             )}
@@ -130,6 +132,7 @@ export function SourceControls(props: SourceControlsProps) {
                               class="flex shrink-0 text-ink-muted"
                             >
                               <RssIcon
+                                aria-hidden={false}
                                 class="size-3"
                                 aria-label="Subscription calendar"
                               />

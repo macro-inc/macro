@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"PdfHighlightAnchor\" SET \"deletedAt\" = NOW()\n        WHERE uuid = $1 AND \"deletedAt\" IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "870169ef2ed0f067650a67165e9f7b9babf83d733ddfdfa0d958c8b03a8b5d04"
+}

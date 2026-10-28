@@ -1,0 +1,121 @@
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  navigateToSidebarView,
+  sidebarContent,
+} from '@components/app/app-sidebar/sidebar';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import { Dropdown } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { CustomizeSidebarModal } from './customize-sidebar-modal';
+import {
+  moreMenuItems,
+  type NavItemGates,
+  type SidebarNextMenuItem,
+} from './nav-items';
+
+export type MoreMenuProps = {
+  gates: NavItemGates;
+};
+
+function navigateToItem(
+  item: SidebarNextMenuItem,
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
+  analytics: ReturnType<typeof useAnalytics>,
+  shiftKey: boolean
+) {
+  analytics.track('sidebar_click', { view: item.id });
+  navigateToSidebarView({
+    viewId: item.id,
+    params: item.params,
+    shiftKey,
+    openWithSplit,
+    referredFrom: 'sidebar',
+  });
+  globalSplitManager()?.returnFocus();
+}
+
+/**
+ * The "More" menu button in the sidebar rail, shown below the main nav.
+ * Lists hidden items and Scheduling, and opens the Customize sidebar modal.
+ */
+export function MoreMenu(props: MoreMenuProps) {
+  const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
+  const analytics = useAnalytics();
+  const layout = useSplitLayout();
+  const preloadItem = (item: SidebarNextMenuItem) =>
+    layout.preloadContent(sidebarContent(item.id, item.params));
+  const hiddenItems = () => moreMenuItems(props.gates);
+
+  // Capture shift key before onSelect fires (which omits the event)
+  let shiftHeld = false;
+  const captureSplitIntent = (event: PointerEvent | KeyboardEvent) => {
+    shiftHeld = event.shiftKey;
+  };
+
+  return (
+    <>
+      <Dropdown placement="right-start" gutter={6}>
+        <Dropdown.Trigger
+          aria-label={t('nav.more')}
+          variant="ghost"
+          size="icon-md"
+          class="size-10 shrink-0 cursor-default rounded-xl"
+          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
+          draggable={false}
+          data-sidebar-next-item="more"
+        >
+          <DotsThreeIcon class="size-5" />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="min-w-[14rem]">
+          <Show when={hiddenItems().length > 0}>
+            <Dropdown.Group>
+              <For each={hiddenItems()}>
+                {(item) => (
+                  <Dropdown.Item
+                    class="gap-2"
+                    onMouseEnter={() => preloadItem(item)}
+                    onFocus={() => preloadItem(item)}
+                    onPointerDown={captureSplitIntent}
+                    onKeyDown={captureSplitIntent}
+                    onSelect={() =>
+                      navigateToItem(
+                        item,
+                        layout.openWithSplit,
+                        analytics,
+                        shiftHeld
+                      )
+                    }
+                  >
+                    <Dynamic
+                      component={item.icon}
+                      class="size-4 shrink-0 text-ink-muted"
+                    />
+                    <span class="flex-1 truncate text-ink">{item.label}</span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Show>
+
+          <Dropdown.Group>
+            <Dropdown.Item onSelect={() => setCustomizeSidebarOpen(true)}>
+              <span class="flex-1 truncate text-ink">
+                {t('nav.customizeSidebar')}
+              </span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+
+      <CustomizeSidebarModal
+        gates={props.gates}
+        open={customizeSidebarOpen()}
+        onOpenChange={setCustomizeSidebarOpen}
+      />
+    </>
+  );
+}

@@ -3,7 +3,7 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { MODEL_PRETTYNAME, MODEL_PROVIDER } from '@core/component/AI/constant';
 import { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
+import LockIcon from '@icon/system/regular/lock-simple.svg?component-solid';
 
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
@@ -101,10 +101,13 @@ function ChatInputBoxInner() {
     <Item label="Chat input - not connected to backend">
       <div class="size-full">
         <div class="flex gap-2 py-2">
-          <Button onClick={() => input.setIsGenerating(true)} variant="accent">
+          <Button onClick={() => input.setIsGenerating(true)} variant="primary">
             Generate
           </Button>
-          <Button onClick={() => input.setIsGenerating(false)} variant="accent">
+          <Button
+            onClick={() => input.setIsGenerating(false)}
+            variant="primary"
+          >
             Stop
           </Button>
         </div>
@@ -471,7 +474,7 @@ function ProviderFailureDemoBody(props: {
             if (e.key === 'Enter') send();
           }}
         />
-        <Button variant="accent" onClick={send}>
+        <Button variant="primary" onClick={send}>
           Send
         </Button>
       </div>
@@ -486,7 +489,7 @@ function ProviderFailureChat() {
   return (
     <ProviderFailureDemo
       label="Provider failure - switch-model fallback"
-      initialModel={Model.opus5}
+      initialModel={Model.opus55}
       availableModels={GALLERY_MODELS}
     />
   );
@@ -678,10 +681,10 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <Button onClick={startStream} variant="accent">
+        <Button onClick={startStream} variant="primary">
           Stream
         </Button>
-        <Button onClick={() => setIsPaused((p) => !p)} variant="accent">
+        <Button onClick={() => setIsPaused((p) => !p)} variant="primary">
           {isPaused() ? 'Resume' : 'Pause'}
         </Button>
         <label class="flex items-center gap-x-1 text-xs">
@@ -701,7 +704,7 @@ function TableStreamInner() {
           Raw
         </label>
         <Button
-          variant="accent"
+          variant="primary"
           onClick={() => {
             setStream(undefined);
             setRawText('');

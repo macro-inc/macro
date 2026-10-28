@@ -185,6 +185,7 @@ describe('buildChannelRailRows', () => {
         channels: [acme, zeta],
         direct_messages: [],
         recents: [],
+        threads: [],
       },
       buildChannelSectionRows({
         labels: [],
@@ -217,6 +218,7 @@ describe('buildChannelRailRows', () => {
         channels: [deals],
         direct_messages: [],
         recents: [],
+        threads: [],
       },
       sectionRows
     );
@@ -248,10 +250,33 @@ describe('buildChannelRailRows', () => {
         channels: [acme],
         direct_messages: [],
         recents: [zeta, acme],
+        threads: [],
       },
       []
     );
     expect(rows.map((row) => row.id)).toEqual(['channel:zeta', 'channel:acme']);
+  });
+
+  it('puts All threads above one mixed list of channels and DMs', () => {
+    const dm = channel('dm', 'Bob', 'direct_message');
+    const rows = buildChannelRailRows(
+      'threads',
+      expanded,
+      {
+        favorites: [],
+        channels: [acme],
+        direct_messages: [],
+        recents: [],
+        threads: [dm, acme],
+      },
+      []
+    );
+    expect(rows.map((row) => row.id)).toEqual([
+      'all-threads',
+      'channel:dm',
+      'channel:acme',
+    ]);
+    expect(rows[1]).toMatchObject({ scope: 'threads', localIndex: 0 });
   });
 });
 
@@ -291,6 +316,7 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
       channels: [acme, zeta, deals],
       direct_messages: [],
       recents: [],
+      threads: [],
     },
     sections
   );

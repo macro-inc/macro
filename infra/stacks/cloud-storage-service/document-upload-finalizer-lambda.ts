@@ -16,11 +16,18 @@ export type DocumentUploadFinalizerLambdaEnvVars = {
   LEXICAL_SERVICE_URL: pulumi.Output<string> | string;
   SYNC_SERVICE_URL: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
+  ENVIRONMENT: pulumi.Output<string> | string;
+  DOCUMENT_STORAGE_BUCKET: pulumi.Output<string> | string;
+  DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.Output<string> | string;
 };
 
 type DocumentUploadFinalizerLambdaArgs = {
   envVars: DocumentUploadFinalizerLambdaEnvVars;
   documentStorageBucketArn: pulumi.Output<string> | string;
+  /** Upgraded legacy `.doc` files are staged here for the DOCX pipeline. */
+  docxUploadBucketArn: pulumi.Output<string> | string;
+  /** Legacy `.doc`/`.ppt`/`.xls` uploads are upgraded through this queue. */
+  convertQueueArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
     publicSubnetIds: pulumi.Output<string[]> | string[];
@@ -40,7 +47,14 @@ export class DocumentUploadFinalizerLambda extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:DocumentUploadFinalizerLambda', name, {}, opts);
-    const { documentStorageBucketArn, vpc, envVars, tags } = args;
+    const {
+      documentStorageBucketArn,
+      docxUploadBucketArn,
+      convertQueueArn,
+      vpc,
+      envVars,
+      tags,
+    } = args;
 
     this.tags = tags;
 
@@ -53,8 +67,34 @@ export class DocumentUploadFinalizerLambda extends pulumi.ComponentResource {
           Statement: [
             {
               Effect: 'Allow',
-              Action: ['s3:GetObject'],
+              // PutObject copies an upgraded legacy Office file into a new
+              // document version.
+              Action: ['s3:GetObject', 's3:PutObject'],
               Resource: [pulumi.interpolate`${documentStorageBucketArn}/*`],
+            },
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutObject'],
+              Resource: [pulumi.interpolate`${docxUploadBucketArn}/*`],
+            },
+          ],
+        }),
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const sqsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-sqs-policy`,
+      {
+        name: `${BASE_NAME}-sqs-policy-${stack}`,
+        policy: pulumi.output({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['sqs:SendMessage'],
+              Resource: [convertQueueArn],
             },
           ],
         }),
@@ -84,6 +124,7 @@ export class DocumentUploadFinalizerLambda extends pulumi.ComponentResource {
           aws.iam.ManagedPolicy.AWSLambdaVPCAccessExecutionRole,
           aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
           s3Policy.arn,
+          sqsPolicy.arn,
         ],
         tags: this.tags,
       },

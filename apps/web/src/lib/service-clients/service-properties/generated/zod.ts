@@ -24,6 +24,8 @@ export const listPropertiesQueryParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
+      'CONTACT',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -44,6 +46,7 @@ export const listPropertiesResponseItem = zod
           .enum([
             'BOOLEAN',
             'DATE',
+            'DATE_RANGE',
             'NUMBER',
             'STRING',
             'SELECT_NUMBER',
@@ -84,35 +87,45 @@ export const listPropertiesResponseItem = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
-          ])
-          .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
-          ),
-        specific_entity_type: zod
-          .union([
-            zod.null(),
-            zod
-              .enum([
-                'CALENDAR_EVENT',
-                'CALL_RECORD',
-                'CHANNEL',
-                'CHAT',
-                'COMPANY',
-                'DOCUMENT',
-                'INITIATIVE',
-                'PROJECT',
-                'TASK',
-                'THREAD',
-                'USER',
-              ])
               .describe(
-                'Type of entity that can be referenced by entity properties.'
+                'System-owned property (no user, team, or database owner).'
               ),
           ])
-          .optional(),
+          .describe(
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+          ),
+        specific_entity_type: zod.union([
+          zod.null(),
+          zod
+            .enum([
+              'CALENDAR_EVENT',
+              'CALL_RECORD',
+              'CHANNEL',
+              'CHAT',
+              'COMPANY',
+              'DATABASE_ROW',
+              'CONTACT',
+              'DOCUMENT',
+              'INITIATIVE',
+              'PROJECT',
+              'TASK',
+              'THREAD',
+              'USER',
+            ])
+            .describe(
+              'Type of entity that can be referenced by entity properties.'
+            ),
+        ]),
         updated_at: zod.iso.datetime({}),
       })
       .describe('Property definition model (service representation).'),
@@ -125,6 +138,7 @@ export const listPropertiesResponseItem = zod
               .enum([
                 'BOOLEAN',
                 'DATE',
+                'DATE_RANGE',
                 'NUMBER',
                 'STRING',
                 'SELECT_NUMBER',
@@ -165,42 +179,52 @@ export const listPropertiesResponseItem = zod
                   .describe('Team-scoped property.'),
                 zod
                   .object({
+                    database_id: zod.uuid(),
+                    scope: zod.enum(['database']),
+                  })
+                  .describe(
+                    'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                  ),
+                zod
+                  .object({
                     scope: zod.enum(['system']),
                   })
-                  .describe('System-owned property (no user or team owner).'),
-              ])
-              .describe(
-                'Defines who owns a property - user-scoped, team-scoped, or system.'
-              ),
-            specific_entity_type: zod
-              .union([
-                zod.null(),
-                zod
-                  .enum([
-                    'CALENDAR_EVENT',
-                    'CALL_RECORD',
-                    'CHANNEL',
-                    'CHAT',
-                    'COMPANY',
-                    'DOCUMENT',
-                    'INITIATIVE',
-                    'PROJECT',
-                    'TASK',
-                    'THREAD',
-                    'USER',
-                  ])
                   .describe(
-                    'Type of entity that can be referenced by entity properties.'
+                    'System-owned property (no user, team, or database owner).'
                   ),
               ])
-              .optional(),
+              .describe(
+                'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+              ),
+            specific_entity_type: zod.union([
+              zod.null(),
+              zod
+                .enum([
+                  'CALENDAR_EVENT',
+                  'CALL_RECORD',
+                  'CHANNEL',
+                  'CHAT',
+                  'COMPANY',
+                  'DATABASE_ROW',
+                  'CONTACT',
+                  'DOCUMENT',
+                  'INITIATIVE',
+                  'PROJECT',
+                  'TASK',
+                  'THREAD',
+                  'USER',
+                ])
+                .describe(
+                  'Type of entity that can be referenced by entity properties.'
+                ),
+            ]),
             updated_at: zod.iso.datetime({}),
           })
           .describe('Property definition model (service representation).'),
         property_options: zod.array(
           zod
             .object({
-              color: zod.string().nullish(),
+              color: zod.string().nullable(),
               created_at: zod.iso.datetime({}),
               display_order: zod.number(),
               id: zod.uuid(),
@@ -260,6 +284,11 @@ export const createPropertyDefinitionBody = zod
           .describe('Date and time values.'),
         zod
           .object({
+            type: zod.enum(['date_range']),
+          })
+          .describe('A span from a start date-time to an end one.'),
+        zod
+          .object({
             type: zod.enum(['number']),
           })
           .describe('Numeric values.'),
@@ -309,6 +338,8 @@ export const createPropertyDefinitionBody = zod
                     'CHANNEL',
                     'CHAT',
                     'COMPANY',
+                    'DATABASE_ROW',
+                    'CONTACT',
                     'DOCUMENT',
                     'INITIATIVE',
                     'PROJECT',
@@ -357,6 +388,7 @@ export const getPropertyDefinitionResponse = zod
       .enum([
         'BOOLEAN',
         'DATE',
+        'DATE_RANGE',
         'NUMBER',
         'STRING',
         'SELECT_NUMBER',
@@ -397,35 +429,45 @@ export const getPropertyDefinitionResponse = zod
           .describe('Team-scoped property.'),
         zod
           .object({
+            database_id: zod.uuid(),
+            scope: zod.enum(['database']),
+          })
+          .describe(
+            'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+          ),
+        zod
+          .object({
             scope: zod.enum(['system']),
           })
-          .describe('System-owned property (no user or team owner).'),
-      ])
-      .describe(
-        'Defines who owns a property - user-scoped, team-scoped, or system.'
-      ),
-    specific_entity_type: zod
-      .union([
-        zod.null(),
-        zod
-          .enum([
-            'CALENDAR_EVENT',
-            'CALL_RECORD',
-            'CHANNEL',
-            'CHAT',
-            'COMPANY',
-            'DOCUMENT',
-            'INITIATIVE',
-            'PROJECT',
-            'TASK',
-            'THREAD',
-            'USER',
-          ])
           .describe(
-            'Type of entity that can be referenced by entity properties.'
+            'System-owned property (no user, team, or database owner).'
           ),
       ])
-      .optional(),
+      .describe(
+        'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+      ),
+    specific_entity_type: zod.union([
+      zod.null(),
+      zod
+        .enum([
+          'CALENDAR_EVENT',
+          'CALL_RECORD',
+          'CHANNEL',
+          'CHAT',
+          'COMPANY',
+          'DATABASE_ROW',
+          'CONTACT',
+          'DOCUMENT',
+          'INITIATIVE',
+          'PROJECT',
+          'TASK',
+          'THREAD',
+          'USER',
+        ])
+        .describe(
+          'Type of entity that can be referenced by entity properties.'
+        ),
+    ]),
     updated_at: zod.iso.datetime({}),
   })
   .describe('Property definition model (service representation).');
@@ -446,7 +488,7 @@ export const getPropertyOptionsParams = zod.object({
 
 export const getPropertyOptionsResponseItem = zod
   .object({
-    color: zod.string().nullish(),
+    color: zod.string().nullable(),
     created_at: zod.iso.datetime({}),
     display_order: zod.number(),
     id: zod.uuid(),
@@ -558,7 +600,7 @@ export const updatePropertyOptionBody = zod
 
 export const updatePropertyOptionResponse = zod
   .object({
-    color: zod.string().nullish(),
+    color: zod.string().nullable(),
     created_at: zod.iso.datetime({}),
     display_order: zod.number(),
     id: zod.uuid(),
@@ -609,6 +651,7 @@ export const getBulkEntityPropertiesBody = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',
                 'PROJECT',
@@ -646,6 +689,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                   .enum([
                     'BOOLEAN',
                     'DATE',
+                    'DATE_RANGE',
                     'NUMBER',
                     'STRING',
                     'SELECT_NUMBER',
@@ -686,37 +730,45 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       .describe('Team-scoped property.'),
                     zod
                       .object({
+                        database_id: zod.uuid(),
+                        scope: zod.enum(['database']),
+                      })
+                      .describe(
+                        'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                      ),
+                    zod
+                      .object({
                         scope: zod.enum(['system']),
                       })
                       .describe(
-                        'System-owned property (no user or team owner).'
+                        'System-owned property (no user, team, or database owner).'
                       ),
                   ])
                   .describe(
-                    'Defines who owns a property - user-scoped, team-scoped, or system.'
+                    'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
                   ),
-                specific_entity_type: zod
-                  .union([
-                    zod.null(),
-                    zod
-                      .enum([
-                        'CALENDAR_EVENT',
-                        'CALL_RECORD',
-                        'CHANNEL',
-                        'CHAT',
-                        'COMPANY',
-                        'DOCUMENT',
-                        'INITIATIVE',
-                        'PROJECT',
-                        'TASK',
-                        'THREAD',
-                        'USER',
-                      ])
-                      .describe(
-                        'Type of entity that can be referenced by entity properties.'
-                      ),
-                  ])
-                  .optional(),
+                specific_entity_type: zod.union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'CALENDAR_EVENT',
+                      'CALL_RECORD',
+                      'CHANNEL',
+                      'CHAT',
+                      'COMPANY',
+                      'DATABASE_ROW',
+                      'CONTACT',
+                      'DOCUMENT',
+                      'INITIATIVE',
+                      'PROJECT',
+                      'TASK',
+                      'THREAD',
+                      'USER',
+                    ])
+                    .describe(
+                      'Type of entity that can be referenced by entity properties.'
+                    ),
+                ]),
                 updated_at: zod.iso.datetime({}),
               })
               .describe('Property definition model (service representation).'),
@@ -724,7 +776,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
               .array(
                 zod
                   .object({
-                    color: zod.string().nullish(),
+                    color: zod.string().nullable(),
                     created_at: zod.iso.datetime({}),
                     display_order: zod.number(),
                     id: zod.uuid(),
@@ -773,6 +825,8 @@ export const getBulkEntityPropertiesResponse = zod.record(
                     'CHANNEL',
                     'CHAT',
                     'COMPANY',
+                    'DATABASE_ROW',
+                    'CONTACT',
                     'DOCUMENT',
                     'INITIATIVE',
                     'PROJECT',
@@ -845,6 +899,21 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       ),
                     zod
                       .object({
+                        type: zod.enum(['DateRange']),
+                        value: zod
+                          .object({
+                            end: zod.iso.datetime({}),
+                            start: zod.iso.datetime({}),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                          ),
+                      })
+                      .describe(
+                        'Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}'
+                      ),
+                    zod
+                      .object({
                         type: zod.enum(['SelectOption']),
                         value: zod
                           .array(zod.uuid())
@@ -870,6 +939,8 @@ export const getBulkEntityPropertiesResponse = zod.record(
                                     'CHANNEL',
                                     'CHAT',
                                     'COMPANY',
+                                    'DATABASE_ROW',
+                                    'CONTACT',
                                     'DOCUMENT',
                                     'INITIATIVE',
                                     'PROJECT',
@@ -935,6 +1006,7 @@ export const getEntityPropertiesParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -965,6 +1037,7 @@ export const getEntityPropertiesResponse = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',
@@ -1005,35 +1078,45 @@ export const getEntityPropertiesResponse = zod
                     .describe('Team-scoped property.'),
                   zod
                     .object({
+                      database_id: zod.uuid(),
+                      scope: zod.enum(['database']),
+                    })
+                    .describe(
+                      'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                    ),
+                  zod
+                    .object({
                       scope: zod.enum(['system']),
                     })
-                    .describe('System-owned property (no user or team owner).'),
-                ])
-                .describe(
-                  'Defines who owns a property - user-scoped, team-scoped, or system.'
-                ),
-              specific_entity_type: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum([
-                      'CALENDAR_EVENT',
-                      'CALL_RECORD',
-                      'CHANNEL',
-                      'CHAT',
-                      'COMPANY',
-                      'DOCUMENT',
-                      'INITIATIVE',
-                      'PROJECT',
-                      'TASK',
-                      'THREAD',
-                      'USER',
-                    ])
                     .describe(
-                      'Type of entity that can be referenced by entity properties.'
+                      'System-owned property (no user, team, or database owner).'
                     ),
                 ])
-                .optional(),
+                .describe(
+                  'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+                ),
+              specific_entity_type: zod.union([
+                zod.null(),
+                zod
+                  .enum([
+                    'CALENDAR_EVENT',
+                    'CALL_RECORD',
+                    'CHANNEL',
+                    'CHAT',
+                    'COMPANY',
+                    'DATABASE_ROW',
+                    'CONTACT',
+                    'DOCUMENT',
+                    'INITIATIVE',
+                    'PROJECT',
+                    'TASK',
+                    'THREAD',
+                    'USER',
+                  ])
+                  .describe(
+                    'Type of entity that can be referenced by entity properties.'
+                  ),
+              ]),
               updated_at: zod.iso.datetime({}),
             })
             .describe('Property definition model (service representation).'),
@@ -1041,7 +1124,7 @@ export const getEntityPropertiesResponse = zod
             .array(
               zod
                 .object({
-                  color: zod.string().nullish(),
+                  color: zod.string().nullable(),
                   created_at: zod.iso.datetime({}),
                   display_order: zod.number(),
                   id: zod.uuid(),
@@ -1090,6 +1173,8 @@ export const getEntityPropertiesResponse = zod
                   'CHANNEL',
                   'CHAT',
                   'COMPANY',
+                  'DATABASE_ROW',
+                  'CONTACT',
                   'DOCUMENT',
                   'INITIATIVE',
                   'PROJECT',
@@ -1162,6 +1247,21 @@ export const getEntityPropertiesResponse = zod
                     ),
                   zod
                     .object({
+                      type: zod.enum(['DateRange']),
+                      value: zod
+                        .object({
+                          end: zod.iso.datetime({}),
+                          start: zod.iso.datetime({}),
+                        })
+                        .describe(
+                          'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                        ),
+                    })
+                    .describe(
+                      'Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}'
+                    ),
+                  zod
+                    .object({
                       type: zod.enum(['SelectOption']),
                       value: zod
                         .array(zod.uuid())
@@ -1187,6 +1287,8 @@ export const getEntityPropertiesResponse = zod
                                   'CHANNEL',
                                   'CHAT',
                                   'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
                                   'DOCUMENT',
                                   'INITIATIVE',
                                   'PROJECT',
@@ -1257,6 +1359,7 @@ export const bulkUpdateEntityPropertyOptionsParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -1330,6 +1433,7 @@ export const setEntityPropertyParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -1360,6 +1464,19 @@ export const setEntityPropertyBody = zod
                 value: zod.iso.datetime({}),
               })
               .describe('Date and time value'),
+            zod
+              .object({
+                type: zod.enum(['date_range']),
+                value: zod
+                  .object({
+                    end: zod.iso.datetime({}),
+                    start: zod.iso.datetime({}),
+                  })
+                  .describe(
+                    'A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.'
+                  ),
+              })
+              .describe('Date range value'),
             zod
               .object({
                 type: zod.enum(['number']),
@@ -1398,6 +1515,8 @@ export const setEntityPropertyBody = zod
                         'CHANNEL',
                         'CHAT',
                         'COMPANY',
+                        'DATABASE_ROW',
+                        'CONTACT',
                         'DOCUMENT',
                         'INITIATIVE',
                         'PROJECT',
@@ -1434,6 +1553,8 @@ export const setEntityPropertyBody = zod
                           'CHANNEL',
                           'CHAT',
                           'COMPANY',
+                          'DATABASE_ROW',
+                          'CONTACT',
                           'DOCUMENT',
                           'INITIATIVE',
                           'PROJECT',
@@ -1497,6 +1618,7 @@ export const addEntityPropertyOptionParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -1522,6 +1644,7 @@ export const removeEntityPropertyOptionParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
       'PROJECT',
@@ -1569,6 +1692,7 @@ export const bulkUpdateEntitiesPropertyOptionsBody = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',
                 'PROJECT',
@@ -1615,6 +1739,7 @@ export const bulkUpdateEntitiesPropertyOptionsResponse = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',
                 'PROJECT',
@@ -1675,12 +1800,22 @@ export const listTagsResponseItem = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
+              .describe(
+                'System-owned property (no user, team, or database owner).'
+              ),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
           )
           .and(
             zod.object({
@@ -1689,6 +1824,7 @@ export const listTagsResponseItem = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',
@@ -1723,6 +1859,8 @@ export const listTagsResponseItem = zod
                       'CHANNEL',
                       'CHAT',
                       'COMPANY',
+                      'DATABASE_ROW',
+                      'CONTACT',
                       'DOCUMENT',
                       'INITIATIVE',
                       'PROJECT',
@@ -1817,12 +1955,22 @@ export const ensureTagSetResponse = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
+              .describe(
+                'System-owned property (no user, team, or database owner).'
+              ),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
           )
           .and(
             zod.object({
@@ -1831,6 +1979,7 @@ export const ensureTagSetResponse = zod
                 .enum([
                   'BOOLEAN',
                   'DATE',
+                  'DATE_RANGE',
                   'NUMBER',
                   'STRING',
                   'SELECT_NUMBER',
@@ -1865,6 +2014,8 @@ export const ensureTagSetResponse = zod
                       'CHANNEL',
                       'CHAT',
                       'COMPANY',
+                      'DATABASE_ROW',
+                      'CONTACT',
                       'DOCUMENT',
                       'INITIATIVE',
                       'PROJECT',

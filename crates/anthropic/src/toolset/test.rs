@@ -1,9 +1,107 @@
 use super::*;
+use crate::types::response::web_search::{SearchResult, WebSearchContent, WebSearchToolError};
 use crate::types::response::{Content, MessageResponse, ResponseContentKind};
+use ai_billing::domain::{
+    DenyReason,
+    admission::{AdmissionFuture, AiAdmissionError, AiAdmissionService},
+};
 use ai_usage::financial::{FinancialError, WriteDisposition};
 use ai_usage::{FinancialFuture, UsageTracking};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+struct Refuse {
+    error: AiAdmissionError,
+    callers: Mutex<Vec<(String, ai_usage::AiFeature)>>,
+}
+impl AiAdmissionService for Refuse {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.callers
+                .lock()
+                .unwrap()
+                .push((user.to_string(), feature));
+            Err(self.error)
+        })
+    }
+}
+
+#[tokio::test]
+async fn direct_tools_refuse_before_both_provider_branches_and_observation() {
+    use ai_toolset::{AsyncTool, ServiceContext};
+    for tracked in [false, true] {
+        for error in [
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            AiAdmissionError::Unavailable,
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut context = AnthropicToolContext::new(
+                Client::with_config(crate::config::Config {
+                    api_base: format!("http://{}", listener.local_addr().unwrap()),
+                    ..Default::default()
+                }),
+                "claude-haiku-4-5".into(),
+            );
+            let admission = Arc::new(Refuse {
+                error,
+                callers: Mutex::new(Vec::new()),
+            });
+            context.admission = admission.clone();
+            let journal = Arc::new(Observations::default());
+            if tracked {
+                context.recorder =
+                    ai_usage::with_tracking(Arc::new(ai_usage::NoOpUsageRecorder), journal.clone());
+            }
+            context.usage_context = UsageContext::system(ai_usage::AiFeature::Automation);
+            let first =
+                RequestContext::new("macro|first@example.com".to_owned().try_into().unwrap());
+            let second =
+                RequestContext::new("macro|second@example.com".to_owned().try_into().unwrap());
+            let tool = WebSearch {
+                input: "test".into(),
+            };
+            let (a, b) = tokio::join!(
+                tool.call(ServiceContext(context.clone()), first.clone()),
+                tool.call(ServiceContext(context), second.clone()),
+            );
+            for result in [a, b] {
+                assert_eq!(
+                    result.unwrap_err().description,
+                    format!("{}: {error}", error.code())
+                );
+            }
+            {
+                let callers = admission.callers.lock().unwrap();
+                assert!(
+                    callers.contains(&(first.user_id.to_string(), ai_usage::AiFeature::Automation))
+                );
+                assert!(
+                    callers
+                        .contains(&(second.user_id.to_string(), ai_usage::AiFeature::Automation))
+                );
+            }
+            assert!(journal.begins.lock().unwrap().is_empty());
+            assert!(journal.finals.lock().unwrap().is_empty());
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(10), listener.accept())
+                    .await
+                    .is_err()
+            );
+        }
+    }
+}
+
+struct NoAnalytics;
+impl UsageRecorder for NoAnalytics {
+    fn record(&self, _: ai_usage::UsageEvent) {
+        panic!("native tools must not introduce a new analytics producer");
+    }
+}
 
 #[derive(Default)]
 struct Observations {
@@ -60,7 +158,7 @@ async fn context_with_status(
         }),
         "claude-haiku-4-5".into(),
     );
-    context.recorder = ai_usage::with_tracking(Arc::new(ai_usage::NoOpUsageRecorder), journal);
+    context.recorder = ai_usage::with_tracking(Arc::new(NoAnalytics), journal);
     context.usage_context = UsageContext::system(ai_usage::AiFeature::Automation);
     context
 }
@@ -363,6 +461,150 @@ fn deserialize_web_search_response() {
             }
         }
     }
+}
+
+fn search_result(url: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "web_search_result",
+        "url": url,
+        "title": format!("Title of {url}"),
+        "encrypted_content": "EqgfCioIARgB...",
+        "page_age": "April 30, 2025"
+    })
+}
+
+fn search_result_block(tool_use_id: &str, content: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "web_search_tool_result",
+        "tool_use_id": tool_use_id,
+        "content": content
+    })
+}
+
+/// A paused server-tool loop is a real stop reason for web search, so the
+/// tool must hand back the results found so far rather than fail on the
+/// envelope; stop reasons this crate has never seen must not fail it either.
+#[tokio::test]
+async fn web_search_survives_paused_and_unknown_stop_reasons() {
+    use ai_toolset::{AsyncTool, ServiceContext};
+    for stop_reason in [
+        "pause_turn",
+        "model_context_window_exceeded",
+        "some_future_reason",
+    ] {
+        let body = serde_json::json!({
+            "id": "msg-1",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
+                search_result_block("srv-1", serde_json::json!([search_result("https://a.example")])),
+                {"type": "server_tool_use", "id": "srv-2", "name": "web_search", "input": {"query": "b"}},
+            ],
+            "stop_reason": stop_reason,
+            "stop_sequence": null,
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        });
+        let context = context_with_response(&body.to_string(), Arc::default()).await;
+        let request = RequestContext::new(
+            "macro|authenticated@example.com"
+                .to_owned()
+                .try_into()
+                .unwrap(),
+        );
+        let response = WebSearch {
+            input: "a and b".into(),
+        }
+        .call(ServiceContext(context), request)
+        .await
+        .unwrap_or_else(|error| panic!("{stop_reason}: {}", error.description));
+        assert_eq!(response.tool_use_id, "srv-1");
+        match response.content {
+            WebSearchContent::Results(results) => assert_eq!(results.len(), 1),
+            WebSearchContent::Error(error) => panic!("{stop_reason}: {error:?}"),
+        }
+    }
+}
+
+#[test]
+fn web_search_output_folds_every_search_without_encrypted_content() {
+    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        {"type": "text", "text": "Searching."},
+        {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
+        search_result_block("srv-1", serde_json::json!([
+            search_result("https://a.example"),
+            search_result("https://shared.example"),
+        ])),
+        search_result_block("srv-2", serde_json::json!({
+            "type": "web_search_tool_result_error",
+            "error_code": "too_many_requests"
+        })),
+        search_result_block("srv-3", serde_json::json!([
+            search_result("https://shared.example"),
+            search_result("https://c.example"),
+        ])),
+    ]))
+    .unwrap();
+
+    let response = web_search::collect_results(blocks).expect("a search ran");
+    assert_eq!(response.tool_use_id, "srv-1");
+    let WebSearchContent::Results(results) = response.content else {
+        panic!("one failed search must not hide the others' results");
+    };
+    let urls: Vec<_> = results
+        .iter()
+        .map(|result| match result {
+            SearchResult::WebSearchResult {
+                url,
+                encrypted_content,
+                ..
+            } => {
+                assert_eq!(encrypted_content, &None);
+                url.as_str()
+            }
+        })
+        .collect();
+    assert_eq!(
+        urls,
+        [
+            "https://a.example",
+            "https://shared.example",
+            "https://c.example"
+        ]
+    );
+}
+
+#[test]
+fn web_search_output_reports_the_error_only_when_nothing_was_found() {
+    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        search_result_block(
+            "srv-1",
+            serde_json::json!({
+                "type": "web_search_tool_result_error",
+                "error_code": "max_uses_exceeded"
+            })
+        ),
+        search_result_block(
+            "srv-2",
+            serde_json::json!({
+                "type": "web_search_tool_result_error",
+                "error_code": "unavailable"
+            })
+        ),
+    ]))
+    .unwrap();
+    let response = web_search::collect_results(blocks).expect("a search ran");
+    assert_eq!(response.tool_use_id, "srv-1");
+    assert!(matches!(
+        response.content,
+        WebSearchContent::Error(WebSearchToolError { ref error_code, .. }) if error_code == "max_uses_exceeded"
+    ));
+
+    let no_search: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        {"type": "text", "text": "I do not need to search for that."}
+    ]))
+    .unwrap();
+    assert!(web_search::collect_results(no_search).is_none());
 }
 
 #[test]

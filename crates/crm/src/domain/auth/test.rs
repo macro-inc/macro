@@ -90,38 +90,6 @@ fn team_receipt_from_team_receipt_validates_type_and_id() {
 }
 
 #[test]
-fn comment_receipt_derives_entity_and_rejects_non_crm() {
-    let entity = company_uuid();
-    let access = CrmCommentReceipt::<ViewAccessLevel>::new(
-        EntityAccessReceipt::dangerously_assert_internal_user(
-            &entity.to_string(),
-            EntityType::CrmContact,
-        ),
-        team_uuid(),
-        TeamRole::Owner,
-    )
-    .unwrap();
-
-    assert_eq!(
-        access.comment_entity().unwrap(),
-        (CrmCommentEntityType::CrmContact, entity)
-    );
-
-    // A receipt for a non-CRM entity cannot mint a comment receipt.
-    assert!(
-        CrmCommentReceipt::<ViewAccessLevel>::new(
-            EntityAccessReceipt::dangerously_assert_internal_user(
-                &entity.to_string(),
-                EntityType::Team,
-            ),
-            team_uuid(),
-            TeamRole::Owner,
-        )
-        .is_err()
-    );
-}
-
-#[test]
 fn team_receipt_hidden_gate_derives_from_team_role() {
     use entity_access::domain::models::{Entity, EntityPermission, MemberTeamRole, TeamRole};
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};

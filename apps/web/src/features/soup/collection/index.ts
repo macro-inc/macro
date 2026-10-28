@@ -1,4 +1,5 @@
 export { type DateBucket, dateBucket } from './date-buckets';
+export { createSoupRowStore } from './row-store';
 export {
   assertUniqueSoupRowIds,
   type BuildFlatSoupRowsOptions,

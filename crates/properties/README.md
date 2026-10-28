@@ -163,11 +163,10 @@ no-op default and do not publish property events:
 
 - `crates/properties_service/src/api/context.rs` omits the broker generic from
   its concrete `PropertiesService` alias.
-- `crates/ai_tools/src/tool_context.rs` omits the broker generic from
-  `ToolPropertiesService`, and `build_properties_service` does not attach a
-  broker. Property and task-property writes through contexts built there,
-  including document cognition, MCP, memory, and the shared AI tool context,
-  therefore do not publish.
+- `crates/ai_tools/src/tool_context.rs` builds `ToolPropertiesService` over
+  `MaybeToolEventBroker`. Hosts that call `build_properties_service_with_broker`
+  publish; `build_properties_service` uses the no-op variant, so writes through
+  hosts that build it that way (no Kafka configured) do not publish.
 
 These are explicit producer coverage boundaries, not fallback delivery paths.
 

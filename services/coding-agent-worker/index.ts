@@ -32,9 +32,11 @@ const app = new Hono();
 
 app.use(logger());
 
-macro.events.on('channel.message_posted', async ({ metadata, message }) => {
+macro.events.on('message.posted', async ({ metadata, target }) => {
+  if (target.type !== 'channel') return;
+  const { message } = target;
   const content = await message.content();
-  console.log('[ingress] channel.message_posted', { metadata, content });
+  console.log('[ingress] message.posted', { metadata, content });
   const match = content && normalizeMessageContent(content).match(TRIGGER);
   if (!match) return;
   const [, repoUrl, prompt] = match;

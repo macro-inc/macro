@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, chat_id, payload, state, message_id, error_code, created_at, request_sha256, account_id, generation\n            FROM whatsapp_send WHERE chat_id = $1 AND user_id = $2 AND idempotency_key = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "request_sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 9,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dbbbb283566a4387f24bcfcc72ff31a078be98e7af17fd266b56bdd54e8d12cc"
+}

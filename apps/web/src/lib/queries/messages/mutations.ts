@@ -2,7 +2,13 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
+import { Telemetry } from '@macro-inc/observability';
+import {
+  messageReferencesCrmRecord,
+  refreshCrmAssociatedSoupQueries,
+} from '@queries/soup/crm-association';
 import {
   bumpSoupEntityTouchedAt,
   invalidateSoupEntity,
@@ -256,14 +262,19 @@ export function optimisticDeleteMessage(
     target,
   };
 
-  if (target.kind === 'top_level' && vars.parent.type !== 'channel') {
+  if (
+    target.kind === 'top_level' &&
+    vars.parent.type !== 'channel' &&
+    vars.parent.type !== 'call'
+  ) {
     context.threadState = getCachedThreadState(vars.parent, target.messageId);
   }
 
   if (
     target.kind === 'top_level' &&
-    vars.parent.type === 'channel' &&
-    topLevelMessageHasReplies(vars.parent, target.messageId)
+    (vars.parent.type === 'call' ||
+      (vars.parent.type === 'channel' &&
+        topLevelMessageHasReplies(vars.parent, target.messageId)))
   ) {
     context.previousDeletedAt =
       getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
@@ -458,12 +469,18 @@ export function useSendMessageMutation(
           return { insert, updatedAt };
         },
         onSuccess(data, variables, context) {
-          const threadId = variables.message.thread_id ?? undefined;
+          const threadId = data.thread_id ?? undefined;
           // A server predating client-minted ids ignores `id` and mints its
           // own. Rebuild the optimistic row under the server id so it keeps
           // its thread state (including the anchor) and never holds a dead id;
           // `applyMessage` below then settles it on the server's fields.
-          if (data.id !== variables.optimisticId && context?.insert) {
+          // A concurrent first call message may become a reply to the root
+          // another participant just created, while retaining its client id.
+          if (
+            (data.id !== variables.optimisticId ||
+              threadId !== (variables.message.thread_id ?? undefined)) &&
+            context?.insert
+          ) {
             rollbackInsertChannelMessage(variables.parent, context.insert);
             optimisticInsertMessage({
               parent: variables.parent,
@@ -471,6 +488,7 @@ export function useSendMessageMutation(
               senderId: variables.senderId,
               optimisticAttachments: variables.optimisticAttachments,
               ...variables.message,
+              thread_id: threadId,
             });
           }
 
@@ -484,9 +502,15 @@ export function useSendMessageMutation(
           // this soup entity. Refresh root messages here so the channel moves to
           // its updated position in soup lists.
           if (threadId === undefined && variables.parent.type === 'channel') {
-            refetchSoupEntity(variables.parent.id, 'channel');
+            refetchSoupEntity(variables.parent.id, 'channel').catch((error) =>
+              Telemetry.error(error, { surface: 'messages' })
+            );
             invalidateSoupEntity(variables.parent.id);
           }
+
+          // CRM record lists include messages that mention or attach the record.
+          if (messageReferencesCrmRecord(variables.message))
+            fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
 
           if (variables.parent.type === 'channel')
             analytics.track('channel_message_sent', {
@@ -494,7 +518,7 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'edited');
+          applyMessage(data, 'posted');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -504,13 +528,15 @@ export function useSendMessageMutation(
           }
           context?.updatedAt?.rollback();
         },
-        onSettled: (_data, _error, variables) => {
+        onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
             variables.parent,
             resolveMessageTarget({
               parent: variables.parent,
-              messageId: variables.optimisticId,
-              threadId: variables.message.thread_id ?? undefined,
+              messageId: data?.id ?? variables.optimisticId,
+              threadId:
+                (data ? data.thread_id : variables.message.thread_id) ??
+                undefined,
             })
           );
         },
@@ -573,6 +599,8 @@ export function useDeleteMessageMutation(
         },
         onSuccess(data, _vars, context) {
           applyRootDeletion(data, context?.threadState);
+          // The deleted message may have referenced a CRM record.
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
         onError(error, vars, context) {
           console.error('failed to delete message', error);
@@ -663,6 +691,8 @@ export function usePatchMessageMutation(
         },
         onSuccess(data) {
           applyMessage(data, 'edited');
+          // An edit can add or remove a CRM record reference.
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
         onError(error, vars, context) {
           console.error('failed to update message', error);

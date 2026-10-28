@@ -43,6 +43,9 @@ pub enum FrecencyStorageErr {
     /// failed to deserialize a type from json
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// The dynamic frecency query cannot represent a GitHub pull request filter.
+    #[error("GitHub pull request filters are not supported by frecency queries")]
+    UnsupportedGithubPullRequestFilter,
 }
 
 impl FrecencyPgStorage {
@@ -257,6 +260,12 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
             limit,
             filters,
         } = req;
+        if filters
+            .as_ref()
+            .is_some_and(|filter| filter.github_pull_request_filter.is_some())
+        {
+            return Err(FrecencyStorageErr::UnsupportedGithubPullRequestFilter);
+        }
         match filters {
             None => {
                 self.static_get_top_entities(user_id, from_score, limit)

@@ -14,11 +14,25 @@ export const badgeVariants = createVariants(
   {
     variant: {
       ghost: 'bg-transparent text-ink-muted',
+      secondary: 'bg-button-secondary-bg text-ink',
       outline: 'bg-transparent text-ink-muted border-edge-muted',
     },
     size: {
-      xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3",
+      xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3 has-[>[data-slot=avatar][data-size=sm]:first-child]:pl-px",
       ...CONTROL_SIZE_VARIANTS,
+      // A 16px avatar in a 24px pill has a 3px inset inside its 1px border.
+      sm: cn(
+        CONTROL_SIZE_VARIANTS.sm,
+        'has-[>[data-slot=avatar][data-size=sm]:first-child]:pl-[3px]'
+      ),
+      md: cn(
+        CONTROL_SIZE_VARIANTS.md,
+        'has-[>[data-slot=avatar][data-size=md]:first-child]:pl-[3px]'
+      ),
+      lg: cn(
+        CONTROL_SIZE_VARIANTS.lg,
+        'has-[>[data-slot=avatar][data-size=md]:first-child]:pl-[5px]'
+      ),
     },
   },
   {
@@ -49,9 +63,8 @@ export function badgeTriggerClasses(options: BadgeClassOptions = {}): string {
   const { variant = 'ghost', size = 'md', class: className } = options;
   return cn(
     buttonClasses({
-      variant,
-      size,
-      noTouchResize: true,
+      variant: variant ?? 'ghost',
+      size: size ?? 'md',
       class: className,
     }),
     'focus-visible:ring-2 focus-visible:ring-accent/20',
@@ -62,6 +75,7 @@ export function badgeTriggerClasses(options: BadgeClassOptions = {}): string {
 /** A non-interactive label with Button-aligned sizing.
  *
  * @do Keep badge text to a word or two.
+ * @do Use a small leading Avatar in xs/sm badges, or medium in md/lg badges.
  * @do Use `badgeTriggerClasses` when a badge needs to behave like a button.
  * @do Use a palette color for identity (tags, calendars) and a semantic color
  *   for state.

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE database_tables t\n        SET position = ordered.position\n        FROM UNNEST($2::uuid[], $3::text[]) AS ordered(id, position)\n        WHERE t.id = ordered.id AND t.database_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "430baaadebc7b5c1d58d5f347781e8d2b1f0a0e1bee66f3c9dd4c25137e473f7"
+}

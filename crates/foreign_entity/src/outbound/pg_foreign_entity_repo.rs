@@ -18,7 +18,6 @@ struct ForeignEntityBatchQuery<'a> {
     source_auth_entities: &'a [String],
     sort_method: SimpleSortMethod,
     filter_jsonpath: Option<&'a str>,
-    participant_github_user_id: Option<&'a str>,
     /// Macro user id used to scope the per-user notification state predicates.
     /// When a notification filter is requested but this is `None`, nothing matches.
     notification_user_id: Option<&'a str>,
@@ -37,15 +36,14 @@ fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
         .unzip()
 }
 
-/// A participant or mixed metadata/notification subtree cannot be lifted safely.
-/// Pure notification subtrees support AND, OR, and NOT.
+/// A mixed metadata/notification subtree cannot be lifted safely. Pure notification subtrees
+/// support AND, OR, and NOT.
 struct UnsupportedHoistedFilter;
 
 /// Filters lifted off the top-level AND spine into dedicated SQL predicates because they cannot be
-/// expressed in the metadata jsonpath (they need indexed-containment or notification-table joins).
+/// expressed in the metadata jsonpath (they need notification-table joins).
 #[derive(Default)]
 struct HoistedForeignEntityFilters {
-    includes_me: bool,
     // A truth table over the eight possible sets of notification states present
     // on an entity. AND combines truth tables, not row-level state predicates:
     // an unseen literal and a seen literal can match different notifications.
@@ -56,7 +54,6 @@ struct HoistedForeignEntityFilters {
 impl HoistedForeignEntityFilters {
     fn and(self, other: Self) -> Self {
         Self {
-            includes_me: self.includes_me || other.includes_me,
             notification_matches: match (self.notification_matches, other.notification_matches) {
                 (Some(a), Some(b)) => Some(a & b),
                 (a, b) => a.or(b),
@@ -105,8 +102,8 @@ fn notification_truth_table(expr: &Expr<ForeignEntityLiteral>) -> Option<u8> {
     })
 }
 
-/// Literals that cannot be represented in the metadata jsonpath and must be lifted into dedicated
-/// SQL predicates instead.
+/// Literals that cannot be represented in the metadata jsonpath. Notification states are lifted
+/// into SQL predicates; IncludesMe fails closed in this generic repository.
 fn is_hoisted_literal(literal: &ForeignEntityLiteral) -> bool {
     matches!(
         literal,
@@ -124,9 +121,9 @@ fn contains_hoisted_literal(expr: &Expr<ForeignEntityLiteral>) -> bool {
     }
 }
 
-/// Lift participant predicates and pure notification subtrees off the AND spine.
-/// Notification subtrees preserve their full boolean expression through a truth table;
-/// other literals remain in the metadata jsonpath. Mixed OR/NOT subtrees fail closed.
+/// Lift pure notification subtrees off the AND spine. Notification subtrees preserve their full
+/// boolean expression through a truth table; other literals remain in the metadata jsonpath.
+/// Mixed OR/NOT subtrees fail closed.
 fn extract_hoisted_filters(
     expr: &Expr<ForeignEntityLiteral>,
 ) -> Result<HoistedForeignEntityFilters, UnsupportedHoistedFilter> {
@@ -140,10 +137,6 @@ fn extract_hoisted_filters(
         Expr::And(left, right) => {
             Ok(extract_hoisted_filters(left)?.and(extract_hoisted_filters(right)?))
         }
-        Expr::Literal(ForeignEntityLiteral::IncludesMe) => Ok(HoistedForeignEntityFilters {
-            includes_me: true,
-            ..Default::default()
-        }),
         other => {
             if contains_hoisted_literal(other) {
                 Err(UnsupportedHoistedFilter)
@@ -181,9 +174,8 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             jsonpath_text_eq("foreignEntitySource", source)
         }
-        // IncludesMe and the notification literals are hoisted into dedicated SQL predicates by
-        // extract_hoisted_filters and never reach the jsonpath; if one slips through, match nothing
-        // rather than everything.
+        // IncludesMe cannot be resolved in this generic repository, and notification literals
+        // require dedicated SQL predicates. extract_hoisted_filters rejects either if unhandled.
         ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => {
             "(1 == 0)".to_string()
         }
@@ -217,7 +209,6 @@ impl PgForeignEntityRepo {
             source_auth_entities,
             sort_method,
             filter_jsonpath,
-            participant_github_user_id,
             notification_user_id,
             notification_sets,
             cursor_id,
@@ -267,21 +258,17 @@ impl PgForeignEntityRepo {
                     )
                   )
                   AND (
-                    $8::text IS NULL
-                    OR (fe.metadata -> 'participantGithubUserIds') ? $8::text
-                  )
-                  AND (
-                    $9::int[] IS NULL
-                    OR ($10::text IS NOT NULL AND (
+                    $8::int[] IS NULL
+                    OR ($9::text IS NOT NULL AND (
                         SELECT COALESCE(bit_or(CASE un.state
                             WHEN 'unseen' THEN 1 WHEN 'seen' THEN 2 WHEN 'done' THEN 4 END), 0)
                         FROM notification n
                         JOIN user_notification un ON un.notification_id = n.id
-                        WHERE un.user_id = $10::text
+                        WHERE un.user_id = $9::text
                           AND un.deleted_at IS NULL
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
-                    ) = ANY($9::int[]))
+                    ) = ANY($8::int[]))
                   )
                 ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC
             )
@@ -307,27 +294,10 @@ impl PgForeignEntityRepo {
             cursor_value,
             cursor_id,
             limit,
-            participant_github_user_id,
             notification_sets,
             notification_user_id,
         )
         .fetch_all(&self.pool)
-        .await
-    }
-
-    async fn github_user_id_for_macro_user(
-        &self,
-        macro_user_id: &str,
-    ) -> Result<Option<String>, sqlx::Error> {
-        sqlx::query_scalar!(
-            r#"
-            SELECT github_user_id
-            FROM github_links
-            WHERE macro_id = $1
-            "#,
-            macro_user_id,
-        )
-        .fetch_optional(&self.pool)
         .await
     }
 }
@@ -402,7 +372,6 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
         }
 
         let HoistedForeignEntityFilters {
-            includes_me,
             notification_matches,
             jsonpath: filter_jsonpath,
         } = match query
@@ -426,19 +395,6 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             return Ok(Vec::new());
         }
 
-        let participant_github_user_id = if includes_me {
-            let Some(requesting_user) = requesting_user.as_deref() else {
-                return Ok(Vec::new());
-            };
-            match self.github_user_id_for_macro_user(requesting_user).await? {
-                Some(github_user_id) => Some(github_user_id),
-                // No linked GitHub identity: the user participates in nothing.
-                None => return Ok(Vec::new()),
-            }
-        } else {
-            None
-        };
-
         let notification_sets: Option<Vec<i32>> = notification_matches.map(|table| {
             (0..8)
                 .filter(|present| table & (1 << present) != 0)
@@ -446,7 +402,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
         });
         // Notification states are scoped to the requesting user's per-user notification row.
         // Without a requesting user the predicate matches nothing, so an active notification
-        // filter yields no results (consistent with the participant filter above).
+        // filter yields no results.
         let notification_user_id = requesting_user.as_deref();
 
         let (source_ids, source_auth_entities) = source_id_parts(&source_ids);
@@ -457,7 +413,6 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             source_auth_entities: &source_auth_entities,
             sort_method: *query.sort_method(),
             filter_jsonpath: filter_jsonpath.as_deref(),
-            participant_github_user_id: participant_github_user_id.as_deref(),
             notification_user_id,
             notification_sets: notification_sets.as_deref(),
             cursor_id: cursor_id.copied(),

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_participants (channel_id, user_id, role)\n             VALUES ($1, $2, 'owner'), ($1, $3, 'member')\n             ON CONFLICT (channel_id, user_id) DO UPDATE SET left_at = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c82d37f9704b0c2d6c5efc51441447cfc0471991d3e9284432c49235b68fc5ac"
+}

@@ -12,6 +12,7 @@ import {
   type ComparisonRow,
   ComparisonTable,
 } from '../../PostComparison';
+import { PostFaqItem } from '../../PostFaq';
 import type { PostMeta } from '../../registry';
 
 const EMAIL_VIDEO_ID = 'tnsxkywzTvY';
@@ -34,8 +35,8 @@ const comparisonRows: ComparisonRow[] = [
     them: '$10–$19 per seat, plus AI at $14–$33',
   },
   {
-    feature: 'Free plan',
-    macro: 'Full workspace for personal use, with storage and AI limits',
+    feature: 'No-cost access',
+    macro: 'Free Guest access to a workspace, with storage and AI limits',
     them: 'Free with storage capped at 60MB and limited AI',
   },
   {
@@ -498,10 +499,9 @@ export default function MacroVsClickUpPost() {
           item, no module matrix.
         </p>
         <p>
-          We also offer a free plan that covers all you need for personal use
-          with some limits on storage and the AI models you can access. Finally,
-          enterprises can get a custom deployment that adds SSO, compliance and
-          self-hosting.
+          You can also join a workspace as a Guest for free, with limits on
+          storage and the AI models you can access. Finally, enterprises can get
+          a custom deployment that adds SSO, compliance and self-hosting.
         </p>
         <p>
           ClickUp's seat price starts lower — $10 to $19 before AI — but the
@@ -575,72 +575,77 @@ export default function MacroVsClickUpPost() {
           clearer foundation.
         </p>
 
-        <h2>FAQ</h2>
-        <div class="mvn-faq">
-          <h3>Is Macro better than ClickUp for startups?</h3>
-          <p>
-            For most startups, yes. Macro replaces your inbox, chat, docs and
-            task tracker with one AI-first workspace, so shared context is the
-            default. ClickUp offers more project-management knobs, but those
-            knobs are also where small teams lose time — configuring Spaces,
-            cleaning up views, and teaching new hires which List is current. If
-            you want everything connected and AI-ready without a heavy admin
-            burden, Macro is the better place to start.
-          </p>
+        <h2 class="post-faq-title">Frequently asked questions</h2>
+        <div class="post-faq">
+          <PostFaqItem question="Is Macro better than ClickUp for startups?">
+            <p>
+              For most startups, yes. Macro replaces your inbox, chat, docs and
+              task tracker with one AI-first workspace, so shared context is the
+              default. ClickUp offers more project-management knobs, but those
+              knobs are also where small teams lose time — configuring Spaces,
+              cleaning up views, and teaching new hires which List is current.
+              If you want everything connected and AI-ready without a heavy
+              admin burden, Macro is the better place to start.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro cheaper than ClickUp?</h3>
-          <p>
-            This depends on the plan you choose. ClickUp's base plans cost $10
-            or $19 per seat per month. To access AI, you have to add another $14
-            or $33, depending on the features you want. That brings the total
-            with AI to somewhere between $24 and $52. Macro, meanwhile, costs
-            $40 per month for everything we offer — including AI — without
-            sorting which features sit behind which tier.
-          </p>
+          <PostFaqItem question="Is Macro cheaper than ClickUp?">
+            <p>
+              This depends on the plan you choose. ClickUp's base plans cost $10
+              or $19 per seat per month. To access AI, you have to add another
+              $14 or $33, depending on the features you want. That brings the
+              total with AI to somewhere between $24 and $52. Macro, meanwhile,
+              costs $40 per month for everything we offer — including AI —
+              without sorting which features sit behind which tier.
+            </p>
+          </PostFaqItem>
 
-          <h3>How do ClickUp and Macro's free plans compare?</h3>
-          <p>
-            ClickUp's free plan is built for testing the product. You get
-            unlimited tasks and members, but storage is capped at 60MB, and you
-            get limited access to AI tools. Our free plan gives you full
-            workspace access with a "Sent with Macro" signature and limits on
-            storage and AI.
-          </p>
+          <PostFaqItem question="How does Macro Guest access compare with ClickUp's free plan?">
+            <p>
+              ClickUp's free plan is built for testing the product. You get
+              unlimited tasks and members, but storage is capped at 60MB, and
+              you get limited access to AI tools. Guest access in Macro is free,
+              with a "Sent with Macro" signature and limits on storage and AI.
+            </p>
+          </PostFaqItem>
 
-          <h3>Does ClickUp not have email?</h3>
-          <p>
-            ClickUp can connect to Gmail or Outlook through integrations, but
-            that isn't an email client. Teams still need a separate tool for
-            their actual inbox, which is one more place work can fall out of
-            sync. Our email client is built into the app itself.
-          </p>
+          <PostFaqItem question="Does ClickUp not have email?">
+            <p>
+              ClickUp can connect to Gmail or Outlook through integrations, but
+              that isn't an email client. Teams still need a separate tool for
+              their actual inbox, which is one more place work can fall out of
+              sync. Our email client is built into the app itself.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is ClickUp hard to use?</h3>
-          <p>
-            "Hard" depends on the team. ClickUp isn't missing documentation or
-            training — if anything, it needs them, because there's so much to
-            learn. Power users who enjoy configuring workflows often stick with
-            it. Teams that want to open the app and move get frustrated by how
-            many places a simple task can live. Macro is deliberately narrower
-            so day-to-day use stays fast.
-          </p>
+          <PostFaqItem question="Is ClickUp hard to use?">
+            <p>
+              "Hard" depends on the team. ClickUp isn't missing documentation or
+              training — if anything, it needs them, because there's so much to
+              learn. Power users who enjoy configuring workflows often stick
+              with it. Teams that want to open the app and move get frustrated
+              by how many places a simple task can live. Macro is deliberately
+              narrower so day-to-day use stays fast.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro open source?</h3>
-          <p>
-            Yes, end to end:{' '}
-            <a
-              href="https://github.com/macro-inc/macro"
-              target="_blank"
-              rel="noreferrer"
-            >
-              github.com/macro-inc/macro
-            </a>
-            . Your data stays open and portable and the app is extensible.
-            ClickUp is closed source.
-          </p>
+          <PostFaqItem question="Is Macro open source?">
+            <p>
+              Yes, end to end:{' '}
+              <a
+                href="https://github.com/macro-inc/macro"
+                target="_blank"
+                rel="noreferrer"
+              >
+                github.com/macro-inc/macro
+              </a>
+              . Your data stays open and portable and the app is extensible.
+              ClickUp is closed source.
+            </p>
+          </PostFaqItem>
         </div>
 
-        <p>
+        <p class="post-footnote">
           For tasks, GitHub linking, agents and the rest of the workspace, see
           the{' '}
           <a href="https://docs.macro.com" target="_blank" rel="noreferrer">

@@ -5,8 +5,8 @@
  * replace the first call's host in the middle of its animation.
  * Subagents and user tools stay outside groups so delegated work and user
  * interactions remain visible regardless of the surrounding tool traffic.
- * DisplayResults is inline answer content and always breaks the run, including
- * while its arguments are still arriving.
+ * Tools with their own answer or session view always break the run, including
+ * while their arguments are still arriving.
  *
  * A thought at the tail of a run stays out of the group only when the run
  * closes the message: that row is the current (or last) reasoning, and
@@ -30,13 +30,18 @@ export type PartSegment = {
 /**
  * Macro tools whose call renders the answer itself rather than a card about
  * it: `DisplayResults` renders the dynamic-UI view the model composed, the
- * same full-width dashboard the chat shows.
+ * same full-width dashboard the chat shows. `GenerateImage` shows the generated
+ * image document. `DispatchCodingAgent` shows the dispatched session's Magic Chip.
  *
  * Folding one of these into a group would put the answer behind a closed
  * caret, indented inside a row of muted tool chips — so they break the run
  * and stand on their own, like a paragraph of the reply.
  */
-const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
+const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
+  'DispatchCodingAgent',
+  'DisplayResults',
+  'GenerateImage',
+]);
 
 /**
  * Whether a part is a tool call that renders its own view (see
@@ -45,6 +50,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
+  if (isCodeExecution(part) || presentedReviewId(part)) return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&
@@ -97,4 +103,38 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
     }
   }
   return segments;
+}
+
+/** Only Macro's session-authenticated internal server may select this view. */
+export function isCodeExecution(part: MessagePart): boolean {
+  return (
+    part.kind === 'tool_use' &&
+    part.name.kind === 'mcp' &&
+    part.name.server === 'macro_internal' &&
+    part.name.tool === 'ExecuteCode'
+  );
+}
+
+/** Only the server-authored presentation call selects a persisted review card.
+ * The normal PresentReview invocation still renders its ordinary receipt.
+ */
+export function presentedReviewId(part: MessagePart): string | undefined {
+  if (
+    part.kind !== 'tool_use' ||
+    part.name.kind !== 'mcp' ||
+    part.name.server !== 'macro_internal' ||
+    part.name.tool !== 'PresentReview' ||
+    !('input' in part.detail)
+  )
+    return;
+  const input = part.detail.input;
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    !('reviewId' in input) ||
+    typeof input.reviewId !== 'string' ||
+    !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(input.reviewId)
+  )
+    return;
+  return part.id === `review_${input.reviewId}` ? input.reviewId : undefined;
 }

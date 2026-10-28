@@ -45,12 +45,20 @@ pub struct SetPricingRequest {
     pub price_per_mil_in: Option<f32>,
     /// New price per million output tokens (USD). Required for token pricing.
     pub price_per_mil_out: Option<f32>,
+    /// Price per million cache-read input tokens (USD). Omit it when the model
+    /// has no published rate: calls that report cache reads then stay unpriced.
+    pub price_per_mil_cache_read: Option<f32>,
+    /// Price per million cache-write input tokens (USD). Omit it when the model
+    /// has no published rate: calls that report cache writes then stay unpriced.
+    pub price_per_mil_cache_write: Option<f32>,
     /// Price per minute of audio (USD), or null for token-only pricing.
     pub price_per_audio_minute: Option<f32>,
 }
 
 impl SetPricingRequest {
     fn pricing(&self) -> Result<ModelPricing, &'static str> {
+        let cache_read = self.price_per_mil_cache_read;
+        let cache_write = self.price_per_mil_cache_write;
         match (
             self.price_per_mil_in,
             self.price_per_mil_out,
@@ -58,11 +66,18 @@ impl SetPricingRequest {
         ) {
             (input, output, Some(per_minute))
                 if input.is_none_or(|price| price == 0.0)
-                    && output.is_none_or(|price| price == 0.0) =>
+                    && output.is_none_or(|price| price == 0.0)
+                    && cache_read.is_none()
+                    && cache_write.is_none() =>
             {
                 Ok(ModelPricing::Audio { per_minute })
             }
-            (Some(input), Some(output), None) => Ok(ModelPricing::Tokens { input, output }),
+            (Some(input), Some(output), None) => Ok(ModelPricing::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            }),
             (_, _, Some(_)) => Err("choose token pricing or audio pricing"),
             _ => Err("provide both token prices or an audio price"),
         }

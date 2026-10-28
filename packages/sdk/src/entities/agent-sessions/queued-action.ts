@@ -8,8 +8,8 @@ import type { MacroClient } from '../../utils/client';
 /**
  * One action waiting in an agent session's server-side queue: a prompt or a
  * compact accepted while a turn was running, dispatching when that turn
- * ends. Until then it can be edited (prompts only) or removed; once it has
- * dispatched, both answer 404 — there is no un-sending.
+ * ends. Until then it can be edited (prompts only), steered, or removed; once
+ * it has dispatched, these actions answer 404 — there is no un-sending.
  *
  * List-sourced only - there is no per-action GET, only the queue snapshot -
  * so this wraps whatever DTO the caller already has, the same shape
@@ -79,6 +79,15 @@ export class QueuedAction {
     );
     this.dto = { ...this.dto, prompt };
     return this;
+  }
+
+  /** Move this action to the front and interrupt the current turn to run it next. */
+  async steer(): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.steerQueuedAction({
+        path: { session_id: this.sessionId, action_id: this.actionId },
+      }),
+    );
   }
 
   /** Remove this action from the queue before it dispatches. */

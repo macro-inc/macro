@@ -1,7 +1,7 @@
 query Soup($input: SoupInput!) {
 	user {
 		id
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items {
 				...SoupItemFields
@@ -14,7 +14,7 @@ query Soup($input: SoupInput!) {
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly {
 				...SoupItemFields
@@ -38,7 +38,7 @@ query SoupBackfill($input: SoupInput!) {
 query SoupMailBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly { ...SoupItemFields }
 			nextCursor
@@ -49,7 +49,7 @@ query SoupMailBackfill($input: SoupInput!) {
 query SoupSharedMailBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
-		emailLinks @cacheOnly { id emailAddress photoUrl }
+		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items @cacheOnly { ...SoupItemFields }
 			scopeIds: items { __typename id }
@@ -61,7 +61,10 @@ query SoupSharedMailBackfill($input: SoupInput!) {
 query MailAccounts {
 	user {
 		id
-		emailLinks { id emailAddress photoUrl }
+		emailLinks {
+			...MailAccountFields
+			sendAs { emailAddress displayName }
+		}
 	}
 }
 
@@ -80,7 +83,8 @@ fragment MailPreviewFields on GraphqlMailPreviewMessage {
 fragment MailItemFields on GraphqlSoupEntity {
 	...SoupItemFields
 	... on GraphqlSoupEmailThread {
-		mailAllPreview { ...MailPreviewFields }
+		mailDraftState { ...EmailDraftStateFields }
+        mailAllPreview { ...MailPreviewFields }
 		mailDraftPreview { ...MailPreviewFields }
 		mailSentPreview { ...MailPreviewFields }
 	}
@@ -96,36 +100,19 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
 	...SoupEntityIdentityFields
-	... on GraphqlSoupAgentSession {
-		sessionName: name
-		isArchived
+	...SoupAgentSessionFields
+	frecencyScore
+	... on GraphqlSoupDatabaseRow {
+		tableId
+		databaseId
+		position
 		ownerId
-		botId
-		harness
-		repoUrl
-		repoBranch
-		pullRequestUrl
-		workingBranch
-		pullRequestState
-		pullRequestId
-		turnState
-		bot {
-			id
-			name
-			avatarUrl
-		}
-		threadId
-		status
+		creatorId
 		createdAt
 		updatedAt
-		viewedAt
-		properties {
-			...SoupPropertyFields
-		}
+		properties { ...SoupPropertyFields }
 	}
-	frecencyScore
 	... on GraphqlSoupInitiative {
-		descriptionDocumentId
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -184,7 +171,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
-		mailAllPreview @cacheOnly { ...MailPreviewFields }
+		latestOutboundMessageTs
+		latestNonSpamMessageTs
+		reminderReturnedAt
+		mailDraftState @cacheOnly { ...EmailDraftStateFields }
+        mailAllPreview @cacheOnly { ...MailPreviewFields }
 		mailDraftPreview @cacheOnly { ...MailPreviewFields }
 		mailSentPreview @cacheOnly { ...MailPreviewFields }
 		emailName: name
@@ -197,12 +188,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		isImportant
 		isSignal
 		projectId
-		sortTs
 		createdAt
 		updatedAt
 		viewedAt
-		participants {
-			id
+		participants: senders {
+			contactId
 			linkId
 			name
 			email
@@ -294,6 +284,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	...GraphqlCrmContactFields
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -317,27 +308,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		createdAt
 		updatedAt
 	}
-	... on GraphqlSoupReminder {
-		reminderDescription: description
-		scheduleType
-		remindAt
-		cron
-		timezone
-		nextRunAt
-		enabled
-		completedAt
-		createdAt
-		updatedAt
-		referencedEntity {
-			id
-			entityType
-			fileType
-			subType
-		}
-		properties {
-			...SoupPropertyFields
-		}
-	}
 	... on GraphqlSoupCalendarEvent {
 		calendarEventTitle: title
 		calendarEventStatus: status
@@ -358,6 +328,38 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 	notifications { ...SoupNotificationFields }
 }
 
+# An agent session's list fields. Also re-read alone, from the primary, when
+# the session reports a committed change: see AgentSessionRow.
+fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
+	sessionName: name
+	isArchived
+	ownerId
+	botId
+	harness
+	repoUrl
+	repoBranch
+	pullRequestUrl
+	workingBranch
+	pullRequestState
+	pullRequestId
+	turnState
+	bot {
+		id
+		name
+		avatarUrl
+	}
+	threadId
+	source
+	visibility
+	status
+	createdAt
+	updatedAt
+	viewedAt
+	properties {
+		...SoupPropertyFields
+	}
+}
+
 fragment SoupEntityIdentityFields on GraphqlSoupEntity {
 	id
 	entityType
@@ -374,33 +376,39 @@ fragment SoupPropertyFields on GraphqlProperty {
 	specificEntityType
 	isSystem
 	isMetadata
-	value {
-		__typename
-		... on GraphqlBooleanPropertyValue {
-			boolValue: value
+	value { ...SoupPropertyValueFields }
+}
+
+fragment SoupPropertyValueFields on GraphqlPropertyValue {
+	__typename
+	... on GraphqlBooleanPropertyValue {
+		boolValue: value
+	}
+	... on GraphqlNumberPropertyValue {
+		numberValue: value
+	}
+	... on GraphqlStringPropertyValue {
+		stringValue: value
+	}
+	... on GraphqlDatePropertyValue {
+		dateValue: value
+	}
+	... on GraphqlDateRangePropertyValue {
+		rangeStart: start
+		rangeEnd: end
+	}
+	... on GraphqlSelectOptionPropertyValue {
+		optionIds
+	}
+	... on GraphqlEntityReferencePropertyValue {
+		references {
+			entityId
+			entityType
+			specificMessageId
 		}
-		... on GraphqlNumberPropertyValue {
-			numberValue: value
-		}
-		... on GraphqlStringPropertyValue {
-			stringValue: value
-		}
-		... on GraphqlDatePropertyValue {
-			dateValue: value
-		}
-		... on GraphqlSelectOptionPropertyValue {
-			optionIds
-		}
-		... on GraphqlEntityReferencePropertyValue {
-			references {
-				entityId
-				entityType
-				specificMessageId
-			}
-		}
-		... on GraphqlLinkPropertyValue {
-			urls
-		}
+	}
+	... on GraphqlLinkPropertyValue {
+		urls
 	}
 }
 
@@ -422,9 +430,13 @@ fragment SoupNotificationFields on GraphqlNotification {
 }
 
 fragment SoupNotificationStateFields on GraphqlNotification {
+	__typename
 	id
 	eventType
+	# The Soup cache reads `entityType` by its schema name; never alias it.
 	entityType
+	# The canonical type also covers entities outside Soup (external chats).
+	targetEntityType
 	entityId
 	sent
 	state
@@ -461,6 +473,11 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 # REST metadata (including mention/reply content) remains available to consumers.
 fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
+	... on GraphqlExternalChatMessageMetadata {
+		externalChatProvider: provider
+		externalChatName: chatName
+		externalChatMessageId: messageId
+	}
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent
@@ -503,6 +520,20 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		repliedToDocumentCommentThreadText: text
 		repliedToDocumentCommentThreadSenderProfilePictureUrl: senderProfilePictureUrl
 		repliedToDocumentCommentThreadSenderDisplayName: senderDisplayName
+	}
+	... on GraphqlEntityAccessRequestedMetadata {
+		entityAccessRequestedRequestId: requestId
+		entityAccessRequestedRevision: revision
+		entityAccessRequestedEntityName: entityName
+		entityAccessRequestedFileType: fileType
+		entityAccessRequestedAccessLevel: accessLevel
+	}
+	... on GraphqlEntityAccessGrantedMetadata {
+		entityAccessGrantedRequestId: requestId
+		entityAccessGrantedRevision: revision
+		entityAccessGrantedEntityName: entityName
+		entityAccessGrantedFileType: fileType
+		entityAccessGrantedAccessLevel: accessLevel
 	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
@@ -594,6 +625,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlReminderMetadata {
 		reminderReminderId: reminderId
 		reminderDescription: description
+		reminderScheduledFor: scheduledFor
 	}
 	... on GraphqlCalendarEventReminderMetadata {
 		calendarEventReminderEventId: eventId
@@ -604,6 +636,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventReminderStartDate: startDate
 		calendarEventReminderTimeZone: timeZone
 		calendarEventReminderMinutesBefore: minutesBefore
+	}
+	... on GraphqlCalendarEventJoinRequestMetadata {
+		calendarEventJoinRequestRequestId: requestId
+		calendarEventJoinRequestEventId: eventId
+		calendarEventJoinRequestTitle: title
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary
@@ -755,4 +792,16 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		agentSessionMentionedMentionedBy: mentionedBy
 		agentSessionMentionedActionId: actionId
 	}
+}
+
+fragment MailAccountFields on GraphqlEmailLink {
+  id
+  macroId
+  provider
+  emailAddress
+  photoUrl
+  isPrimary
+  needsReauth
+  draftIsSignal
+  settings { signature signatureOnRepliesForwards }
 }

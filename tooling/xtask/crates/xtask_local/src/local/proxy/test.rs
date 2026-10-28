@@ -16,6 +16,7 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
         "/lexical",
         "/ai-editing",
         "/static-file",
+        "/local-storage",
     ] {
         assert!(prefixes.contains(&prefix));
     }
@@ -117,6 +118,8 @@ fn document_content_services_are_available_through_the_proxy() {
 
     assert!(caddy.contains("uri strip_prefix /sync"));
     assert!(caddy.contains("reverse_proxy sync-service:8787"));
+    assert!(caddy.contains("header_up Origin http://localhost:3000"));
+    assert!(!caddyfile(Mode::Dev, false).contains("header_up Origin"));
     assert!(caddy.contains("handle_path /lexical/*"));
     assert!(caddy.contains("reverse_proxy lexical-service:8096"));
     assert!(caddy.contains("handle_path /ai-editing/*"));
@@ -134,6 +137,8 @@ fn static_file_block_is_mode_specific() {
     assert!(!local.contains("route /static-file/*"));
     assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
+    assert!(local.contains("handle_path /local-storage/*"));
+    assert!(!caddyfile(Mode::Dev, false).contains("handle_path /local-storage/*"));
 }
 
 /// Drift gate across the Rust↔TypeScript seam: every proxied service's prefix
@@ -186,6 +191,21 @@ fn static_frontend_block_is_opt_in() {
 
     let headless_dev = caddyfile(Mode::Dev, true);
     assert!(!headless_dev.contains("handle /mailpit/*"));
+}
+
+/// Only host-run Vite needs protection from concurrent module connection bursts.
+#[test]
+fn vite_connection_limit_is_scoped_to_frontend() {
+    for mode in [Mode::Local, Mode::Dev] {
+        let attached = caddyfile(mode, false);
+        assert_eq!(attached.matches("max_conns_per_host").count(), 1);
+        let (backend_routes, frontend_route) = attached
+            .split_once("reverse_proxy host.docker.internal:{$VITE_PORT} {")
+            .expect("attached frontend must proxy to Vite");
+        assert!(!backend_routes.contains("max_conns_per_host"));
+        assert!(frontend_route.contains("transport http {\n                max_conns_per_host 16"));
+        assert!(!caddyfile(mode, true).contains("max_conns_per_host"));
+    }
 }
 
 /// Local Caddy speaks HTTPS with a machine certificate and stamps wildcard CORS

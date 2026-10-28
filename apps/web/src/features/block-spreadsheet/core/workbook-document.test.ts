@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   appendSpreadsheetRows,
   DEFAULT_SHEET_ID,
+  freshSpreadsheetCells,
   readSpreadsheetCells,
   readSpreadsheetLayout,
   resizeSpreadsheetColumn,
+  SPREADSHEET_DEFAULT_STYLE,
+  type SpreadsheetCells,
   writeSpreadsheetCells,
 } from './spreadsheet-document';
 import {
@@ -58,7 +61,7 @@ describe('collaborative workbook', () => {
         id: DEFAULT_SHEET_ID,
         name: 'Sheet1',
         cells: { A1: { value: 'legacy', italic: true } },
-        layout: { rowCount: 300, columnWidths: { 0: 180 } },
+        layout: { rowCount: 300, columnCount: 26, columnWidths: { 0: 180 } },
       },
     ]);
     expect(doc.version().toJSON()).toEqual(version);
@@ -80,12 +83,162 @@ describe('collaborative workbook', () => {
     expect(readSpreadsheetLayout(doc).rowCount).toBe(200);
     expect(readSpreadsheetLayout(doc, id)).toEqual({
       rowCount: 250,
+      columnCount: 26,
       columnWidths: { 0: 320 },
     });
     renameSpreadsheetSheet(doc, id, 'Forecast');
     expect(readSpreadsheetSheets(doc)[1]).toEqual({ id, name: 'Forecast' });
     expect(readSpreadsheetCells(doc, id).A1.value).toBe('second');
     doc.free();
+  });
+
+  it('keeps charts and pivot tables reading a renamed sheet, and the values charts show when it is deleted', () => {
+    const doc = new LoroDoc();
+    const [data, report] = importSpreadsheetSheets(doc, [
+      {
+        ...blank('Data'),
+        cells: {
+          A1: { value: 'Month' },
+          B1: { value: 'Sales' },
+          A2: { value: 'Jan' },
+          B2: { value: '10' },
+          A3: { value: 'Feb' },
+          B3: { value: '=B2*2' },
+        },
+      },
+      {
+        ...blank('Report'),
+        metadata: {
+          drawings: [
+            {
+              id: 'chart',
+              type: 'chart',
+              from: { row: 0, column: 0, x: 0, y: 0 },
+              width: 300,
+              height: 200,
+              chart: {
+                plots: [
+                  {
+                    kind: 'line',
+                    series: [{ nameRef: 0, categories: 1, values: 2 }],
+                  },
+                ],
+                references: ['Data!$B$1', 'Data!$A$2:$A$3', "'Data'!$B$2:$B$3"],
+                source:
+                  '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:pivotSource><c:name>[Book.xlsx]Data!PivotTable1</c:name></c:pivotSource></c:chartSpace>',
+              },
+            },
+          ],
+          pivotTables: [
+            {
+              table: '<pivotTableDefinition name="Summary"/>',
+              cache: '<pivotCacheDefinition/>',
+              location: 'F1:G13',
+              source: 'Data!$A$1:$B$3',
+            },
+          ],
+        },
+      },
+    ]);
+    // A text box showing a cell of the sheet.
+    const writeMetadata = (value: unknown) =>
+      doc.getMap('spreadsheetSheetMetadata').set(report, JSON.stringify(value));
+    writeMetadata({
+      ...readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+        ?.metadata,
+      drawings: [
+        ...(readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+          ?.metadata?.drawings ?? []),
+        {
+          id: 'total',
+          type: 'shape',
+          from: { row: 20, column: 0, x: 0, y: 0 },
+          width: 100,
+          height: 40,
+          shape: {
+            parts: [
+              {
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+                text: {
+                  paragraphs: [{ runs: [{ text: '10', bold: true }] }],
+                  link: 'Data!$B$3',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    doc.commit();
+    renameSpreadsheetSheet(doc, data, 'Sales 2024');
+    const metadata = () =>
+      readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+        ?.metadata;
+    expect(metadata()).toMatchObject({
+      drawings: [
+        {
+          chart: {
+            references: [
+              "'Sales 2024'!$B$1",
+              "'Sales 2024'!$A$2:$A$3",
+              "'Sales 2024'!$B$2:$B$3",
+            ],
+            source: expect.stringContaining(
+              "<c:name>[Book.xlsx]'Sales 2024'!PivotTable1</c:name>"
+            ),
+          },
+        },
+        { shape: { parts: [{ text: { link: "'Sales 2024'!$B$3" } }] } },
+      ],
+      pivotTables: [{ source: "'Sales 2024'!$A$1:$B$3" }],
+    });
+    // The chart keeps the values it showed: calculated ones when given, and
+    // literal cells otherwise. The pivot table keeps its values as cells.
+    const other = new LoroDoc();
+    other.import(doc.export({ mode: 'snapshot' }));
+    // Calculated values of B2:B3.
+    deleteSpreadsheetSheet(doc, data, (range) =>
+      range.left === 1 && range.top >= 1
+        ? [
+            { text: '10', number: 10 },
+            { text: '20', number: 20 },
+          ].slice(range.top - 1, range.bottom)
+        : undefined
+    );
+    expect(metadata()?.pivotTables).toBeUndefined();
+    expect(metadata()?.drawings).toMatchObject([
+      { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,20}'] } },
+      // The text box keeps the value it showed, in its look.
+      {
+        shape: {
+          parts: [
+            { text: { paragraphs: [{ runs: [{ text: '20', bold: true }] }] } },
+          ],
+        },
+      },
+    ]);
+    const kept = metadata()?.drawings?.[1];
+    expect(kept?.type === 'shape' && kept.shape.parts[0].text?.link).toBe(
+      undefined
+    );
+    deleteSpreadsheetSheet(other, data);
+    expect(
+      readSpreadsheetWorkbook(other).find((sheet) => sheet.id === report)
+        ?.metadata?.drawings
+    ).toMatchObject([
+      { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,}'] } },
+      // A formula cell without calculated values shows nothing.
+      {
+        shape: {
+          parts: [{ text: { paragraphs: [{ runs: [{ text: '' }] }] } }],
+        },
+      },
+    ]);
+    doc.free();
+    other.free();
   });
 
   it('merges independent styles, cells and appended rows on a new shared sheet', () => {
@@ -727,10 +880,11 @@ describe('collaborative workbook', () => {
       [],
       [blank('dup'), blank('DUP')],
       [blank('bad/name')],
-      [{ ...blank('bad cell'), cells: { AA1: { value: 'outside' } } }],
+      [{ ...blank('bad cell'), cells: { XFE1: { value: 'outside' } } }],
       [{ ...blank('bad width'), columnWidths: { 0: 999 } }],
-      [{ ...blank('bad height'), rowCount: 1001 }],
-      Array.from({ length: 11 }, (_, index) => blank(`Sheet${index}`)),
+      [{ ...blank('bad height'), rowCount: 100_001 }],
+      [{ ...blank('bad columns'), columnCount: 16_385 }],
+      Array.from({ length: 301 }, (_, index) => blank(`Sheet${index}`)),
     ])
       expect(() => importSpreadsheetSheets(doc, inputs, true)).toThrow();
     expect(doc.version().toJSON()).toEqual(before);
@@ -743,14 +897,14 @@ describe('collaborative workbook', () => {
     const right = new LoroDoc();
     importSpreadsheetSheets(
       left,
-      Array.from({ length: 8 }, (_, index) => blank(`Tab${index}`))
+      Array.from({ length: 298 }, (_, index) => blank(`Tab${index}`))
     );
     synchronize(left, right);
     addSpreadsheetSheet(left, 'Alice');
     addSpreadsheetSheet(right, 'Bob');
     synchronize(left, right);
-    expect(readSpreadsheetSheets(left)).toHaveLength(11);
-    expect(() => addSpreadsheetSheet(left)).toThrow('up to 10');
+    expect(readSpreadsheetSheets(left)).toHaveLength(301);
+    expect(() => addSpreadsheetSheet(left)).toThrow('up to 300');
     left.free();
     right.free();
   });
@@ -820,6 +974,67 @@ it('duplicates local definitions without duplicating global names and rejects co
       )
     ).toThrow(/name/i);
     expect(doc.version().encode()).toEqual(before);
+  } finally {
+    doc.free();
+  }
+});
+
+it('describes freshly imported cells exactly as the document reads them back', () => {
+  const styled = {
+    bold: true,
+    italic: true,
+    underline: true,
+    strikethrough: true,
+    fontFamily: 'mono',
+    fontSize: 14,
+    textColor: '#112233',
+    fillColor: '#ffeedd',
+    horizontalAlign: 'right',
+    verticalAlign: 'top',
+    wrap: true,
+    borderTop: true,
+    borderRight: true,
+    borderBottom: true,
+    borderLeft: true,
+    decimals: 2,
+    format: 'currency',
+    numberFormat: '#,##0.00;(#,##0.00)',
+    fontName: 'Arial',
+    borderTopStyle: 'thin',
+    borderTopColor: '#000000',
+    borderRightStyle: 'double',
+    borderRightColor: '#123456',
+    borderBottomStyle: 'thick',
+    borderBottomColor: '#abcdef',
+    borderLeftStyle: 'dotted',
+    borderLeftColor: '#fedcba',
+  } as const;
+  const cells: SpreadsheetCells = {
+    A1: { value: '1' },
+    A2: { value: '' },
+    A3: { value: '', bold: true },
+    A4: { value: 'x', bold: false, fontSize: 10, format: 'general' },
+    A5: { value: '=A1*2', ...SPREADSHEET_DEFAULT_STYLE },
+    B7: { value: 'styled', ...styled },
+    XFD100000: { value: '', fillColor: '#00ff00', decimals: -1 },
+  };
+  const doc = new LoroDoc();
+  try {
+    const [id] = importSpreadsheetSheets(
+      doc,
+      [{ name: 'Data', cells, rowCount: 100_000, columnWidths: {} }],
+      true
+    );
+    const fresh = freshSpreadsheetCells(cells);
+    expect(fresh).toEqual(readSpreadsheetCells(doc, id));
+    expect(Object.keys(fresh)).toEqual([
+      'A1',
+      'A3',
+      'A4',
+      'A5',
+      'B7',
+      'XFD100000',
+    ]);
   } finally {
     doc.free();
   }

@@ -1,11 +1,12 @@
 use super::*;
 
-const STORAGE_TYPES: [EntityType; 11] = [
+const STORAGE_TYPES: [EntityType; 12] = [
     EntityType::CalendarEvent,
     EntityType::CallRecord,
     EntityType::Channel,
     EntityType::Chat,
     EntityType::Company,
+    EntityType::DatabaseRow,
     EntityType::Document,
     EntityType::Initiative,
     EntityType::Project,

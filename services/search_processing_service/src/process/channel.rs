@@ -1,4 +1,5 @@
 use anyhow::Context;
+use comms_db_client::messages::get_channel_message::ChannelMessageForSearch;
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::channel_message::UpsertChannelMessageArgs,
@@ -22,7 +23,7 @@ pub async fn process_channel_message_update(
         .await
         .context("unable to get channel message")?;
 
-    if channel_message_info.channel_message.deleted_at.is_some() {
+    if channel_message_info.message.deleted_at.is_some() {
         tracing::trace!("channel message is deleted, removing from search index");
         let channel_id = channel_id.to_string();
         let message_id = message_id.to_string();
@@ -32,7 +33,20 @@ pub async fn process_channel_message_update(
         return Ok(());
     }
 
-    let raw_content = &channel_message_info.channel_message.content;
+    let args = channel_message_upsert_args(channel_message_info)?;
+    opensearch_client
+        .upsert_channel_message(&args, index_override)
+        .await?;
+
+    Ok(())
+}
+
+fn channel_message_upsert_args(
+    ChannelMessageForSearch { message, mentions }: ChannelMessageForSearch,
+) -> anyhow::Result<UpsertChannelMessageArgs> {
+    let channel_id = message.channel_id;
+    let message_id = message.message_id;
+    let raw_content = &message.content;
     let transformed_content = match ParsedXmlText::parse(raw_content) {
         Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
         Err(e) => {
@@ -41,39 +55,23 @@ pub async fn process_channel_message_update(
         }
     };
 
-    let upsert_channel_message_args = UpsertChannelMessageArgs {
-        channel_id: channel_message_info.channel_id.to_string(),
-        channel_type: channel_message_info.channel_type.to_string(),
-        org_id: channel_message_info.org_id,
-        message_id: channel_message_info.channel_message.message_id.to_string(),
-        thread_id: channel_message_info
-            .channel_message
-            .thread_id
-            .unwrap_or(channel_message_info.channel_message.message_id)
-            .to_string(),
-        sender_id: channel_message_info.channel_message.sender_id,
-        mentions: channel_message_info.channel_message.mentions,
+    Ok(UpsertChannelMessageArgs {
+        channel_id: channel_id.to_string(),
+        channel_type: message.channel_type.to_string(),
+        org_id: message.org_id,
+        message_id: message_id.to_string(),
+        thread_id: message.thread_id.unwrap_or(message_id).to_string(),
+        sender_id: message.sender_id,
+        imported_author: message.imported_author,
+        mentions,
         content: transformed_content.trim().to_string(),
-        created_at_millis: EpochMillis::new(
-            channel_message_info
-                .channel_message
-                .created_at
-                .timestamp_millis(),
-        )?,
-        updated_at_millis: EpochMillis::new(
-            channel_message_info
-                .channel_message
-                .updated_at
-                .timestamp_millis(),
-        )?,
-    };
-
-    opensearch_client
-        .upsert_channel_message(&upsert_channel_message_args, index_override)
-        .await?;
-
-    Ok(())
+        created_at_millis: EpochMillis::new(message.created_at.timestamp_millis())?,
+        updated_at_millis: EpochMillis::new(message.updated_at.timestamp_millis())?,
+    })
 }
+
+#[cfg(test)]
+mod test;
 
 pub async fn process_remove_channel_message(
     opensearch_client: &OpensearchClient,

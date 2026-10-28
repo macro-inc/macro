@@ -1,9 +1,13 @@
+import { AGENT_ACTIVITY_STATUSES } from '@macro-inc/lexical-core/nodes/AgentActivityNode';
 import { CONNECT_APP_TARGETS } from '@macro-inc/lexical-core/nodes/ConnectAppNode';
 import {
   MAGIC_CHIP_AUTHORS,
   MAGIC_CHIP_STATUSES,
 } from '@macro-inc/lexical-core/nodes/MagicChipNode';
-import type { ReplyTargetParent } from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
+import {
+  REPLY_TARGET_PARENT_TYPES,
+  type ReplyTargetParent,
+} from '@macro-inc/lexical-core/nodes/ReplyTargetNode';
 import { composeAgentSessionAnnouncement } from '@macro-inc/lexical-core/utils/agent-announcement';
 import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
 import { composeAgentConnectionPrompt } from '@macro-inc/lexical-core/utils/agent-connection-prompt';
@@ -14,7 +18,7 @@ import { handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
 
 const messageParent = z.object({
-  type: z.enum(['channel', 'document']),
+  type: z.enum(REPLY_TARGET_PARENT_TYPES),
   id: z.string().min(1),
 });
 
@@ -35,7 +39,7 @@ const replyTargetRequest = z
   );
 
 const sessionAnnouncementRequest = z.object({
-  replyTarget: replyTargetRequest,
+  replyTarget: replyTargetRequest.optional(),
   chip: z.object({
     agentSessionId: z.string(),
     channelId: z.string().optional(),
@@ -52,12 +56,37 @@ const sessionAnnouncementRequest = z.object({
  * turn runs, or prose the harness patches in - the answer, a fallback for a
  * turn that said nothing, a question only the session view can answer.
  */
+const activityRow = z.object({
+  id: z.string(),
+  label: z.string(),
+  detail: z.string().nullish(),
+  status: z.enum(AGENT_ACTIVITY_STATUSES),
+});
+
+const replySegment = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('prose'), markdown: z.string() }),
+  z.object({
+    kind: z.literal('activity'),
+    turn: z.number().int().nonnegative(),
+    segment: z.number().int().nonnegative(),
+    rows: z.array(activityRow),
+    sealed: z.boolean(),
+  }),
+]);
+
 const chatReplyRequest = z.object({
   chatReply: z.object({
     sessionId: z.string().min(1),
+    link: z.boolean().optional(),
     body: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('pending') }),
       z.object({ kind: z.literal('markdown'), markdown: z.string() }),
+      z.object({
+        kind: z.literal('segments'),
+        segments: z.array(replySegment),
+        pending: z.boolean().optional(),
+        footer: z.string().nullish(),
+      }),
     ]),
   }),
 });
@@ -118,7 +147,7 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
         });
       }
       if ('chatReply' in body) {
-        const { sessionId, body: replyBody } = body.chatReply;
+        const { sessionId, link, body: replyBody } = body.chatReply;
         // The schema requires a body, but the discriminated union does not
         // survive chanfana's OpenAPI round-trip as required, so it arrives
         // typed as optional. Refuse rather than invent a state: a reply with
@@ -127,18 +156,52 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
           throw new Error('chatReply needs a body');
         }
         return c.json({
-          markdown: composeAgentChatReply({ sessionId, body: replyBody }),
+          markdown: composeAgentChatReply({
+            sessionId,
+            link,
+            body:
+              replyBody.kind === 'segments'
+                ? {
+                    kind: 'segments',
+                    pending: replyBody.pending,
+                    footer: replyBody.footer ?? undefined,
+                    segments: replyBody.segments.map((segment) =>
+                      segment.kind === 'prose'
+                        ? segment
+                        : {
+                            ...segment,
+                            rows: segment.rows.map((row) => ({
+                              id: row.id,
+                              label: row.label,
+                              status: row.status,
+                              ...(row.detail ? { detail: row.detail } : {}),
+                            })),
+                          }
+                    ),
+                  }
+                : replyBody,
+          }),
         });
       }
-      const { parent, channelId, ...target } = body.replyTarget;
-      // Callers that predate message parents send only `channelId`; the
-      // node itself references any parent the reply lives under.
-      const replyParent: ReplyTargetParent | undefined =
-        parent ?? (channelId ? { type: 'channel', id: channelId } : undefined);
+      const target = body.replyTarget;
+      // Assignments have no user-authored message to quote.
+      const replyParent: ReplyTargetParent | undefined = target
+        ? (target.parent ??
+          (target.channelId
+            ? { type: 'channel', id: target.channelId }
+            : undefined))
+        : undefined;
       const markdown = composeAgentSessionAnnouncement({
-        replyTarget: replyParent
-          ? { ...target, parent: replyParent }
-          : undefined,
+        replyTarget:
+          target && replyParent
+            ? {
+                parent: replyParent,
+                targetMessageId: target.targetMessageId,
+                targetThreadId: target.targetThreadId,
+                displayText: target.displayText,
+                senderId: target.senderId,
+              }
+            : undefined,
         chip: body.chip,
       });
       return c.json({ markdown });

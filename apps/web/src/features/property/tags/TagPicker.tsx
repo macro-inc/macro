@@ -1,10 +1,11 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
   DropdownSearchInput,
@@ -67,7 +68,7 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 
 const MAX_LIST_HEIGHT = 192;
 const tagActionButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
 
 export type TagPickerSourceProps =
   | { docTags: DocTags; createDocTags?: never }
@@ -135,7 +136,7 @@ export function TagPicker(props: TagPickerProps) {
     }
 
     if (saveAndClose) {
-      void saveAndClose();
+      fireAndForget(saveAndClose(), 'tag-picker');
     } else {
       setOpenState(false, { restoreFocus: true });
     }
@@ -265,7 +266,7 @@ export function TagPickerPopover(props: {
     }
 
     if (saveAndClose) {
-      void saveAndClose();
+      fireAndForget(saveAndClose(), 'tag-picker');
     } else {
       props.onOpenChange(false);
     }
@@ -628,7 +629,7 @@ function TagPickerBody(props: {
         setCreateStep('scope');
       } else {
         const scope = scopeOptions()[selectedScopeIndex()]?.scope;
-        if (scope) void createTag(scope);
+        if (scope) fireAndForget(createTag(scope), 'tag-picker');
       }
     }
   };
@@ -646,7 +647,7 @@ function TagPickerBody(props: {
 
       if (showClearAllRow() && index === clearAllRowIndex()) {
         setSelectedIds(new Set<string>());
-        void saveAndClose();
+        fireAndForget(saveAndClose(), 'tag-picker');
         return;
       }
 
@@ -654,7 +655,7 @@ function TagPickerBody(props: {
       if (!item) return;
 
       toggleSelected(item.option.id);
-      if (!event?.shiftKey) saveAndClose();
+      if (!event?.shiftKey) fireAndForget(saveAndClose(), 'tag-picker');
     },
     onClose: saveAndClose,
     enableNumericHotkeys: false,
@@ -706,7 +707,7 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl glass bg-menu-glass text-sm menu-open-animation"
+          class="menu-surface z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] text-sm menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();
@@ -763,10 +764,15 @@ function TagPickerBody(props: {
                             }
                             onSelect={(event) => {
                               toggleSelected(item.option.id);
-                              if (!event.shiftKey) saveAndClose();
+                              if (!event.shiftKey)
+                                fireAndForget(saveAndClose(), 'tag-picker');
                             }}
-                            onEdit={() => void beginEdit(item)}
-                            onOpenTag={() => void openTaggedItems(item)}
+                            onEdit={() =>
+                              fireAndForget(beginEdit(item), 'tag-picker')
+                            }
+                            onOpenTag={() =>
+                              fireAndForget(openTaggedItems(item), 'tag-picker')
+                            }
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
                                 dropdown.setSelectedIndex(itemIndex(item));
@@ -798,10 +804,18 @@ function TagPickerBody(props: {
                                 }
                                 onSelect={(event) => {
                                   toggleSelected(item.option.id);
-                                  if (!event.shiftKey) saveAndClose();
+                                  if (!event.shiftKey)
+                                    fireAndForget(saveAndClose(), 'tag-picker');
                                 }}
-                                onEdit={() => void beginEdit(item)}
-                                onOpenTag={() => void openTaggedItems(item)}
+                                onEdit={() =>
+                                  fireAndForget(beginEdit(item), 'tag-picker')
+                                }
+                                onOpenTag={() =>
+                                  fireAndForget(
+                                    openTaggedItems(item),
+                                    'tag-picker'
+                                  )
+                                }
                                 onMouseEnter={() => {
                                   if (!dropdown.keyboardMode()) {
                                     dropdown.setSelectedIndex(itemIndex(item));
@@ -821,7 +835,7 @@ function TagPickerBody(props: {
                             }
                             onClick={() => {
                               setSelectedIds(new Set<string>());
-                              void saveAndClose();
+                              fireAndForget(saveAndClose(), 'tag-picker');
                             }}
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
@@ -879,7 +893,9 @@ function TagPickerBody(props: {
                   setCreateStep('scope');
                 }}
                 onScopeMouseEnter={setSelectedScopeIndex}
-                onScopeSelect={(scope) => void createTag(scope)}
+                onScopeSelect={(scope) =>
+                  fireAndForget(createTag(scope), 'tag-picker')
+                }
               />
             )}
           </Show>
@@ -914,7 +930,6 @@ function TagPickerRow(props: {
               type="button"
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               tooltip="View tagged items"
               aria-label={`View all items with tag ${label()}`}
               class={tagActionButtonClass}
@@ -934,7 +949,6 @@ function TagPickerRow(props: {
               type="button"
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               tooltip="Edit tag"
               aria-label={`Edit ${label()}`}
               class={tagActionButtonClass}

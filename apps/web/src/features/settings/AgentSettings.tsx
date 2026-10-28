@@ -1,68 +1,60 @@
+import type { AgentKind } from '@app/features/agents-view/core/agent-kind';
 import { useSearchParams } from '@solidjs/router';
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Match, on, Switch } from 'solid-js';
 import { Agents } from './Agents';
-import {
-  AgentManagementNavigation,
-  type AgentManagementSection,
-} from './components/agent-management-navigation';
-import { BringYourOwnAgent } from './components/bring-your-own-agent';
+import { agentSettingsRequest } from './agentSettingsState';
+import { CursorConnectPage } from './CursorConnectPage';
 import { Harness } from './Harness';
+import { RuntimePairingPage } from './RuntimePairingPage';
+
+export type AgentManagementSection = 'agents' | 'runtimes';
+
+type AgentSettingsPage = AgentManagementSection | 'cursor' | 'pairing';
 
 /** One management surface, mounted by both Settings and the Agents workspace. */
 export function AgentSettings(props: {
   initialSection?: AgentManagementSection;
+  createKind?: AgentKind;
+  onCloseCreate?: () => void;
 }) {
   const [searchParams] = useSearchParams();
-  const [section, setSection] = createSignal<AgentManagementSection>(
+  const [page, setPage] = createSignal<AgentSettingsPage>(
     searchParams.pair ? 'runtimes' : (props.initialSection ?? 'agents')
   );
-  const [startPairing, setStartPairing] = createSignal(false);
-  let host: HTMLDivElement | undefined;
-  const scrollBody = () =>
-    host?.querySelector<HTMLElement>('[data-settings-page]') ?? null;
-
-  // Each section is its own SettingsPage, so switching mounts a fresh scroll
-  // container. Carry the offset across so the section tabs, which sit below
-  // the shared header, stay under the finger or pointer that chose them.
-  const showSection = (next: AgentManagementSection) => {
-    const scrollTop = scrollBody()?.scrollTop ?? 0;
-    setSection(next);
-    const body = scrollBody();
-    if (body) body.scrollTop = scrollTop;
+  const navigate = (next: AgentSettingsPage) => {
+    props.onCloseCreate?.();
+    setPage(next);
   };
-
-  const navigation = () => (
-    <AgentManagementNavigation
-      section={section()}
-      onChange={(section) => {
-        setStartPairing(false);
-        showSection(section);
-      }}
-    />
+  const showAgents = () => navigate('agents');
+  const activePage = () => (props.createKind ? 'agents' : page());
+  // An agent opened from elsewhere lands in its editor, which lives on the
+  // agents page; `Agents` consumes the request.
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request) showAgents();
+    })
   );
 
   return (
-    <div ref={host} class="contents">
-      <Show
-        when={section() === 'agents'}
-        fallback={
-          <Harness navigation={navigation()} startPairing={startPairing()} />
-        }
-      >
+    <Switch>
+      <Match when={activePage() === 'agents'}>
         <Agents
-          navigation={
-            <>
-              <BringYourOwnAgent
-                onAddRuntime={() => {
-                  setStartPairing(true);
-                  showSection('runtimes');
-                }}
-              />
-              {navigation()}
-            </>
-          }
+          createKind={props.createKind}
+          onCloseCreate={showAgents}
+          onCursor={() => navigate('cursor')}
+          onSetUpRuntime={() => navigate('pairing')}
+          onManageRuntimes={() => navigate('runtimes')}
         />
-      </Show>
-    </div>
+      </Match>
+      <Match when={activePage() === 'cursor'}>
+        <CursorConnectPage onClose={showAgents} />
+      </Match>
+      <Match when={activePage() === 'pairing'}>
+        <RuntimePairingPage onClose={showAgents} />
+      </Match>
+      <Match when={activePage() === 'runtimes'}>
+        <Harness onBack={showAgents} />
+      </Match>
+    </Switch>
   );
 }

@@ -8,7 +8,7 @@ use crate::testing::RecordingRealtime;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn runtime_branch_survives_without_pr_and_respects_owner_repository_and_fence(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
+    let repo = test_repo(&pool);
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let owner = session.owner_user().unwrap();

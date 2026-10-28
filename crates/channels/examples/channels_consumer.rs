@@ -67,15 +67,10 @@ fn event_type(event: &ChannelTopicEvent) -> &'static str {
     match event {
         ChannelTopicEvent::Created(_) => "channel.created",
         ChannelTopicEvent::Updated(_) => "channel.updated",
+        ChannelTopicEvent::PictureChanged(_) => "channel.picture_changed",
         ChannelTopicEvent::Deleted(_) => "channel.deleted",
-        ChannelTopicEvent::MessagePosted(_) => "channel.message_posted",
-        ChannelTopicEvent::MessagePatched(_) => "channel.message_patched",
-        ChannelTopicEvent::MessageDeleted(_) => "channel.message_deleted",
-        ChannelTopicEvent::MessageAttachmentCreated(_) => "channel.message_attachment_created",
-        ChannelTopicEvent::MessageAttachmentRemoved(_) => "channel.message_attachment_removed",
         ChannelTopicEvent::ParticipantAdded(_) => "channel.participant_added",
         ChannelTopicEvent::ParticipantRemoved(_) => "channel.participant_removed",
-        ChannelTopicEvent::Mentioned(_) => "channel.mentioned",
     }
 }
 

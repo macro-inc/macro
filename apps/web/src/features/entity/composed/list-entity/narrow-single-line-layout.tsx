@@ -56,7 +56,17 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate"
       >
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+          <Show
+            when={props.icon}
+            fallback={
+              <Entity.Icon
+                entity={props.entity}
+                streamState={props.streamState}
+              />
+            }
+          >
+            {props.icon}
+          </Show>
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
@@ -99,32 +109,39 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             </Show>
           </Match>
         </Switch>
+        {props.titleTrailing}
       </Entity.Slot>
 
       <Show
         when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          props.referenceProperties ||
+          props.scheduleStatus ||
+          (!props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
         }
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
-          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
-            <Match when={isTaskEntity(props.entity)}>
-              <Entity.Properties
-                entity={props.entity}
-                maxUserStackUsers={0}
-                showCaret={false}
-              />
-            </Match>
-            <Match
-              when={props.entity.type === 'calendar_event' && props.entity}
-            >
-              {(entity) => <CalendarEventWhen entity={entity()} />}
-            </Match>
-          </Switch>
+          {props.referenceProperties}
+          {props.scheduleStatus}
+          <Show when={!props.hasNotifications}>
+            <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+              <Match when={isTaskEntity(props.entity)}>
+                <Entity.Properties
+                  entity={props.entity}
+                  maxUserStackUsers={0}
+                  showCaret={false}
+                />
+              </Match>
+              <Match
+                when={props.entity.type === 'calendar_event' && props.entity}
+              >
+                {(entity) => <CalendarEventWhen entity={entity()} />}
+              </Match>
+            </Switch>
+          </Show>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

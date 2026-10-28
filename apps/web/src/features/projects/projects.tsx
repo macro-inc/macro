@@ -1,13 +1,22 @@
 import { listOwnedSlotName } from '@app/components/list/owned-slots';
+import {
+  makeCopyEntityIdAction,
+  makeCopyLinkAction,
+} from '@app/features/next-soup/actions';
+import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSearchParams } from '@app/lib/split-router';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableProjects } from '@core/constant/featureFlags';
+import { enableGantt, enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
   getGraphqlSoupCacheHost,
@@ -15,8 +24,16 @@ import {
 } from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
-import type { Accessor } from 'solid-js';
-import { ErrorBoundary, onCleanup, type ParentProps, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  ErrorBoundary,
+  on,
+  onCleanup,
+  type ParentProps,
+  Show,
+  Suspense,
+} from 'solid-js';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -26,10 +43,15 @@ import {
   type ProjectListActivation,
 } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
-import { projectKeys } from './queries/keys';
+import { projectCollectionSearch } from './project-collection-search';
+import { ProjectShareLauncher } from './project-share';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
+import {
+  ProjectsSidebar,
+  type ProjectsSidebarProps,
+} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -39,17 +61,6 @@ function createProjectReadGate() {
 
 function createProjectsContext() {
   const userId = useUserId();
-  onCleanup(
-    registerActivityRevalidator({
-      client: getGraphqlSoupClient,
-      // Multiple mounted surfaces share an in-flight refresh instead of cancelling it.
-      refresh: () =>
-        queryClient.invalidateQueries(
-          { queryKey: projectKeys._def },
-          { cancelRefetch: false }
-        ),
-    })
-  );
   return createProjectSources(
     initiativeClient,
     { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
@@ -73,7 +84,10 @@ function ProjectsContent(props: ParentProps) {
     <ErrorBoundary
       fallback={(_, reset) => (
         <div role="alert" class="p-4">
-          Could not load projects. <Button onClick={reset}>Try again</Button>
+          Could not load projects.{' '}
+          <Button variant="ghost" onClick={reset}>
+            Try again
+          </Button>
         </div>
       )}
     >
@@ -90,9 +104,12 @@ function ProjectsContent(props: ParentProps) {
   );
 }
 
-export function ProjectsTab(props: {
+type ProjectsTabProps = {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
-}) {
+  search?: Parameters<typeof createProjectCollection>[0]['search'];
+};
+
+export function ProjectsTab(props: ProjectsTabProps) {
   return (
     <Projects>
       <ProjectsCollectionHost {...props} />
@@ -100,12 +117,20 @@ export function ProjectsTab(props: {
   );
 }
 
-function ProjectsCollectionHost(props: {
-  onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
-}) {
+export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
+  return (
+    <Projects>
+      <ProjectsSidebar {...props} />
+    </Projects>
+  );
+}
+
+function ProjectsCollectionHost(props: ProjectsTabProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const context = useProjectsContext();
+  const ganttFlag = useFeatureFlag(enableGantt);
+  const [search, setSearch] = createSearchParams(projectCollectionSearch);
   const activation = withSplitPanelOwner(
     listOwnedSlotName('initiatives:activation'),
     () => ({
@@ -126,20 +151,69 @@ function ProjectsCollectionHost(props: {
       createProjectCollection({
         ...createProjectCollectionPersistence(panel.handle),
         createSource: context.createCollectionSource,
+        search: props.search,
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
   );
+  // URL history restores the entry snapshot, not the latest layout selection.
+  const entryLayout = collection.layout();
+  createEffect(
+    on(
+      () => search.layout,
+      (layout) => collection.setLayout(layout ?? entryLayout)
+    )
+  );
+  const displayCollection = {
+    ...collection,
+    setLayout: (layout: 'list' | 'gantt') => {
+      const selected = collection.setLayout(layout);
+      setSearch({ layout: selected });
+      return selected;
+    },
+  };
+  const copyLink = makeCopyLinkAction();
+  const copyId = makeCopyEntityIdAction();
+  const [sharing, setSharing] = createSignal<string>();
   return (
-    <ProjectsCollection
-      onOpen={open}
-      collection={collection}
-      onCreate={() =>
-        layout.popoverSplit({ type: 'component', id: 'project-compose' })
-      }
-      scopeId={panel.splitHotkeyScope}
-      isActive={panel.isPanelActive}
-    />
+    <>
+      <ProjectsCollection
+        createAction={
+          <Show when={!isTouchDevice()}>
+            <TasksCreateAction presentation="toolbar" projectsEnabled />
+          </Show>
+        }
+        onOpen={open}
+        collection={displayCollection}
+        ganttEnabled={ganttFlag().enabled}
+        createAssigneeName={(id) => usePropertyUserDisplay(id).name}
+        onCreate={(initialDraft) =>
+          layout.popoverSplit({
+            type: 'component',
+            id: 'project-compose',
+            params: initialDraft ? { initialDraft } : undefined,
+          })
+        }
+        scopeId={panel.splitHotkeyScope}
+        isActive={panel.isPanelActive}
+        canOpenInNewSplit={() =>
+          globalSplitManager()?.canAppendSplit() ?? false
+        }
+        onCopyLink={(id) =>
+          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
+        }
+        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
+        onShare={(projectId) => setSharing(projectId)}
+      />
+      <Show when={sharing()} keyed>
+        {(projectId) => (
+          <ProjectShareLauncher
+            projectId={projectId}
+            onClose={() => setSharing(undefined)}
+          />
+        )}
+      </Show>
+    </>
   );
 }
 
@@ -152,8 +226,4 @@ export function ProjectAssignmentDialog(props: {
       <ProjectAssignment taskIds={props.taskIds} onClose={props.onClose} />
     </Projects>
   );
-}
-
-export function useTaskProjectReferences(ids: Accessor<readonly string[]>) {
-  return createProjectsContext().createReferencesSource(ids);
 }

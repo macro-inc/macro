@@ -3,25 +3,26 @@ import cursor from '@icon/wide-cursor-ide.svg?url';
 import gabriel from '../../../assets/people/gabriel.webp';
 import jacob from '../../../assets/people/jacob-work.webp';
 import julia from '../../../assets/people/julia.webp';
+import macro from '../../../assets/people/macro-agent.svg?url';
 import teo from '../../../assets/people/teo.webp';
 import valentina from '../../../assets/people/valentina.webp';
 
 /** Local participants in the homepage's launch example. */
 export const homepagePeople = {
   jacob: {
-    name: 'Jacob Beckerman',
+    name: 'Jacob',
     shortName: 'Jacob',
     initials: 'JB',
     photo: jacob,
   },
   julia: {
-    name: 'Julia Westphal',
+    name: 'Julia',
     shortName: 'Julia',
     initials: 'JW',
     photo: julia,
   },
   gabriel: {
-    name: 'Gabriel Birman',
+    name: 'Gabriel',
     shortName: 'Gabriel',
     initials: 'GB',
     photo: gabriel,
@@ -33,6 +34,7 @@ export const homepagePeople = {
     photo: valentina,
   },
   teo: { name: 'Teo', shortName: 'Teo', initials: 'T', photo: teo },
+  macro: { name: 'Macro', shortName: 'Macro', initials: 'M', photo: macro },
   claude: { name: 'Claude', shortName: 'Claude', initials: 'C', photo: claude },
   cursor: { name: 'Cursor', shortName: 'Cursor', initials: 'C', photo: cursor },
 } as const;

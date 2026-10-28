@@ -9,7 +9,8 @@
     "preinstall": "node -e \"if (process.env.npm_execpath && !process.env.npm_execpath.includes('bun')) { console.error('Please use bun as the package manager'); process.exit(1); }\"",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && tsc --noEmit --skipLibCheck --project stacks/web-app/tsconfig.json && bun run test:web-delivery",
+    "test:web-delivery": "bun test stacks/web-app/publication.test.ts && bun test stacks/web-app/app-route.test.ts && bun test stacks/website/app-cache.test.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
@@ -7,17 +8,25 @@ import type { ActiveCallSummary } from '@service-storage/generated/schemas/activ
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import {
+  updateEntitySharePolicy,
+  usesGraphqlSharePolicy,
+} from '../storage/entity-mutations';
 import { callKeys } from './keys';
 
-export function useActiveCallQuery(channelId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: callKeys.active(channelId()).queryKey,
-    queryFn: () => fetchActiveCall(channelId()),
+function activeCallQueryOptions(channelId: string) {
+  return queryOptions({
+    queryKey: callKeys.active(channelId).queryKey,
+    queryFn: () => fetchActiveCall(channelId),
     placeholderData: null,
     refetchInterval: 15_000,
-  }));
+  });
+}
+
+export function useActiveCallQuery(channelId: Accessor<string>) {
+  return useQuery(() => activeCallQueryOptions(channelId()));
 }
 
 /** Fresh lookups keep recovery from re-creating a call that already ended. */
@@ -31,19 +40,36 @@ export function requestCallToken(channelId: string) {
 }
 
 /**
+ * Declines this ringing call for the user so their other devices stop ringing.
+ * Bound to `callId` so a stale incoming-call UI cannot decline a replacement
+ * call. Nothing to cache: the call stays active for other members, and the
+ * caller's own ring is already dismissed locally.
+ */
+export function declineCall(callId: string) {
+  return throwOnErr(() => callServiceClient.declineCall(callId));
+}
+
+/**
  * All active calls in channels the user is a member of, newest first. One
  * request app-wide; the websocket
  * call_started/call_ended handlers keep it live.
  */
 export function useActiveCallsQuery() {
-  return useQuery(() => ({
+  return useQuery(activeCallsQueryOptions);
+}
+
+function fetchActiveCalls() {
+  return throwOnErr(() => callServiceClient.getActiveCalls());
+}
+
+function activeCallsQueryOptions() {
+  return queryOptions({
     queryKey: callKeys.allActive.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => callServiceClient.getActiveCalls()),
+    queryFn: fetchActiveCalls,
     placeholderData: [] as ActiveCallSummary[],
     refetchInterval: 30_000,
     enabled: ENABLE_CALLS,
-  }));
+  });
 }
 
 export function setActiveCallStartedCache(call: CallActiveResponse) {
@@ -99,7 +125,7 @@ function _useJoinCallMutation() {
     mutationFn: async (channelId: string) =>
       await throwOnErr(() => callServiceClient.getOrCreateCall(channelId)),
     onSuccess() {
-      invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       if (
@@ -139,7 +165,7 @@ export function useLeaveCallMutation() {
       }
     },
     onSuccess() {
-      invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
       console.error('failed to leave call', error);
@@ -147,17 +173,21 @@ export function useLeaveCallMutation() {
   }));
 }
 
-export function useCallRecordQuery(callId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: callKeys.record(callId()).queryKey,
+function callRecordQueryOptions(callId: string) {
+  return queryOptions({
+    queryKey: callKeys.record(callId).queryKey,
     queryFn: async () =>
-      await throwOnErr(() => callServiceClient.getCallRecord(callId())),
+      await throwOnErr(() => callServiceClient.getCallRecord(callId)),
     // The call block's load() primes this cache; a stale time keeps that
     // primed record from triggering an immediate duplicate fetch on mount.
     // Mutations still invalidate, so sharing edits stay reactive.
     staleTime: 60_000,
-    enabled: callId().length > 0,
-  }));
+    enabled: callId.length > 0,
+  });
+}
+
+export function useCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => callRecordQueryOptions(callId()));
 }
 
 export function fetchCallRecord(
@@ -204,6 +234,12 @@ export function buildCallTeamSharePayload(
 }
 
 export function updateCallTeamShare(callId: string, shared: boolean) {
+  if (usesGraphqlSharePolicy('call'))
+    return updateEntitySharePolicy(
+      'call',
+      callId,
+      buildCallTeamSharePayload(shared)
+    );
   return callServiceClient.editCallRecord({
     callId,
     sharePermission: buildCallTeamSharePayload(shared),
@@ -229,14 +265,16 @@ function patchCachedCallTeamShare(
 export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   const queryKey = callKeys.record(callId).queryKey;
   // Drop in-flight GETs so a slower record response cannot overwrite this write.
-  void queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({ queryKey });
   queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
     prev ? patchCachedCallTeamShare(prev, shared) : prev
   );
 }
 
 function invalidateCallRecord(callId: string) {
-  queryClient.invalidateQueries({ queryKey: callKeys.record(callId).queryKey });
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+  });
 }
 
 /**

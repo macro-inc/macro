@@ -1,5 +1,5 @@
 // The AI tools mirror this palette in
-// crates/properties/src/inbound/toolset/tag_color.rs (TagColor::hex). Keep the
+// crates/properties/src/tag_color.rs (TagColor::hex). Keep the
 // two in sync when adding, removing, recoloring, or reordering a tag color.
 export const TAG_COLORS = [
   '#E5484D', // Red
@@ -35,3 +35,13 @@ export const TAG_COLOR_OPTIONS = [
   color: (typeof TAG_COLORS)[number];
   name: string;
 }[];
+
+export type TagColorOption = (typeof TAG_COLOR_OPTIONS)[number];
+
+/** The palette colour an option's stored hex value is, matched without regard to case. */
+export function optionColorOf(
+  hex: string | null | undefined
+): TagColorOption | undefined {
+  const wanted = hex?.toUpperCase();
+  return TAG_COLOR_OPTIONS.find((option) => option.color === wanted);
+}

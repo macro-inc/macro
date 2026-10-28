@@ -1,0 +1,17 @@
+---
+title: ReadAgentSession
+description: >-
+  Read an agent session by its ID from an agent-session mention or search
+  result.
+---
+
+# ReadAgentSession
+
+Read an agent session by its ID from an agent-session mention or search result. Returns the latest 20 messages in chronological order, including prompts, replies, tool activity and errors. Optionally select a turn number to inspect earlier history. Each message is capped at 4000 characters; truncated flags identify omitted history or text. Requires view access to the session.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sessionId` | string | Yes | The agent session UUID from its mention or search result. |
+| `turn` | integer | No | Read only this turn number, as returned in messages; omit for recent history. |

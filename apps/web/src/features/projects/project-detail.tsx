@@ -1,29 +1,38 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import {
+  makeCopyEntityIdAction,
+  makeCopyLinkAction,
+} from '@app/features/next-soup/actions';
+import { useNavigate } from '@app/lib/split-router';
+import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate } from '@app/lib/split-router';
+} from '@app/routes/routes';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { getPermissions } from '@core/component/SharePermissions';
-import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getDisplayName, tryMacroId } from '@core/user';
-import StackIcon from '@phosphor/stack.svg';
-import { Button } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
-import { ProjectCollaborators } from './components/project-collaborators';
+import { fireAndForget } from '@core/util/fireAndForget';
+import StackIcon from '@icon/system/regular/stack.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
+import { Button, Tabs } from '@ui';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import type { TaskCreateOptions } from '../tasks-view/types';
+import { DeleteProjectsDialog } from './components/delete-projects-dialog';
+import { ProjectMenuDropdown } from './components/project-row-menu';
+import { ProjectContentSkeleton } from './components/project-skeletons';
+import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
+  type ProjectSource,
   type ProjectsContext,
   useProjectsContext,
 } from './context/projects-context';
@@ -34,8 +43,10 @@ import {
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
+import { useProjectShareModal } from './project-share';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -88,52 +99,105 @@ type ProjectDetailProps = {
   onDelete?(): void;
 };
 
-const userName = (id: string) => getDisplayName(tryMacroId(id));
-
-/** The standard Share menu; collaborators are the project's direct grants. */
-function ProjectShareTrigger(props: {
+function ProjectTitleMenu(props: {
   project: ProjectDetailData;
+  source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
+  section: ProjectSection;
+  onShare(): void;
+  onDelete(): void;
 }) {
-  const panel = useSplitPanelOrThrow();
-  const setMembers = async (ids: string[]) => {
+  const definitions = useProjectsContext().createPropertyDefinitionsSource();
+  const layout = useSplitLayout();
+  const copyLink = makeCopyLinkAction();
+  const copyId = makeCopyEntityIdAction();
+  const [renaming, setRenaming] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [error, setError] = createSignal<string>();
+  const definition = (id: string) =>
+    definitions
+      .properties()
+      .find((property) => property.propertyDefinitionId === id);
+  const ownValue = (property: Property) =>
+    props.source
+      .properties()
+      .find(
+        (current) =>
+          current.propertyDefinitionId === property.propertyDefinitionId
+      ) ?? property;
+  const setOption = async (property: Property, optionId: string) => {
     try {
-      await props.commands.setMembers(props.project.id, ids);
-    } catch (error) {
-      toast.failure('Could not update collaborators', {
-        subtext: 'Please try again',
+      await props.commands.saveProperty(props.project.id, ownValue(property), {
+        valueType: 'SELECT_STRING',
+        values: [optionId],
       });
-      throw error;
+    } catch (error) {
+      console.error('Failed to update project', error);
+      toast.failure(`Could not update ${property.displayName.toLowerCase()}`);
     }
   };
-  // Stable, so the open dialog keeps the picker's draft across refreshes.
-  const Collaborators = () => (
-    <ProjectCollaborators
-      project={props.project}
-      getUserName={userName}
-      pending={props.commands.pending()}
-      onMembers={setMembers}
-    />
-  );
-  const openShare = useShareModal(() => ({
-    id: props.project.id,
-    blockAlias: 'initiative',
-    itemType: 'initiative',
-    name: props.project.name,
-    owner: props.project.ownerId,
-    userPermissions: getPermissions(props.project.access),
-    people: Collaborators,
-    hasDirectShares: props.project.memberIds.some(
-      (id) => id !== props.project.ownerId
-    ),
-  }));
+  const deleteProject = async () => {
+    setError(undefined);
+    try {
+      await props.commands.delete(props.project.id);
+      props.onDelete();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not delete project.'
+      );
+    }
+  };
   return (
-    <ShareTrigger
-      onClick={openShare}
-      id={props.project.id}
-      blockType="initiative"
-      hotkeyScope={panel.splitHotkeyScope}
-    />
+    <>
+      <ProjectMenuDropdown
+        targets={() => [
+          { project: props.project, properties: props.source.properties() },
+        ]}
+        status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+        priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
+        canOpenInNewSplit={globalSplitManager()?.canAppendSplit() ?? false}
+        onOpenInNewSplit={(row) =>
+          openProject(layout, row.project.id, {
+            section: props.section,
+            newSplit: true,
+          })
+        }
+        onRename={() => setRenaming(true)}
+        onSetOption={(_, property, optionId) =>
+          fireAndForget(setOption(property, optionId), 'projects')
+        }
+        onCopyLink={(row) =>
+          fireAndForget(
+            copyLink.executeByBlock(row.project.id, 'initiative'),
+            'projects'
+          )
+        }
+        onCopyId={(row) =>
+          fireAndForget(copyId.executeById(row.project.id), 'projects')
+        }
+        onShare={props.onShare}
+        onDelete={() => {
+          setError(undefined);
+          setDeleting(true);
+        }}
+      />
+      <Show when={renaming()}>
+        <RenameProjectDialog
+          name={props.project.name}
+          onOpenChange={setRenaming}
+          onRename={(name) => props.commands.rename(props.project.id, name)}
+        />
+      </Show>
+      <Show when={deleting()}>
+        <DeleteProjectsDialog
+          count={1}
+          pending={props.commands.pending()}
+          error={error()}
+          onOpenChange={setDeleting}
+          onDelete={() => fireAndForget(deleteProject(), 'projects')}
+        />
+      </Show>
+    </>
   );
 }
 
@@ -142,6 +206,8 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const source = context.createProjectSource(() => props.route.id);
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
+  const openShare = useProjectShareModal(source.project, commands);
+  const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
   const section = (section: ProjectSection) =>
@@ -149,7 +215,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
-  const createTask = () => {
+  const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
     layout.popoverSplit({
       type: 'component',
@@ -158,6 +224,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         createTask: (
           ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
         ) => commands.createTask(projectId, ...args),
+        initialProjectId: projectId,
+        initialDueDate: options?.dueDate,
+        composerContext: options?.composerContext,
         onSuccess: () => section('tasks'),
       },
     });
@@ -168,99 +237,126 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
       <EntityDetailTopBar
-        navigation={
+        titleMenu={
           <Show when={source.project()}>
-            <TabsInset
-              list={[
-                { value: 'overview', label: 'Overview' },
-                { value: 'tasks', label: 'Tasks' },
-              ]}
-              value={props.route.section}
-              onChange={(value) => section(value as ProjectSection)}
-              aria-label="Project sections"
-              class="shrink-0 whitespace-nowrap"
-            />
-          </Show>
-        }
-      >
-        <Show when={source.project()}>
-          {(project) => (
-            <ProjectShareTrigger project={project()} commands={commands} />
-          )}
-        </Show>
-      </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1">
-        <Switch>
-          <Match when={source.loading() && !source.project()}>
-            <p role="status" class="p-6 text-ink-muted">
-              Loading project…
-            </p>
-          </Match>
-          <Match when={source.project()}>
             {(project) => (
-              <ProjectWorkspace
+              <ProjectTitleMenu
                 project={project()}
                 source={source}
                 commands={commands}
                 section={props.route.section}
+                onShare={openShare}
                 onDelete={
                   props.onDelete ??
                   (() => navigate({ route: tasksSplitRoute, params: {} }))
                 }
-                onOpenTask={(task, options) => {
-                  const event = options?.event;
-                  if (
-                    !isTouchDevice() &&
-                    !(
-                      event?.shiftKey ||
-                      event?.metaKey ||
-                      event?.ctrlKey ||
-                      event?.altKey
-                    )
-                  ) {
-                    navigate({
-                      route: projectTaskRoute,
-                      params: {
-                        projectId: props.route.id,
-                        section: props.route.section,
-                        taskId: task.id,
-                      },
-                    });
-                    return true;
-                  }
-                  layout.openWithSplit(
-                    { type: 'md', id: task.id },
-                    { preferNewSplit: options?.event?.shiftKey }
-                  );
-                  return true;
-                }}
-                onCreateTask={createTask}
-                description={
-                  <ProjectDescription
-                    documentId={project().descriptionDocumentId}
-                    canEdit={canEditProject(project())}
-                  />
-                }
-                discussion={
-                  <ProjectDiscussion
-                    projectId={project().id}
-                    canWrite={canDiscussProject(project())}
-                    targetId={props.route.discussionId}
-                  />
-                }
               />
             )}
-          </Match>
-          <Match when={true}>
-            <div role="alert" class="p-6">
-              <p>
-                Project unavailable. It may have been deleted, or you may no
-                longer have access.
-              </p>
-              <Button onClick={() => void source.refresh()}>Try again</Button>
-            </div>
-          </Match>
-        </Switch>
+          </Show>
+        }
+        navigation={
+          <Tabs
+            aria-label="Project sections"
+            touch="inset"
+            class="shrink-0"
+            options={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'tasks', label: 'Tasks' },
+            ]}
+            value={props.route.section}
+            onChange={section}
+          />
+        }
+      >
+        <Show when={source.project()}>
+          {(project) => (
+            <ShareTrigger
+              onClick={openShare}
+              id={project().id}
+              blockType="initiative"
+              hotkeyScope={panel.splitHotkeyScope}
+            />
+          )}
+        </Show>
+      </EntityDetailTopBar>
+      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
+        <Suspense
+          fallback={<ProjectContentSkeleton section={props.route.section} />}
+        >
+          <Switch>
+            <Match when={source.loading() && !source.project()}>
+              <ProjectContentSkeleton section={props.route.section} />
+            </Match>
+            <Match when={source.project()}>
+              {(project) => (
+                <ProjectWorkspace
+                  project={project()}
+                  source={source}
+                  commands={commands}
+                  section={props.route.section}
+                  onOpenTask={(task, options) => {
+                    const event = options?.event;
+                    if (
+                      !isTouchDevice() &&
+                      !(
+                        event?.shiftKey ||
+                        event?.metaKey ||
+                        event?.ctrlKey ||
+                        event?.altKey
+                      )
+                    ) {
+                      fireAndForget(
+                        navigate({
+                          route: projectTaskRoute,
+                          params: {
+                            projectId: props.route.id,
+                            section: props.route.section,
+                            taskId: task.id,
+                          },
+                        }),
+                        'project-detail'
+                      );
+                      return true;
+                    }
+                    layout.openWithSplit(
+                      { type: 'md', id: task.id },
+                      { preferNewSplit: options?.event?.shiftKey }
+                    );
+                    return true;
+                  }}
+                  onCreateTask={createTask}
+                  description={
+                    <ProjectDescription
+                      projectId={project().id}
+                      canEdit={canEditProject(project())}
+                    />
+                  }
+                  discussion={
+                    <ProjectDiscussion
+                      projectId={project().id}
+                      canWrite={canDiscussProject(project())}
+                      targetId={props.route.discussionId}
+                    />
+                  }
+                />
+              )}
+            </Match>
+            <Match when={true}>
+              <div role="alert" class="p-6">
+                <p>
+                  Project unavailable. It may have been deleted, or you may no
+                  longer have access.
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={() => fireAndForget(source.refresh(), 'projects')}
+                >
+                  Try again
+                </Button>
+              </div>
+            </Match>
+          </Switch>
+        </Suspense>
       </div>
     </>
   );

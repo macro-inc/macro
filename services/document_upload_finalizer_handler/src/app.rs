@@ -1,7 +1,10 @@
+use documents::domain::legacy_office_upgrade::{
+    LegacyOfficeUpgradeRepoPort, LegacyOfficeUpgradeStoragePort, LegacyOfficeUpgrader,
+};
 use documents::domain::ports::markdown::MarkdownInitializationPort;
 use documents::domain::upload_finalize::{UploadFinalizeDocumentPort, UploadedDocumentFinalizer};
 use model::document::FileType;
-use s3_key::DocumentKey;
+use s3_key::{DocumentKey, UpgradedOfficeFormat};
 
 use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
 
@@ -15,25 +18,36 @@ pub struct ObjectCreated {
 }
 
 /// Application use case for finalizing document uploads from object-created events.
-pub struct DocumentUploadFinalizer<P, O> {
+pub struct DocumentUploadFinalizer<P, O, U> {
     document_port: P,
     object_reader: O,
+    upgrade_storage: U,
 }
 
-impl<P, O> DocumentUploadFinalizer<P, O> {
+impl<P, O, U> DocumentUploadFinalizer<P, O, U> {
     /// Construct the upload finalization use case.
-    pub fn new(document_port: P, object_reader: O) -> Self {
+    pub fn new(document_port: P, object_reader: O, upgrade_storage: U) -> Self {
         Self {
             document_port,
             object_reader,
+            upgrade_storage,
         }
     }
 }
 
-impl<P, O> DocumentUploadFinalizer<P, O>
+fn upgraded_file_type(format: UpgradedOfficeFormat) -> FileType {
+    match format {
+        UpgradedOfficeFormat::Docx => FileType::Docx,
+        UpgradedOfficeFormat::Pptx => FileType::Pptx,
+        UpgradedOfficeFormat::Xlsx => FileType::Xlsx,
+    }
+}
+
+impl<P, O, U> DocumentUploadFinalizer<P, O, U>
 where
-    P: DocumentUploadMetadataPort + UploadFinalizeDocumentPort,
+    P: DocumentUploadMetadataPort + UploadFinalizeDocumentPort + LegacyOfficeUpgradeRepoPort,
     O: DocumentObjectReader,
+    U: LegacyOfficeUpgradeStoragePort,
 {
     /// Handle one object-created event.
     #[tracing::instrument(skip(self, markdown_initializer), err)]
@@ -55,7 +69,9 @@ where
 
         let is_finalizable_key = matches!(
             document_key,
-            DocumentKey::Versioned { .. } | DocumentKey::ConvertedPdf { .. }
+            DocumentKey::Versioned { .. }
+                | DocumentKey::ConvertedPdf { .. }
+                | DocumentKey::UpgradedOffice { .. }
         );
         if !is_finalizable_key {
             tracing::trace!(key=%event.key, ?document_key, "skipping non-finalizable document storage key");
@@ -86,17 +102,37 @@ where
         };
 
         let finalizer = UploadedDocumentFinalizer::new(&self.document_port, markdown_initializer);
+        let upgrader = LegacyOfficeUpgrader::new(&self.document_port, &self.upgrade_storage);
         let result = match document_key {
             DocumentKey::ConvertedPdf { .. } => {
                 finalizer
                     .finalize_converted_pdf_document(&document_context)
                     .await
             }
-            DocumentKey::Versioned { .. } => {
-                finalizer
+            DocumentKey::Versioned { version_id, .. } => {
+                // The legacy original stays ready (downloadable) while its
+                // OpenXML upgrade is produced.
+                match finalizer
                     .finalize_uploaded_document(&document_context, markdown.as_deref())
                     .await
+                {
+                    Ok(()) => upgrader
+                        .request_upgrade(&document_context, version_id)
+                        .await
+                        .map(|requested| {
+                            if requested {
+                                tracing::info!(%document_id, version_id, "requested legacy office upgrade");
+                            }
+                        }),
+                    Err(error) => Err(error),
+                }
             }
+            DocumentKey::UpgradedOffice { format, .. } => upgrader
+                .apply_upgrade(&document_context, upgraded_file_type(format))
+                .await
+                .map(|outcome| {
+                    tracing::info!(%document_id, ?outcome, "applied legacy office upgrade");
+                }),
             _ => unreachable!("non-finalizable keys returned earlier"),
         };
 
@@ -109,3 +145,6 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -32,6 +32,7 @@ import {
   type TableNode,
 } from '@lexical/table';
 import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
+import { $createBookingLinkMentionNode } from '@macro-inc/lexical-core/nodes/BookingLinkMentionNode';
 import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
@@ -614,24 +615,9 @@ export class Doc implements DocReader, DocWriter {
 
   private moveNode(node: NodeRef, at: Position): void {
     this.tx(() => {
-      const block = this.block(node);
-      if ('after' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'after', id: at.after },
-          this.session
-        );
-      else if ('before' in at)
-        blocks.$moveBlock(
-          block,
-          { placement: 'before', id: at.before },
-          this.session
-        );
-      else {
-        block.remove();
-        if ('appendToRoot' in at) blocks.$appendBlock(block);
-        else blocks.$prependBlock(block);
-      }
+      const block = this.anchor(node);
+      block.remove();
+      this.place(block, at);
     });
   }
 
@@ -1049,6 +1035,14 @@ export function buildNode(spec: NodeSpec): LexicalNode {
         )
         .with({ kind: 'pr' }, (m) =>
           $createPullRequestMentionNode({ id: m.id, label: m.label })
+        )
+        .with({ kind: 'booking_link' }, (m) =>
+          $createBookingLinkMentionNode({
+            profileId: m.profileId,
+            url: m.url,
+            slug: m.slug,
+            label: m.label,
+          })
         )
         .with({ kind: 'tag' }, (m) =>
           $createTagMentionNode({

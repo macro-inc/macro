@@ -1,9 +1,11 @@
 import { SearchBar } from '@app/components/view-shell';
 import { debouncedDependent } from '@core/util/debounce';
-import StackIcon from '@phosphor/stack.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
+import { canEditProject } from '../core/project';
 
 export function ProjectAssignment(props: {
   taskIds: readonly string[];
@@ -54,7 +56,7 @@ export function ProjectAssignment(props: {
     >
       <div class="flex flex-col gap-3 p-4">
         <Dialog.Title>
-          Set project
+          Add to project
           {remaining().length > 1 ? ` for ${remaining().length} tasks` : ''}
         </Dialog.Title>
         <SearchBar
@@ -65,9 +67,10 @@ export function ProjectAssignment(props: {
           onEscape={close}
         />
         <Button
+          variant="ghost"
           class="justify-start"
           disabled={commands.pending()}
-          onClick={() => void assign()}
+          onClick={() => fireAndForget(assign(), 'projects')}
         >
           No project
         </Button>
@@ -75,22 +78,16 @@ export function ProjectAssignment(props: {
           <For each={source.rows()}>
             {(row) => (
               <Button
+                variant="ghost"
                 class="w-full justify-start"
-                disabled={
-                  commands.pending() ||
-                  (row.project.access !== 'edit' &&
-                    row.project.access !== 'owner')
+                disabled={commands.pending() || !canEditProject(row.project)}
+                onClick={() =>
+                  fireAndForget(assign(row.project.id), 'projects')
                 }
-                onClick={() => void assign(row.project.id)}
               >
                 <StackIcon class="size-4 shrink-0" />
                 <span class="truncate">{row.project.name}</span>
-                <Show
-                  when={
-                    row.project.access !== 'edit' &&
-                    row.project.access !== 'owner'
-                  }
-                >
+                <Show when={!canEditProject(row.project)}>
                   <span class="ml-auto text-xs text-ink-muted">Read only</span>
                 </Show>
               </Button>
@@ -106,7 +103,12 @@ export function ProjectAssignment(props: {
           <p role="alert" class="text-sm text-failure">
             Could not load projects.
           </p>
-          <Button onClick={() => void source.refresh()}>Try again</Button>
+          <Button
+            variant="ghost"
+            onClick={() => fireAndForget(source.refresh(), 'projects')}
+          >
+            Try again
+          </Button>
         </Show>
         <Show
           when={
@@ -119,8 +121,9 @@ export function ProjectAssignment(props: {
         </Show>
         <Show when={source.hasMore()}>
           <Button
+            variant="secondary"
             disabled={source.loadingMore()}
-            onClick={() => void source.loadMore()}
+            onClick={() => fireAndForget(source.loadMore(), 'projects')}
           >
             Load more projects
           </Button>
@@ -138,7 +141,7 @@ export function ProjectAssignment(props: {
           </p>
         </Show>
         <div class="flex justify-end">
-          <Button disabled={commands.pending()} onClick={close}>
+          <Button variant="ghost" disabled={commands.pending()} onClick={close}>
             Cancel
           </Button>
         </div>

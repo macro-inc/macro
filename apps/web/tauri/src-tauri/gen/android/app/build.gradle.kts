@@ -14,14 +14,14 @@ val keystorePropertiesFile = rootProject.file("keystore.properties")
 // Defer signing failures until release work is requested so debug builds remain usable.
 val releaseSigningProperties = runCatching {
     if (!keystorePropertiesFile.isFile) {
-        throw GradleException("Release builds require keystore.properties; see docs/ANDROID_DEVELOPMENT.md")
+        throw GradleException("Release builds require keystore.properties; see docs/development/android.md")
     }
     val properties = Properties().apply {
         keystorePropertiesFile.inputStream().use { load(it) }
     }
     for (name in listOf("keyAlias", "keyPassword", "storePassword", "storeFile")) {
         if (properties.getProperty(name).isNullOrBlank()) {
-            throw GradleException("Missing $name in keystore.properties; see docs/ANDROID_DEVELOPMENT.md")
+            throw GradleException("Missing $name in keystore.properties; see docs/development/android.md")
         }
     }
     if (!rootProject.file(properties.getProperty("storeFile")).isFile) {
@@ -35,7 +35,7 @@ if (firebaseConfigured) {
 }
 gradle.taskGraph.whenReady {
     if (!firebaseConfigured && allTasks.any { it.name.contains("Release") }) {
-        throw GradleException("Release builds require app/google-services.json for com.macro.app.prod; see docs/ANDROID_DEVELOPMENT.md")
+        throw GradleException("Release builds require app/google-services.json for com.macro.workspace.mobile; see docs/development/android.md")
     }
     if (allTasks.any { it.name.contains("Release") }) {
         releaseSigningProperties.getOrThrow()
@@ -51,10 +51,10 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
-    namespace = "com.macro.app.prod"
+    namespace = "com.macro.workspace.mobile"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.macro.app.prod"
+        applicationId = "com.macro.workspace.mobile"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

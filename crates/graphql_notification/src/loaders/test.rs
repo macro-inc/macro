@@ -101,6 +101,7 @@ async fn aliases_and_entities_batch_without_mixing_full_and_limited_results() {
         .execute(
             r#"{
         roots: notifications(entity: "one", filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) { id state }
+        feed: notifications(entity: "one", filter: {states: [UNSEEN], channelFeedOnly: true}, limit: 1) { id state }
         full: notifications(entity: "one") { id state }
         unread: notifications(entity: "one", filter: {states: [UNSEEN]}, limit: 1) { id state }
         other: notifications(entity: "two", filter: {states: [UNSEEN]}, limit: 1) { id state }
@@ -114,7 +115,12 @@ async fn aliases_and_entities_batch_without_mixing_full_and_limited_results() {
     assert_eq!(json["unread"][0]["state"], "UNSEEN");
     assert_eq!(json["other"].as_array().unwrap().len(), 1);
     let calls = calls.lock().unwrap();
-    assert_eq!(calls.len(), 3, "one batch per selection, not per entity");
+    assert_eq!(calls.len(), 4, "one batch per selection, not per entity");
+    assert!(
+        calls
+            .iter()
+            .any(|(_, _, query)| query.channel_feed_only && query.limit == Some(1))
+    );
     assert!(
         calls
             .iter()
@@ -123,7 +129,9 @@ async fn aliases_and_entities_batch_without_mixing_full_and_limited_results() {
     assert_eq!(
         calls
             .iter()
-            .find(|(_, _, query)| query.limit == Some(1) && !query.top_level_messages_only)
+            .find(|(_, _, query)| query.limit == Some(1)
+                && !query.top_level_messages_only
+                && !query.channel_feed_only)
             .unwrap()
             .1
             .len(),

@@ -144,6 +144,14 @@ type GraphqlMutationOptions = {
   ) => unknown;
 };
 
+const inFlightMutations = new Set<Promise<unknown>>();
+
+afterEach(async () => {
+  const pending = [...inFlightMutations];
+  inFlightMutations.clear();
+  await Promise.all(pending);
+});
+
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
@@ -196,7 +204,7 @@ beforeEach(() => {
           return error;
         },
         mutate: (input: GraphqlMutationInput) => {
-          void mutateAsync(input);
+          inFlightMutations.add(mutateAsync(input));
         },
         mutateAsync,
       };
@@ -1202,17 +1210,20 @@ describe('optimisticInsertNotification', () => {
     ).toHaveBeenCalledWith('session-1', 'unseen');
   });
 
-  it('should skip soup update for unsupported entity types', () => {
-    seedQueryCache([createMockNotificationPage([])]);
+  it.each(['user', 'database'] as const)(
+    'should skip soup update for %s entities',
+    (entityType) => {
+      seedQueryCache([createMockNotificationPage([])]);
 
-    const userNotification = createMockNotification({
-      entity_type: 'user',
-      created_at: '2024-01-01T00:00:00.000Z',
-    });
+      const userNotification = createMockNotification({
+        entity_type: entityType,
+        created_at: '2024-01-01T00:00:00.000Z',
+      });
 
-    optimisticInsertNotification(userNotification);
+      optimisticInsertNotification(userNotification);
 
-    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
-    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
-  });
+      expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+      expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
+    }
+  );
 });

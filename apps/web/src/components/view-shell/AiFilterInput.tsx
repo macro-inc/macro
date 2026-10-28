@@ -1,5 +1,7 @@
-import SparkleIcon from '@phosphor/sparkle.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { cn } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -18,6 +20,8 @@ export type AiFilterInputProps = {
 };
 
 type Feedback = { tone: 'note' | 'error'; text: string };
+
+const AI_FILTER_FAILED_MESSAGE = "Couldn't apply that filter. Try again.";
 
 /**
  * Plain-English filter box for list filter menus: type a description, press
@@ -42,7 +46,13 @@ export function AiFilterInput(props: AiFilterInputProps) {
     const id = requestId;
     setPending(true);
     setFeedback(undefined);
-    const outcome = await props.onSubmit(query);
+    let outcome: AiFilterOutcome;
+    try {
+      outcome = await props.onSubmit(query);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'ai-filter' });
+      outcome = { status: 'error', message: AI_FILTER_FAILED_MESSAGE };
+    }
     if (id !== requestId) return;
 
     setPending(false);
@@ -106,7 +116,7 @@ export function AiFilterInput(props: AiFilterInputProps) {
       case 'Enter':
         event.preventDefault();
         event.stopPropagation();
-        void submit();
+        fireAndForget(submit(), 'ai-filter');
         return;
       case 'Escape':
       case 'ArrowDown':
@@ -125,7 +135,7 @@ export function AiFilterInput(props: AiFilterInputProps) {
     <div class="flex w-60 flex-col gap-1">
       <div
         class={cn(
-          'flex h-8 items-center gap-2 rounded-lg border border-edge-muted bg-input px-2',
+          'flex h-8 items-center gap-2 rounded-lg border border-edge-muted bg-input not-touch:elevated px-2',
           'focus-within:border-accent'
         )}
       >

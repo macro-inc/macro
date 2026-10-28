@@ -87,6 +87,7 @@ const placeholder = soupPropertyToProperty({
     data_type: 'SELECT_STRING',
     is_multi_select: false,
     is_metadata: false,
+    specific_entity_type: null,
     is_system: true,
     owner: { scope: 'system' },
     created_at: new Date(0).toISOString(),
@@ -110,6 +111,7 @@ window.fetch = async (input, init) => {
     variables: {
       input: {
         entityId?: string;
+        entityType?: string;
         value?: { selectOption?: string };
         initial?: { limit?: number };
       };
@@ -153,29 +155,33 @@ window.fetch = async (input, init) => {
     }
     return Response.json({ data: groupedData() });
   }
-  return Response.json({
-    data: {
-      user: {
-        id: 'macro|task-optimism@example.test',
-        soup: {
-          items: taskIds.map((id) => ({
-            __typename: 'GraphqlSoupDocument',
-            id,
-            properties: saved.has(id) ? [saved.get(id)] : [],
-          })),
-        },
+  const item = (id: string) => ({
+    __typename: 'GraphqlSoupDocument',
+    id,
+    properties: saved.has(id) ? [saved.get(id)] : [],
+  });
+  const user = { id: 'macro|task-optimism@example.test' };
+  if (body.query.includes('query EntityProperties')) {
+    return Response.json({
+      data: {
+        user: { ...user, soupEntity: item(body.variables.input.entityId!) },
       },
-    },
+    });
+  }
+  return Response.json({
+    data: { user: { ...user, soup: { items: taskIds.map(item) } } },
   });
 };
 
 function Fixture() {
-  const query = createUrqlQuery(() => ({
-    client: getGraphqlSoupClient(),
-    query: EntityPropertiesDocument,
-    variables: { input: { initial: { limit: 2 } } },
-    requestPolicy: 'cache-and-network',
-  }));
+  const queries = taskIds.map((entityId) =>
+    createUrqlQuery(() => ({
+      client: getGraphqlSoupClient(),
+      query: EntityPropertiesDocument,
+      variables: { input: { entityType: 'DOCUMENT' as const, entityId } },
+      requestPolicy: 'cache-and-network',
+    }))
+  );
   const grouped = createUrqlQuery(() => ({
     client: getGraphqlSoupClient(),
     query: GroupSoupMembershipDocument,
@@ -236,8 +242,8 @@ function Fixture() {
   });
   const property = (entityId: string): Property => {
     const raw =
-      query.data?.user.soup.items.find((item) => item.id === entityId)
-        ?.properties ?? [];
+      queries[taskIds.indexOf(entityId)].data?.user.soupEntity?.properties ??
+      [];
     return (
       mapGraphqlProperties(raw)
         .map(soupPropertyToProperty)
@@ -280,7 +286,10 @@ function Fixture() {
         </output>
         <output aria-label="Urgent group">{groupItems(urgent)}</output>
       </Show>
-      <Show when={query.data} fallback={<p>Loading</p>}>
+      <Show
+        when={queries.every((query) => query.data)}
+        fallback={<p>Loading</p>}
+      >
         <For each={taskIds}>
           {(entityId, index) => (
             <section

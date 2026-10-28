@@ -1,17 +1,22 @@
-import TaskIcon from '@phosphor/list-checks.svg';
-import { Button } from '@ui';
-export function EmailTaskButton(props: { onClick: () => void }) {
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import type { ButtonSize } from '@ui';
+
+export function EmailTaskButton(props: {
+  onClick: () => void;
+  grouped?: boolean;
+  size?: ButtonSize;
+}) {
   return (
-    <Button
-      tooltip="Create Task"
-      variant="ghost"
-      size="sm"
+    <HeaderActionButton
+      grouped={props.grouped}
+      size={props.size}
+      tooltip="Create task"
+      label="Create task"
       onClick={props.onClick}
-      depth={2}
-      class="gap-1.5 border border-edge-muted px-2 text-ink-extra-muted"
-    >
-      <TaskIcon />
-      <span class="text-xs font-semibold">Task</span>
-    </Button>
+      icon={
+        <TaskIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      }
+    />
   );
 }

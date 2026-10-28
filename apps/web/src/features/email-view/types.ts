@@ -1,19 +1,7 @@
 import type { FacetSelection } from '@app/features/soup';
+import type { EmailTab } from './constants';
 
-/**
- * Existing tab ids match the legacy mail view (`important` is Signal).
- * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
- */
-export type EmailTab =
-  | 'important'
-  | 'noise'
-  | 'favorites'
-  | 'sent'
-  | 'scheduled'
-  | 'calendar'
-  | 'drafts'
-  | 'shared'
-  | 'all';
+export type { EmailTab };
 
 export type EmailFilterGroupId =
   | 'read'
@@ -42,6 +30,8 @@ export type EmailViewState = {
    * explicitly none, otherwise the selected email link ids.
    */
   inboxIds: string[] | undefined;
+  /** An alias is always scoped to the inbox that owns its provider grant. */
+  aliasFilter?: { inboxId: string; emailAddress: string };
   facets: FacetSelection;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];

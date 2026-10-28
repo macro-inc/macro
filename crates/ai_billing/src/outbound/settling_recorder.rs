@@ -4,12 +4,12 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{BillingService, SettlementTrigger};
+use crate::domain::{AiUsageBilling, BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
-use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
-use macro_env::Environment;
+use ai_usage::{UsageEvent, UsageRecorder, UsageRepo};
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::Instrument;
 
 /// Pauses between attempts to land a usage row; the length is the number of
 /// retries after the first attempt.
@@ -19,10 +19,11 @@ const RECORD_RETRY_BACKOFF: [Duration; 3] = [
     Duration::from_secs(5),
 ];
 
-/// Wraps the Postgres usage recorder. After each row lands it reads the
-/// payer's position and, when there is uncovered usage, triggers settlement
-/// (credit consumption and overage collection) in the service that owns
-/// Stripe. Recording stays best-effort and never delays the completion.
+/// Wraps the Postgres usage recorder. With settlement enabled, after a counted
+/// row lands it reads the payer's position and, when there is uncovered usage,
+/// triggers settlement (credit consumption and overage collection) in the
+/// service that owns Stripe. Recording stays best-effort and never delays the
+/// completion.
 ///
 /// A row that cannot be written is billable usage lost, so the write is
 /// retried with backoff before it is given up on. The retry is bounded and
@@ -32,22 +33,24 @@ pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
     billing: Arc<B>,
     trigger: T,
-    environment: Environment,
+    settlement: AiUsageBilling,
 }
 
 impl<Repo, B, T> SettlingUsageRecorder<Repo, B, T> {
-    /// Build the recorder. Usage is recorded everywhere; settlement is requested only in dev.
+    /// Build the recorder. Usage is always recorded; only counted usage can
+    /// request settlement, and only when the host's `ENABLE_AI_USAGE_BILLING`
+    /// policy is enabled. The inner service owns the counting policy.
     pub fn new(
         inner: Arc<UsageServiceImpl<Repo>>,
         billing: Arc<B>,
         trigger: T,
-        environment: Environment,
+        settlement: AiUsageBilling,
     ) -> Self {
         Self {
             inner,
             billing,
             trigger,
-            environment,
+            settlement,
         }
     }
 }
@@ -62,49 +65,50 @@ where
         let inner = self.inner.clone();
         let billing = self.billing.clone();
         let trigger = self.trigger.clone();
-        let environment = self.environment;
-        tokio::spawn(async move {
-            let user = event.user.clone();
-            let mut backoff = RECORD_RETRY_BACKOFF.iter();
-            loop {
-                let Err(e) = inner.record_now(event.clone()).await else {
-                    break;
-                };
-                match backoff.next() {
-                    Some(pause) => {
-                        tracing::warn!(error = ?e, "failed to record ai usage; retrying");
-                        tokio::time::sleep(*pause).await;
+        let should_settle = self.settlement.is_enabled() && inner.counts_usage(&event);
+        tokio::spawn(
+            async move {
+                let user = event.user.clone();
+                let mut backoff = RECORD_RETRY_BACKOFF.iter();
+                loop {
+                    let Err(e) = inner.record_now(event.clone()).await else {
+                        break;
+                    };
+                    match backoff.next() {
+                        Some(pause) => {
+                            tracing::warn!(error = ?e, "failed to record ai usage; retrying");
+                            tokio::time::sleep(*pause).await;
+                        }
+                        None => {
+                            tracing::error!(
+                                error = ?e,
+                                attempts = RECORD_RETRY_BACKOFF.len() + 1,
+                                model = %event.model,
+                                amount = ?event.amount,
+                                "failed to record ai usage; giving up"
+                            );
+                            return;
+                        }
                     }
-                    None => {
-                        tracing::error!(
-                            error = ?e,
-                            attempts = RECORD_RETRY_BACKOFF.len() + 1,
-                            model = %event.model,
-                            amount = ?event.amount,
-                            "failed to record ai usage; giving up"
-                        );
-                        return;
+                }
+                if !should_settle {
+                    return;
+                }
+                match billing.snapshot(&user).await {
+                    Ok(snapshot) => {
+                        if snapshot.tier.is_paid()
+                            && !snapshot.unlimited
+                            && snapshot.uncovered_cents > 0
+                        {
+                            trigger.request_settlement(snapshot.payer);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "failed to read ai billing position");
                     }
                 }
             }
-            if !matches!(environment, Environment::Develop)
-                || user.as_ref() == SYSTEM_USER_ID.as_ref()
-            {
-                return;
-            }
-            match billing.snapshot(&user).await {
-                Ok(snapshot) => {
-                    if snapshot.tier.is_paid()
-                        && !snapshot.unlimited
-                        && snapshot.uncovered_cents > 0
-                    {
-                        trigger.request_settlement(snapshot.payer);
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = ?e, "failed to read ai billing position");
-                }
-            }
-        });
+            .in_current_span(),
+        );
     }
 }

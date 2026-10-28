@@ -1,10 +1,20 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { connectSlugForPipedreamApp } from '@core/pipedream/slugs';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
+import { type ConnectionState, StatusDot } from '../integration-ui';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsSection,
+} from '../primitives';
 import { AiGrantActions } from './ai-grant-actions';
 import { capabilityFacts } from './capability-row';
 import {
@@ -12,19 +22,15 @@ import {
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
 import {
+  type CapabilityStatus,
   type ConnectionsModel,
   CURATED_AI,
   type CuratedAiProvider,
   capabilitiesFor,
 } from './model';
 import { useNativeMcpActions } from './native-actions';
-import {
-  IntegrationRow,
-  SettingsCard,
-  SettingsPage,
-  SettingsSection,
-} from './primitives';
 import { providerIcon } from './provider-meta';
+import { SlackChannelImportCard } from './slack-channel-import/SlackChannelImportCard';
 import { useConnectionsView } from './view-state';
 
 const COPY: Record<
@@ -53,6 +59,27 @@ const COPY: Record<
   },
 };
 
+function statusIndicator(status: CapabilityStatus): {
+  state: ConnectionState;
+  label: string;
+} {
+  return match(status)
+    .with('connected', () => ({
+      state: 'connected' as const,
+      label: 'Connected',
+    }))
+    .with('off', () => ({ state: 'disconnected' as const, label: 'Disabled' }))
+    .with('action-required', () => ({
+      state: 'attention' as const,
+      label: 'Needs reconnecting',
+    }))
+    .with('not-connected', () => ({
+      state: 'disconnected' as const,
+      label: 'Not connected',
+    }))
+    .exhaustive();
+}
+
 export function PipedreamAiProvider(props: {
   model: ConnectionsModel;
   provider: CuratedAiProvider;
@@ -63,6 +90,8 @@ export function PipedreamAiProvider(props: {
     capabilitiesFor(props.model, props.provider).find(
       (item) => item.kind === 'ai'
     );
+  const status = () => row()?.status ?? 'not-connected';
+  const indicator = () => statusIndicator(status());
   const aiFacts = () => {
     const cap = row();
     return cap ? capabilityFacts(cap) : 'Powered by Pipedream';
@@ -72,7 +101,7 @@ export function PipedreamAiProvider(props: {
   const native = useNativeMcpActions();
   const { connect, busy } = createPipedreamCatalogConnect({
     entry: () => ({
-      app_slug: props.provider,
+      app_slug: connectSlugForPipedreamApp(props.provider),
       display_name: copy.name,
     }),
     onConnected: () => toast.success(`${copy.name} connected`),
@@ -95,7 +124,7 @@ export function PipedreamAiProvider(props: {
       return;
     }
     update.mutate(
-      { app_slug: props.provider, enabled },
+      { app_slug: row()?.appSlug ?? props.provider, enabled },
       { onError: () => toast.failure('Failed to update connector') }
     );
   };
@@ -126,7 +155,7 @@ export function PipedreamAiProvider(props: {
       body: `Disconnect ${copy.name}?`,
       onConfirm: () =>
         remove.mutate(
-          { app_slug: props.provider },
+          { app_slug: row()?.appSlug ?? props.provider },
           {
             onSuccess: () =>
               toast.success(`Disconnected ${copy.name} from Macro`),
@@ -145,13 +174,13 @@ export function PipedreamAiProvider(props: {
       native.startAuth(url, cap.account || copy.name);
       return;
     }
-    void connect();
+    fireAndForget(connect(), 'connections-settings');
   };
 
   const actions = (): JSX.Element => (
     <AiGrantActions
-      status={row()?.status ?? 'not-connected'}
-      onConnect={() => void connect()}
+      status={status()}
+      onConnect={() => fireAndForget(connect(), 'connections-settings')}
       onReconnect={reconnect}
       onEnable={() => setEnabled(true)}
       onDisable={() => setEnabled(false)}
@@ -167,20 +196,37 @@ export function PipedreamAiProvider(props: {
     <SettingsPage
       title={copy.title}
       icon={providerIcon(props.provider)}
+      description={copy.outcome}
       onBack={view.closeProvider}
+      backLabel="Integrations"
     >
-      <SettingsSection title="Your Connections">
+      <SettingsSection title="Macro AI">
         <SettingsCard>
           <IntegrationRow
+            icon={providerIcon(props.provider)}
             title={copy.title}
-            description={copy.outcome}
+            status={
+              <StatusDot state={indicator().state} label={indicator().label} />
+            }
+            description={indicator().label}
             facts={aiFacts()}
-            muted={row()?.status === 'off'}
+            muted={status() === 'off'}
           >
             {actions()}
           </IntegrationRow>
         </SettingsCard>
       </SettingsSection>
+      <Show
+        when={
+          props.provider === 'slack' &&
+          row()?.mechanism === 'pipedream' &&
+          row()?.status === 'connected'
+        }
+      >
+        <Suspense>
+          <SlackChannelImportCard />
+        </Suspense>
+      </Show>
       <DisconnectConfirmDialog
         request={disconnect()}
         onClose={() => setDisconnect(null)}

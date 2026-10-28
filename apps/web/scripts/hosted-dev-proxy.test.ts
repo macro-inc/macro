@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
+import { connect as connectHttp2 } from 'node:http2';
 import { get, request } from 'node:https';
 import type { AddressInfo, Socket } from 'node:net';
 import { createServer, resolveConfig } from 'vite';
@@ -40,8 +41,11 @@ it('maps dev HTTP and WebSocket URLs while preserving production and OAuth hosts
 
 it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects other origins', async () => {
   const sockets = new Set<Socket>();
-  const upgrades: { cookie: string | undefined; path: string | undefined }[] =
-    [];
+  const upgrades: {
+    cookie: string | undefined;
+    origin: string | null;
+    path: string | undefined;
+  }[] = [];
   let requests = 0;
   const backend = createHttpServer((req, res) => {
     requests++;
@@ -55,6 +59,7 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
         path: req.url,
         cookie: req.headers.cookie,
         host: req.headers.host,
+        origin: req.headers.origin ?? null,
       })
     );
   });
@@ -63,7 +68,11 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
     socket.on('close', () => sockets.delete(socket));
   });
   backend.on('upgrade', (req, socket) => {
-    upgrades.push({ cookie: req.headers.cookie, path: req.url });
+    upgrades.push({
+      cookie: req.headers.cookie,
+      origin: req.headers.origin ?? null,
+      path: req.url,
+    });
     const accept = createHash('sha1')
       .update(
         `${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`
@@ -140,6 +149,7 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
       path: '/auth/user/me?check=1',
       cookie,
       host: new URL(upstream).host,
+      origin: null,
     });
     expect(response.cookies).toEqual([
       `${cookie}; Path=/; Secure; HttpOnly; SameSite=None`,
@@ -186,11 +196,85 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
         req.end();
       });
     await connect(origin);
-    expect(upgrades).toEqual([{ cookie, path: '/connection-gateway?check=1' }]);
+    expect(upgrades).toEqual([
+      { cookie, origin: null, path: '/connection-gateway?check=1' },
+    ]);
     await expect(connect('https://unrelated.example')).rejects.toThrow();
     expect(upgrades).toHaveLength(1);
   } finally {
     for (const socket of sockets) socket.destroy();
+    await vite.close();
+    await new Promise<void>((resolve) => backend.close(() => resolve()));
+  }
+});
+
+it('keeps HTTP/2 for remote browsers while proxying', async () => {
+  const backend = createHttpServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader(
+      'Set-Cookie',
+      'dev-macro-refresh-token=fixture; Domain=macro.com; Path=/; Secure; HttpOnly'
+    );
+    res.end(JSON.stringify({ path: req.url, origin: req.headers.origin ?? null }));
+  });
+  await new Promise<void>((resolve) => backend.listen(0, '127.0.0.1', resolve));
+  const upstream = `http://127.0.0.1:${(backend.address() as AddressInfo).port}`;
+  const vite = await createServer({
+    configFile: false,
+    appType: 'custom',
+    logLevel: 'silent',
+    plugins: [devHttps({}), hostedDevProxy({}, { gateway: upstream })],
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { host: '127.0.0.1', port: 0 },
+  });
+  try {
+    await vite.listen();
+    const address = vite.httpServer?.address();
+    if (!address || typeof address === 'string')
+      throw new Error('No Vite listener');
+    const session = connectHttp2(`https://localhost:${address.port}`, {
+      host: '127.0.0.1',
+      servername: 'localhost',
+      ca: readFileSync(
+        new URL('../../../infra/local/certs/ca.pem', import.meta.url)
+      ),
+    });
+    try {
+      const response = await new Promise<{
+        status: number | undefined;
+        cookies: string[] | undefined;
+        body: string;
+      }>((resolve, reject) => {
+        const stream = session.request({
+          ':path': '/__macro_dev/gateway/auth/user/me',
+          origin: `https://localhost:${address.port}`,
+        });
+        let status: number | undefined;
+        let cookies: string[] | undefined;
+        let body = '';
+        stream.on('response', (headers) => {
+          status = headers[':status'];
+          cookies = headers['set-cookie'];
+        });
+        stream.setEncoding('utf8');
+        stream.on('data', (chunk) => {
+          body += chunk;
+        });
+        stream.on('end', () => resolve({ status, cookies, body }));
+        stream.on('error', reject);
+        stream.end();
+      });
+      expect(session.alpnProtocol).toBe('h2');
+      expect(response).toEqual({
+        status: 200,
+        cookies: ['dev-macro-refresh-token=fixture; Path=/; Secure; HttpOnly'],
+        body: JSON.stringify({ path: '/auth/user/me', origin: null }),
+      });
+    } finally {
+      session.close();
+    }
+  } finally {
     await vite.close();
     await new Promise<void>((resolve) => backend.close(() => resolve()));
   }

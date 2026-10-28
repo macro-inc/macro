@@ -4,7 +4,10 @@ import {
   type DedicatedWorkerLike,
   type SharedWorkerLike,
 } from './coordinator-page-adapter';
-import { CACHE_COORDINATOR_PROTOCOL_VERSION } from './coordinator-protocol';
+import {
+  CACHE_COORDINATOR_PROTOCOL_VERSION,
+  cacheDatabaseIdentity,
+} from './coordinator-protocol';
 
 class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
@@ -172,6 +175,83 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(attach?.transfer).toHaveLength(1);
   });
 
+  it('reports visibility changes during registration and fences stale handoff notices', async () => {
+    class Visibility extends EventTarget {
+      visibilityState: DocumentVisibilityState = 'visible';
+    }
+    const visibility = new Visibility();
+    const detached = vi.spyOn(visibility, 'removeEventListener');
+    const port = new FakeCoordinatorPort();
+    const sent = Promise.withResolvers<void>();
+    const post = port.postMessage.bind(port);
+    vi.spyOn(port, 'postMessage').mockImplementation((message, transfer) => {
+      post(message, transfer);
+      sent.resolve();
+    });
+    const onCacheReadAvailabilityChanged = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      visibility,
+      onCacheReadAvailabilityChanged,
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+    });
+    const started = adapter.start();
+    await sent.promise;
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      visible: true,
+    });
+    visibility.visibilityState = 'hidden';
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    expect(port.messages.at(-1)?.message).toMatchObject({
+      kind: 'tab-visibility',
+      visible: false,
+    });
+    visibility.visibilityState = 'visible';
+    visibility.dispatchEvent(new Event('visibilitychange'));
+    expect(port.messages.at(-1)?.message).toMatchObject({
+      kind: 'tab-visibility',
+      visible: true,
+    });
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 1,
+      state: 'blocked',
+    });
+    port.receive({
+      ...version,
+      kind: 'engine-replaced',
+      ownerEpoch: 2,
+      openOutcome: 'opened-existing',
+    });
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 1,
+      state: 'blocked',
+    });
+    expect(onCacheReadAvailabilityChanged).toHaveBeenCalledExactlyOnceWith(
+      'blocked'
+    );
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 2,
+      state: 'ready',
+    });
+    expect(onCacheReadAvailabilityChanged).toHaveBeenLastCalledWith('ready');
+    await adapter.dispose({ graceful: false });
+    expect(detached).toHaveBeenCalledWith(
+      'visibilitychange',
+      expect.any(Function)
+    );
+  });
+
   it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
     const port = new FakeCoordinatorPort();
     const progress = vi.fn();
@@ -206,6 +286,264 @@ describe('CacheCoordinatorPageAdapter', () => {
     port.receive(loading);
     expect(error).toHaveBeenCalledOnce();
     expect(port.closed).toBe(true);
+  });
+
+  it('forwards the owner-lock phases in order and rejects stepping back', async () => {
+    const port = new FakeCoordinatorPort();
+    const progress = vi.fn();
+    const error = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onStartupProgress: progress,
+      onTerminalError: error,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    const phase = (name: string, timeoutMs: number) => ({
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 1,
+      phase: name,
+      databaseAction: 'open-existing',
+      timeoutMs,
+    });
+    port.receive(phase('loading-assets', 300_000));
+    port.receive(phase('awaiting-owner-lock', 15_000));
+    port.receive(phase('awaiting-owner-lock', 15_000));
+    port.receive(phase('opening-database', 20_000));
+    expect(progress.mock.calls.map(([message]) => message.phase)).toEqual([
+      'loading-assets',
+      'awaiting-owner-lock',
+      'opening-database',
+    ]);
+    expect(error).not.toHaveBeenCalled();
+
+    port.receive(phase('awaiting-owner-lock', 15_000));
+
+    expect(error).toHaveBeenCalledOnce();
+    expect(port.closed).toBe(true);
+  });
+
+  const registeredAdapter = async (
+    options: Partial<Parameters<typeof createCacheCoordinatorPageAdapter>[0]>
+  ) => {
+    const port = new FakeCoordinatorPort();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      ...options,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    return port;
+  };
+
+  const removeStale = (ownerEpoch: number) => ({
+    ...version,
+    kind: 'remove-stale-databases',
+    tabId: 'tab-a',
+    ownerEpoch,
+  });
+
+  it('relays that another context holds the database', async () => {
+    const onCacheUnavailable = vi.fn();
+    const port = await registeredAdapter({ onCacheUnavailable });
+
+    port.receive({
+      ...version,
+      kind: 'cache-unavailable',
+      reason: 'another app version holds the database',
+    });
+
+    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
+      'another app version holds the database'
+    );
+  });
+
+  it('registers with its build time and relays a newer build taking over', async () => {
+    const onCacheSuperseded = vi.fn();
+    const port = await registeredAdapter({
+      buildTime: 1_790_000_000_000,
+      onCacheSuperseded,
+    });
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 1_790_000_000_000,
+    });
+
+    port.receive({
+      ...version,
+      kind: 'cache-superseded',
+      reason: 'a newer version of the app took over the local cache',
+    });
+
+    expect(onCacheSuperseded).toHaveBeenCalledExactlyOnceWith(
+      'a newer version of the app took over the local cache'
+    );
+  });
+
+  it('registers as an unstamped build outside app bundles', async () => {
+    const port = await registeredAdapter({});
+
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 0,
+    });
+  });
+
+  it('isolates different builds when their coordinator script URL is unchanged', async () => {
+    const workers: Array<{
+      url: string;
+      name: string | undefined;
+      port: FakeCoordinatorPort;
+    }> = [];
+    for (const [tabId, buildTime] of [
+      ['old-a', 1_000],
+      ['old-b', 1_000],
+      ['new-a', 2_000],
+    ] as const) {
+      const registration = Promise.withResolvers<FakeCoordinatorPort>();
+      vi.stubGlobal(
+        'SharedWorker',
+        class {
+          readonly port = new FakeCoordinatorPort();
+
+          constructor(url: URL, options: WorkerOptions) {
+            workers.push({
+              url: url.href,
+              name: options.name,
+              port: this.port,
+            });
+            const postMessage = this.port.postMessage.bind(this.port);
+            vi.spyOn(this.port, 'postMessage').mockImplementation(
+              (message, transfer) => {
+                postMessage(message, transfer);
+                registration.resolve(this.port);
+              }
+            );
+          }
+        }
+      );
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId,
+        buildTime,
+        lockManager: heldLockManager(),
+        createDedicatedWorker: () => new FakeWorker(),
+      });
+      const started = adapter.start();
+      const port = await registration.promise;
+      expect(port.messages[0]?.message).toMatchObject({
+        kind: 'register-tab',
+        scope: 'scope',
+        tabId,
+        buildTime,
+      });
+      port.receive({ ...version, kind: 'registered', tabId });
+      await started;
+      await adapter.dispose({ graceful: false });
+    }
+
+    expect(workers).toHaveLength(3);
+    expect(workers[0]?.url).toBe(workers[2]?.url);
+    expect(workers[0]?.name).toBe(workers[1]?.name);
+    expect(workers[0]?.name).not.toBe(workers[2]?.name);
+  });
+
+  it('deletes stale databases in a disposable worker, once, for its own engine', async () => {
+    const cleanupWorker = new FakeWorker();
+    const createCleanupWorker = vi.fn(() => cleanupWorker);
+    const listOpfsRootNames = vi.fn(async () => [
+      'graphql-cache:scope:s1.v1.t1',
+      'graphql-cache:scope:s1.v1.t1-wal',
+      cacheDatabaseIdentity('scope'),
+      'unrelated.db',
+    ]);
+    const observations: Array<Record<string, unknown>> = [];
+    const port = await registeredAdapter({
+      createCleanupWorker,
+      listOpfsRootNames,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+
+    // Only the engine's current owner cleans up.
+    port.receive(removeStale(1));
+    await Promise.resolve();
+    expect(listOpfsRootNames).not.toHaveBeenCalled();
+    port.receive(election(1));
+    port.receive(removeStale(1));
+
+    await vi.waitFor(() => expect(cleanupWorker.messages).toHaveLength(1));
+    expect(cleanupWorker.messages[0]?.message).toEqual({
+      ...version,
+      kind: 'remove-stale-databases',
+      scope: 'scope',
+    });
+    const reply = FakeMessageChannel.instances.at(-1)?.port1 as unknown as {
+      onmessage: (event: MessageEvent<unknown>) => void;
+    };
+    reply.onmessage(
+      new MessageEvent('message', {
+        data: {
+          ...version,
+          kind: 'stale-databases-removed',
+          removed: 1,
+          inUse: 0,
+          keptWithQueuedMutations: 1,
+          failed: false,
+        },
+      })
+    );
+    await vi.waitFor(() => expect(cleanupWorker.terminated).toBe(true));
+    expect(
+      observations.filter((observation) =>
+        String(observation.ownerEvent).startsWith('stale-')
+      )
+    ).toEqual([
+      expect.objectContaining({
+        ownerEvent: 'stale-databases-removed',
+        outcome: 'success',
+        count: 1,
+      }),
+      expect.objectContaining({ ownerEvent: 'stale-database-kept', count: 1 }),
+    ]);
+
+    port.receive(removeStale(1));
+    await Promise.resolve();
+    expect(createCleanupWorker).toHaveBeenCalledOnce();
+  });
+
+  it('starts no cleanup worker when only its own database exists', async () => {
+    const createCleanupWorker = vi.fn(() => new FakeWorker());
+    const listOpfsRootNames = vi.fn(async () => [
+      cacheDatabaseIdentity('scope'),
+      `${cacheDatabaseIdentity('scope')}-wal`,
+    ]);
+    const port = await registeredAdapter({
+      createCleanupWorker,
+      listOpfsRootNames,
+    });
+    port.receive(election(1));
+
+    port.receive(removeStale(1));
+
+    await vi.waitFor(() => expect(listOpfsRootNames).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    expect(createCleanupWorker).not.toHaveBeenCalled();
   });
 
   it('terminates and clears a failed worker before reporting owner loss', async () => {

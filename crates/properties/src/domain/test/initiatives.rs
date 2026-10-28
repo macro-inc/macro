@@ -205,6 +205,10 @@ async fn assignees_share_the_initiative_and_allow_assigning_the_owner() {
                 references: vec![
                     EntityReference::new(owner.as_ref(), EntityType::User),
                     EntityReference::new("macro|assignee@test.com", EntityType::User),
+                    EntityReference::new(
+                        bot_id::CODEX_BOT_ID.into_storage_id().as_ref(),
+                        EntityType::User,
+                    ),
                 ],
             }),
         )

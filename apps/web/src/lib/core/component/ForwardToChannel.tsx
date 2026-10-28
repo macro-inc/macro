@@ -20,8 +20,9 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@phosphor/check.svg?component-solid';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -38,6 +39,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -47,7 +49,10 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    'submitPermissionInfo' | 'hideAccessLevelSelector' | 'editPermissionEnabled'
+    | 'submitPermissionInfo'
+    | 'hideAccessLevelSelector'
+    | 'editPermissionEnabled'
+    | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -137,6 +142,7 @@ function MobileForwardToChannelLayout(
           <span class="text-sm text-ink-muted pr-2">Access:</span>
           <ShareOptions
             editPermissionEnabled={props.editPermissionEnabled}
+            allowedAccessLevels={props.allowedAccessLevels}
             setPermissions={(accessLevel) =>
               props.setSubmitAccessLevel(accessLevel)
             }
@@ -192,6 +198,8 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  /** Levels the picker offers; all when absent. */
+  allowedAccessLevels?: readonly AccessLevel[];
   /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
   entity?: NewAttachment;
   /**
@@ -262,7 +270,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
-      props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
+      props.initialAccessLevel ??
+        match(blockBaseName)
+          .returnType<AccessLevel>()
+          .with('md', () => 'edit')
+          .with('pdf', () => 'comment')
+          .otherwise(() => 'view')
     );
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
@@ -486,7 +499,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       // Holding the shortcut repeats keydown; swallow the repeats so one press
       // sends one share, but keep capturing them so none reaches the composer.
       if (event?.repeat) return true;
-      void handleSubmit();
+      fireAndForget(handleSubmit(), 'forward-to-channel');
       return true;
     },
   });
@@ -521,6 +534,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
             hideAccessLevelSelector={props.hideAccessLevelSelector}
+            allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
             mdScrollRef={mdScrollRef}
@@ -556,11 +570,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">
-                <Show when={selectedOptions().length > 0}>
-                  <span class="text-sm text-ink-extra-muted">can</span>
-                </Show>
                 <ShareOptions
                   editPermissionEnabled={props.editPermissionEnabled}
+                  allowedAccessLevels={props.allowedAccessLevels}
                   setPermissions={(accessLevel) =>
                     setSubmitAccessLevel(accessLevel)
                   }
@@ -657,13 +669,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   Cancel
                 </Button>
                 <Button
-                  variant="strong"
-                  depth={3}
+                  variant="primary"
                   disabled={selectedOptions().length === 0 || isSubmitting()}
                   onClick={() => {
                     const options = selectedOptions();
                     if (options && options.length > 0) {
-                      void handleSubmit();
+                      fireAndForget(handleSubmit(), 'forward-to-channel');
                     }
                   }}
                 >

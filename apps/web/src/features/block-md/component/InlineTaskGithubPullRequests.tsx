@@ -1,11 +1,15 @@
 import { GithubPullRequestStatusIcon } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import GithubIcon from '@icon/mcp-github.svg';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { Button, Layer } from '@ui';
+import { badgeTriggerClasses, CopyButton, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -59,6 +63,96 @@ function InlineTaskGithubPullRequestsSkeleton(): JSX.Element {
   );
 }
 
+function PullRequestPillFace(props: { pr: GithubPullRequest }): JSX.Element {
+  return (
+    <>
+      <Show
+        when={props.pr.status}
+        fallback={<GithubIcon class="size-3 shrink-0" aria-hidden="true" />}
+      >
+        {(status) => (
+          <GithubPullRequestStatusIcon
+            status={status()}
+            class="size-3 shrink-0"
+          />
+        )}
+      </Show>
+      <Show
+        when={pullRequestName(props.pr)}
+        fallback={<span class="min-w-0 truncate">{props.pr.displayName}</span>}
+      >
+        {(title) => (
+          <>
+            <span class="min-w-0 truncate text-ink">{title()}</span>
+            <span class="shrink-0 text-ink-extra-muted">
+              {props.pr.displayName}
+            </span>
+          </>
+        )}
+      </Show>
+      <Show when={hasLineChanges(props.pr)}>
+        <span class="shrink-0 font-mono text-xs tabular-nums">
+          <span class="text-success">
+            +{formatLineCount(props.pr.additions)}
+          </span>
+          <span class="text-ink-extra-muted mx-0.5">/</span>
+          <span class="text-failure">
+            -{formatLineCount(props.pr.deletions)}
+          </span>
+        </span>
+      </Show>
+    </>
+  );
+}
+
+/**
+ * Opens the pull request's Macro block in a new split once GitHub has synced
+ * it; until then the pill links to GitHub.
+ */
+function PullRequestPill(props: { pr: GithubPullRequest }): JSX.Element {
+  const { openWithSplit } = useSplitLayout();
+  const foreignEntityId = () =>
+    USE_MACRO_PR_SUMMARY_BLOCK ? props.pr.foreignEntityId : undefined;
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    const id = foreignEntityId();
+    if (!id) return;
+    openWithSplit(
+      { type: 'pr', id },
+      { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
+    );
+  });
+
+  return (
+    <Layer depth={2}>
+      <Show
+        when={foreignEntityId()}
+        fallback={
+          <a
+            aria-label={`Open GitHub pull request ${pullRequestLabel(props.pr)}`}
+            class={PILL_CLASS}
+            href={props.pr.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={pullRequestTitle(props.pr)}
+          >
+            <PullRequestPillFace pr={props.pr} />
+          </a>
+        }
+      >
+        <button
+          type="button"
+          aria-label={`Open pull request ${pullRequestLabel(props.pr)}`}
+          class={PILL_CLASS}
+          title={pullRequestTitle(props.pr)}
+          {...navHandlers}
+        >
+          <PullRequestPillFace pr={props.pr} />
+        </button>
+      </Show>
+    </Layer>
+  );
+}
+
 function InlineTaskGithubPullRequestsContent(props: {
   blockId: string;
 }): JSX.Element {
@@ -77,75 +171,27 @@ function InlineTaskGithubPullRequestsContent(props: {
       <Show when={isWaitingForPullRequests()}>
         <InlineTaskGithubPullRequestsSkeleton />
       </Show>
-      <For each={pullRequests()}>
-        {(pr) => {
-          const name = pullRequestName(pr);
-          return (
-            <Layer depth={2}>
-              <a
-                aria-label={`Open GitHub pull request ${pullRequestLabel(pr)}`}
-                class={PILL_CLASS}
-                href={pr.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={pullRequestTitle(pr)}
-              >
-                <Show
-                  when={pr.status}
-                  fallback={
-                    <GithubIcon class="size-3 shrink-0" aria-hidden="true" />
-                  }
-                >
-                  {(status) => (
-                    <GithubPullRequestStatusIcon
-                      status={status()}
-                      class="size-3 shrink-0"
-                    />
-                  )}
-                </Show>
-                <Show
-                  when={name}
-                  fallback={
-                    <span class="min-w-0 truncate">{pr.displayName}</span>
-                  }
-                >
-                  {(title) => (
-                    <>
-                      <span class="min-w-0 truncate text-ink">{title()}</span>
-                      <span class="shrink-0 text-ink-extra-muted">
-                        {pr.displayName}
-                      </span>
-                    </>
-                  )}
-                </Show>
-                <Show when={hasLineChanges(pr)}>
-                  <span class="shrink-0 font-mono text-xs tabular-nums">
-                    <span class="text-success">
-                      +{formatLineCount(pr.additions)}
-                    </span>
-                    <span class="text-ink-extra-muted mx-0.5">/</span>
-                    <span class="text-failure">
-                      -{formatLineCount(pr.deletions)}
-                    </span>
-                  </span>
-                </Show>
-              </a>
-            </Layer>
-          );
-        }}
-      </For>
+      <For each={pullRequests()}>{(pr) => <PullRequestPill pr={pr} />}</For>
       <Show when={!isWaitingForPullRequests() && pullRequests().length === 0}>
-        <Button
-          variant="ghost"
+        <CopyButton
+          variant="secondary"
           size="sm"
-          depth={2}
-          tooltip="Copy branch name"
-          hotkey={TOKENS.entity.action.copyBranchName}
-          class={cn(PILL_CLASS, 'bg-surface px-1.5')}
-          onClick={() => void copyBranchNameToClipboard(props.blockId)}
+          tooltip={{
+            content: 'Copy branch name',
+            hotkey: TOKENS.entity.action.copyBranchName,
+          }}
+          aria-label="Copy branch name"
+          class={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'sm',
+            class: 'gap-1.5 bg-surface-2 border border-edge',
+          })}
+          onClick={() =>
+            copyBranchNameToClipboard(props.blockId, { silent: true })
+          }
         >
           <GitBranch class="size-3 shrink-0" />
-        </Button>
+        </CopyButton>
       </Show>
     </>
   );

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM scheduling_booking WHERE profile_id = $1 AND event_type_id = $2 AND starts_at >= $3 AND starts_at < $4 AND status <> 'cancelled'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7f79ce9e1dbcb284bda1ccb12decd61ad0cdd61553ecf04b03d8753b4c49d8db"
+}

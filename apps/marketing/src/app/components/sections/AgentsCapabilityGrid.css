@@ -6,7 +6,7 @@
 .agents-cap-art { position: relative; width: 100%; }
 .agents-cap-caption { padding-left: 29px; display: grid; align-content: start; gap: 20px; }
 .agents-page .agents-cap-caption h2 { display: flex; align-items: center; gap: 10px; margin-left: -29px; font: 700 14px/1.3 'body'; letter-spacing: .07em; text-transform: uppercase; color: var(--c2); }
-.agents-cap-number { display: inline-grid; place-items: center; width: 19px; height: 19px; flex: none; border: 1px solid color-mix(in srgb, var(--c4) 42%, transparent); border-radius: 50%; font: 500 11px/1 'rajdhani', 'body'; letter-spacing: 0; }
+.agents-cap-number { display: inline-grid; place-items: center; width: 19px; height: 19px; flex: none; border: 1px solid color-mix(in srgb, var(--c4) 42%, transparent); border-radius: 50%; font: 500 11px/1 'Inter', 'body'; letter-spacing: 0; }
 .agents-page .agents-cap-caption p { color: color-mix(in srgb, var(--c4) 85%, transparent); font: 500 15px/1.5 'body'; max-width: 40ch; }
 .agents-cap-assignment { width: 116%; margin-left: 5%; mask-image: linear-gradient(to right, transparent, #000 7%, #000 75%, transparent); }
 .agents-cap-assignment > svg { display: block; width: 100%; height: auto; }

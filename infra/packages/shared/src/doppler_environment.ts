@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { stack } from '.';
+import { grafanaIngestSecretArn } from './grafana_telemetry';
 
 export type DopplerEcsEnvironmentArgs = {
   // Resource tags
@@ -35,7 +36,9 @@ export class DopplerEcsEnvironment extends pulumi.ComponentResource {
           Statement: [
             {
               Action: ['secretsmanager:GetSecretValue'],
-              Resource: pulumi.interpolate`${dopplerSecretSyncArn}`,
+              Resource: grafanaIngestSecretArn
+                ? [dopplerSecretSyncArn, grafanaIngestSecretArn]
+                : pulumi.interpolate`${dopplerSecretSyncArn}`,
               Effect: 'Allow',
             },
           ],

@@ -5,10 +5,14 @@ use ::axum::{
 use rootcause::Report;
 
 use crate::{
-    InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
+    CredentialOrigin, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
+    MacroAuthorizationService,
 };
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
+use super::{
+    MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    log_authorization_failure, rejection,
+};
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -71,7 +75,9 @@ where
         .authorize_internal(provided_key, claims)
         .await
         .map_err(internal_authorization_rejection)?;
-    let acting_user = user_context.map(authenticated_user).transpose()?;
+    let acting_user = user_context
+        .map(|user_context| authenticated_user(user_context, CredentialOrigin::Internal))
+        .transpose()?;
 
     Ok(Some(MacroAuthorization::Internal(acting_user)))
 }
@@ -103,6 +109,6 @@ fn header_string(headers: &HeaderMap, name: Option<&str>) -> Option<String> {
 fn internal_authorization_rejection(
     error: Report<MacroAuthorizationError>,
 ) -> MacroAuthorizationRejection {
-    tracing::error!(error=?error.current_context(), "internal authorization failed");
+    log_authorization_failure(&error, "internal authorization failed");
     rejection("unauthorized")
 }

@@ -3,6 +3,29 @@ import { message, thread } from '../tests/fixtures';
 import { selectThreadMessages, selectThreadSender } from './thread-messages';
 
 describe('thread message selection', () => {
+  it.each([false, true])(
+    'selects the most recently edited reply draft independently of transport order (reverse=%s)',
+    (reverse) => {
+      const older = message('older-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+        updated_at: '2026-09-01T10:00:00Z',
+        internal_date_ts: '2026-09-03T10:00:00Z',
+      });
+      const newer = message('newer-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+        updated_at: '2026-09-02T10:00:00Z',
+        internal_date_ts: '2026-09-01T10:00:00Z',
+      });
+      const drafts = reverse ? [newer, older] : [older, newer];
+      expect(selectThreadMessages(thread(drafts)).draftMap.parent).toBe(newer);
+      // Local replies do not have received/sent timestamps.
+      older.internal_date_ts = undefined;
+      newer.internal_date_ts = undefined;
+      expect(selectThreadMessages(thread(drafts)).draftMap.parent).toBe(newer);
+    }
+  );
   it('targets the original external sender for sender actions regardless of transport order', () => {
     const original = message('original', {
       from: { email: 'originator@example.com' },
@@ -28,6 +51,28 @@ describe('thread message selection', () => {
       selectThreadSender(thread([viewer]), 'viewer@example.com')
     ).toBeUndefined();
     expect(selectThreadSender(thread([]))).toBeUndefined();
+  });
+  it('never offers a deleted draft as the reply draft or the draft to edit', () => {
+    const parent = message('parent');
+    const live = message('live', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-02T10:00:00Z',
+    });
+    const deleted = message('deleted', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-03T10:00:00Z',
+      operation: { state: 'DELETED', revision: '3' },
+    });
+    expect(
+      selectThreadMessages(thread([parent, live, deleted])).draftMap
+    ).toEqual({ parent: live });
+    const standalone = message('standalone', {
+      is_draft: true,
+      operation: { state: 'DELETED', revision: '1' },
+    });
+    expect(selectThreadMessages(thread([standalone])).messages).toEqual([]);
   });
   it('orders messages chronologically without mutating the source and separates reply drafts', () => {
     const newer = message('new', { internal_date_ts: '2026-09-02T10:00:00Z' });

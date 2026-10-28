@@ -44,10 +44,10 @@ impl AsyncTool<()> for EchoTool {
 fn streamed_echo() -> MockCompletionModel {
     MockCompletionModel::from_stream_turns([
         vec![
-            MockStreamEvent::tool_call_name_delta("fc-1", "internal-1", "echo_tool"),
-            MockStreamEvent::tool_call_arguments_delta("fc-1", "internal-1", "{\"value\":"),
-            MockStreamEvent::tool_call_arguments_delta("fc-1", "internal-1", "\"hi\"}"),
-            MockStreamEvent::tool_call("fc-1", "echo_tool", serde_json::json!({ "value": "hi" }))
+            MockStreamEvent::tool_call_name_delta("call-1", "internal-1", "echo_tool"),
+            MockStreamEvent::tool_call_arguments_delta("call-1", "internal-1", "{\"value\":"),
+            MockStreamEvent::tool_call_arguments_delta("call-1", "internal-1", "\"hi\"}"),
+            MockStreamEvent::tool_call("call-1", "echo_tool", serde_json::json!({ "value": "hi" }))
                 .with_call_id("call-1"),
             MockStreamEvent::final_response_with_default_usage(),
         ],
@@ -85,7 +85,7 @@ async fn a_streamed_call_opens_early_and_finishes_under_the_same_id() {
             _ => None,
         })
         .collect();
-    assert_eq!(started, vec![("internal-1", "echo_tool")]);
+    assert_eq!(started, vec![("call-1", "echo_tool")]);
 
     let fragments: Vec<(&str, &str)> = collected
         .parts
@@ -97,15 +97,15 @@ async fn a_streamed_call_opens_early_and_finishes_under_the_same_id() {
         .collect();
     assert_eq!(
         fragments,
-        vec![("internal-1", "{\"value\":"), ("internal-1", "\"hi\"}")]
+        vec![("call-1", "{\"value\":"), ("call-1", "\"hi\"}")]
     );
 
     let calls = collected.tool_calls();
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].id, "internal-1");
+    assert_eq!(calls[0].id, "call-1");
     assert_eq!(calls[0].json, serde_json::json!({ "value": "hi" }));
     assert!(matches!(
-        collected.tool_response("internal-1"),
+        collected.tool_response("call-1"),
         Some(ToolResponse::Json { json, .. }) if json == &serde_json::json!({ "echo": "hi" })
     ));
 

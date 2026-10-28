@@ -26,6 +26,14 @@ export const MOBILE_SIGNUP_SENT_PATH = '/mobile-signup-sent';
  */
 export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
 
+/**
+ * True on iPhone, iPod, and iPad — the only phones with a Macro app. iPadOS
+ * Safari reports itself as a Mac, so a touch-capable "Macintosh" counts too.
+ */
+export const isIOS = (userAgent: string, maxTouchPoints: number): boolean =>
+  /iPhone|iPad|iPod/.test(userAgent) ||
+  (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+
 // Survives the navigation from the capture step to the confirmation step (and a
 // refresh of it), which is where the conversions fire.
 const SUBMITTED_EMAIL_KEY = 'macro_mobile_signup_email';
@@ -71,6 +79,9 @@ export const markConversionFired = (email: string | null): void =>
 export const isLikelyEmail = (value: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
+/** Must match `SendMobileWelcomeEmailError::PersonalEmail` in the auth service. */
+const WORK_EMAIL_REQUIRED = 'Please use your work email or Gmail';
+
 export type MobileSignupResult = { ok: true } | { ok: false; message: string };
 
 /**
@@ -110,7 +121,16 @@ export const submitMobileSignup = async (
   }
 
   if (response.status === 400) {
-    return { ok: false, message: 'That email address was not accepted.' };
+    const body = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    return {
+      ok: false,
+      message:
+        body?.message === WORK_EMAIL_REQUIRED
+          ? `${WORK_EMAIL_REQUIRED}.`
+          : 'That email address was not accepted.',
+    };
   }
   if (response.status === 429) {
     return { ok: false, message: 'Too many attempts. Please try again later.' };

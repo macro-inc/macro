@@ -73,7 +73,7 @@ fn viewed_first_browse_order_is_applied_before_the_page_limit() {
 #[test]
 fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
     block_on(async {
-        for old_version in [None, Some("1")] {
+        for old_version in [None, Some("1"), Some("2")] {
             let database =
                 TursoMemoryDatabase::new(format!("projection-upgrade-{old_version:?}.db"));
             let mut storage = database.open("scope").unwrap();
@@ -91,6 +91,28 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
                 key("GraphqlSoupDocument:document"),
                 quick_access_document("Document", 2),
             ));
+            let email = Record {
+                fields: [
+                    (
+                        "__typename".into(),
+                        CacheValue::String("GraphqlSoupEmailThread".into()),
+                    ),
+                    ("name".into(), CacheValue::String("Weekly update".into())),
+                    ("snippet".into(), CacheValue::String("quartz".into())),
+                    (
+                        "senders".into(),
+                        CacheValue::List(vec![CacheValue::Object(
+                            [
+                                ("name".into(), CacheValue::String("Teo".into())),
+                                ("email".into(), CacheValue::String("teo@sender.test".into())),
+                            ]
+                            .into(),
+                        )]),
+                    ),
+                ]
+                .into(),
+            };
+            entries.push((key("GraphqlSoupEmailThread:thread"), email));
             entries.push((key("Thing:retained"), record("unchanged")));
             storage.put_batch(entries.clone()).await.unwrap();
             storage.enqueue_mutation(queued("Pending")).await.unwrap();
@@ -98,6 +120,11 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             let mut engine = Engine::new(storage);
             let generation = engine.current_storage_generation().await.unwrap();
             let storage = engine.into_storage();
+            raw_execute(
+                &storage,
+                "UPDATE search_documents SET search_text = 'weekly update quartz' WHERE __typename = 'GraphqlSoupEmailThread'",
+                vec![],
+            );
             // Model rows written by the previous max(viewedAt, updatedAt) projection.
             raw_execute(
                 &storage,
@@ -119,10 +146,23 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             storage.try_close().unwrap();
 
             let mut storage = database.open("scope").unwrap();
-            let rows = storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+            let mut rows = storage
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap();
+            rows.extend(
+                storage
+                    .load_search_documents(SearchProfile::QuickAccessV1, "document")
+                    .await
+                    .unwrap(),
+            );
+            let emails = storage
+                .load_search_documents(SearchProfile::QuickAccessV1, "email")
+                .await
+                .unwrap();
+            assert_eq!(emails.len(), 1);
+            assert!(emails[0].search_text.contains("teo@sender.test"));
+            assert!(!emails[0].search_text.contains("quartz"));
             assert_eq!(rows.len(), 602);
             assert_eq!(rows.iter().filter(|row| row.timestamp_ms == 1).count(), 600);
             assert_eq!(
@@ -185,7 +225,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
             vec![],
         );
         let before = storage
-            .load_search_documents(SearchProfile::QuickAccessV1)
+            .load_search_documents(SearchProfile::QuickAccessV1, "channel")
             .await
             .unwrap();
         // Fail after the DELETE has executed; the enclosing transaction must
@@ -197,7 +237,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
         );
         assert_eq!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap(),
             before
@@ -212,7 +252,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
         ensure_search_projection_version(&storage.connection()).unwrap();
         assert_eq!(
             storage
-                .load_search_documents(SearchProfile::QuickAccessV1)
+                .load_search_documents(SearchProfile::QuickAccessV1, "channel")
                 .await
                 .unwrap()[0]
                 .timestamp_ms,

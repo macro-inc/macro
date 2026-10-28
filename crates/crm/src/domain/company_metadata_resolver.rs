@@ -11,16 +11,24 @@
 
 use crate::domain::model::DomainMetadata;
 
+/// Outcome of resolving one domain.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DomainResolution {
+    /// The provider answered. Stored in `crm_domain_directory` as the
+    /// domain's permanent entry, even when every field is empty (the
+    /// provider knows nothing about the domain — the negative cache).
+    Resolved(Box<DomainMetadata>),
+    /// No answer this time: the binary has no resolver, the provider is
+    /// not configured, or the call failed. The directory entry stays
+    /// pending so the enrichment worker retries it.
+    Unavailable,
+}
+
 /// Resolves company metadata for a single email domain.
 ///
-/// Implementations are expected to be best-effort: a missing page,
-/// network timeout, or malformed metadata should be surfaced as a
-/// [`DomainMetadata`] with all-NULL fields rather than an error, since
-/// the caller writes the result into `crm_domain_directory` as a
-/// negative cache so the domain isn't re-resolved on the next populate.
+/// Implementations are best-effort and never error: a failed call is
+/// [`DomainResolution::Unavailable`], logged by the implementation.
 pub trait CompanyMetadataResolver: Clone + Send + Sync + 'static {
-    /// Resolve metadata for the given lower-cased `domain`. Returns
-    /// [`DomainMetadata::default`] (all fields `None`) on any failure;
-    /// implementations are expected to log internally.
-    fn resolve(&self, domain: &str) -> impl Future<Output = DomainMetadata> + Send;
+    /// Resolve metadata for the given lower-cased `domain`.
+    fn resolve(&self, domain: &str) -> impl Future<Output = DomainResolution> + Send;
 }

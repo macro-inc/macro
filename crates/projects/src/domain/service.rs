@@ -36,8 +36,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectError, ProjectTree, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -45,6 +45,7 @@ use super::ports::{
 };
 use super::upload::{build_destination_map, build_root_folder};
 
+mod purge_owned;
 #[cfg(test)]
 mod tests;
 
@@ -200,6 +201,16 @@ where
             .map_err(|error| internal_error(error, "unable to list projects"))
     }
 
+    async fn list_accessible_projects(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Project>, ProjectError> {
+        self.repo
+            .get_accessible_projects_for_user(user_id.as_ref())
+            .await
+            .map_err(|error| internal_error(error, "unable to list accessible projects"))
+    }
+
     async fn list_pending_projects(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -324,6 +335,17 @@ where
                 }
             })
             .collect())
+    }
+
+    async fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> Result<ProjectTree, ProjectError> {
+        self.repo
+            .get_project_tree(&receipt.entity().entity_id, limit)
+            .await
+            .map_err(|error| internal_error(error, "unable to get project tree"))
     }
 
     async fn get_project_permissions(
@@ -471,6 +493,7 @@ where
             }
         }
 
+        let moving = args.project_parent_id.is_some();
         let project_uuid = parse_internal_uuid(&project.id, "project ID")?;
         let old_parent_uuid = project
             .parent_id
@@ -493,21 +516,26 @@ where
             .await?;
 
         self.bump_project_modified(&project.id).await;
-        let _ = self
-            .entity_access_management_service
-            .move_project(
-                &project_uuid,
-                old_parent_uuid.as_ref(),
-                new_parent_uuid.as_ref(),
-            )
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    project_id = %project.id,
-                    "unable to update entity access for project"
-                );
-            });
+        // Only a move changes inherited access: an edit that leaves the parent
+        // alone (a rename, a share change) must keep what the project and its
+        // contents inherit from the folders above.
+        if moving {
+            let _ = self
+                .entity_access_management_service
+                .move_project(
+                    &project_uuid,
+                    old_parent_uuid.as_ref(),
+                    new_parent_uuid.as_ref(),
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        project_id = %project.id,
+                        "unable to update entity access for project"
+                    );
+                });
+        }
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
@@ -661,7 +689,7 @@ where
         let event_owner = actor.clone();
         let event_name = args.root_folder_name.clone();
         let event_parent_project_id = args.parent_id.clone();
-        let root_folder = build_root_folder(&args.root_folder_name, args.content)
+        let root_folder = build_root_folder(&args.root_folder_name, args.content, &args.folders)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
 
         // The uploaded projects and documents all share the owner's team-derived

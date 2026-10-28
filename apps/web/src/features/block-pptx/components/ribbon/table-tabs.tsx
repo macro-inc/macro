@@ -1,0 +1,492 @@
+/**
+ * Contextual tabs for tables: Table Design (styles, shading, borders) and
+ * Layout (rows, columns, merging, sizes, alignment).
+ */
+
+import type { ShapeOutline, TableStyleInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import AlignBottom from '@icon/system/regular/align-bottom.svg';
+import AlignCenterVertical from '@icon/system/regular/align-center-vertical.svg';
+import AlignTop from '@icon/system/regular/align-top.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import { For, Show } from 'solid-js';
+import {
+  ColorPicker,
+  NumberField,
+  PopoverItem,
+  PopoverLabel,
+  RibbonButton,
+  RibbonGroup,
+  RibbonPopover,
+  RibbonTextButton,
+} from './controls';
+import { useRibbon } from './ribbon';
+import { TextDirectionMenu } from './text-direction';
+
+const BORDER_EDGES: [string, string][] = [
+  ['all', 'All borders'],
+  ['outside', 'Outside borders'],
+  ['inside', 'Inside borders'],
+  ['top', 'Top border'],
+  ['bottom', 'Bottom border'],
+  ['left', 'Left border'],
+  ['right', 'Right border'],
+  ['insideHorizontal', 'Inside horizontal'],
+  ['insideVertical', 'Inside vertical'],
+];
+
+/** A small picture of which edges a border choice draws. */
+function BorderIcon(props: { edges: string }) {
+  const e = () => props.edges;
+  const on = (edge: string) =>
+    e() === 'all' ||
+    e() === edge ||
+    (e() === 'outside' && ['top', 'bottom', 'left', 'right'].includes(edge)) ||
+    (e() === 'inside' && ['insideHorizontal', 'insideVertical'].includes(edge));
+  const line = (edge: string, d: string) => (
+    <path
+      d={d}
+      class={on(edge) ? 'stroke-ink' : 'stroke-ink/25'}
+      stroke-width={on(edge) ? 1.6 : 0.8}
+      stroke-dasharray={on(edge) ? undefined : '1 1'}
+    />
+  );
+  return (
+    <svg viewBox="0 0 16 16" class="size-4 fill-none">
+      {line('top', 'M2 2H14')}
+      {line('bottom', 'M2 14H14')}
+      {line('left', 'M2 2V14')}
+      {line('right', 'M14 2V14')}
+      {line('insideHorizontal', 'M2 8H14')}
+      {line('insideVertical', 'M8 2V14')}
+    </svg>
+  );
+}
+
+export interface TableTabProps {
+  table: ShapeOutline;
+  styles: TableStyleInfo[];
+  selectRows: () => void;
+  selectColumns: () => void;
+  selectTable: () => void;
+}
+
+export function TableDesignTab(props: TableTabProps) {
+  const env = useRibbon();
+  const c = env.commands;
+  const ro = () => env.readonly();
+  const style = () => props.table.table?.style;
+  const option = (
+    key:
+      | 'firstRow'
+      | 'lastRow'
+      | 'bandRow'
+      | 'firstCol'
+      | 'lastCol'
+      | 'bandCol',
+    label: string
+  ) => (
+    <label class="flex items-center gap-1 px-1 text-xs">
+      <input
+        type="checkbox"
+        class="accent-accent"
+        disabled={ro() || !c.setTableStyle}
+        checked={style()?.[key] ?? false}
+        onChange={(e) =>
+          fireAndForget(
+            c.setTableStyle({ [key]: e.currentTarget.checked }),
+            'pptx-editor'
+          )
+        }
+      />
+      {label}
+    </label>
+  );
+  return (
+    <>
+      <RibbonGroup label="Table style options">
+        <div class="grid grid-flow-col grid-rows-2 gap-x-1">
+          {option('firstRow', 'Header row')}
+          {option('lastRow', 'Total row')}
+          {option('bandRow', 'Banded rows')}
+          {option('firstCol', 'First column')}
+          {option('lastCol', 'Last column')}
+          {option('bandCol', 'Banded columns')}
+        </div>
+      </RibbonGroup>
+      <Show when={props.styles.length > 0}>
+        <RibbonGroup label="Table styles">
+          <RibbonPopover
+            label="Table styles"
+            text={style()?.name ?? 'Styles'}
+            icon={<span class="sr-only">Table styles</span>}
+            disabled={ro()}
+            testId="pptx-table-styles"
+          >
+            {(close) => (
+              <div class="flex max-h-[60vh] w-72 flex-col overflow-y-auto">
+                <For each={props.styles}>
+                  {(s) => (
+                    <PopoverItem
+                      label={s.name}
+                      active={s.id === style()?.id}
+                      icon={<TableStyleSwatch name={s.name} />}
+                      onClick={() => {
+                        close();
+                        fireAndForget(
+                          c.setTableStyle({ style: s.id }),
+                          'pptx-editor'
+                        );
+                      }}
+                    />
+                  )}
+                </For>
+              </div>
+            )}
+          </RibbonPopover>
+        </RibbonGroup>
+      </Show>
+      <RibbonGroup label="Cells">
+        <RibbonPopover
+          label="Shading"
+          icon={<PaintBucket class="size-3.5" />}
+          disabled={ro()}
+          testId="pptx-cell-shading"
+        >
+          {(close) => (
+            <ColorPicker
+              themeGrid={env.themeGrid()}
+              standard={env.standardColors}
+              noneLabel="No fill"
+              onPick={(v) => {
+                close();
+                fireAndForget(c.fillCells(v), 'pptx-editor');
+              }}
+            />
+          )}
+        </RibbonPopover>
+        <RibbonPopover
+          label="Borders"
+          icon={<BorderIcon edges="all" />}
+          disabled={ro()}
+          testId="pptx-cell-borders"
+        >
+          {(close) => (
+            <div class="flex w-56 flex-col">
+              <For each={BORDER_EDGES}>
+                {([edges, label]) => (
+                  <PopoverItem
+                    label={label}
+                    icon={<BorderIcon edges={edges} />}
+                    onClick={() => {
+                      close();
+                      fireAndForget(c.borderCells(edges), 'pptx-editor');
+                    }}
+                  />
+                )}
+              </For>
+              <PopoverItem
+                label="No border"
+                icon={<BorderIcon edges="none" />}
+                onClick={() => {
+                  close();
+                  fireAndForget(c.borderCells('all', true), 'pptx-editor');
+                }}
+              />
+              <PopoverLabel>Pen</PopoverLabel>
+              <ColorPicker
+                themeGrid={env.themeGrid()}
+                standard={env.standardColors}
+                onPick={(v) => {
+                  if (v) c.setBorderPen({ color: v });
+                }}
+              />
+              <div class="flex flex-wrap gap-1 px-1 pt-1">
+                <For each={[0.5, 1, 1.5, 2.25, 3, 4.5]}>
+                  {(w) => (
+                    <button
+                      type="button"
+                      class="rounded-md border border-edge-muted px-1.5 py-0.5 text-xs hover:bg-ink/5"
+                      onClick={() => c.setBorderPen({ width: w })}
+                    >
+                      {w} pt
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+        </RibbonPopover>
+      </RibbonGroup>
+    </>
+  );
+}
+
+/** A tiny preview of a built-in style from its name (accent color, kind). */
+function TableStyleSwatch(props: { name: string }) {
+  const env = useRibbon();
+  const accent = () => {
+    const m = /Accent (\d)/.exec(props.name);
+    const slot = m ? `accent${m[1]}` : 'dk1';
+    return env.deck()?.themeColors.find(([s]) => s === slot)?.[1] ?? '#444444';
+  };
+  const kind = () =>
+    /Medium|Dark/.test(props.name)
+      ? 'solid'
+      : /Light/.test(props.name)
+        ? 'light'
+        : 'grid';
+  return (
+    <svg viewBox="0 0 16 12" class="h-3 w-4">
+      <rect
+        x="0"
+        y="0"
+        width="16"
+        height="3"
+        fill={kind() === 'grid' ? 'none' : accent()}
+        stroke={accent()}
+        stroke-width="0.6"
+      />
+      <For each={[3, 6, 9]}>
+        {(y, i) => (
+          <rect
+            x="0"
+            y={y}
+            width="16"
+            height="3"
+            fill={
+              kind() === 'solid' && i() % 2 === 0
+                ? `color-mix(in srgb, ${accent()} 30%, white)`
+                : 'white'
+            }
+            stroke={kind() === 'light' ? 'none' : accent()}
+            stroke-width="0.4"
+          />
+        )}
+      </For>
+    </svg>
+  );
+}
+
+export function TableLayoutTab(props: TableTabProps) {
+  const env = useRibbon();
+  const c = env.commands;
+  const ro = () => env.readonly();
+  return (
+    <>
+      <RibbonGroup label="Table">
+        <RibbonPopover
+          label="Select"
+          text="Select"
+          icon={<span class="sr-only">Select</span>}
+        >
+          {(close) => (
+            <div class="flex w-40 flex-col">
+              <PopoverItem
+                label="Select row"
+                onClick={() => {
+                  close();
+                  props.selectRows();
+                }}
+              />
+              <PopoverItem
+                label="Select column"
+                onClick={() => {
+                  close();
+                  props.selectColumns();
+                }}
+              />
+              <PopoverItem
+                label="Select table"
+                onClick={() => {
+                  close();
+                  props.selectTable();
+                }}
+              />
+            </div>
+          )}
+        </RibbonPopover>
+      </RibbonGroup>
+      <RibbonGroup label="Rows and columns">
+        <RibbonPopover
+          label="Delete"
+          text="Delete"
+          icon={<Trash class="size-3.5" />}
+          disabled={ro()}
+          testId="pptx-table-delete"
+        >
+          {(close) => (
+            <div class="flex w-40 flex-col">
+              <PopoverItem
+                label="Delete columns"
+                onClick={() => {
+                  close();
+                  fireAndForget(c.deleteColumns(), 'pptx-editor');
+                }}
+              />
+              <PopoverItem
+                label="Delete rows"
+                onClick={() => {
+                  close();
+                  fireAndForget(c.deleteRows(), 'pptx-editor');
+                }}
+              />
+              <PopoverItem
+                label="Delete table"
+                onClick={() => {
+                  close();
+                  fireAndForget(c.deleteTable(), 'pptx-editor');
+                }}
+              />
+            </div>
+          )}
+        </RibbonPopover>
+        <RibbonTextButton
+          aria-label="Insert above"
+          disabled={ro()}
+          data-testid="pptx-insert-row-above"
+          onClick={() => fireAndForget(c.insertRows('above'), 'pptx-editor')}
+        >
+          Insert above
+        </RibbonTextButton>
+        <RibbonTextButton
+          aria-label="Insert below"
+          disabled={ro()}
+          data-testid="pptx-insert-row-below"
+          onClick={() => fireAndForget(c.insertRows('below'), 'pptx-editor')}
+        >
+          Insert below
+        </RibbonTextButton>
+        <RibbonTextButton
+          aria-label="Insert left"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.insertColumns('left'), 'pptx-editor')}
+        >
+          Insert left
+        </RibbonTextButton>
+        <RibbonTextButton
+          aria-label="Insert right"
+          disabled={ro()}
+          data-testid="pptx-insert-col-right"
+          onClick={() => fireAndForget(c.insertColumns('right'), 'pptx-editor')}
+        >
+          Insert right
+        </RibbonTextButton>
+      </RibbonGroup>
+      <RibbonGroup label="Merge">
+        <RibbonTextButton
+          aria-label="Merge cells"
+          disabled={ro() || !c.canMerge()}
+          data-testid="pptx-merge-cells"
+          onClick={() => fireAndForget(c.mergeCells(), 'pptx-editor')}
+        >
+          Merge cells
+        </RibbonTextButton>
+        <RibbonTextButton
+          aria-label="Split cells"
+          disabled={ro() || !c.canSplit()}
+          onClick={() => fireAndForget(c.splitCells(), 'pptx-editor')}
+        >
+          Split cells
+        </RibbonTextButton>
+      </RibbonGroup>
+      <RibbonGroup label="Cell size">
+        <NumberField
+          label="Row height"
+          unit="pt"
+          value={c.cellSize()?.h}
+          min={4}
+          max={2000}
+          disabled={ro()}
+          onCommit={(h) => fireAndForget(c.setCellSize({ h }), 'pptx-editor')}
+        />
+        <NumberField
+          label="Column width"
+          unit="pt"
+          value={c.cellSize()?.w}
+          min={4}
+          max={2000}
+          disabled={ro()}
+          onCommit={(w) => fireAndForget(c.setCellSize({ w }), 'pptx-editor')}
+        />
+        <RibbonTextButton
+          aria-label="Distribute rows"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.distributeRows(), 'pptx-editor')}
+        >
+          Distribute rows
+        </RibbonTextButton>
+        <RibbonTextButton
+          aria-label="Distribute columns"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.distributeColumns(), 'pptx-editor')}
+        >
+          Distribute columns
+        </RibbonTextButton>
+      </RibbonGroup>
+      <RibbonGroup label="Alignment">
+        <RibbonButton
+          aria-label="Align left"
+          tooltip="Align left"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.alignCells('left'), 'pptx-editor')}
+        >
+          <TextAlignLeft />
+        </RibbonButton>
+        <RibbonButton
+          aria-label="Center"
+          tooltip="Center"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.alignCells('center'), 'pptx-editor')}
+        >
+          <TextAlignCenter />
+        </RibbonButton>
+        <RibbonButton
+          aria-label="Align right"
+          tooltip="Align right"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.alignCells('right'), 'pptx-editor')}
+        >
+          <TextAlignRight />
+        </RibbonButton>
+        <RibbonButton
+          aria-label="Align top"
+          tooltip="Align top"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.anchorCells('top'), 'pptx-editor')}
+        >
+          <AlignTop />
+        </RibbonButton>
+        <RibbonButton
+          aria-label="Center vertically"
+          tooltip="Center vertically"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.anchorCells('middle'), 'pptx-editor')}
+        >
+          <AlignCenterVertical />
+        </RibbonButton>
+        <RibbonButton
+          aria-label="Align bottom"
+          tooltip="Align bottom"
+          disabled={ro()}
+          onClick={() => fireAndForget(c.anchorCells('bottom'), 'pptx-editor')}
+        >
+          <AlignBottom />
+        </RibbonButton>
+        <TextDirectionMenu
+          current={c.textDirection()}
+          disabled={ro()}
+          testId="pptx-cell-text-direction"
+          onPick={(direction) =>
+            fireAndForget(c.setTextDirection(direction), 'pptx-editor')
+          }
+          onMore={() => env.openFormatPane('text')}
+        />
+      </RibbonGroup>
+    </>
+  );
+}

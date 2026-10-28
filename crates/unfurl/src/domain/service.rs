@@ -1,6 +1,8 @@
 //! Service implementation that drives the [`UnfurlFetcher`] port and turns
 //! its raw meta-tag output into a [`GetUnfurlResponse`].
 
+use tracing::Level;
+
 use crate::domain::{
     favicon::append_optimistic_favico,
     models::{GetUnfurlResponse, UnfurlErr},
@@ -28,7 +30,7 @@ where
     F: UnfurlFetcher,
     anyhow::Error: From<F::Err>,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn unfurl(&self, url: &str) -> Result<GetUnfurlResponse, UnfurlErr> {
         let tags = self
             .fetcher

@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use bot_id::{BotId, NonSystemBotId};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -7,14 +7,15 @@ use model_owner::CreationPrincipal;
 
 use super::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
-    NewPlainTextDocument, RepoDocumentKind, RepoDocumentSubtype, file_shas,
+    NewNotionDocument, NewPlainTextDocument, RepoDocumentKind, RepoDocumentSubtype, file_shas,
 };
 use crate::domain::content::DocumentContent;
 use crate::domain::models::{CreateTaskRequest, DocumentError, InitialLinkShare, NewDocument};
+use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
@@ -39,6 +40,8 @@ fn team_bot() -> CreationPrincipal {
 struct FakeCreationService {
     calls: Mutex<Vec<(CreationPrincipal, NewDocument)>>,
     task_principals: Mutex<Vec<CreationPrincipal>>,
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail_content_update: bool,
 }
 
 impl DocumentCreationService for FakeCreationService {
@@ -49,6 +52,7 @@ impl DocumentCreationService for FakeCreationService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         let file_type = document.file_type.map(|kind| kind.to_string());
+        self.lifecycle.lock().unwrap().push("create");
         self.calls
             .lock()
             .unwrap()
@@ -81,6 +85,16 @@ impl DocumentCreationService for FakeCreationService {
         })
     }
 
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("canvas_ready");
+        if self.fail_content_update {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "Canvas initialization failed"
+            )));
+        }
+        Ok(())
+    }
+
     async fn handle_task_properties(
         &self,
         principal: &CreationPrincipal,
@@ -88,6 +102,7 @@ impl DocumentCreationService for FakeCreationService {
         _request: &CreateTaskRequest,
     ) -> Result<(), DocumentError> {
         self.task_principals.lock().unwrap().push(principal.clone());
+        self.lifecycle.lock().unwrap().push("properties");
         Ok(())
     }
 
@@ -100,11 +115,17 @@ impl DocumentCreationService for FakeCreationService {
         _document_id: &str,
         _content: DocumentContent,
     ) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("content_ready");
+        if self.fail_content_update {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "content update failed"
+            )));
+        }
         Ok(())
     }
 
     async fn cleanup_created_document(&self, _document_id: &str) {
-        panic!("unexpected cleanup_created_document call")
+        self.lifecycle.lock().unwrap().push("cleanup");
     }
 }
 
@@ -117,6 +138,46 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
         _markdown: &str,
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(vec![1, 2, 3])
+    }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        Ok(MarkdownSnapshot {
+            snapshot: vec![4, 5, 6],
+            markdown: format!("converted: {}", notion.markdown),
+        })
+    }
+}
+
+struct RecordingMarkdownInitializer {
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail: bool,
+}
+
+impl MarkdownInitializationPort for RecordingMarkdownInitializer {
+    async fn initialize_existing_markdown(
+        &self,
+        _document_id: &str,
+        _markdown: &str,
+    ) -> Result<Vec<u8>, DocumentError> {
+        self.lifecycle.lock().unwrap().push("initialize");
+        if self.fail {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "initialization failed"
+            )));
+        }
+        Ok(vec![1, 2, 3])
+    }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        _notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        panic!("unexpected initialize_existing_notion call")
     }
 }
 
@@ -181,6 +242,73 @@ fn task_document(markdown: &str) -> NewMarkdownTextDocument {
     }
 }
 
+#[tokio::test]
+async fn task_assignments_are_applied_only_after_content_is_readable() {
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
+    let tracker = RecordingMentionTracker::default();
+    let creator = DocumentCreator::new(
+        FakeCreationService {
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        RecordingMarkdownInitializer {
+            lifecycle: lifecycle.clone(),
+            fail: false,
+        },
+        FakeBytesUploader,
+        &tracker,
+    );
+
+    creator
+        .create_markdown_text(
+            &CreationPrincipal::User(owner()),
+            task_document("Do the assigned work"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *lifecycle.lock().unwrap(),
+        ["create", "initialize", "content_ready", "properties"]
+    );
+}
+
+#[tokio::test]
+async fn failed_task_content_never_applies_assignments() {
+    for fail_initialization in [true, false] {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let tracker = RecordingMentionTracker::default();
+        let creator = DocumentCreator::new(
+            FakeCreationService {
+                lifecycle: lifecycle.clone(),
+                fail_content_update: !fail_initialization,
+                ..Default::default()
+            },
+            RecordingMarkdownInitializer {
+                lifecycle: lifecycle.clone(),
+                fail: fail_initialization,
+            },
+            FakeBytesUploader,
+            &tracker,
+        );
+
+        assert!(
+            creator
+                .create_markdown_text(
+                    &CreationPrincipal::User(owner()),
+                    task_document("Do the assigned work")
+                )
+                .await
+                .is_err()
+        );
+
+        let lifecycle = lifecycle.lock().unwrap();
+        assert!(!lifecycle.contains(&"properties"));
+        assert_eq!(lifecycle.last(), Some(&"cleanup"));
+        assert!(tracker.calls().is_empty());
+    }
+}
+
 fn creator(
     tracker: &RecordingMentionTracker,
 ) -> DocumentCreator<
@@ -222,6 +350,38 @@ async fn markdown_creation_tracks_the_seeded_mentions_once() {
             DOCUMENT_ID.to_string(),
             Some("macro|owner@example.com".to_string()),
             EMAIL_SEED.to_string(),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn notion_creation_tracks_the_mentions_of_the_converted_markdown() {
+    let tracker = RecordingMentionTracker::default();
+
+    let created = creator(&tracker)
+        .create_notion_markdown(
+            &CreationPrincipal::User(owner()),
+            NewNotionDocument {
+                metadata: NewDocumentMetadata::new("Roadmap"),
+                notion: NotionMarkdown {
+                    markdown: "<mention-page url=\"https://www.notion.so/p\">Plan</mention-page>"
+                        .to_string(),
+                    ..NotionMarkdown::default()
+                },
+                subtype: MarkdownSubtype::Note,
+            },
+        )
+        .await
+        .expect("creation should succeed");
+
+    assert_eq!(created.initial_snapshot(), Some([4, 5, 6].as_slice()));
+    assert_eq!(
+        tracker.calls(),
+        vec![(
+            DOCUMENT_ID.to_string(),
+            Some("macro|owner@example.com".to_string()),
+            "converted: <mention-page url=\"https://www.notion.so/p\">Plan</mention-page>"
+                .to_string(),
         )]
     );
 }
@@ -423,5 +583,66 @@ fn test_file_shas() {
     assert_eq!(
         hashes.base64,
         "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="
+    );
+}
+
+#[tokio::test]
+async fn native_canvas_creation_finishes_shared_content_without_uploading() {
+    let tracker = RecordingMentionTracker::default();
+    let creator = creator(&tracker);
+    let created = creator
+        .create_plain_text(
+            &CreationPrincipal::User(owner()),
+            NewPlainTextDocument::new(
+                NewDocumentMetadata::new("Canvas"),
+                FileType::Canvas,
+                String::new(),
+                MarkdownSubtype::Note,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *creator.document_service.lifecycle.lock().unwrap(),
+        vec!["create", "canvas_ready"]
+    );
+    assert!(created.response().document_response.presigned_url.is_none());
+    assert_eq!(
+        created
+            .response()
+            .document_response
+            .document_metadata
+            .content,
+        crate::domain::content::DocumentContent::ready(
+            crate::domain::content::DocumentContentLocation::SyncService
+        )
+    );
+}
+
+#[tokio::test]
+async fn failed_native_canvas_creation_removes_its_metadata() {
+    let tracker = RecordingMentionTracker::default();
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
+    let creator = DocumentCreator::new(
+        FakeCreationService {
+            fail_content_update: true,
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        FakeMarkdownInitializer,
+        FakeBytesUploader,
+        &tracker,
+    );
+    let result = creator
+        .create_canvas(
+            &CreationPrincipal::User(owner()),
+            NewDocumentMetadata::new("Canvas"),
+        )
+        .await;
+    assert!(result.is_err());
+    assert_eq!(
+        *lifecycle.lock().unwrap(),
+        vec!["create", "canvas_ready", "cleanup"]
     );
 }

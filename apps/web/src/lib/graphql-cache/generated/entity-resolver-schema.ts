@@ -2,6 +2,13 @@
 
 export const entityResolverSchema = {
   CompleteMutationRoot: {
+    createSavedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [
+        ['input', 'id'],
+        ['input', 'sharedTeamId'],
+      ],
+    },
     markEmailThreadSeen: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -14,7 +21,15 @@ export const entityResolverSchema = {
       targets: ['GraphqlChannelActivity'],
       argumentPaths: [['input', 'channelId']],
     },
+    resolveEmailMessageOperation: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'messageId']],
+    },
     setEmailThreadArchived: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'threadId']],
+    },
+    setEmailThreadState: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
     },
@@ -37,8 +52,19 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupInitiative'],
       argumentPaths: [['initiativeId']],
     },
+    updateSavedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [
+        ['input', 'id'],
+        ['input', 'sharing', 'teamId'],
+      ],
+    },
   },
   GraphqlUser: {
+    agentSession: {
+      targets: ['GraphqlSoupAgentSession'],
+      argumentPaths: [['sessionId']],
+    },
     emailThread: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -47,6 +73,30 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupInitiative'],
       argumentPaths: [['initiativeId']],
     },
+    savedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [['id']],
+    },
+    soupEntity: {
+      targets: [
+        'GraphqlSoupAgentSession',
+        'GraphqlSoupCalendarEvent',
+        'GraphqlSoupCall',
+        'GraphqlSoupChannel',
+        'GraphqlSoupChannelMessage',
+        'GraphqlSoupChat',
+        'GraphqlSoupCrmCompany',
+        'GraphqlSoupCrmContact',
+        'GraphqlSoupDatabaseRow',
+        'GraphqlSoupDocument',
+        'GraphqlSoupEmailThread',
+        'GraphqlSoupForeignEntity',
+        'GraphqlSoupInitiative',
+        'GraphqlSoupProject',
+        'GraphqlSoupReminder',
+      ],
+      argumentPaths: [['input', 'entityId']],
+    },
   },
 } as const;
 
@@ -54,13 +104,34 @@ export type GeneratedEntityResolverSchema = typeof entityResolverSchema;
 export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
+  | 'GraphqlSavedView'
+  | 'GraphqlSoupAgentSession'
+  | 'GraphqlSoupCalendarEvent'
+  | 'GraphqlSoupCall'
+  | 'GraphqlSoupChannel'
+  | 'GraphqlSoupChannelMessage'
+  | 'GraphqlSoupChat'
+  | 'GraphqlSoupCrmCompany'
+  | 'GraphqlSoupCrmContact'
+  | 'GraphqlSoupDatabaseRow'
+  | 'GraphqlSoupDocument'
   | 'GraphqlSoupEmailThread'
-  | 'GraphqlSoupInitiative';
+  | 'GraphqlSoupForeignEntity'
+  | 'GraphqlSoupInitiative'
+  | 'GraphqlSoupProject'
+  | 'GraphqlSoupReminder';
 export type GeneratedEntityResolverArgumentPath =
+  | readonly ['id']
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
+  | readonly ['input', 'entityId']
+  | readonly ['input', 'id']
   | readonly ['input', 'labelId']
+  | readonly ['input', 'messageId']
   | readonly ['input', 'propertyDefinitionId']
+  | readonly ['input', 'sharedTeamId']
+  | readonly ['input', 'sharing', 'teamId']
   | readonly ['input', 'threadId']
   | readonly ['input', 'value', 'entityReference', 'specificMessageId']
-  | readonly ['input', 'value', 'selectOption'];
+  | readonly ['input', 'value', 'selectOption']
+  | readonly ['sessionId'];

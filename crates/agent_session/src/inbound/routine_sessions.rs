@@ -105,7 +105,13 @@ impl From<JsonRejection> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match self.0 {
+            RoutineSessionError::Admission(error) => {
+                ai_billing::inbound::admission::admission_status(error)
+            }
             RoutineSessionError::InvalidCommand => StatusCode::BAD_REQUEST,
+            RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
             RoutineSessionError::Forbidden => StatusCode::FORBIDDEN,
             RoutineSessionError::PersonaUnavailable => StatusCode::NOT_FOUND,
             RoutineSessionError::RuntimeUnavailable => StatusCode::SERVICE_UNAVAILABLE,

@@ -1,6 +1,9 @@
 //! In-memory model discovery adapter.
 
 use agent_harness::domain::capability_discovery::{CapabilityProbeError, RawCapabilityProbe};
+use agent_inmem::domain::model_access::InMemModelAccess;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use std::sync::Arc;
 
 use agent_harness::domain::model_load::{InMemoryModelProbe, ModelProbeError, RawModelProbe};
@@ -10,47 +13,69 @@ use agent_inmem::domain::engine::TurnEngine;
 pub struct InMemoryModels {
     engine: Option<Arc<dyn TurnEngine>>,
     current: String,
+    access: Arc<dyn InMemModelAccess>,
 }
 
 impl InMemoryModels {
     /// Build an adapter over the optional in-memory engine.
-    pub fn new(engine: Option<Arc<dyn TurnEngine>>, current: String) -> Self {
-        Self { engine, current }
+    pub fn new(
+        engine: Option<Arc<dyn TurnEngine>>,
+        current: String,
+        access: Arc<dyn InMemModelAccess>,
+    ) -> Self {
+        Self {
+            engine,
+            current,
+            access,
+        }
     }
 }
 
 impl InMemoryModelProbe for InMemoryModels {
-    async fn probe(&self) -> Result<RawModelProbe, ModelProbeError> {
+    async fn probe(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+    ) -> Result<RawModelProbe, ModelProbeError> {
         let Some(engine) = &self.engine else {
             return Ok(RawModelProbe::Unsupported);
         };
+        let access = self
+            .access
+            .access(&Owner::User(caller.clone()))
+            .await
+            .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
         Ok(RawModelProbe::Options(
             agent_inmem::domain::model_options::model_config_options(
-                &self.current,
-                engine.supported_models(),
+                access.default_model(&self.current),
+                &access.models(engine.supported_models()),
             ),
         ))
     }
 }
 
 impl agent_harness::domain::capability_discovery::CapabilityProbe for InMemoryModels {
-    type Target = ();
+    type Target = MacroUserIdStr<'static>;
     async fn probe(
         &self,
-        _: &(),
+        caller: &MacroUserIdStr<'static>,
         model: Option<&str>,
     ) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         let Some(engine) = &self.engine else {
             return Ok(RawCapabilityProbe::Unsupported);
         };
-        let current = model.unwrap_or(&self.current);
+        let access = self
+            .access
+            .access(&Owner::User(caller.clone()))
+            .await
+            .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
+        let current = access.default_model(model.unwrap_or(&self.current));
         if !engine.supported_models().contains(&current) {
             return Err(CapabilityProbeError::Failed("unsupported model".to_owned()));
         }
         Ok(RawCapabilityProbe::Options(
             agent_inmem::domain::model_options::model_config_options(
                 current,
-                engine.supported_models(),
+                &access.models(engine.supported_models()),
             ),
         ))
     }

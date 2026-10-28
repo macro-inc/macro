@@ -19,6 +19,7 @@ function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
     to: [{ email: 'viewer@example.com' }],
     cc: [],
     bcc: [],
+    draft_generation: 0,
     attachments: [],
     attachments_draft: [],
     attachments_forwarded: [],
@@ -44,7 +45,82 @@ function thread(messages: ApiMessage[]): ApiThread {
   };
 }
 
+import { createThreadSnapshot } from '../primitives/thread-snapshot';
 import { createEmailThreadSource, toEmailThread } from './thread-source';
+
+it('keeps a reopened local draft through server identity adoption and rejects another route', () =>
+  createRoot((dispose) => {
+    try {
+      const [route, setRoute] = createSignal('local-thread');
+      const [resolved, setResolved] = createSignal('local-thread');
+      const [loading, setLoading] = createSignal(false);
+      const local = {
+        ...thread([message('local-draft', { is_draft: true })]),
+        db_id: 'local-thread',
+      };
+      const [data, setData] = createSignal<ThreadQueryData | undefined>({
+        thread: local,
+        hasMore: false,
+      });
+      const source = createEmailThreadSource(route, {
+        get resolvedThreadId() {
+          return resolved();
+        },
+        get isSuccess() {
+          return !loading();
+        },
+        get isLoading() {
+          return loading();
+        },
+        isError: false,
+        get data() {
+          if (loading()) throw new Error('suspending resource read');
+          return data();
+        },
+      } as ThreadQueryResult<ThreadQueryData>);
+      const snapshot = createThreadSnapshot(source);
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // Cache subscriptions can publish the aliased record before the async
+      // identity lookup observes the same settlement.
+      setData({ thread: { ...local, db_id: 'server-thread' }, hasMore: false });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // The route remains a durable local handle while its query changes keys.
+      batch(() => {
+        setResolved('server-thread');
+        setLoading(true);
+        setData(undefined);
+      });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+      batch(() => {
+        setData({
+          thread: { ...local, db_id: 'server-thread' },
+          hasMore: false,
+        });
+        setLoading(false);
+      });
+      expect(source.id()).toBe('server-thread');
+      expect(snapshot()?.db_id).toBe('server-thread');
+
+      // Reopening the old route after settlement also accepts the canonical row.
+      const reopened = createEmailThreadSource(route, {
+        resolvedThreadId: 'server-thread',
+        isSuccess: true,
+        isError: false,
+        data: data(),
+      } as ThreadQueryResult<ThreadQueryData>);
+      expect(reopened.thread()?.db_id).toBe('server-thread');
+      batch(() => {
+        setRoute('another-thread');
+        setResolved('another-thread');
+        setLoading(true);
+      });
+      expect(snapshot()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  }));
 
 describe('thread query adaptation', () => {
   it('preserves saved invitations through the explicit cached message projection', () => {
@@ -190,6 +266,12 @@ it('keeps rendering and attachment identities while excluding transport metadata
           filename: 'image.png',
           size_bytes: 123,
         },
+        {
+          db_id: 'cloud',
+          filename: 'invite.ics',
+          mime_type: 'text/calendar',
+          reference_url: 'https://outlook.office.com/mail/item',
+        },
       ],
       attachments_draft: [
         {
@@ -198,6 +280,8 @@ it('keeps rendering and attachment identities while excluding transport metadata
           content_type: 'text/plain',
           file_name: 'notes.txt',
           s3_key: 'notes',
+          upload_pending: false,
+          is_inline: false,
           sha: 'sha',
           size: 42,
         },
@@ -215,14 +299,19 @@ it('keeps rendering and attachment identities while excluding transport metadata
       ],
       provider_id: 'reply-provider-id',
       scheduled_send_time: '2026-10-01T12:00:00Z',
+      scheduled_send_status: 'unconfirmed',
     }),
   ]);
   const projected = toEmailThread(wire).messages[0];
   expect(projected).toMatchObject({
     provider_id: 'reply-provider-id',
     scheduled_send_time: '2026-10-01T12:00:00Z',
+    scheduled_send_status: 'unconfirmed',
     labels: [{ name: 'CATEGORY_PERSONAL', provider_label_id: 'UNREAD' }],
-    attachments: [{ db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' }],
+    attachments: [
+      { db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' },
+      { db_id: 'cloud', reference_url: 'https://outlook.office.com/mail/item' },
+    ],
     attachments_draft: [{ id: 'draft-file', s3_key: 'notes' }],
     attachments_forwarded: [
       { attachment_id: 'forward-file', filename: 'forward.txt' },

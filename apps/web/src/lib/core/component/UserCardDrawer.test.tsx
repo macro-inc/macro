@@ -49,12 +49,16 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
   }),
 }));
 
-vi.mock('@queries/crm/contacts', () => ({
+vi.mock('@app/features/crm/record-adapter', () => ({
   useCrmContactByEmailQuery: () => ({ isSuccess: false, data: undefined }),
 }));
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ isSuccess: false, data: undefined }),
+}));
+
+vi.mock('@app/features/settings/bot-settings-user-action', () => ({
+  createBotSettingsUserCardAction: () => () => undefined,
 }));
 
 vi.mock('./UserIcon', () => ({

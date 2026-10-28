@@ -15,9 +15,9 @@ export function NarrowCondensedLayout(props: LayoutProps) {
         'w-full gap-x-(--soup-row-column-gap) items-center pr-2 pl-(--soup-row-padding-l) grid text-sm'
       )}
       style={{
-        'grid-template-columns': 'var(--soup-row-indicator-width) 1fr',
+        'grid-template-columns': 'var(--soup-row-indicator-width) 1fr auto',
         'grid-template-rows': '36px',
-        'grid-template-areas': '"indicator title"',
+        'grid-template-areas': '"indicator title timestamp"',
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
@@ -34,9 +34,20 @@ export function NarrowCondensedLayout(props: LayoutProps) {
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate font-normal"
       >
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+          <Show
+            when={props.icon}
+            fallback={
+              <Entity.Icon
+                entity={props.entity}
+                streamState={props.streamState}
+              />
+            }
+          >
+            {props.icon}
+          </Show>
         </div>
         <Entity.Title entity={props.entity} />
+        {props.titleTrailing}
         <Show when={isChannelEntity(props.entity) && props.entity}>
           {(entity) => (
             <span class="ml-auto shrink-0 flex items-center">
@@ -55,6 +66,10 @@ export function NarrowCondensedLayout(props: LayoutProps) {
             <ChannelJoinButton entity={entity()} class="ml-auto shrink-0" />
           )}
         </Show>
+      </Entity.Slot>
+      <Entity.Slot placement="timestamp" class="flex items-center gap-1">
+        {props.referenceProperties}
+        {props.scheduleStatus}
       </Entity.Slot>
     </Entity.Layout>
   );

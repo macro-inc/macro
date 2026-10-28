@@ -12,6 +12,12 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use nom::branch::alt;
+use nom::bytes::complete::take_while1;
+use nom::character::complete::{anychar, char, one_of};
+use nom::combinator::{consumed, iterator, map, opt, recognize};
+use nom::multi::many0;
+use nom::{IResult, Parser};
 use serde_json::{Map, Value};
 
 #[cfg(test)]
@@ -39,6 +45,7 @@ pub struct StreamingCalls {
 #[derive(Default)]
 struct StreamingCall {
     arguments: String,
+    over_limit: bool,
     last_peek: Option<Instant>,
     peeked: Option<Value>,
 }
@@ -46,11 +53,8 @@ struct StreamingCall {
 impl StreamingCalls {
     /// The model named call `id`; its arguments follow.
     pub fn open(&mut self, id: &str) {
-        if self
-            .calls
-            .insert(id.to_owned(), StreamingCall::default())
-            .is_none()
-        {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.calls.entry(id.to_owned()) {
+            entry.insert(StreamingCall::default());
             self.order.push(id.to_owned());
         }
     }
@@ -59,23 +63,27 @@ impl StreamingCalls {
     /// if one is due and says something the last one did not.
     pub fn push_arguments(&mut self, id: &str, delta: &str, now: Instant) -> Option<Value> {
         let call = self.calls.get_mut(id)?;
-        if call.arguments.len() > PEEK_LIMIT {
+        if call.over_limit {
+            return None;
+        }
+        if delta.len() > PEEK_LIMIT.saturating_sub(call.arguments.len()) {
+            call.over_limit = true;
+            call.arguments.clear();
             return None;
         }
         call.arguments.push_str(delta);
-        if call.arguments.len() > PEEK_LIMIT
-            || call
-                .last_peek
-                .is_some_and(|at| now.saturating_duration_since(at) < PEEK_WINDOW)
+        if call
+            .last_peek
+            .is_some_and(|at| now.saturating_duration_since(at) < PEEK_WINDOW)
         {
             return None;
         }
+        call.last_peek = Some(now);
         let peek = peek_arguments(&call.arguments).filter(|peek| !peek.is_empty())?;
         let peek = Value::Object(peek);
         if call.peeked.as_ref() == Some(&peek) {
             return None;
         }
-        call.last_peek = Some(now);
         call.peeked = Some(peek.clone());
         Some(peek)
     }
@@ -104,25 +112,23 @@ pub fn peek_arguments(prefix: &str) -> Option<Map<String, Value>> {
     let mut in_string = false;
     let mut escaped = false;
     let mut cuts: Vec<(usize, Vec<char>)> = Vec::new();
-    for (at, ch) in prefix.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
+    let mut tokens = iterator(prefix, consumed(json_token));
+    let mut at = 0;
+    for (raw, token) in &mut tokens {
+        match token {
+            JsonToken::String {
+                open,
+                trailing_escape,
+            } => {
+                in_string = open;
+                escaped = trailing_escape;
             }
-            continue;
-        }
-        match ch {
-            '"' => in_string = true,
-            '{' => closers.push('}'),
-            '[' => closers.push(']'),
-            '}' | ']' => {
+            JsonToken::Symbol('{') => closers.push('}'),
+            JsonToken::Symbol('[') => closers.push(']'),
+            JsonToken::Symbol('}' | ']') => {
                 closers.pop();
             }
-            ',' => {
+            JsonToken::Symbol(',') => {
                 if cuts.len() == PEEK_CUTS {
                     cuts.remove(0);
                 }
@@ -130,6 +136,7 @@ pub fn peek_arguments(prefix: &str) -> Option<Map<String, Value>> {
             }
             _ => {}
         }
+        at += raw.len();
     }
 
     let mut whole = prefix.to_owned();
@@ -152,4 +159,36 @@ pub fn peek_arguments(prefix: &str) -> Option<Map<String, Value>> {
                 _ => None,
             }
         })
+}
+
+/// A JSON token, allowing the final string to be incomplete.
+enum JsonToken {
+    String { open: bool, trailing_escape: bool },
+    Symbol(char),
+    Other,
+}
+
+fn json_token(input: &str) -> IResult<&str, JsonToken> {
+    alt((
+        map(
+            (
+                char('"'),
+                many0(alt((
+                    recognize((char('\\'), anychar)),
+                    take_while1(|ch| ch != '"' && ch != '\\'),
+                ))),
+                opt(char('\\')),
+                opt(char('"')),
+            ),
+            |(_, _, escape, close)| JsonToken::String {
+                open: close.is_none(),
+                trailing_escape: escape.is_some(),
+            },
+        ),
+        map(one_of("{}[],"), JsonToken::Symbol),
+        map(take_while1(|ch| !"\"{}[],".contains(ch)), |_| {
+            JsonToken::Other
+        }),
+    ))
+    .parse(input)
 }

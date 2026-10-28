@@ -10,8 +10,6 @@ use models_soup::agent_session::AgentPullRequestState;
 
 use super::*;
 
-const PULL_REQUEST_SOURCE: &str = "github_pull_request";
-
 fn pull_request_key(url: &str) -> Option<String> {
     let reference = PullRequestRef::parse(url)?;
     Some(format!(
@@ -22,8 +20,8 @@ fn pull_request_key(url: &str) -> Option<String> {
 
 /// Enrich only returned rows, so metadata work is bounded by the page size and
 /// never reads branch facts for sessions outside the caller's visible page.
-pub(super) async fn enrich<F: ForeignEntityService>(
-    foreign_entities: &F,
+pub(super) async fn enrich<F: GithubPullRequestListing>(
+    pull_requests: &F,
     branches: Option<&dyn SessionBranchReader>,
     user: String,
     sources: Vec<SourceId>,
@@ -75,18 +73,14 @@ pub(super) async fn enrich<F: ForeignEntityService>(
         ) else {
             return Ok(Vec::new());
         };
-        let filter = Expr::and(
-            Expr::Literal(ForeignEntityLiteral::ForeignEntitySource(
-                PULL_REQUEST_SOURCE.to_owned(),
-            )),
-            Arc::unwrap_or_clone(ids),
-        );
-        foreign_entities
-            .get_foreign_entities_for_user(
+        pull_requests
+            .list_pull_requests(
                 Some(user),
                 sources,
                 keys.len() as u32,
-                Query::new(None, SimpleSortMethod::UpdatedAt, Some(Arc::new(filter))),
+                Query::new(None, SimpleSortMethod::UpdatedAt, Some(ids)),
+                None,
+                GithubPullRequestSortDirection::Desc,
             )
             .await
             .map_err(anyhow::Error::from)

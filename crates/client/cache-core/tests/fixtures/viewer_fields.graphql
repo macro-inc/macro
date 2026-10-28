@@ -1,0 +1,36 @@
+query Page($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupDocument { name }
+      }
+    }
+  }
+}
+
+query AliasedPage($input: SoupInput!) {
+  viewer: user {
+    id
+    page: soup(input: $input) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupDocument { name }
+      }
+    }
+  }
+}
+
+query Viewer { user { id } }
+
+query Group($input: GroupedSoupInput!) {
+  user {
+    id
+    groupSoup(input: $input) {
+      bins { key items { __typename id } }
+    }
+  }
+}

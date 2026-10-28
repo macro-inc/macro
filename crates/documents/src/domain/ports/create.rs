@@ -40,6 +40,13 @@ pub trait DocumentCreationService: Send + Sync {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
+    /// Initialize a newly created Canvas and mark its shared content ready.
+    /// On failure, compensate any possibly-created sync snapshot.
+    fn initialize_canvas(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
     /// Assign task properties to a markdown task document.
     fn handle_task_properties(
         &self,
@@ -78,6 +85,10 @@ where
         (**self).create_document(principal, document, job_id).await
     }
 
+    async fn initialize_canvas(&self, document_id: &str) -> Result<(), DocumentError> {
+        (**self).initialize_canvas(document_id).await
+    }
+
     async fn handle_task_properties(
         &self,
         principal: &CreationPrincipal,
@@ -104,4 +115,14 @@ where
     async fn cleanup_created_document(&self, document_id: &str) {
         (**self).cleanup_created_document(document_id).await
     }
+}
+
+/// Inbound service for saving file bytes as a document using the existing upload lifecycle.
+pub trait DocumentUploadService: Send + Sync {
+    /// Validate the destination and file, create the document, and upload its bytes.
+    fn upload_file(
+        &self,
+        principal: &CreationPrincipal,
+        upload: crate::domain::create::upload::NewFileUpload,
+    ) -> impl Future<Output = Result<crate::domain::create::CreatedDocument, DocumentError>> + Send;
 }

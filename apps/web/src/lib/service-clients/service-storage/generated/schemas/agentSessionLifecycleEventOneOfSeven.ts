@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionLifecycleEventOneOfSevenEventType } from './agentSessionLifecycleEventOneOfSevenEventType';
-import type { SessionSettledMetadata } from './sessionSettledMetadata';
+import type { CommandRejectedMetadata } from './commandRejectedMetadata';
 
 /**
- * A turn ended with nothing queued behind it.
+ * An accepted command was refused before runtime execution.
  */
 export type AgentSessionLifecycleEventOneOfSeven = {
   event_type: AgentSessionLifecycleEventOneOfSevenEventType;
-  /** A turn ended with nothing queued behind it. */
-  metadata: SessionSettledMetadata;
+  /** An accepted command was refused before runtime execution. */
+  metadata: CommandRejectedMetadata;
 };

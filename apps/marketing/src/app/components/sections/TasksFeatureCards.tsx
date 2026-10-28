@@ -212,7 +212,7 @@ function TaskFeatureCard(props: {
               'box-sizing': 'border-box',
               display: 'inline-flex',
               flex: 'none',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '11.5px' : '11px',
               'font-variant-numeric': 'tabular-nums',
               height: compact() ? '20px' : '19px',
@@ -427,16 +427,9 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
               <p
                 style={{
                   color: 'var(--c4)',
-                  // Cyberreader rather than the site's Rajdhani 'body': this is a
-                  // longer read than anything else on the page, and cyberreader —
-                  // a blend of Rajdhani's edge and Inter's readability, used for
-                  // the blog — carries it at length while still sounding like the
-                  // site. It ships as discrete faces at 300/400/700 only (not a
-                  // variable axis), so the 300 below is the real Light file rather
-                  // than a synthesised weight.
-                  'font-family': 'cyberreader',
-                  'font-size': mobile() ? '16.5px' : '18px',
-                  'font-weight': '300',
+                  'font-family': 'Inter',
+                  'font-size': mobile() ? '14px' : '15px',
+                  'font-weight': '400',
                   'line-height': 1.6,
                   margin: '0',
                   'text-align': 'left',
@@ -461,16 +454,9 @@ export function TasksFeatureCards(props: { cardsOnly?: boolean } = {}) {
               <p
                 style={{
                   color: 'var(--c2)',
-                  // Cyberreader rather than the site's Rajdhani 'body': this is a
-                  // longer read than anything else on the page, and cyberreader —
-                  // a blend of Rajdhani's edge and Inter's readability, used for
-                  // the blog — carries it at length while still sounding like the
-                  // site. It ships as discrete faces at 300/400/700 only (not a
-                  // variable axis), so the 300 below is the real Light file rather
-                  // than a synthesised weight.
-                  'font-family': 'cyberreader',
-                  'font-size': mobile() ? '16.5px' : '18px',
-                  'font-weight': '300',
+                  'font-family': 'Inter',
+                  'font-size': mobile() ? '14px' : '15px',
+                  'font-weight': '400',
                   'line-height': 1.6,
                   margin: '0',
                   'text-align': 'left',

@@ -62,7 +62,7 @@ export function SectionFaq(props: {
           color: var(--c1);
           cursor: default;
           display: flex;
-          font-family: 'cyberreader';
+          font-family: 'Inter';
           font-size: 16px;
           font-weight: 400;
           gap: 16px;
@@ -74,7 +74,7 @@ export function SectionFaq(props: {
         .faq--embedded .faq__item > summary { padding: 22px 20px; }
         .faq__item > summary::-webkit-details-marker { display: none; }
         .faq__item > summary .faq__chevron { color: var(--c4); flex-shrink: 0; transition: transform 220ms ease; }
-        .faq__answer { color: var(--c4); font-family: 'cyberreader'; font-size: 16px; line-height: 1.6; margin: 0; padding: 0 4px 24px; max-width: 760px; }
+        .faq__answer { color: var(--c4); font-family: 'Inter'; font-size: 16px; line-height: 1.6; margin: 0; padding: 0 4px 24px; max-width: 760px; }
         .faq--embedded .faq__answer { max-width: none; padding: 0 20px 24px; }
         .faq__answer a { color: var(--a0); text-decoration: none; }
         .faq__answer code { background: color-mix(in srgb, var(--c4) 12%, transparent); border-radius: 4px; font-size: 13px; padding: 1px 5px; }
@@ -100,8 +100,8 @@ export function SectionFaq(props: {
           <h2
             style={{
               color: 'var(--a0)',
-              'font-family': 'rajdhani, body',
-              'font-size': mobile() ? '26px' : '36px',
+              'font-family': 'Inter, body',
+              'font-size': mobile() ? '23px' : '33px',
               'font-weight': '700',
               'letter-spacing': '0.08em',
               margin: 0,

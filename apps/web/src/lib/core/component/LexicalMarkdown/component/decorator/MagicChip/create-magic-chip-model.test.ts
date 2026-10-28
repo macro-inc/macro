@@ -70,6 +70,8 @@ vi.mock('@core/user', () => ({
   getDisplayName: (id: string) =>
     id === 'macro|alice@macro.com' ? 'Alice Owner' : '',
 }));
+let viewer = 'macro|alice@macro.com';
+vi.mock('@core/context/user', () => ({ useUserId: () => () => viewer }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
@@ -107,6 +109,9 @@ const prompt: FoldedMessage = {
   parts: [{ kind: 'text', text: 'Say hi' }],
   stop: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const response: FoldedMessage = {
@@ -117,6 +122,9 @@ const response: FoldedMessage = {
   parts: [{ kind: 'text', text: 'Hi!' }],
   stop: { kind: 'end_turn' },
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const openResponse: FoldedMessage = {
@@ -358,7 +366,9 @@ describe('createMagicChipModel', () => {
           resolveStale = resolve;
         })
       );
-      void handleAgentSessionUpdated({ agentSessionId: 'session' });
+      const staleUpdate = handleAgentSessionUpdated({
+        agentSessionId: 'session',
+      });
       await settle();
       serviceClient.get.mockResolvedValue(snapshot(first));
       await handleAgentSessionUpdated({ agentSessionId: 'session' });
@@ -372,6 +382,7 @@ describe('createMagicChipModel', () => {
       expect(model.header()?.pullRequestUrl).toBe(first);
       expect(sibling.header()?.pullRequestUrl).toBe(first);
       resolveStale(snapshot(null));
+      await staleUpdate;
       await settle();
       expect(model.header()?.pullRequestUrl).toBe(first);
 
@@ -647,6 +658,52 @@ describe('createMagicChipModel', () => {
     expect(live.issue).not.toHaveBeenCalled();
 
     dispose();
+  });
+
+  it('says what a held tool call wants, as yours to the owner', async () => {
+    live.snapshot = {
+      messages: [prompt, openResponse],
+      metadata: {
+        pendingInteractions: [
+          {
+            kind: 'tool_approval',
+            approvalId: 'a1',
+            turn: 0,
+            serverSlug: 'macro',
+            serverName: 'Macro',
+            toolName: 'GetThread',
+            requestedBy: 'macro|bob@macro.com',
+          },
+        ],
+      } as unknown as SessionMetadata,
+    };
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        ownerId: 'macro|alice@macro.com',
+        canEdit: true,
+      },
+    });
+    const action = async () => {
+      let presentation!: ReturnType<
+        typeof createMagicChipModel
+      >['presentation'];
+      const dispose = createRoot((rootDispose) => {
+        presentation = createModel(props).presentation;
+        return rootDispose;
+      });
+      await settle();
+      const shown = presentation();
+      dispose();
+      return shown.kind === 'asking' ? shown.asking.action : undefined;
+    };
+
+    expect(await action()).toBe('Wants to read your email');
+    viewer = 'macro|bob@macro.com';
+    expect(await action()).toBe("Wants to read the owner's email");
+    viewer = 'macro|alice@macro.com';
   });
 
   it("a question from a later turn is not this chip's, and the live metadata moves it", async () => {

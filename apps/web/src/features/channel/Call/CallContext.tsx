@@ -5,8 +5,11 @@ import {
   type BackgroundEffect,
   backgroundProcessorOptions,
 } from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
+import type { Span } from '@macro-inc/observability';
 import {
   fetchActiveCall,
   invalidateActiveCallQueries,
@@ -37,7 +40,8 @@ import {
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';
-import { createCallLifecycle } from './call-lifecycle';
+import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
+import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -56,7 +60,8 @@ import {
   useMaybeNativeCallState,
 } from './native-call-state';
 import {
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
+  prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
 
@@ -1067,7 +1072,7 @@ function createCallState() {
 
   // Re-enumerate when devices change (e.g. headphones plugged in)
   const handleDeviceChange = () => {
-    enumerateDevices();
+    fireAndForget(enumerateDevices(), 'call-devices');
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
@@ -1192,11 +1197,21 @@ function createCallState() {
     targetRoom: Room,
     source: keyof CallPrejoinTracks,
     prejoinTrack: MediaStreamTrack | undefined,
-    enableDevice: () => Promise<unknown>
+    enableDevice: () => Promise<unknown>,
+    mediaSpan?: Span
   ) {
+    const callId = store.activeCallId;
     if (prejoinTrack?.readyState === 'live') {
       try {
-        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        await traceCallMedia(
+          'publish_prejoin',
+          {
+            'call.id': callId ?? undefined,
+            'call.media.device': source,
+          },
+          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          mediaSpan
+        );
         return;
       } catch (e) {
         console.error(`failed to publish prejoin ${source} track`, e);
@@ -1205,13 +1220,22 @@ function createCallState() {
       }
     }
     prejoinTrack?.stop();
-    await enableDevice();
+    await traceCallMedia(
+      'enable',
+      {
+        'call.id': callId ?? undefined,
+        'call.media.device': source,
+      },
+      enableDevice,
+      mediaSpan
+    );
   }
 
   async function finishLocalMediaSetup(
     targetRoom: Room,
     setupVersion: number,
-    prejoinTracks?: CallPrejoinTracks
+    prejoinTracks?: CallPrejoinTracks,
+    mediaSpan?: Span
   ) {
     // Each step claims its track; anything left unclaimed is stopped.
     const unclaimed = { ...prejoinTracks };
@@ -1221,7 +1245,7 @@ function createCallState() {
       return track;
     };
     try {
-      await setUpLocalMedia(targetRoom, setupVersion, claim);
+      await setUpLocalMedia(targetRoom, setupVersion, claim, mediaSpan);
     } finally {
       stopPrejoinTracks(unclaimed);
     }
@@ -1230,7 +1254,8 @@ function createCallState() {
   async function setUpLocalMedia(
     targetRoom: Room,
     setupVersion: number,
-    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined,
+    mediaSpan?: Span
   ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1247,7 +1272,8 @@ function createCallState() {
             targetRoom.localParticipant.setMicrophoneEnabled(
               true,
               currentMicrophoneCaptureOptions(store.activeAudioInputDeviceId)
-            )
+            ),
+          mediaSpan
         );
       }
     } catch (e) {
@@ -1273,8 +1299,12 @@ function createCallState() {
 
     if (!store.isVideoMuted) {
       try {
-        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
-          enableInitialCamera(targetRoom)
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'camera',
+          claim('camera'),
+          () => enableInitialCamera(targetRoom),
+          mediaSpan
         );
         if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
         if (store.isVideoMuted) {
@@ -1419,16 +1449,33 @@ function createCallState() {
     const newMuted = !store.isAudioMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setMicrophoneEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setMicrophoneEnabled(false)
+        );
       } else {
         // Re-enable the mic. When the muted publication survived
         // (stopMicTrackOnMute is false) this only unmutes and the capture
         // options are ignored; they matter when the track was stopped and
         // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          currentMicrophoneCaptureOptions(deviceId)
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions(deviceId)
+            )
         );
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
@@ -1452,14 +1499,31 @@ function createCallState() {
     const newMuted = !store.isVideoMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setCameraEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setCameraEnabled(false)
+        );
         // Track is gone — drop our processor ref so the next enable starts clean.
         setBlurProcessor(null);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
-        await r.localParticipant.setCameraEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setCameraEnabled(
+              true,
+              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            )
         );
         // Read the actual device the browser chose so the dropdown is accurate
         const camPub = r.localParticipant.getTrackPublication(
@@ -1573,8 +1637,11 @@ function createCallState() {
     }
   }
 
+  // When this client joined its current call, for time-in-call analytics.
+  let joinedAt: number | undefined;
   const lifecycle = createCallLifecycle({
     shouldRequestToken: callSession.shouldRequestToken,
+    prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
     connect: (token) =>
       callSession.connectWithToken(token, {
@@ -1604,7 +1671,7 @@ function createCallState() {
         unregister();
       };
     },
-    onJoined: (call) => {
+    onJoined: (call, source) => {
       const answeringUserId = userId();
       if (answeringUserId && call.callId) {
         publishCallResolution({
@@ -1613,29 +1680,53 @@ function createCallState() {
           answeredBy: answeringUserId,
         });
       }
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
+      joinedAt = Date.now();
       analytics.track('call_action', {
         action: 'joined',
         channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        trigger: source,
       });
     },
-    onLeft: (channelId) =>
+    onLeft: (call, reason) => {
+      const secondsInCall =
+        joinedAt === undefined
+          ? undefined
+          : Math.round((Date.now() - joinedAt) / 1000);
+      joinedAt = undefined;
       analytics.track('call_action', {
         action: 'left',
-        channelId,
-        leaveReason: 'user_initiated',
-      }),
+        channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        leaveReason: reason,
+        secondsInCall,
+      });
+    },
     reportError: (error) => console.error('call lifecycle failed', error),
   });
   const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
     lifecycle.getState()
   );
-  const unsubscribeLifecycle = lifecycle.subscribe((state) =>
-    setLifecycleSnapshot(state)
-  );
+  // Reloading into a newer app build would cut the call off.
+  let releaseReloadHold: (() => void) | undefined;
+  const holdReloadDuringCall = (state: CallLifecycleState) => {
+    const inCall = state.t !== 'idle' && state.t !== 'failed';
+    if (inCall && !releaseReloadHold) {
+      releaseReloadHold = holdAutomaticReload();
+    } else if (!inCall && releaseReloadHold) {
+      releaseReloadHold();
+      releaseReloadHold = undefined;
+    }
+  };
+  holdReloadDuringCall(lifecycle.getState());
+  const unsubscribeLifecycle = lifecycle.subscribe((state) => {
+    setLifecycleSnapshot(state);
+    holdReloadDuringCall(state);
+  });
 
   const unsubscribeNative =
-    isNativeIosCallKitEnabled() && nativeCall
+    isNativeCallEnabled() && nativeCall
       ? bindNativeCallLifecycle(nativeCall, lifecycle)
       : undefined;
 
@@ -1649,6 +1740,7 @@ function createCallState() {
   onCleanup(() => {
     unsubscribeNative?.();
     unsubscribeLifecycle();
+    releaseReloadHold?.();
     lifecycle.dispose();
     disposed = true;
     browserConnectGeneration += 1;

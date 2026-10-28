@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f3c3ebc7e9ef14262161957ed9a02091b8106d1ed6772bfe60cafd47dbe3a620"
+}

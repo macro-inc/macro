@@ -15,6 +15,9 @@ const canonicalOrigin = (
 ).replace(/\/$/, '');
 const window = new Window();
 const failures: string[] = [];
+const indexedRoutes = baseline.routes.filter(
+  ({ path }) => !baseline.retiredPaths.includes(path)
+);
 async function check(
   route: string,
   verify: (response: Response, body: string) => void
@@ -31,7 +34,7 @@ async function check(
     );
   }
 }
-for (const previous of baseline.routes) {
+for (const previous of indexedRoutes) {
   await check(previous.path, (response, body) => {
     assert.equal(
       response.status,
@@ -73,12 +76,35 @@ await check('/robots.txt', (response, body) => {
 });
 await check('/sitemap.xml', (response, body) => {
   assert.equal(response.status, 200);
-  for (const route of baseline.routes)
+  for (const route of indexedRoutes)
     assert(
       body.includes(`<loc>${canonicalOrigin}${route.path}</loc>`),
       `Missing sitemap URL ${route.path}`
     );
+  for (const route of baseline.retiredPaths)
+    assert(
+      !body.includes(`<loc>${canonicalOrigin}${route}</loc>`),
+      `Retired sitemap URL ${route}`
+    );
 });
+for (const route of baseline.retiredPaths) {
+  await check(route, (response, body) => {
+    assert.equal(response.status, 200);
+    const doc = new window.DOMParser().parseFromString(body, 'text/html');
+    assert.equal(
+      doc.querySelector('meta[http-equiv="refresh"]')?.getAttribute('content'),
+      '0;url=/',
+      'Missing homepage redirect'
+    );
+    assert(
+      doc
+        .querySelector('meta[name="robots"]')
+        ?.getAttribute('content')
+        ?.includes('noindex'),
+      'Retired route must stay noindex'
+    );
+  });
+}
 await check('/start', (response, body) => {
   assert.equal(response.status, 200);
   assert(body.includes('noindex, follow'), 'Signup flow must stay noindex');
@@ -91,5 +117,5 @@ await check('/__seo_missing_page__', (response) => {
 });
 assert.equal(failures.length, 0, failures.join('\n'));
 console.log(
-  `[seo-live] ${baseline.routes.length} pages, crawler files, signup and HTTP error handling passed at ${origin}`
+  `[seo-live] ${indexedRoutes.length} pages, crawler files, signup and HTTP error handling passed at ${origin}`
 );

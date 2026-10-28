@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 AS listed FROM whatsapp_roster WHERE account_id = $1 AND group_jid = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "listed",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cc74fb3a124d8ea056fe2ec5ccdb43e02a0db893a0cb2fd83ea2883d52dcabd5"
+}

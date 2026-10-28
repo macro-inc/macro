@@ -66,7 +66,7 @@ pub struct SearchToolsResponse {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
-    description = "Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net."
+    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net."
 )]
 pub struct SearchTools {
     /// Keywords describing the capability you need (matched against tool names
@@ -119,11 +119,11 @@ pub struct LoadToolsResponse {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "LoadTools",
-    description = "Load tools by name (from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need."
+    description = "Load tools by name (from the More Macro Tools list in your instructions, or from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need."
 )]
 pub struct LoadTools {
     /// Exact tool names to load, as returned by `SearchTools`.
-    #[schemars(description = "Exact tool names to load, taken from SearchTools results.")]
+    #[schemars(description = "Exact tool names to load.")]
     pub names: Vec<String>,
 }
 

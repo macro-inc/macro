@@ -8,7 +8,7 @@ use super::unavailable;
 #[cfg(test)]
 mod test;
 
-/// List routines owned by `user_id`.
+/// List routines `user_id` can access.
 pub async fn resolve_scheduled_actions(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -16,7 +16,7 @@ pub async fn resolve_scheduled_actions(
     let actions = ctx
         .data::<ScheduledActionGraphqlContext>()?
         .0
-        .list_owned(user_id)
+        .list_accessible(user_id)
         .await
         .map_err(unavailable)?;
     actions

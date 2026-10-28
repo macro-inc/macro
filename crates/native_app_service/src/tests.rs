@@ -41,6 +41,7 @@ impl MockBundleFetcher {
         Self {
             manifest: BundleManifest {
                 schema_version: 2,
+                min_native_builds: None,
                 bundle_build,
                 min_native_build,
                 git_sha: Some("abc123".to_string()),
@@ -256,7 +257,7 @@ async fn policy_returns_clear_when_current_active_bundle_is_revoked() {
 }
 
 #[tokio::test]
-async fn all_targets_can_receive_manifest_updates() {
+async fn legacy_manifests_only_update_platforms_with_legacy_numbering() {
     let service = service(20, 0, BundleUpdatePolicy::default());
 
     let mobile = MobileTarget::iter()
@@ -264,6 +265,15 @@ async fn all_targets_can_receive_manifest_updates() {
         .chain(DesktopTarget::iter().map(AllTargets::Desktop));
 
     for target in mobile {
+        if target == AllTargets::Mobile(MobileTarget::Android) {
+            assert_matches!(
+                service
+                    .get_bundle_update(request(target, Arch::Aarch64, 10, 100))
+                    .await,
+                Ok(None)
+            );
+            continue;
+        }
         for arch in Arch::iter() {
             assert_matches!(
                 service
@@ -398,4 +408,64 @@ fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) 
     }
 
     test();
+}
+
+#[tokio::test]
+async fn shared_bundle_uses_independent_mobile_build_minima() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest.schema_version = 3;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+        android: 2_050_001,
+        ios: 184,
+    });
+    for (target, build, minimum) in [
+        (MobileTarget::Android, 2_050_000, 2_050_001),
+        (MobileTarget::Ios, 183, 184),
+    ] {
+        assert_matches!(
+            service.get_bundle_update(request(AllTargets::Mobile(target), Arch::Aarch64, 10, build)).await,
+            Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
+                assert_eq!(required.min_native_build, minimum);
+            }
+        );
+        assert_matches!(
+            service.get_bundle_update(request(AllTargets::Mobile(target), Arch::Aarch64, 10, minimum)).await,
+            Ok(Some(BundleAction::Update(update))) => {
+                assert_eq!(update.min_native_build, minimum);
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    for schema in [3, 4] {
+        service.bundle_fetcher.manifest.schema_version = schema;
+        assert_matches!(
+            service
+                .get_bundle_update(request(
+                    AllTargets::Mobile(MobileTarget::Android),
+                    Arch::Aarch64,
+                    10,
+                    2_050_000
+                ))
+                .await,
+            Ok(None)
+        );
+    }
+    service.bundle_fetcher.manifest.schema_version = 2;
+    service.bundle_fetcher.manifest.min_native_builds =
+        Some(domain::models::MobileBuildMinima { android: 9, ios: 2 });
+    assert_matches!(
+        service
+            .get_bundle_update(request(
+                AllTargets::Mobile(MobileTarget::Android),
+                Arch::Aarch64,
+                10,
+                2_050_000
+            ))
+            .await,
+        Ok(None)
+    );
 }

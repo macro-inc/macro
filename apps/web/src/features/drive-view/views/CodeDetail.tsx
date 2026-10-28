@@ -5,8 +5,11 @@ import {
 } from '@block-code/component/CodeContent';
 import { CodeModeControl } from '@block-code/component/CodeModeControl';
 import { isHtmlFileType } from '@block-code/util/fileMode';
-import { downloadFile } from '@filesystem/download';
+import { SidePanel } from '@components/app/side-panel';
+import { createFileDownload } from '@core/util/createFileDownload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Rerun } from '@solid-primitives/keyed';
+import { ok } from 'neverthrow';
 import {
   type Accessor,
   createSignal,
@@ -45,9 +48,9 @@ function CodeDetailContent(props: {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={isHtmlFile}>
-        <div class="flex h-10 shrink-0 items-center justify-end border-edge border-b px-3">
+        <SidePanel.HeaderActions>
           <CodeModeControl mode={mode()} onModeChange={setMode} />
-        </div>
+        </SidePanel.HeaderActions>
       </Show>
       <div class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <CodeContent
@@ -70,14 +73,18 @@ function CodeDetailSession(props: {
 }) {
   const analytics = useAnalytics();
   const [text, setText] = createSignal(props.data.text);
-  const operations = [
-    downloadFileOperation(() => {
-      downloadFile(
-        new Blob([text() ?? ''], { type: 'text/plain' }),
-        documentDownloadName(props.data.documentMetadata)
-      );
+  const download = createFileDownload(() => ({
+    id: `${props.documentId}:${props.data.documentMetadata.documentVersionId}`,
+    name: documentDownloadName(props.data.documentMetadata),
+    load: async () => {
       analytics.track('download', { blockType: 'code' });
-    }),
+      return ok({ blob: new Blob([text() ?? ''], { type: 'text/plain' }) });
+    },
+  }));
+  const operations = [
+    downloadFileOperation(() =>
+      fireAndForget(download.start(), 'drive-file-download')
+    ),
   ];
 
   return (
@@ -87,6 +94,7 @@ function CodeDetailSession(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        download,
       })}
       <CodeDetailContent
         documentId={props.documentId}
@@ -133,6 +141,7 @@ export function CodeDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="code"
       label="code document"
       load={loadCodeDocument}
     >

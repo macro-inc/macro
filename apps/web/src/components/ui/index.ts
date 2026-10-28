@@ -1,4 +1,6 @@
 export { ActionDialogShell } from './components/ActionDialogShell';
+export type { ApiKeyInputProps } from './components/ApiKeyInput';
+export { ApiKeyInput } from './components/ApiKeyInput';
 export type {
   AvatarGroupProps,
   AvatarGroupSize,
@@ -21,13 +23,16 @@ export {
 } from './components/Badge';
 export type {
   ButtonClassOptions,
+  ButtonFinish,
   ButtonProps,
   ButtonSize,
+  ButtonTooltip,
+  ButtonTooltipOptions,
   ButtonVariant,
   ButtonVariantProps,
 } from './components/Button';
 export { Button, buttonClasses, buttonVariants } from './components/Button';
-export { ButtonGroup } from './components/ButtonGroup';
+export { ButtonGroup, type ButtonGroupProps } from './components/ButtonGroup';
 export type {
   CalendarMonthMenuProps,
   CalendarMonthSelectorProps,
@@ -48,6 +53,14 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export type {
+  ColorPickerFieldProps,
+  ColorPickerInputProps,
+  ColorPickerPreviewProps,
+  ColorPickerRootProps,
+  ColorPickerTrackProps,
+} from './components/ColorPicker';
+export { ColorPicker } from './components/ColorPicker';
 export {
   type CommandListController,
   CommandMenuEmptyState,
@@ -64,10 +77,13 @@ export type {
   ConfirmDialogProps,
 } from './components/ConfirmDialog';
 export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
+export { CopyButton, type CopyButtonProps } from './components/CopyButton';
+export { DatePicker, type DatePickerProps } from './components/DatePicker';
 export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
+export type { DropdownMultiSelectItemProps } from './components/Dropdown';
 export { Dropdown } from './components/Dropdown';
 export type {
   EmptyStateAction,
@@ -77,6 +93,7 @@ export { EmptyStatePanel } from './components/EmptyStatePanel';
 export { EntityComposer } from './components/EntityComposer';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
+export { HoldButton, type HoldButtonProps } from './components/HoldButton';
 export { Hotkey } from './components/Hotkey';
 export { HoverCard } from './components/HoverCard';
 export type {
@@ -123,13 +140,20 @@ export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
 export { NavRow } from './components/NavRow';
+export type {
+  NumberUnitInputDecrementProps,
+  NumberUnitInputIncrementProps,
+  NumberUnitInputInputProps,
+  NumberUnitInputProps,
+  NumberUnitInputUnitProps,
+} from './components/NumberUnitInput';
+export { NumberUnitInput } from './components/NumberUnitInput';
 export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
 export type { RadioGroupProps } from './components/RadioGroup';
 export { RadioGroup } from './components/RadioGroup';
 export { Scroll } from './components/Scroll';
-export { SegmentedControl } from './components/SegmentedControl';
 export type {
   SelectContentProps,
   SelectIconProps,
@@ -141,13 +165,25 @@ export type {
   SelectTriggerProps,
   SelectValueProps,
 } from './components/Select';
-export { Select } from './components/Select';
+export { Select, selectTriggerClasses } from './components/Select';
 export type { SendButtonProps } from './components/SendButton';
 export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
+export type {
+  SliderFillProps,
+  SliderRootProps,
+  SliderThumbProps,
+  SliderTrackProps,
+} from './components/Slider';
+export { Slider } from './components/Slider';
 export { Surface } from './components/Surface';
-export { TabbedControl } from './components/TabbedControl';
-export type { TabItem, TabsProps } from './components/Tabs';
+export { TabSelector } from './components/TabSelector';
+export type {
+  TabOption,
+  TabsProps,
+  TabsSize,
+  TabsTouchStyle,
+} from './components/Tabs';
 export { Tabs } from './components/Tabs';
 export { TagDot, type TagDotProps, type TagDotSize } from './components/TagDot';
 export type {

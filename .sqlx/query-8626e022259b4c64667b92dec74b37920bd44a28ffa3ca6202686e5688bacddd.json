@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $1\n            UNION ALL SELECT $1\n        )\n        SELECT i.id, i.name, i.owner_user_id, i.created_at, i.updated_at, uh.\"updatedAt\"::timestamptz AS viewed_at\n        FROM initiative i\n        LEFT JOIN \"UserHistory\" uh ON uh.\"itemId\" = i.id::text\n            AND uh.\"itemType\" = 'initiative' AND uh.\"userId\" = $1\n        WHERE i.id = ANY($2) AND (\n            EXISTS (SELECT 1 FROM entity_access ea\n                WHERE ea.entity_id = i.id AND ea.entity_type = 'initiative'\n                AND ea.source_id IN (SELECT source_id FROM user_source_ids))\n            OR EXISTS (SELECT 1 FROM \"SharePermission\" sp\n                JOIN team_user owner_team ON owner_team.user_id = i.owner_user_id\n                WHERE sp.id = i.share_permission_id AND sp.\"linkShare\" = 'TEAM'\n                AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids))\n        )\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8626e022259b4c64667b92dec74b37920bd44a28ffa3ca6202686e5688bacddd"
+}

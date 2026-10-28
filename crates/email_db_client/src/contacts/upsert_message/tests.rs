@@ -326,6 +326,76 @@ async fn insert_new_contacts_allows_same_email_different_links(pool: Pool<Postgr
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("upsert_message_contacts"))
+)]
+// should not deadlock when concurrent batches insert the same new addresses in different orders
+async fn insert_new_contacts_overlapping_batches_do_not_deadlock(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let contact = |email: &str| ContactPhotoless {
+        id: macro_uuid::generate_uuid_v7(),
+        link_id,
+        email_address: email.to_string(),
+        name: None,
+    };
+    let batch_a = [
+        contact("a@example.com"),
+        contact("gate@example.com"),
+        contact("b@example.com"),
+    ];
+    let batch_b = [
+        contact("b@example.com"),
+        contact("gate@example.com"),
+        contact("a@example.com"),
+    ];
+
+    // An uncommitted insert of the gate address parks both batches mid-statement, so each batch can
+    // hold an address the other still needs at the moment the gate opens.
+    let mut gate = pool.begin().await?;
+    sqlx::query("INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)")
+        .bind(macro_uuid::generate_uuid_v7())
+        .bind(link_id)
+        .bind("gate@example.com")
+        .execute(&mut *gate)
+        .await?;
+
+    let open_gate = async {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let parked: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM pg_stat_activity
+                     WHERE datname = current_database() AND wait_event_type = 'Lock'",
+                )
+                .fetch_one(&pool)
+                .await?;
+                if parked == 2 {
+                    return Ok::<_, sqlx::Error>(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await??;
+        gate.rollback().await?;
+        anyhow::Ok(())
+    };
+
+    let (inserted_a, inserted_b, opened) = tokio::join!(
+        insert_new_contacts(&pool, &batch_a),
+        insert_new_contacts(&pool, &batch_b),
+        open_gate
+    );
+    opened?;
+
+    assert_eq!(inserted_a?.len() + inserted_b?.len(), 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
 )]
 // should update name for a contact that has no name

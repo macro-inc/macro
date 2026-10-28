@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+jsonschema = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 rig-core = "0.41.0"

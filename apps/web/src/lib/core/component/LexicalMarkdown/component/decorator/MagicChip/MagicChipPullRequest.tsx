@@ -1,3 +1,5 @@
+import { MergePullRequestButton } from '@app/features/block-pr/component/MergePullRequestButton';
+import type { PullRequestCheck } from '@app/features/block-pr/primitives/pull-request-ready-to-merge';
 import {
   parseGithubPrUrl,
   prDisplayName,
@@ -5,8 +7,8 @@ import {
 } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import { Button, buttonClasses } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
@@ -27,10 +29,29 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       ? (value as Record<string, unknown>)
       : {};
   };
+  const checks = (): PullRequestCheck[] | undefined => {
+    const value = metadata().checks;
+    if (!Array.isArray(value)) return undefined;
+    return value.map((item) => {
+      if (!item || typeof item !== 'object') {
+        return { status: null, conclusion: null };
+      }
+      const record = item as Record<string, unknown>;
+      return {
+        status: typeof record.status === 'string' ? record.status : null,
+        conclusion:
+          typeof record.conclusion === 'string' ? record.conclusion : null,
+      };
+    });
+  };
+  const text = (key: 'name' | 'status') => {
+    const value = metadata()[key];
+    return typeof value === 'string' ? value : undefined;
+  };
   const label = () => {
-    const title = metadata().name;
+    const title = text('name');
     const parsed = reference();
-    return typeof title === 'string' && title
+    return title
       ? `${parsed ? `#${parsed.number} · ` : ''}${title}`
       : parsed
         ? prDisplayName(parsed)
@@ -40,6 +61,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
     const value = metadata()[key];
     return typeof value === 'number' ? value : undefined;
   };
+  const isDraft = () =>
+    metadata().draft === true && metadata().status === 'open';
   const content = () => (
     <>
       <Show
@@ -49,8 +72,9 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
             aria-hidden="true"
             class="size-3.5"
             classList={{
-              'text-success': metadata().status === 'open',
+              'text-success': metadata().status === 'open' && !isDraft(),
               'text-failure': metadata().status === 'closed',
+              'text-ink-muted': isDraft(),
             }}
           />
         }
@@ -92,7 +116,6 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
             variant: 'ghost',
             size: 'sm',
             fullWidth: true,
-            noTouchResize: true,
             class:
               'h-8 min-w-0 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none',
           })}
@@ -104,24 +127,41 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       }
     >
       {(pr) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          fullWidth
-          noTouchResize
-          class="h-8 min-w-0 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none"
-          aria-label={label()}
-          data-magic-chip-pull-request={props.url}
-          on:click={(event) => {
-            event.stopPropagation();
-            layout.openWithSplit(
-              { type: 'pr', id: pr().id },
-              { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
-            );
-          }}
-        >
-          {content()}
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            class="h-8 min-w-0 flex-1 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none"
+            aria-label={label()}
+            data-magic-chip-pull-request={props.url}
+            on:click={(event) => {
+              event.stopPropagation();
+              layout.openWithSplit(
+                { type: 'pr', id: pr().id },
+                {
+                  preferNewSplit: openInNewSplitForMention(
+                    event.shiftKey,
+                    true
+                  ),
+                }
+              );
+            }}
+          >
+            {content()}
+          </Button>
+          <Show when={reference()}>
+            {(prRef) => (
+              <MergePullRequestButton
+                target={{ ...prRef(), title: text('name') }}
+                status={text('status')}
+                draft={metadata().draft === true}
+                checks={checks()}
+                class="h-8"
+              />
+            )}
+          </Show>
+        </>
       )}
     </Show>
   );

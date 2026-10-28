@@ -3,8 +3,14 @@ import type { CalendarAttendee } from '@service-storage/generated/schemas/calend
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventTransparency } from '@service-storage/generated/schemas/eventTransparency';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { multiDayTimedDisplayRange } from './utils/calendar-date';
+import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
+import type { ViewerCapabilities } from '@service-storage/generated/schemas/viewerCapabilities';
+import {
+  isTimedPointEvent,
+  multiDayTimedDisplayRange,
+} from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
 /** Supported FullCalendar period views. */
@@ -14,7 +20,7 @@ export type CalendarPeriodView =
   | 'timeGridDay';
 
 /** The conferencing system backing an event's join URL. */
-type ConferenceProvider = 'google_meet' | 'other';
+type ConferenceProvider = 'google_meet' | 'microsoft_teams' | 'other';
 
 /** Supported first day of the calendar week. */
 export type CalendarWeekStart = 0 | 1;
@@ -24,6 +30,8 @@ export type CalendarTimeFormat = '12-hour' | '24-hour';
 
 /** A calendar source used to group and style events. */
 export interface CalendarSource {
+  provider?: 'google' | 'outlook';
+  capabilities?: import('@service-calendar/generated/schemas/calendarCapabilities').CalendarCapabilities;
   /** Stable source identifier. */
   id: string;
   /** Human-readable source name. */
@@ -44,6 +52,13 @@ export interface CalendarSource {
 
 /** Calendar occurrence data, independent from FullCalendar. */
 export interface CalendarEvent {
+  /** A sanitized team projection grants read access only, never provider actions. */
+  teamProjection?: {
+    ownerId: string;
+    kind: 'busy' | 'details';
+    /** Legacy OOO status does not carry an availability classification. */
+    contributesToAvailability?: boolean;
+  };
   /** Stable identifier for this rendered occurrence. */
   id: string;
   /** Stable canonical calendar event identifier. */
@@ -73,6 +88,19 @@ export interface CalendarEvent {
   creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
+  /** What the organizer lets guests do. */
+  guestPolicy: GuestPolicy;
+  /**
+   * Whether the event is the viewer's snapshot of a meeting shared in one of
+   * their channels: a private copy the meeting's changes never reach and
+   * whose answers never reach the organizer. Absent on a regular event.
+   */
+  isSnapshot?: boolean;
+  /**
+   * What the viewer may do with the displayed copy. Nothing when that copy's
+   * calendar is read-only, even if another copy is writable.
+   */
+  viewerCan: ViewerCapabilities;
   /**
    * Reminder configuration of the primary copy, the one Macro's alerts
    * follow whichever copy a chip shows. Absent means the calendar default.
@@ -87,6 +115,8 @@ export interface CalendarEvent {
   reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
+  /** `transparent` events show the owner as free; absent means busy. */
+  transparency?: EventTransparency;
   /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
@@ -120,6 +150,26 @@ export interface CalendarEvent {
   /** Optional event description. */
   description?: string;
 }
+
+/** Source id every teammate out-of-office event carries; hiding it hides the overlay. */
+export const TEAM_OOO_SOURCE_ID = 'team-ooo';
+
+/** Google's default guest policy, for events Macro builds itself. */
+export const DEFAULT_GUEST_POLICY: GuestPolicy = {
+  canModify: false,
+  canInviteOthers: true,
+  canSeeOtherGuests: true,
+};
+
+/** No capability at all. */
+export const NO_VIEWER_CAPABILITIES: ViewerCapabilities = {
+  editDetails: false,
+  inviteGuests: false,
+  removeGuests: false,
+  setGuestPolicy: false,
+  rsvp: false,
+  organize: false,
+};
 
 /** Shared presentation source until calendar/account metadata is exposed. */
 export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
@@ -247,10 +297,14 @@ export function mapCalendarOccurrence(
     creatorName: optionalText(content.creatorName),
     creatorEmail: optionalText(content.creatorEmail),
     attendees: event.attendees ?? [],
+    guestPolicy: event.guestPolicy,
+    isSnapshot: event.isSnapshot,
+    viewerCan: content.isReadOnly ? NO_VIEWER_CAPABILITIES : event.viewerCan,
     reminders: canonical.reminders ?? undefined,
     reminderCalendarId: canonical.calendarId ?? undefined,
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
+    transparency: content.transparency,
     calendarId,
     sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
@@ -275,12 +329,18 @@ export function mapCalendarEventToFullCalendar(
   // ranges. Keep projected timed events fixed so their timestamps are not
   // accidentally replaced with date-only API values.
   const interactionEditable = timeEditable && allDayRange === undefined;
+  // FullCalendar replaces an equal end with its default one-hour duration.
+  // Give an instant a minimal rendering footprint without changing the model.
+  // Point events cannot be dragged/resized, so this display end is never saved.
+  const displayEnd = isTimedPointEvent(event)
+    ? new Date(Date.parse(event.start) + 1).toISOString()
+    : event.end;
 
   return {
     id: event.id,
     title: event.title,
     start: allDayRange?.start ?? event.start,
-    end: allDayRange?.end ?? event.end,
+    end: allDayRange?.end ?? displayEnd,
     allDay: isRenderedAllDay,
     display: 'auto',
     startEditable: interactionEditable,

@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PricePricePerAudioMinute } from './pricePricePerAudioMinute';
+import type { PricePricePerMillionCacheRead } from './pricePricePerMillionCacheRead';
+import type { PricePricePerMillionCacheWrite } from './pricePricePerMillionCacheWrite';
 
 /**
  * Rates applied to an invocation and its resolved dollar cost.
@@ -12,6 +14,12 @@ import type { PricePricePerAudioMinute } from './pricePricePerAudioMinute';
 export interface Price {
   /** Price per audio minute (USD), absent for token billing. */
   price_per_audio_minute?: PricePricePerAudioMinute;
+  /** Price per million cache-read input tokens (USD), absent when the model
+has no published rate and for audio billing. */
+  price_per_million_cache_read?: PricePricePerMillionCacheRead;
+  /** Price per million cache-write input tokens (USD), absent when the model
+has no published rate and for audio billing. */
+  price_per_million_cache_write?: PricePricePerMillionCacheWrite;
   /** Price per million input tokens (USD); zero for audio billing. */
   price_per_million_in: number;
   /** Price per million output tokens (USD); zero for audio billing. */

@@ -1,13 +1,13 @@
 import { For } from 'solid-js';
 import '../macro-vs-notion/MacroVsNotion.css';
-import { featureNavGlyphs } from '../../../../app/components/graphics/FeatureNavGlyphs';
+import './MacroVsLinear.css';
 import { PhoneFrame } from '../../../../app/components/utils/UtilPhoneFrame';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import linkedWorkspace from '../../../../assets/posts/macro-vs-linear/linked-workspace.jpg';
 import taskCreateButton from '../../../../assets/posts/macro-vs-linear/task-create-button.mp4';
+import taskCreateCurrent from '../../../../assets/posts/macro-vs-linear/task-create-current.webp';
+import taskDetailCurrent from '../../../../assets/posts/macro-vs-linear/task-detail-current.webp';
 import taskEmailAction from '../../../../assets/posts/macro-vs-linear/task-email-action.png';
 import taskFromChannel from '../../../../assets/posts/macro-vs-linear/task-from-channel.jpg';
-import taskFromEmailModal from '../../../../assets/posts/macro-vs-linear/task-from-email-modal.jpg';
 import taskFromHuddle from '../../../../assets/posts/macro-vs-linear/task-from-huddle.jpg';
 import taskGithubPr from '../../../../assets/posts/macro-vs-linear/task-github-pr.jpg';
 import {
@@ -15,6 +15,7 @@ import {
   ComparisonTable,
   LinearLogo,
 } from '../../PostComparison';
+import { PostFaqItem } from '../../PostFaq';
 import type { PostMeta } from '../../registry';
 
 const LINEAR_VIDEO_ID = 'nHxqE2mVKrA';
@@ -115,31 +116,14 @@ const USER_QUOTES: { name: string; text: string }[] = [
   },
 ];
 
-/** Small isometric block glyph (reused from the home feature nav) shown above
- * a section heading. `route` selects which block composition to draw. */
-function SectionGlyph(props: { route: string }) {
-  const Glyph = featureNavGlyphs[props.route];
-  return (
-    <div class="mvn-section-glyph" aria-hidden="true">
-      {Glyph ? <Glyph height="44px" /> : null}
-    </div>
-  );
-}
-
 function PostScreenshot(props: {
   src: string;
   alt: string;
   width: number;
   height: number;
-  fadeRight?: boolean;
 }) {
   return (
-    <figure
-      classList={{
-        'mvn-graphic': true,
-        'mvn-graphic--fade-right': !!props.fadeRight,
-      }}
-    >
+    <figure class="mvn-graphic">
       <div class="mvn-graphic-frame">
         <div class="mvn-graphic-inner">
           <img
@@ -227,7 +211,7 @@ export const postMeta: PostMeta = {
   subtitle:
     'Macro is the open source alternative to Linear for fast engineering task management.',
   date: '2026-06-25',
-  updated: '2026-07-09',
+  updated: '2026-09-25',
   description:
     'Macro is the open-source alternative to Linear: fast, keyboard-first task management inside one workspace with email, chat, docs, calls and a CRM, linked to GitHub and a shared team memory.',
   preview: ARTICLE_PREVIEW,
@@ -243,7 +227,7 @@ export const postMeta: PostMeta = {
 
 export default function MacroVsLinearPost() {
   return (
-    <div class="mvn-post">
+    <div class="mvn-post linear-post">
       <article>
         <p>{ARTICLE_PARAGRAPHS[0]}</p>
         <p>{ARTICLE_PARAGRAPHS[1]}</p>
@@ -310,7 +294,7 @@ export default function MacroVsLinearPost() {
           rows={comparisonRows}
         />
 
-        <SectionGlyph route="/tasks" />
+        <hr class="post-section-rule" aria-hidden="true" />
         <h2>Task creation: Linear is manual, Macro is automatic</h2>
         <p>
           Macro and Linear are comparably fast once you are inside the tracker:
@@ -348,16 +332,6 @@ export default function MacroVsLinearPost() {
         <p class="mvn-figcaption">
           Hit <strong>Task</strong> on any email to turn it into a tracked item
           without leaving your inbox.
-        </p>
-        <PostScreenshot
-          src={taskFromEmailModal}
-          alt="Create task modal opened from an email, with the source thread linked in the description"
-          width={1024}
-          height={640}
-        />
-        <p class="mvn-figcaption">
-          The modal opens with the email linked — status, assignee and priority
-          ready to set, source attached.
         </p>
 
         <h3>From a channel message</h3>
@@ -400,6 +374,16 @@ export default function MacroVsLinearPost() {
           create task modal — the same Linear-style speed, without leaving
           Macro.
         </p>
+        <PostScreenshot
+          src={taskCreateCurrent}
+          alt="Current Macro create-task dialog with title, description, status, priority, assignee, due date and tags"
+          width={840}
+          height={366}
+        />
+        <p class="mvn-figcaption">
+          Set the task’s status, priority, assignee and due date in the create
+          dialog. Captured from Macro in September 2026.
+        </p>
 
         <h3>From markdown to-dos</h3>
         <p>
@@ -425,7 +409,7 @@ export default function MacroVsLinearPost() {
           assignee, linked to the rest of your workspace.
         </p>
 
-        <SectionGlyph route="/calls" />
+        <hr class="post-section-rule" aria-hidden="true" />
         <h2>Create and assign tasks from standups and huddles</h2>
         <p>
           A lot of tasks are decided on a call and never make it into a tracker
@@ -454,7 +438,7 @@ export default function MacroVsLinearPost() {
           gets said into assigned tasks when it ends.
         </p>
 
-        <SectionGlyph route="/github" />
+        <hr class="post-section-rule" aria-hidden="true" />
         <h2>Linked to GitHub, both ways</h2>
         <p>
           For engineering work, Macro tasks link to GitHub bidirectionally and
@@ -487,7 +471,7 @@ export default function MacroVsLinearPost() {
           still a separate thing to check.
         </p>
 
-        <SectionGlyph route="/agents" />
+        <hr class="post-section-rule" aria-hidden="true" />
         <h2>One linked system, one team memory</h2>
         <p>
           In Linear you link issues to issues, and to PRs and a handful of
@@ -498,15 +482,15 @@ export default function MacroVsLinearPost() {
           workspace becomes context you can navigate in either direction.
         </p>
         <PostScreenshot
-          src={linkedWorkspace}
-          alt="Macro workspace showing tasks in the same app as email, channels, calls and the rest of the sidebar"
-          width={1024}
-          height={519}
-          fadeRight
+          src={taskDetailCurrent}
+          alt="Current Macro task editor with status, priority, assignee, description, discussion and the shared workspace navigation"
+          width={1200}
+          height={650}
         />
         <p class="mvn-figcaption">
-          Tasks live in the same app as email, channels, calls and everything
-          else — one rail, one linked system.
+          The current task editor keeps properties, the description and
+          discussion together, with the rest of the workspace one click away.
+          Captured from Macro in September 2026.
         </p>
         <p>
           That web is also how permissions work. Anything you @-mention in a
@@ -540,47 +524,51 @@ export default function MacroVsLinearPost() {
           </For>
         </div>
 
-        <h2>FAQ</h2>
-        <div class="mvn-faq">
-          <h3>Should I switch from Linear to Macro?</h3>
-          <p>
-            If your stack is Linear plus Slack plus email plus docs plus a CRM,
-            yes — that is five tools that do not share context. Run Macro
-            alongside Linear for a week, create tasks from your real email and
-            channels, wire up GitHub, and see how much context-switching
-            disappears.
-          </p>
+        <h2 class="post-faq-title">Frequently asked questions</h2>
+        <div class="post-faq">
+          <PostFaqItem question="Should I switch from Linear to Macro?">
+            <p>
+              If your stack is Linear plus Slack plus email plus docs plus a
+              CRM, yes — that is five tools that do not share context. Run Macro
+              alongside Linear for a week, create tasks from your real email and
+              channels, wire up GitHub, and see how much context-switching
+              disappears.
+            </p>
+          </PostFaqItem>
 
-          <h3>When would I keep Linear instead?</h3>
-          <p>
-            When you explicitly want standalone issue tracking disconnected from
-            email, chat, calls and docs — a dedicated tracker tab and
-            integrations to bridge the gap, rather than one linked workspace.
-          </p>
+          <PostFaqItem question="When would I keep Linear instead?">
+            <p>
+              When you explicitly want standalone issue tracking disconnected
+              from email, chat, calls and docs — a dedicated tracker tab and
+              integrations to bridge the gap, rather than one linked workspace.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro open source?</h3>
-          <p>
-            Yes, end to end:{' '}
-            <a
-              href="https://github.com/macro-inc/macro"
-              target="_blank"
-              rel="noreferrer"
-            >
-              github.com/macro-inc/macro
-            </a>
-            . Your data stays open and portable and the app is extensible.
-            Linear is closed source.
-          </p>
+          <PostFaqItem question="Is Macro open source?">
+            <p>
+              Yes, end to end:{' '}
+              <a
+                href="https://github.com/macro-inc/macro"
+                target="_blank"
+                rel="noreferrer"
+              >
+                github.com/macro-inc/macro
+              </a>
+              . Your data stays open and portable and the app is extensible.
+              Linear is closed source.
+            </p>
+          </PostFaqItem>
 
-          <h3>Can I move my Linear issues over?</h3>
-          <p>
-            Run Macro alongside Linear while you switch — create tasks from live
-            email and channels so new work lands in Macro without a big-bang
-            migration, then bring the rest across as you go.
-          </p>
+          <PostFaqItem question="Can I move my Linear issues over?">
+            <p>
+              Run Macro alongside Linear while you switch — create tasks from
+              live email and channels so new work lands in Macro without a
+              big-bang migration, then bring the rest across as you go.
+            </p>
+          </PostFaqItem>
         </div>
 
-        <p>
+        <p class="post-footnote">
           For shortcuts, @mentions, the task component and GitHub integration,
           see the{' '}
           <a

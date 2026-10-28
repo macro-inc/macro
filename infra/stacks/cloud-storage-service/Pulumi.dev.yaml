@@ -1,6 +1,7 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  cloud-storage-service:deploy_slack_import_worker: true
   cloud-storage-service:macro_db_secret_key: macro-db-dev
   cloud-storage-service:macro_db_proxy_secret_key: macrodb-rds-proxy-dev
   cloud-storage-service:macro_db_readonly_secret_key: macro-db-readonly-dev

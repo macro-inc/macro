@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ready AS (\n                    UPDATE slack_import_conversation c\n                    SET status = 'queued', event_generation = event_generation + 1, updated_at = clock_timestamp()\n                    FROM slack_import_job j\n                    WHERE j.team_id = $1 AND j.id = $2 AND c.job_id = j.id\n                      AND j.status = 'uploading' AND j.registration_closed_at IS NULL\n                      AND j.cancel_requested_at IS NULL\n                      AND c.status = 'awaiting_uploads' AND c.sealed_at IS NOT NULL\n                      AND EXISTS (SELECT 1 FROM slack_import_upload u\n                                  WHERE u.job_id = j.id AND u.slack_channel_id IS NULL AND u.verified_at IS NOT NULL)\n                      AND c.part_count = (SELECT count(*) FROM slack_import_upload u\n                          WHERE u.job_id = c.job_id AND u.slack_channel_id = c.slack_channel_id\n                            AND u.verified_at IS NOT NULL)\n                    RETURNING c.job_id, c.slack_channel_id, c.event_generation\n                )\n                INSERT INTO slack_import_outbox (job_id, slack_channel_id, kind, generation)\n                SELECT job_id, slack_channel_id, 'import', event_generation FROM ready\n                ON CONFLICT (job_id, slack_channel_id, kind, generation) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56c53754a1c62a2f2ea12d062c0296b472ba20058ab8c98e5938882da862991f"
+}

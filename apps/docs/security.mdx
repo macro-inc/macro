@@ -51,11 +51,11 @@ Access in Macro is derived from [channel-based sharing](/permissions) rather tha
 
 * Mentioning a block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
 * [Teams](/account/teams) set the defaults for some block types. Tasks are visible to the team, calls are shared to team memory unless a call is opted out, and emails flow into the CRM when Email Sync is enabled for that company.
-* Team roles are **Member**, **Admin**, and **Owner**. Only owners can invite and remove members.
+* Team roles are **Member**, **Admin**, and **Owner**. Admins and owners can remove members and can limit invitations to admins.
 * **Auto-join on domain**, when an admin enables it, adds anyone who signs up with an email on the owner's domain to the team.
 * **Public links** make a document readable by anyone with the URL, including people without a Macro account.
 
-Macro does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Macro. Revoking Macro's access from your Google account, or disconnecting it in **Settings → Connections**, ends email sync.
+Macro does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Macro. Revoking Macro's access from your Google account, or disconnecting it in **Settings → Email**, ends email sync.
 
 ## Agents and your data
 
@@ -75,7 +75,7 @@ Agents operate on your workspace data under the following guarantees:
   </Card>
 
   <Card title="You choose the connections" icon="plug">
-    Connectors and MCP clients are opt-in per workspace from **Settings → Connections**.
+    Agent connections and MCP clients are opt-in, from **Settings → Agent connections** and **Settings → MCP server**.
   </Card>
 </CardGroup>
 

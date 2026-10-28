@@ -1,3 +1,7 @@
+use crate::{
+    outbound::subscription_checkout::StripeCheckoutError,
+    service::subscription_checkout::CheckoutError,
+};
 use axum::{
     Json,
     http::StatusCode,
@@ -25,20 +29,6 @@ pub struct StripePrices {
 }
 
 impl StripePrices {
-    /// The price to sell `plan` at.
-    pub fn price_id(&self, plan: PaidPlan) -> Result<&str, StripeOperationError> {
-        if !PaidPlan::PURCHASABLE.contains(&plan) {
-            return Err(StripeOperationError::PlanUnavailable);
-        }
-        match plan {
-            PaidPlan::Premium => Ok(&self.premium),
-            PaidPlan::Max => self
-                .max
-                .as_deref()
-                .ok_or(StripeOperationError::PlanUnavailable),
-        }
-    }
-
     /// Which plan a subscription item's price belongs to, if any.
     pub fn plan_for_price(&self, price_id: &str) -> Option<PaidPlan> {
         if price_id == self.premium {
@@ -48,11 +38,6 @@ impl StripePrices {
         } else {
             None
         }
-    }
-
-    /// Every price that carries a seat item.
-    pub fn seat_price_ids(&self) -> Vec<String> {
-        self.seat_prices().all()
     }
 
     /// The same prices, for the teams crate's per-plan seat items.
@@ -81,7 +66,13 @@ pub enum StripeOperationError {
     PromoCodeNotFound,
     #[error("Internal server error")]
     UnexpectedStripeResponse,
-    #[error("User already has an active subscription")]
+    #[error("The 30-day trial is only available for your first Premium subscription")]
+    TrialUnavailable,
+    #[error("Checkout changed in another tab. Please try again.")]
+    CheckoutConflict,
+    #[error("Could not create checkout")]
+    CheckoutGateway(StripeCheckoutError),
+    #[error("You already have a subscription. Open Manage in Settings → Billing to update it.")]
     AlreadySubscribed,
     #[error("Teams service error")]
     TeamsErr(#[from] teams::domain::model::TeamError),
@@ -93,8 +84,8 @@ pub enum StripeOperationError {
     NoSubscription,
     #[error("More than one active subscription; contact support to change plans")]
     AmbiguousSubscription,
-    #[error("Already on this plan")]
-    AlreadyOnPlan,
+    #[error("Plan change gateway failed")]
+    PlanChangeGateway(anyhow::Error),
     #[error("Only team admins can change plans on a team")]
     NotTeamAdmin,
     #[error("Team plan change failed")]
@@ -108,19 +99,22 @@ impl IntoResponse for StripeOperationError {
             // user id, DB-stored Stripe customer id) — a parse failure is a server/auth
             // misconfiguration, not bad client input. Map to 500 so metrics don't blame callers.
             StripeOperationError::ParseId(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::PlanChangeGateway(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::DbErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::MissingStripeId => StatusCode::BAD_REQUEST,
             StripeOperationError::StripeIdParse(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::StripeErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::CheckoutConflict => StatusCode::CONFLICT,
             StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
+            StripeOperationError::TrialUnavailable => StatusCode::CONFLICT,
+            StripeOperationError::CheckoutGateway(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::TeamsErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
             StripeOperationError::NoSubscription => StatusCode::NOT_FOUND,
             StripeOperationError::AmbiguousSubscription => StatusCode::CONFLICT,
-            StripeOperationError::AlreadyOnPlan => StatusCode::CONFLICT,
             StripeOperationError::NotTeamAdmin => StatusCode::FORBIDDEN,
             StripeOperationError::TeamPlanErr(e) => match e {
                 SetTeamMemberPlanError::TeamNotPaying => StatusCode::PAYMENT_REQUIRED,
@@ -129,7 +123,8 @@ impl IntoResponse for StripeOperationError {
                 }
                 SetTeamMemberPlanError::TeamError(_)
                 | SetTeamMemberPlanError::CustomerError(_)
-                | SetTeamMemberPlanError::RolesError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                | SetTeamMemberPlanError::RolesError(_)
+                | SetTeamMemberPlanError::UsageReset(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
         };
         (
@@ -152,3 +147,34 @@ pub struct StripeSessionResponse {
 
 #[cfg(test)]
 mod test;
+
+impl From<CheckoutError<StripeCheckoutError>> for StripeOperationError {
+    fn from(error: CheckoutError<StripeCheckoutError>) -> Self {
+        match error {
+            CheckoutError::MissingCustomer => Self::MissingStripeId,
+            CheckoutError::AlreadySubscribed => Self::AlreadySubscribed,
+            CheckoutError::TrialUnavailable => Self::TrialUnavailable,
+            CheckoutError::PlanUnavailable => Self::PlanUnavailable,
+            CheckoutError::PromoCodeNotFound => Self::PromoCodeNotFound,
+            CheckoutError::Gateway(StripeCheckoutError::TrialUnavailable) => Self::TrialUnavailable,
+            CheckoutError::Gateway(StripeCheckoutError::ExistingSubscription) => {
+                Self::AlreadySubscribed
+            }
+            CheckoutError::Gateway(StripeCheckoutError::CheckoutConflict) => Self::CheckoutConflict,
+            CheckoutError::Gateway(error) => Self::CheckoutGateway(error),
+        }
+    }
+}
+
+impl From<crate::service::subscription_plan::PlanChangeError> for StripeOperationError {
+    fn from(error: crate::service::subscription_plan::PlanChangeError) -> Self {
+        use crate::service::subscription_plan::PlanChangeError as E;
+        match error {
+            E::MissingCustomer => Self::MissingStripeId,
+            E::NoSubscription => Self::NoSubscription,
+            E::AmbiguousSubscription => Self::AmbiguousSubscription,
+            E::PlanUnavailable => Self::PlanUnavailable,
+            E::Gateway(error) => Self::PlanChangeGateway(error),
+        }
+    }
+}

@@ -14,18 +14,18 @@ const request = (body: unknown) =>
     body: JSON.stringify(body),
   });
 const connectionPrompt = {
-  agentTag: '@claude',
-  message: 'Connect Claude, then mention me again.',
-  chip: { appSlug: 'claude-cloud', name: 'Claude', target: 'harness' },
+  agentTag: '@codex',
+  message: 'Connect Codex, then mention me again.',
+  chip: { appSlug: 'codex-cloud', name: 'Codex', target: 'harness' },
 };
 
 describe('agent announcements', () => {
   it('composes a connection prompt from the client wire format', async () => {
     const response = await request({ connectionPrompt });
     expect(response.status).toBe(200);
-    expect(await response.json<{ markdown: string }>()).toEqual({
+    expect(await response.json()).toEqual({
       markdown:
-        '`@claude` Connect Claude, then mention me again. <m-connect-app>{"appSlug":"claude-cloud","name":"Claude","target":"harness"}</m-connect-app>',
+        '`@codex` Connect Codex, then mention me again. <m-connect-app>{"appSlug":"codex-cloud","name":"Codex","target":"harness"}</m-connect-app>',
     });
   });
   const chip = {
@@ -45,14 +45,30 @@ describe('agent announcements', () => {
     if (!match?.[1]) throw new Error(`no reply target in ${markdown}`);
     return readReplyTargetData(JSON.parse(match[1]));
   };
-  it('announces under the parent the reply lives in', async () => {
-    const parent = { type: 'document' as const, id: 'doc' };
+  it('announces an assignment as a chip without a user reply target', async () => {
+    const response = await request({ chip });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toBe(
+      `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`
+    );
+    expect(markdown).not.toContain('m-reply-target');
+  });
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('announces under the %s parent the reply lives in', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request({
       replyTarget: { parent, ...replyTarget },
       chip,
     });
     expect(response.status).toBe(200);
-    const { markdown } = await response.json<{ markdown: string }>();
+    const { markdown }: { markdown: string } = await response.json();
     // Shipped broken once: the endpoint built the node from a `channelId`
     // the node no longer had, and every announcement rendered as an
     // unknown reply target. The parser, not the string, is the oracle.
@@ -67,7 +83,7 @@ describe('agent announcements', () => {
       chip,
     });
     expect(response.status).toBe(200);
-    const { markdown } = await response.json<{ markdown: string }>();
+    const { markdown }: { markdown: string } = await response.json();
     expect(parsedReplyTarget(markdown)).toEqual({
       parent: { type: 'channel', id: 'chan' },
       ...replyTarget,
@@ -80,7 +96,7 @@ describe('agent announcements', () => {
       chatReply: { sessionId: 'session', body: { kind: 'pending' } },
     });
     expect(pending.status).toBe(200);
-    const { markdown: spinner } = await pending.json<{ markdown: string }>();
+    const { markdown: spinner }: { markdown: string } = await pending.json();
     expect(spinner.startsWith(`${link}\n\n<m-await>`)).toBe(true);
     expect(spinner.endsWith('</m-await>')).toBe(true);
     const answered = await request({
@@ -89,9 +105,39 @@ describe('agent announcements', () => {
         body: { kind: 'markdown', markdown: 'Sure.\n\n- done' },
       },
     });
-    expect(await answered.json<{ markdown: string }>()).toEqual({
+    expect(await answered.json()).toEqual({
       markdown: `${link}\n\nSure.\n\n- done`,
     });
+  });
+  it('composes a private reply from segments, with steps as a live node', async () => {
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            { kind: 'prose', markdown: 'Checking first.' },
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 1,
+              sealed: true,
+              rows: [
+                { id: 't1', label: 'Ran', detail: 'ls', status: 'completed' },
+                { id: 't2', label: 'Read', detail: null, status: 'completed' },
+              ],
+            },
+          ],
+          footer: null,
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toBe(
+      'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"}],"sealed":true}</m-agent-activity>'
+    );
   });
   it('rejects a chat reply body it does not know', async () => {
     const response = await request({

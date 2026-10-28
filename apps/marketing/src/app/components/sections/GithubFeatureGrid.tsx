@@ -397,7 +397,7 @@ export function GithubFeatureGrid() {
               <span
                 style={{
                   color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
-                  'font-family': 'rajdhani, body',
+                  'font-family': 'Inter, body',
                   'font-size': mobile() ? '11px' : '12px',
                   'font-weight': '500',
                   'letter-spacing': '0.14em',

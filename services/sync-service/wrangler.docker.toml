@@ -33,6 +33,7 @@ INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "http://search-processing-service:8080"
 DSS_URL = "http://document_storage_service:8080"
 DSS_INTERNAL_AUTH_KEY = "local"
+LEXICAL_SERVICE_URL = "http://lexical-service:8096"
 # Tags exported spans with deployment.environment=local, matching the
 # Datadog agent's DD_ENV so the env:local trace/log views include them.
 ENVIRONMENT = "local"

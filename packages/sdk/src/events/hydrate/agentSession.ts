@@ -95,6 +95,17 @@ export function hydrateAgentSessionEvent(
         metadata.announcement_message_id,
       ),
     }))
+    .with({ event_type: 'agent_session.command_rejected' }, ({ metadata }) => ({
+      event_type: 'agent_session.command_rejected' as const,
+      metadata,
+      ...sessionHandles(client, metadata.identity),
+      actor: actorHandle(client, metadata.actor),
+      announcement: announcementHandle(
+        client,
+        metadata.identity,
+        metadata.announcement_message_id,
+      ),
+    }))
     .with({ event_type: 'agent_session.settled' }, ({ metadata }) => ({
       event_type: 'agent_session.settled' as const,
       metadata,
@@ -152,5 +163,8 @@ export function hydrateAgentSessionEvent(
       metadata,
       ...sessionHandles(client, metadata.identity),
     }))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('macro sdk: unknown agent session event', unknown);
+      return undefined;
+    });
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO database_view_positions (view_id, row_id, lane, position)\n        SELECT $1, row_id, lane, position\n        FROM UNNEST($2::uuid[], $3::text[], $4::text[]) AS placed(row_id, lane, position)\n        ON CONFLICT (view_id, row_id)\n        DO UPDATE SET lane = EXCLUDED.lane, position = EXCLUDED.position\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd5ee9a55f6db9e0c1c9858d6bc5b62f7aa00bda6fd9ee5e3a41fe007d6fa63a"
+}

@@ -10,7 +10,7 @@ use crate::domain::model::{
     ChangesetRange, ChangesetSource, GitRef, SessionChanges,
 };
 use crate::domain::ports::{
-    ChangesetRepo, PatchBlobKey, SessionBranchReader, SessionBranchesFuture,
+    ChangesetRepo, PatchBlobKey, PatchLocation, SessionBranchReader, SessionBranchesFuture,
 };
 
 #[cfg(test)]
@@ -162,18 +162,23 @@ impl ChangesetRepo for PgChangesetRepo {
     }
 
     #[tracing::instrument(
-        skip(self, changeset, patch_key),
+        skip(self, changeset, patch),
         err,
         fields(agent.session.id = %changeset.session, changeset.id = %changeset.id)
     )]
     async fn record_changeset(
         &self,
         changeset: &Changeset,
-        patch_key: Option<&PatchBlobKey>,
+        patch: Option<&PatchLocation>,
         finished_at: DateTime<Utc>,
     ) -> Result<Option<PatchBlobKey>, rootcause::Report> {
         let files = serde_json::to_value(&changeset.files)
             .map_err(|error| rootcause::report!("serialize changed files: {error}"))?;
+        let (patch_blob_key, pull_request_changeset_id) = match patch {
+            Some(PatchLocation::Blob(key)) => (Some(key.as_str()), None),
+            Some(PatchLocation::PullRequest(id)) => (None, Some(*id)),
+            None => (None, None),
+        };
         // The CTE reads the row as it was before this statement, which is
         // what makes "the key this capture superseded" one round trip.
         let superseded = sqlx::query_scalar!(
@@ -184,13 +189,15 @@ impl ChangesetRepo for PgChangesetRepo {
             INSERT INTO agent_session_changes (
                 agent_session_id, changeset_id, source, repository,
                 base_ref, base_sha, head_ref, head_sha,
-                files, additions, deletions, patch_blob_key, patch_bytes, truncated,
+                files, additions, deletions, patch_blob_key, pull_request_changeset_id,
+                patch_bytes, truncated,
                 captured_at, attempt_started_at, attempt_finished_at, attempt_outcome, attempt_error
             )
             VALUES (
                 $1, $2, $3, $4,
                 $5, $6, $7, $8,
-                $9, $10, $11, $12, $13, $14,
+                $9, $10, $11, $12, $17,
+                $13, $14,
                 $15, $16, $16, 'captured', NULL
             )
             ON CONFLICT (agent_session_id) DO UPDATE SET
@@ -205,6 +212,7 @@ impl ChangesetRepo for PgChangesetRepo {
                 additions = EXCLUDED.additions,
                 deletions = EXCLUDED.deletions,
                 patch_blob_key = EXCLUDED.patch_blob_key,
+                pull_request_changeset_id = EXCLUDED.pull_request_changeset_id,
                 patch_bytes = EXCLUDED.patch_bytes,
                 truncated = EXCLUDED.truncated,
                 captured_at = EXCLUDED.captured_at,
@@ -225,11 +233,12 @@ impl ChangesetRepo for PgChangesetRepo {
             files,
             i32::try_from(changeset.additions).unwrap_or(i32::MAX),
             i32::try_from(changeset.deletions).unwrap_or(i32::MAX),
-            patch_key.map(PatchBlobKey::as_str),
+            patch_blob_key,
             i64::try_from(changeset.patch_bytes).unwrap_or(i64::MAX),
             changeset.truncated,
             changeset.captured_at,
             finished_at,
+            pull_request_changeset_id,
         )
         .fetch_one(&self.pool)
         .await
@@ -291,17 +300,27 @@ impl ChangesetRepo for PgChangesetRepo {
     }
 
     #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
-    async fn patch_key(
+    async fn patch_location(
         &self,
         session: AgentSessionId,
-    ) -> Result<Option<PatchBlobKey>, rootcause::Report> {
-        let key = sqlx::query_scalar!(
-            r#"SELECT patch_blob_key FROM agent_session_changes WHERE agent_session_id = $1"#,
+    ) -> Result<Option<PatchLocation>, rootcause::Report> {
+        let row = sqlx::query!(
+            r#"
+            SELECT patch_blob_key, pull_request_changeset_id
+            FROM agent_session_changes
+            WHERE agent_session_id = $1
+            "#,
             session.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| rootcause::report!(error))?;
-        Ok(key.flatten().map(PatchBlobKey::from_stored))
+        Ok(row.and_then(
+            |row| match (row.patch_blob_key, row.pull_request_changeset_id) {
+                (Some(key), _) => Some(PatchLocation::Blob(PatchBlobKey::from_stored(key))),
+                (None, Some(id)) => Some(PatchLocation::PullRequest(id)),
+                (None, None) => None,
+            },
+        ))
     }
 }

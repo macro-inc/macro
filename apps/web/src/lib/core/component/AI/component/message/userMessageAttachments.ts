@@ -1,4 +1,5 @@
 import type { Attachment } from '@core/component/AI/types';
+import { getMentionedItemIds } from '@core/util/documentMentions';
 
 const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'channel',
@@ -6,31 +7,6 @@ const ITEM_ATTACHMENT_TYPES = new Set<Attachment['entity_type']>([
   'email_thread',
   'project',
 ]);
-
-const DOCUMENT_MENTION_PATTERN =
-  /<m-document-mention>([\s\S]*?)<\/m-document-mention>/g;
-
-function getMentionedItemIds(content: string): Set<string> {
-  const ids = new Set<string>();
-
-  for (const match of content.matchAll(DOCUMENT_MENTION_PATTERN)) {
-    try {
-      const mention = JSON.parse(match[1]);
-      if (
-        mention &&
-        typeof mention === 'object' &&
-        typeof mention.documentId === 'string' &&
-        'documentName' in mention
-      ) {
-        ids.add(mention.documentId);
-      }
-    } catch {
-      // Malformed mention markup renders as an unknown item, not a reference.
-    }
-  }
-
-  return ids;
-}
 
 export function getVisibleUserMessageAttachments(
   content: string,

@@ -22,6 +22,7 @@ use std::{future::Future, sync::Arc};
 use call::domain::ports::CallService;
 use channels::domain::ports::ChannelService;
 use chat::domain::ports::ChatService;
+use databases::domain::ports::DatabasesService;
 use documents_hex::domain::ports::DocumentService;
 use email::domain::ports::EmailService;
 use entity_access::domain::{
@@ -35,11 +36,16 @@ use entity_mutation::{
     RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
+use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use projects_hex::domain::ports::ProjectService;
+use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
+use tracing::Instrument;
 
+use project_contents::DssProjectContents;
+
+mod project_contents;
 #[cfg(test)]
 mod test;
 
@@ -155,18 +161,22 @@ where
 
 /// Unified entity mutation router wired from the domain services.
 #[derive(Clone)]
-pub struct DssEntityMutationService<D, H, C, K, E, P, A, L> {
+pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L> {
     documents: Arc<D>,
     chats: Arc<H>,
     channels: Arc<C>,
     calls: Arc<K>,
     email: Arc<E>,
     projects: Arc<P>,
+    databases: Arc<Databases>,
+    forms: Arc<Forms>,
     access: Arc<A>,
     lifecycle: Arc<L>,
 }
 
-impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L> {
+impl<D, H, C, K, E, P, Databases, Forms, A, L>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
+{
     /// Compose the unified mutation router from domain services.
     #[expect(
         clippy::too_many_arguments,
@@ -179,6 +189,8 @@ impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L> {
         calls: Arc<K>,
         email: Arc<E>,
         projects: Arc<P>,
+        databases: Arc<Databases>,
+        forms: Arc<Forms>,
         access: Arc<A>,
         lifecycle: Arc<L>,
     ) -> Self {
@@ -189,13 +201,16 @@ impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L> {
             calls,
             email,
             projects,
+            databases,
+            forms,
             access,
             lifecycle,
         }
     }
 }
 
-impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -220,7 +235,17 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
-        + DeleteEntityPermanently,
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
+    Databases:
+        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Forms: RenameEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently
+        + Send
+        + Sync
+        + 'static,
     A: EntityAccessService,
     L: EntityLifecycleService,
 {
@@ -398,6 +423,14 @@ where
                 self.rename_with(&*self.projects, actor, &requested, display_name)
                     .await
             }
+            EntityType::Database => {
+                self.rename_with(&*self.databases, actor, &requested, display_name)
+                    .await
+            }
+            EntityType::Form => {
+                self.rename_with(&*self.forms, actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::ChannelMessage
@@ -406,12 +439,15 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::DatabaseRow
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "rename");
             }
         };
@@ -454,12 +490,19 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            // A database is not filed into a project, so there is nowhere to
+            // move it to (`EntityType::is_valid_entity_access_entity`).
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form
+            | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
         };
@@ -504,12 +547,19 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            // Databases are shared by granting access directly; they carry no
+            // public/channel share policy.
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form
+            | EntityType::DatabaseRow => {
                 return unsupported(requested, "share policy updates");
             }
         };
@@ -547,6 +597,8 @@ where
             EntityType::Document => self.trash_with(&*self.documents, actor, &requested).await,
             EntityType::Chat => self.trash_with(&*self.chats, actor, &requested).await,
             EntityType::Project => self.trash_with(&*self.projects, actor, &requested).await,
+            EntityType::Database => self.trash_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.trash_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -557,12 +609,15 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::DatabaseRow
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "trash");
             }
         };
@@ -579,6 +634,8 @@ where
             EntityType::Document => self.restore_document(actor, &requested).await,
             EntityType::Chat => self.restore_with(&*self.chats, actor, &requested).await,
             EntityType::Project => self.restore_with(&*self.projects, actor, &requested).await,
+            EntityType::Database => self.restore_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.restore_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -589,12 +646,15 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::DatabaseRow
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "restore");
             }
         };
@@ -633,6 +693,8 @@ where
             EntityType::Channel => self.delete_with(&*self.channels, actor, &requested).await,
             EntityType::Call => self.delete_with(&*self.calls, actor, &requested).await,
             EntityType::Project => self.delete_with(&*self.projects, actor, &requested).await,
+            EntityType::Database => self.delete_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.delete_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::ChannelMessage
@@ -641,12 +703,15 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::DatabaseRow
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -673,6 +738,40 @@ where
         )
     }
 
+    /// Duplicate a folder with its subfolders, documents, and chats. The copy
+    /// runs on its own task, so a dropped request cannot stop it between
+    /// creating the copy and discarding a failed one.
+    async fn duplicate_project(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+        display_name: Option<String>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let duplicator = ProjectDuplicator::new(
+            Arc::clone(&self.projects),
+            DssProjectContents {
+                documents: Arc::clone(&self.documents),
+                chats: Arc::clone(&self.chats),
+                access: Arc::clone(&self.access),
+                lifecycle: Arc::clone(&self.lifecycle),
+                actor: actor.clone(),
+            },
+        );
+        let receipt = self.receipt(actor, requested).await?;
+        let requested = requested.clone();
+        let user_id = actor.user_id.clone();
+        tokio::spawn(
+            async move {
+                duplicator
+                    .duplicate_entity(requested, receipt, user_id, display_name)
+                    .await
+            }
+            .in_current_span(),
+        )
+        .await
+        .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
+    }
+
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
     async fn duplicate_one(
         &self,
@@ -692,23 +791,32 @@ where
                 self.duplicate_with(&*self.chats, actor, &requested, display_name)
                     .await
             }
+            EntityType::Project => {
+                self.duplicate_project(actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
             | EntityType::ChannelMessage
             | EntityType::EmailThread
-            | EntityType::Project
             | EntityType::Call
             | EntityType::ForeignEntity
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            // Duplicating a database is unsupported.
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form
+            | EntityType::DatabaseRow => {
                 return unsupported(requested, "duplication");
             }
         };
@@ -716,8 +824,8 @@ where
     }
 }
 
-impl<D, H, C, K, E, P, A, L> EntityMutationService
-    for DssEntityMutationService<D, H, C, K, E, P, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L> EntityMutationService
+    for DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -742,7 +850,17 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
-        + DeleteEntityPermanently,
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
+    Databases:
+        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Forms: RenameEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently
+        + Send
+        + Sync
+        + 'static,
     A: EntityAccessService,
     L: EntityLifecycleService,
 {

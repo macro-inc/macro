@@ -1,5 +1,6 @@
 pub mod copy_document;
 pub mod delete;
+pub mod document_state;
 pub mod exists;
 pub mod get_raw;
 pub mod initialize;

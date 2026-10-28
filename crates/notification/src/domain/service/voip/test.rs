@@ -53,6 +53,20 @@ impl MockRepo {
 }
 
 impl NotificationRepository for MockRepo {
+    async fn notification_is_withdrawn(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<bool, Report> {
+        unreachable!("this service does not deliver queued workflow notifications")
+    }
+
+    async fn complete_notification_publication(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<(), Report> {
+        unreachable!("this service does not publish notifications")
+    }
+
     async fn get_device_endpoints<'a>(
         &self,
         _: &[MacroUserIdStr<'a>],
@@ -75,6 +89,7 @@ impl NotificationRepository for MockRepo {
         _: &str,
         _: &str,
         _: &crate::domain::models::device::DeviceType,
+        _native_call_capable: bool,
     ) -> Result<(), Report> {
         unimplemented!()
     }
@@ -256,6 +271,7 @@ impl NotificationRepository for MockRepo {
 struct MockPush {
     calls: Arc<Mutex<Vec<String>>>,
     should_fail: bool,
+    failing_endpoints: HashSet<String>,
 }
 
 impl MockPush {
@@ -263,6 +279,7 @@ impl MockPush {
         Self {
             calls,
             should_fail: false,
+            failing_endpoints: HashSet::new(),
         }
     }
 
@@ -270,6 +287,7 @@ impl MockPush {
         Self {
             calls: Arc::new(Mutex::new(Vec::new())),
             should_fail: true,
+            failing_endpoints: HashSet::new(),
         }
     }
 }
@@ -281,7 +299,7 @@ impl MobilePushOps for MockPush {
         _: &SnsTarget<'_, T>,
         _: HashMap<String, MessageAttributeValue>,
     ) -> Result<String, Report> {
-        if self.should_fail {
+        if self.should_fail || self.failing_endpoints.contains(endpoint_arn) {
             return Err(rootcause::report!("SNS error"));
         }
         self.calls.lock().unwrap().push(endpoint_arn.to_string());
@@ -331,20 +349,22 @@ async fn dispatches_to_ios_voip_endpoint() {
 
     assert_eq!(*calls.lock().unwrap(), vec!["arn:voip-alice"]);
     assert_eq!(
-        result,
+        result.fully_delivered,
         std::collections::HashSet::from([user("alice@example.com")])
     );
 }
 
 #[tokio::test]
-async fn skips_non_voip_endpoints() {
+async fn targets_android_calls_but_skips_regular_ios_endpoints() {
     let (push, calls) = tracked_push();
     let svc = make_service(
         MockRepo::with_endpoints(HashMap::from([(
             user("bob@example.com"),
             vec![
                 DeviceEndpoint::Ios("arn:apns-bob".to_string()),
-                DeviceEndpoint::Android("arn:fcm-bob".to_string()),
+                DeviceEndpoint::AndroidNativeCall(
+                    "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".to_string(),
+                ),
             ],
         )])),
         push,
@@ -355,8 +375,22 @@ async fn skips_non_voip_endpoints() {
         .await
         .unwrap();
 
-    assert!(targets.is_empty());
-    assert!(calls.lock().unwrap().is_empty());
+    assert_eq!(targets.len(), 1);
+    assert!(matches!(
+        targets[0].endpoints.as_slice(),
+        [DeviceEndpoint::Ios(_), DeviceEndpoint::AndroidNativeCall(arn)] if arn == "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob"
+    ));
+    let delivered = svc
+        .send_voip_pushes(vec![(targets[0].clone(), payload())])
+        .await;
+    // Android delivery cannot replace the ordinary iOS alert on another device.
+    assert!(delivered.fully_delivered.is_empty());
+    assert!(delivered.delivered.ios.is_empty());
+    assert_eq!(
+        delivered.delivered.android,
+        HashSet::from([user("bob@example.com")])
+    );
+    assert_eq!(calls.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -390,5 +424,192 @@ async fn sns_failure_does_not_panic() {
         .send_voip_pushes(vec![(targets[0].clone(), payload())])
         .await;
 
-    assert!(result.is_empty());
+    assert_eq!(
+        result,
+        crate::domain::models::NativeCallPushResult::default()
+    );
+}
+
+#[tokio::test]
+async fn android_delivery_does_not_suppress_apns_when_ios_voip_fails() {
+    let (mut push, calls) = tracked_push();
+    push.failing_endpoints.insert("arn:voip-bob".to_string());
+    let svc = make_service(
+        MockRepo::with_endpoints(HashMap::from([(
+            user("bob@example.com"),
+            vec![
+                DeviceEndpoint::Ios("arn:apns-bob".to_string()),
+                DeviceEndpoint::IosVoip("arn:voip-bob".to_string()),
+                DeviceEndpoint::AndroidNativeCall(
+                    "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".to_string(),
+                ),
+            ],
+        )])),
+        push,
+    );
+
+    let targets = svc
+        .get_voip_push_targets(&[user("bob@example.com")])
+        .await
+        .unwrap();
+    let suppress_apns = svc
+        .send_voip_pushes(vec![(targets[0].clone(), payload())])
+        .await;
+
+    assert!(suppress_apns.fully_delivered.is_empty());
+    assert!(suppress_apns.delivered.ios.is_empty());
+    assert_eq!(
+        suppress_apns.delivered.android,
+        HashSet::from([user("bob@example.com")])
+    );
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec!["arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob"]
+    );
+}
+
+#[tokio::test]
+async fn successful_ios_voip_delivery_suppresses_apns_when_android_fails() {
+    let (mut push, calls) = tracked_push();
+    push.failing_endpoints
+        .insert("arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".to_string());
+    let svc = make_service(
+        MockRepo::with_endpoints(HashMap::from([(
+            user("bob@example.com"),
+            vec![
+                DeviceEndpoint::IosVoip("arn:voip-bob".to_string()),
+                DeviceEndpoint::AndroidNativeCall(
+                    "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".to_string(),
+                ),
+            ],
+        )])),
+        push,
+    );
+
+    let targets = svc
+        .get_voip_push_targets(&[user("bob@example.com")])
+        .await
+        .unwrap();
+    let suppress_apns = svc
+        .send_voip_pushes(vec![(targets[0].clone(), payload())])
+        .await;
+
+    assert!(suppress_apns.fully_delivered.is_empty());
+    assert!(suppress_apns.delivered.android.is_empty());
+    assert_eq!(
+        suppress_apns.delivered.ios,
+        HashSet::from([user("bob@example.com")])
+    );
+    assert_eq!(*calls.lock().unwrap(), vec!["arn:voip-bob"]);
+}
+
+#[tokio::test]
+async fn successful_native_delivery_on_all_registered_platforms_needs_no_fallback_row() {
+    for endpoints in [
+        vec![DeviceEndpoint::AndroidNativeCall(
+            "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".into(),
+        )],
+        vec![
+            DeviceEndpoint::Ios("arn:apns-bob".into()),
+            DeviceEndpoint::IosVoip("arn:voip-bob".into()),
+        ],
+        vec![
+            DeviceEndpoint::Ios("arn:apns-bob".into()),
+            DeviceEndpoint::IosVoip("arn:voip-bob".into()),
+            DeviceEndpoint::AndroidNativeCall(
+                "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".into(),
+            ),
+        ],
+    ] {
+        let (push, _) = tracked_push();
+        let svc = make_service(
+            MockRepo::with_endpoints(HashMap::from([(user("bob@example.com"), endpoints)])),
+            push,
+        );
+        let targets = svc
+            .get_voip_push_targets(&[user("bob@example.com")])
+            .await
+            .unwrap();
+        let result = svc
+            .send_voip_pushes(vec![(targets[0].clone(), payload())])
+            .await;
+        assert_eq!(
+            result.fully_delivered,
+            HashSet::from([user("bob@example.com")])
+        );
+    }
+}
+
+#[tokio::test]
+async fn ordinary_ios_only_users_do_not_need_native_call_tokens() {
+    let (push, calls) = tracked_push();
+    let svc = make_service(
+        MockRepo::with_endpoints(HashMap::from([(
+            user("bob@example.com"),
+            vec![DeviceEndpoint::Ios("arn:apns-bob".into())],
+        )])),
+        push,
+    );
+    assert!(
+        svc.get_voip_push_targets(&[user("bob@example.com")])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn legacy_android_devices_are_not_native_call_targets() {
+    let (push, calls) = tracked_push();
+    let svc = make_service(
+        MockRepo::with_endpoints(HashMap::from([(
+            user("bob@example.com"),
+            vec![DeviceEndpoint::Android("legacy-android".into())],
+        )])),
+        push,
+    );
+    assert!(
+        svc.get_voip_push_targets(&[user("bob@example.com")])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn native_android_success_keeps_legacy_android_fallback_on_the_same_account() {
+    let (push, calls) = tracked_push();
+    let svc = make_service(
+        MockRepo::with_endpoints(HashMap::from([(
+            user("bob@example.com"),
+            vec![
+                DeviceEndpoint::Android("legacy-android".into()),
+                DeviceEndpoint::AndroidNativeCall(
+                    "arn:aws:sns:us-east-1:123:endpoint/GCM/macro/bob".into(),
+                ),
+                DeviceEndpoint::IosVoip("arn:voip-bob".into()),
+            ],
+        )])),
+        push,
+    );
+    let targets = svc
+        .get_voip_push_targets(&[user("bob@example.com")])
+        .await
+        .unwrap();
+    let result = svc
+        .send_voip_pushes(vec![(targets[0].clone(), payload())])
+        .await;
+    assert!(result.fully_delivered.is_empty());
+    assert!(result.delivered.android.contains(&user("bob@example.com")));
+    assert!(result.delivered.ios.contains(&user("bob@example.com")));
+    assert_eq!(calls.lock().unwrap().len(), 2);
+    assert!(
+        !calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|arn| arn == "legacy-android")
+    );
 }

@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::deferral;
 use crate::pubsub::backfill::increment_counters::{
     incr_completed_messages, incr_completed_threads,
 };
@@ -7,8 +8,9 @@ use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::pubsub::DetailedError;
+use models_email::email::service::pubsub::{DetailedError, FailureReason};
 use sqs_worker::cleanup_message;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
@@ -107,6 +109,40 @@ async fn notify_job_failed(ctx: &PubSubContext, job_id: Uuid) {
     }
 }
 
+/// Sends a rate-limited operation back to the queue after a growing delay
+/// (see [`deferral`]), keeping its delivery budget for real failures. If the
+/// send fails, the message is left for redelivery after its visibility timeout.
+#[tracing::instrument(
+    skip(ctx, message, data, e),
+    fields(link_id = ?data.backfill_operation.link_id()),
+    err
+)]
+pub async fn defer_rate_limited_operation(
+    ctx: &PubSubContext,
+    message: &aws_sdk_sqs::types::Message,
+    data: &BackfillPubsubMessage,
+    e: &DetailedError,
+    retry_after: Option<Duration>,
+) -> anyhow::Result<()> {
+    let deferrals = deferral::deferrals(message);
+    let delay_seconds = deferral::delay_seconds(deferrals, retry_after);
+    if let Err(error) = ctx
+        .sqs_client
+        .defer_email_backfill_message(data, delay_seconds, deferrals + 1)
+        .await
+    {
+        tracing::warn!(error = ?error, "Failed to defer a rate-limited backfill operation; it will be redelivered");
+        return handle_retryable_error(data, e).await;
+    }
+    tracing::debug!(
+        deferrals,
+        delay_seconds,
+        "Rate-limited backfill operation deferred"
+    );
+    cleanup_message(&ctx.sqs_worker, message).await?;
+    Ok(())
+}
+
 /// Handles retryable errors by updating status to InProgress and adding the error message
 #[tracing::instrument(
     skip(data, _e),
@@ -118,6 +154,17 @@ pub async fn handle_retryable_error(
 ) -> anyhow::Result<()> {
     let error_chain = format!("{:#}", _e.source);
     tracing::Span::current().record("error", &error_chain);
+
+    // Rate limits and busy write slots are expected backpressure, redelivered
+    // after the visibility timeout; the email API client logs provider
+    // throttling at ERROR.
+    if matches!(
+        _e.reason,
+        FailureReason::GmailApiRateLimited | FailureReason::BackfillWritesBusy
+    ) {
+        tracing::debug!("Refused backfill operation will be redelivered");
+        return Ok(());
+    }
 
     match &data.backfill_operation {
         BackfillOperation::Init(_) => {

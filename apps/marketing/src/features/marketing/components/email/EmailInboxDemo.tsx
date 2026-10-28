@@ -3,6 +3,7 @@ import Signal from '@phosphor/wave-sine.svg';
 import Noise from '@phosphor/waveform.svg';
 import { Button } from '@ui';
 import { createSignal, For, lazy, Show, Suspense } from 'solid-js';
+import type { EmailTagId } from '../../core/demo-email';
 import { EmailSharingDemo } from './EmailSharingDemo';
 import { type DemoEmail, demoEmails } from './email-fixtures';
 import { EmailRows } from './frozen/EmailRows';
@@ -22,6 +23,7 @@ function Inbox(props: { signalNoise?: boolean }) {
   const [tab, setTab] = createSignal<MailTab>(
     props.signalNoise ? 'important' : 'all'
   );
+  const [tag, setTag] = createSignal<EmailTagId>();
   const [account, setAccount] = createSignal('all');
   const [search, setSearch] = createSignal('');
   const [selected, setSelected] = createSignal<DemoEmail>();
@@ -36,7 +38,9 @@ function Inbox(props: { signalNoise?: boolean }) {
       return (
         (tab() === 'all' ||
           (tab() === 'noise' && noise) ||
-          (tab() === 'important' && !noise)) &&
+          (tab() === 'important' && !noise) ||
+          (tab() === 'favorites' && email.favorite)) &&
+        (!tag() || email.tags?.includes(tag()!)) &&
         (account() === 'all' || email.account === account()) &&
         (!unreadOnly() || email.unread) &&
         `${email.sender} ${email.subject} ${email.snippet}`
@@ -47,6 +51,7 @@ function Inbox(props: { signalNoise?: boolean }) {
   const title = () =>
     mailTabs.find((item) => item.id === tab())?.label ?? 'Email';
   const onTab = (next: MailTab) => {
+    setTag(undefined);
     setTab(next);
     setSelected(undefined);
     setCompose(false);
@@ -65,6 +70,11 @@ function Inbox(props: { signalNoise?: boolean }) {
           }
           sidebar={
             <EmailSidebar
+              tag={tag()}
+              onTag={(value) => {
+                onTab('all');
+                setTag(value);
+              }}
               tab={tab()}
               account={account()}
               onTab={onTab}
@@ -103,9 +113,8 @@ function Inbox(props: { signalNoise?: boolean }) {
                       >
                         <option value="all">All inboxes</option>
                         <option value="work">jacob@macro.com</option>
-                        <option value="personal">
-                          jacob.beckerman@gmail.com
-                        </option>
+                        <option value="personal">jacob@gmail.com</option>
+                        <option value="outlook">jacob@outlook.com</option>
                       </select>
                     </label>
                     <div class="mail-mobile-tabs">
@@ -200,11 +209,6 @@ function Inbox(props: { signalNoise?: boolean }) {
               Move Product updates back to Signal
             </Show>
           </Button>
-          <span role="status">
-            {moved()
-              ? 'Product updates is now in Noise.'
-              : 'Switch between Signal and Noise in the sidebar.'}
-          </span>
         </div>
       </Show>
     </div>

@@ -7,7 +7,17 @@ import {
   type MockInstance,
   vi,
 } from 'vitest';
-import { openExternalUrl, registerExternalUrlInterceptor } from './url';
+import {
+  buildSimpleEntityUrl,
+  openExternalUrl,
+  registerExternalUrlInterceptor,
+} from './url';
+
+it('copies routine links using the canonical route', () => {
+  expect(
+    new URL(buildSimpleEntityUrl({ type: 'routine', id: 'routine-1' })).pathname
+  ).toBe('/app/routines/routine-1');
+});
 
 describe('openExternalUrl', () => {
   let openSpy: MockInstance<typeof window.open>;

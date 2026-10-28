@@ -24,6 +24,7 @@ pub(super) struct BillingEvent {
     pub id: String,
     pub at: DateTime<Utc>,
     pub object: Value,
+    pub previous: Value,
 }
 
 impl BillingEvent {
@@ -36,8 +37,64 @@ impl BillingEvent {
                 .to_owned(),
             at: timestamp(&event["created"]).context("invalid verified event time")?,
             object: event["data"]["object"].clone(),
+            previous: event["data"]["previous_attributes"].clone(),
         })
     }
+}
+
+/// Translate a personal item's previous/current provider prices into domain facts.
+/// Matching item ids avoids treating unrelated item edits as a seat upgrade.
+pub(super) fn personal_plan_change(
+    event: &BillingEvent,
+    prices: &crate::api::user::stripe::StripePrices,
+    initial: bool,
+) -> Option<ai_billing::domain::plan_change::PlanChange> {
+    let subscription = &event.object;
+    if subscription["metadata"].get("team_id").is_some()
+        || !matches!(subscription["status"].as_str(), Some("active" | "trialing"))
+    {
+        return None;
+    }
+    let previous = event.previous["items"]["data"].as_array();
+    let items = subscription["items"]["data"].as_array()?;
+    items.iter().find_map(|item| {
+        let item_id = object_id(&item["id"])?;
+        let from = if initial {
+            ai_billing::PlanTier::Free
+        } else {
+            let old = previous?
+                .iter()
+                .find(|old| object_id(&old["id"]) == Some(item_id))?;
+            prices.plan_for_price(object_id(&old["price"])?)?.into()
+        };
+        let to = prices.plan_for_price(object_id(&item["price"])?)?.into();
+        let period = period(subscription, item)?;
+        let previous_period = previous
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|old| object_id(&old["id"]) == Some(item_id))
+            })
+            .and_then(|old| timestamp(&old["current_period_start"]))
+            .or_else(|| timestamp(&event.previous["current_period_start"]));
+        let renewed = previous_period.is_some_and(|start| start < period.start);
+        let at = if renewed && !ai_billing::domain::plan_change::PlanChange::is_upgrade(from, to) {
+            period.start
+        } else {
+            event.previous["metadata"]
+                .get("macro_plan_change_at")
+                .and_then(|_| subscription["metadata"]["macro_plan_change_at"].as_str())
+                .and_then(|stamp| DateTime::parse_from_rfc3339(stamp).ok())
+                .map(|stamp| stamp.with_timezone(&Utc))
+                .unwrap_or(event.at)
+        };
+        Some(ai_billing::domain::plan_change::PlanChange {
+            from,
+            to,
+            at,
+            period,
+        })
+    })
 }
 
 fn timestamp(value: &Value) -> Option<DateTime<Utc>> {

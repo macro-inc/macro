@@ -8,11 +8,14 @@ import { CognitionPresignedEndpoint } from './endpoints/cognition-presigned';
 import { CognitionTextEndpoint } from './endpoints/cognition-text';
 import { CognitionV2Endpoint } from './endpoints/cognition-v2';
 import { CommentMarkEndpoint } from './endpoints/comment-mark';
+import { CommentOnlyChangeEndpoint } from './endpoints/comment-only-change';
 import { ExtractReplyEndpoint } from './endpoints/extract-reply';
 import { HtmlEndpoint } from './endpoints/html';
+import { ImageMarkdownEndpoint } from './endpoints/image-markdown';
 import { MarkdownEndpoint } from './endpoints/markdown';
 import { MarkdownSnapshotEndpoint } from './endpoints/markdown-snapshot';
 import { MentionsEndpoint } from './endpoints/mentions';
+import { NotionSnapshotEndpoint } from './endpoints/notion-snapshot';
 import { PlaintextEndpoint } from './endpoints/plaintext';
 import { SearchTextEndpoint } from './endpoints/search-text';
 import { XmlEndpoint } from './endpoints/xml';
@@ -21,7 +24,6 @@ type Bindings = {
   INTERNAL_AUTH_KEY: string;
   SYNC_SERVICE_AUTH_KEY: string;
   SYNC_SERVICE_URL: string;
-  SYNC_SERVICE: Fetcher;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -45,11 +47,13 @@ app.use('/search/*', internalAuth);
 app.use('/xml/*', internalAuth);
 app.use('/markdown/*', internalAuth);
 app.use('/comment-mark/*', internalAuth);
+app.use('/comment-only-change', internalAuth);
 app.use('/snapshot/*', internalAuth);
 app.use('/mentions', internalAuth);
 app.use('/extract-reply', internalAuth);
 app.use('/agent-announcement', internalAuth);
 app.use('/agent-context', internalAuth);
+app.use('/image-markdown', internalAuth);
 app.use('/internal/health', internalAuth);
 
 const openapi = fromHono(app, {
@@ -71,13 +75,16 @@ openapi.get('/cognitionv2/:docId', CognitionV2Endpoint);
 openapi.get('/search/:docId', SearchTextEndpoint);
 openapi.get('/markdown/:docId', MarkdownEndpoint);
 openapi.get('/comment-mark/:docId/:markId', CommentMarkEndpoint);
+openapi.post('/comment-only-change', CommentOnlyChangeEndpoint);
 openapi.get('/xml/:docId', XmlEndpoint);
 openapi.post('/snapshot/markdown', MarkdownSnapshotEndpoint);
+openapi.post('/snapshot/notion', NotionSnapshotEndpoint);
 openapi.post('/html', HtmlEndpoint);
 openapi.post('/mentions', MentionsEndpoint);
 openapi.post('/extract-reply', ExtractReplyEndpoint);
 openapi.post('/agent-announcement', AgentAnnouncementEndpoint);
 openapi.post('/agent-context', AgentContextEndpoint);
+openapi.post('/image-markdown', ImageMarkdownEndpoint);
 openapi.get('/internal/health', (c) => c.json({ status: 'healthy' }));
 
 export default app;

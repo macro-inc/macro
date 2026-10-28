@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO scheduling_host_claim (booking_id, user_id, occupied) VALUES ($1,$2,tstzmultirange(tstzrange($3,$4,'[)')))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b3fe0fa438a269e5bd2292ee3738ed9de35d2b98ab2474f04fdfb9f6339bfcb"
+}

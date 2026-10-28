@@ -9,6 +9,7 @@ mod durable_object;
 mod error;
 mod generated;
 pub mod keepalive;
+mod lexical_service;
 mod metrics;
 mod mutex;
 mod secrets;

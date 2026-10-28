@@ -81,7 +81,7 @@ vi.mock('@service-cognition/client', () => ({
 
 const request: ChatSendInput = {
   content: 'Summarize **these documents**\nInclude the key decisions.',
-  model: Model.sonnet5,
+  model: Model.sonnet55,
   attachments: [
     { entity_id: 'document-1', entity_type: 'document' },
     { entity_id: 'project-1', entity_type: 'project' },
@@ -91,6 +91,7 @@ const request: ChatSendInput = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.sendStreamChatMessage.mockResolvedValue(ok({}));
   mocks.agentsEnabled = false;
   // ChatInput clears the editor and attachments before invoking onSend.
   mocks.draft = '';
@@ -206,4 +207,15 @@ describe('Home Agent V3 mounting', () => {
     expect(mocks.onSend).toBeDefined();
     expect(document.querySelector('[data-testid="agent-composer"]')).toBeNull();
   });
+});
+
+it('restores a rejected background draft with its attachments', async () => {
+  mocks.createChat.mockResolvedValue(ok({ id: 'new-chat' }));
+  mocks.sendStreamChatMessage.mockResolvedValue(
+    err([{ code: 'HTTP_ERROR', message: 'Speed unavailable' }])
+  );
+  await mocks.onSend?.({ ...request, metaKey: true, speed: 'fast' });
+  expect(mocks.draft).toBe(request.content);
+  expect(mocks.attached).toEqual(request.attachments);
+  expect(mocks.invalidateSoup).not.toHaveBeenCalled();
 });

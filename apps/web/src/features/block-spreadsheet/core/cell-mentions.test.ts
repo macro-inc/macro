@@ -31,6 +31,30 @@ const person = encodeCellMention({
   displayName: 'Taylor',
 });
 describe('spreadsheet mention source', () => {
+  it.each(['routine', 'automation'])(
+    'renders a %s mention as a label and preserves its stored payload',
+    (blockName) => {
+      const value = encodeCellMention({
+        type: 'document',
+        documentId: 'routine-1',
+        documentName: 'Review tasks',
+        blockName,
+      });
+      expect(cellPlainText(value)).toBe('Review tasks');
+      expect(cellTextParts(value)).toEqual([
+        {
+          text: value,
+          mention: {
+            type: 'document',
+            documentId: 'routine-1',
+            documentName: 'Review tasks',
+            blockName,
+          },
+        },
+      ]);
+    }
+  );
+
   it('reuses docs tags with mixed text while treating all other Markdown literally', () => {
     expect(cellPlainText(`**Owner:** ${person} _review_`)).toBe(
       '**Owner:** @Taylor _review_'
@@ -154,8 +178,16 @@ describe('spreadsheet mention source', () => {
         A7: { value: '=A1-DATE(2026,9,20)' },
       });
       // The pill's time of day is dropped so date arithmetic stays whole days.
-      expect(values.A1).toEqual({ display: '9/28/2026', number: 46293 });
-      expect(values.A2).toEqual({ display: '10/5/2026', number: 46300 });
+      expect(values.A1).toEqual({
+        display: '9/28/2026',
+        number: 46293,
+        date: true,
+      });
+      expect(values.A2).toEqual({
+        display: '10/5/2026',
+        number: 46300,
+        date: true,
+      });
       expect(values.A3).toEqual({ display: 'Due Tomorrow' });
       expect(values.A4).toEqual({ display: 'Due Tomorrow' });
       expect(values.A5).toEqual({ display: '46,293.00', number: 46293 });

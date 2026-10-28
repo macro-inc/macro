@@ -1,7 +1,8 @@
 import { envsafe, str } from 'envsafe';
+import type { CanvasBrowserConfig } from './canvas/render';
 import type { D1Database } from './traces-db';
 
-export type Bindings = {
+export type Bindings = CanvasBrowserConfig & {
   /** Tags exported spans with deployment.environment (matches DD_ENV). */
   ENVIRONMENT: string | undefined;
   /** OTLP/HTTP traces endpoint; unset disables trace export. */

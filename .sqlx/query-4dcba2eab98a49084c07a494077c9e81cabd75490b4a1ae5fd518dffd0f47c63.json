@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT part_index AS \"part_index!\", record_count AS \"record_count!\" FROM slack_import_upload\n           WHERE job_id = $1 AND slack_channel_id = $2 AND part_index >= $3 AND part_index <= $4\n           ORDER BY part_index",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_index!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "record_count!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "4dcba2eab98a49084c07a494077c9e81cabd75490b4a1ae5fd518dffd0f47c63"
+}

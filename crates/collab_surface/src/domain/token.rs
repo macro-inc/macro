@@ -14,6 +14,7 @@ use entity_access::domain::models::EntityPermission;
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentPermissionsToken;
+use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use crate::domain::models::CollabSurfaceError;
@@ -21,14 +22,43 @@ use crate::domain::models::CollabSurfaceError;
 /// The sync-service access level implied by a parent-entity permission.
 ///
 /// Channel members collaborate as editors; a view-only channel presence gets a
-/// read-only session. Team roles have no surface semantics yet and fail
-/// closed.
+/// read-only session. Surfaces have no comment layer, and sync-service lets a
+/// Comment grant write to a document-namespace session, so comment access on
+/// the parent is read-only here. Team roles have no surface semantics yet and
+/// fail closed.
 pub fn access_level_for(permission: &EntityPermission) -> Result<AccessLevel, CollabSurfaceError> {
     match permission {
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        } => Ok(AccessLevel::View),
         EntityPermission::AccessLevel { access_level } => Ok(*access_level),
         EntityPermission::ChannelRole { .. } => Ok(AccessLevel::Edit),
         EntityPermission::ChannelViewOnly => Ok(AccessLevel::View),
         EntityPermission::TeamRole { .. } => Err(CollabSurfaceError::AccessDenied),
+    }
+}
+
+/// The least access level a parent type mints any session at. A form's
+/// surface is its unpublished draft, so a respondent's View on the form must
+/// not read it.
+fn minimum_access_level(parent: EntityType) -> Option<AccessLevel> {
+    match parent {
+        EntityType::Form => Some(AccessLevel::Edit),
+        _ => None,
+    }
+}
+
+/// The sync-service access level a parent-entity permission mints for a
+/// surface under `parent`: [`access_level_for`], refused below the parent
+/// type's minimum.
+pub fn surface_access_level(
+    parent: EntityType,
+    permission: &EntityPermission,
+) -> Result<AccessLevel, CollabSurfaceError> {
+    let level = access_level_for(permission)?;
+    match minimum_access_level(parent) {
+        Some(minimum) if level < minimum => Err(CollabSurfaceError::AccessDenied),
+        _ => Ok(level),
     }
 }
 
@@ -50,6 +80,36 @@ pub fn encode_surface_token(
             document_id: surface_id,
             access_level,
             exp: now + TOKEN_TTL_SECS,
+            iss: ISSUER.to_string(),
+        },
+        jwt_secret,
+    )
+    .map_err(|e| CollabSurfaceError::Internal(rootcause::Report::new(e).into_dynamic()))
+}
+
+/// Lifetime of a service token: long enough for one sync-service request.
+const SERVICE_TOKEN_TTL_SECS: usize = 60;
+
+/// Sign a short-lived sync-service grant for `surface_id` on behalf of the
+/// service itself: no `user_id`, so it impersonates no one and sync-service
+/// attributes no edits to a user. Only for a request the domain makes
+/// server-side; never hand it to a caller.
+pub fn encode_service_surface_token(
+    surface_id: String,
+    access_level: AccessLevel,
+    jwt_secret: &str,
+) -> Result<DocumentPermissionToken, CollabSurfaceError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_secs() as usize;
+
+    macro_sync_service_jwt::encode(
+        &DocumentPermissionsToken {
+            user_id: None,
+            document_id: surface_id,
+            access_level,
+            exp: now + SERVICE_TOKEN_TTL_SECS,
             iss: ISSUER.to_string(),
         },
         jwt_secret,

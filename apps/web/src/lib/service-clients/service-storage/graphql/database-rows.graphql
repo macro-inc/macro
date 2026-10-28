@@ -1,0 +1,35 @@
+# A database table's rows as the browser SQL engine reads them: each cell's
+# value by property definition, plus the row fields the local filter index
+# projects (owner, table, timestamps, notification state). The catalog
+# already holds every column's name and type, so properties carry no
+# definition metadata.
+query DatabaseRows($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...DatabaseRowFields
+			}
+			nextCursor
+		}
+	}
+}
+
+fragment DatabaseRowFields on GraphqlSoupEntity {
+	__typename
+	cacheProjection @cacheOnly
+	id
+	notifications { ...SoupNotificationStateFields }
+	... on GraphqlSoupDatabaseRow {
+		tableId
+		position
+		ownerId
+		createdAt
+		updatedAt
+		properties {
+			id
+			propertyDefinitionId
+			value { ...SoupPropertyValueFields }
+		}
+	}
+}

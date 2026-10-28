@@ -1,17 +1,22 @@
 import type {
+  Bucket,
   QuickAccessItem,
   QuickAccessList,
+  QuickAccessListOptions,
 } from '@core/context/quickAccess/types';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useEntitySearch } from './queries/entity-search';
 import type { CategoryFilter } from './types';
 import { useCommandItems } from './useCommandItems';
 
 const mocks = vi.hoisted(() => ({
   list: undefined as QuickAccessList | undefined,
+  requestedBuckets: [] as Bucket[],
   entityMode: (): boolean => false,
   scope: (): CommandWithInfo[] => [],
+  goTo: [] as CommandWithInfo[],
 }));
 // These tests exercise entity loading independently of Projects and its providers.
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -33,7 +38,9 @@ vi.mock('@app/constants/hotkeys', () => ({
 vi.mock('@core/context/quickAccess', () => ({
   exclude: () => ['note', 'channel'],
   useQuickAccess: () => ({
-    useList: () => {
+    useList: (options: Bucket | QuickAccessListOptions) => {
+      if (typeof options === 'string') return { items: () => [] };
+      mocks.requestedBuckets = [...options.buckets];
       if (!mocks.list) throw new Error('Missing test list');
       return mocks.list;
     },
@@ -44,7 +51,7 @@ vi.mock('@core/context/quickAccess', () => ({
 vi.mock('@core/hotkey/getCommands', () => ({
   getActiveCommandsFromScope: (scope: string) =>
     scope === 'go-to'
-      ? []
+      ? mocks.goTo
       : [
           {
             scopeId: 'global',
@@ -70,6 +77,7 @@ vi.mock('./state', () => ({
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
+  mocks.goTo = [];
 });
 function setup() {
   return createRoot((cleanup) => {
@@ -87,6 +95,7 @@ function setup() {
       totalCount: () => items().length,
       hasMore: () => false,
       isLoadingMore: () => false,
+      error: () => undefined,
       loadMore: async () => {},
     };
     const result = useCommandItems(() => '', category, {
@@ -163,5 +172,106 @@ describe('command menu entity loading', () => {
       },
     ]);
     expect(result.isLoadingEntities()).toBe(false);
+  });
+});
+
+describe('command menu database categories', () => {
+  it('keeps databases discoverable in All and Documents without view history', () => {
+    const { result, setItems, setLoading, setCategory } = setup();
+    const database: QuickAccessItem = {
+      id: 'book-organizer',
+      kind: 'entity',
+      bucket: 'database',
+      searchText: 'Book Organizer',
+      sortTimestamp: 1,
+      timestamps: { createdAt: '2026-09-01T00:00:00Z' },
+      data: {
+        type: 'database',
+        id: 'book-organizer',
+        name: 'Book Organizer',
+        ownerId: 'owner',
+        grant: 'owner',
+        createdAt: '2026-09-01T00:00:00Z',
+      },
+    };
+    setItems([database]);
+    setLoading(false);
+    for (const category of ['all', 'documents'] as const) {
+      setCategory(category);
+      expect(result.items()).toContain(database);
+      expect(mocks.requestedBuckets).toContain('database');
+    }
+  });
+});
+
+it('keeps desktop All email-free while mobile composes emails without desktop command state', () => {
+  const { result, setEntityMode, setItems } = setup();
+  result.items();
+  expect(mocks.requestedBuckets).not.toContain('email');
+  setEntityMode(true);
+  const email: QuickAccessItem = {
+    id: 'thread',
+    kind: 'entity',
+    bucket: 'email',
+    searchText: 'Weekly update Teo',
+    sortTimestamp: 1,
+    timestamps: {},
+    data: {
+      type: 'email',
+      id: 'thread',
+      name: 'Weekly update',
+      ownerId: 'owner',
+      isRead: true,
+      isDraft: false,
+      isImportant: false,
+      done: false,
+    },
+  };
+  setItems([email]);
+  createRoot((cleanup) => {
+    const mobile = useEntitySearch(
+      () => 'teo',
+      () => 'email',
+      { enabled: () => true }
+    );
+    expect(mocks.requestedBuckets).toEqual(['email']);
+    expect(mobile.rankItems(mobile.items(), 'teo')).toEqual([email]);
+    cleanup();
+  });
+});
+
+describe('command menu go-to sequences', () => {
+  it('shows a letter on the command it runs when a focused view claims it', () => {
+    const goTo = (
+      description: string,
+      handlerPriority?: CommandWithInfo['handlerPriority']
+    ) => ({
+      scopeId: 'go-to',
+      description,
+      hotkeys: ['t' as const],
+      handlerPriority,
+      runWithInputFocused: false,
+      scopeLevel: 0,
+      hotkeyIsShadowed: false,
+    });
+    mocks.goTo = [goTo('Go to Tasks'), goTo('Go to Sent', 3)];
+    const { result } = setup();
+
+    const item = (description: string) => {
+      const found = result
+        .items()
+        .find(
+          (item) =>
+            item.kind === 'command' && item.data.description === description
+        );
+      return found?.kind === 'command' ? found : undefined;
+    };
+    expect(item('Go to Sent')?.displayHotkeySequence).toEqual([
+      { shortcut: 'g' },
+      { shortcut: 't' },
+    ]);
+    expect(item('Go to Sent')?.hideHotkey).toBe(false);
+    expect(item('Go to Tasks')?.displayHotkeySequence).toBeUndefined();
+    expect(item('Go to Tasks')?.hideHotkey).toBe(true);
   });
 });

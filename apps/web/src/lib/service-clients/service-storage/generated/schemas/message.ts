@@ -10,6 +10,7 @@ import type { MessageAttachment } from './messageAttachment';
 import type { MessageBotProfile } from './messageBotProfile';
 import type { MessageDeletedAt } from './messageDeletedAt';
 import type { MessageEditedAt } from './messageEditedAt';
+import type { MessageGuestName } from './messageGuestName';
 import type { MessageImportedAuthor } from './messageImportedAuthor';
 import type { MessageParent } from './messageParent';
 import type { MessageThreadId } from './messageThreadId';
@@ -31,6 +32,8 @@ export interface Message {
   deleted_at?: MessageDeletedAt;
   /** Last content edit, if any. */
   edited_at?: MessageEditedAt;
+  /** Display name of a verified call guest, retained after the call ends. */
+  guest_name?: MessageGuestName;
   /** Message UUID. */
   id: string;
   imported_author?: MessageImportedAuthor;

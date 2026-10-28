@@ -1,8 +1,12 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { refreshSharedAccess } from '@queries/access-requests/requests';
+import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
 import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
+import { refreshEmailFollowup } from '@queries/reminders/email-refresh';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
@@ -10,6 +14,7 @@ import {
 import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
+import { shareEntity } from '../access-requests/core/types';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
@@ -17,9 +22,15 @@ function refreshSoupEntity(
   notification: UnifiedNotification,
   entityType: Parameters<typeof refetchSoupEntity>[1]
 ) {
-  void refetchSoupEntity(notification.entity_id, entityType);
+  fireAndForget(
+    refetchSoupEntity(notification.entity_id, entityType),
+    'notifications'
+  );
   invalidateSoupEntity(notification.entity_id);
-  void invalidateEntityNotifications(notification.entity_id);
+  fireAndForget(
+    invalidateEntityNotifications(notification.entity_id),
+    'notifications'
+  );
 }
 
 function refreshChannel(
@@ -30,17 +41,28 @@ function refreshChannel(
 
   if (!threadId) return;
 
-  void refetchSoupEntity(threadId, 'channelThread');
+  fireAndForget(refetchSoupEntity(threadId, 'channelThread'), 'notifications');
   invalidateSoupEntity(threadId);
-  void invalidateEntityNotifications(threadId);
+  fireAndForget(invalidateEntityNotifications(threadId), 'notifications');
 }
 
 function refreshEmailThread(notification: UnifiedNotification) {
-  void refetchSoupEntity(notification.entity_id, 'emailThread');
+  fireAndForget(
+    refetchSoupEntity(notification.entity_id, 'emailThread'),
+    'notifications'
+  );
   invalidateSoupEntity(notification.entity_id);
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
   });
+}
+
+async function refreshDeliveredEmailReminder(threadId: string) {
+  try {
+    await refreshEmailFollowup(threadId);
+  } catch (error) {
+    console.warn('Failed to refresh delivered email reminder', error);
+  }
 }
 
 /**
@@ -51,6 +73,16 @@ function refreshEmailThread(notification: UnifiedNotification) {
  */
 export function handleNotificationUpdate(notification: UnifiedNotification) {
   match(notification.notification_metadata)
+    .with(
+      { tag: P.union('entity_access_requested', 'entity_access_granted') },
+      () => {
+        const entity = shareEntity(
+          notification.entity_type,
+          notification.entity_id
+        );
+        if (entity) refreshSharedAccess(entity);
+      }
+    )
     .with(
       { tag: 'channel_mention' },
       { tag: 'channel_message_reaction' },
@@ -77,12 +109,21 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         messageKeys.messagesByIds,
         messageKeys.threadReplies,
       ]) {
-        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+        queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
       }
-      void invalidateEntityNotifications(notification.entity_id);
+      fireAndForget(
+        invalidateEntityNotifications(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');
+    })
+    // An open event's details list the new request.
+    .with({ tag: 'calendar_event_join_request' }, ({ content }) => {
+      queryClient.invalidateQueries({
+        queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
+      });
     })
     .with({ tag: 'crm_discussion' }, () => {
       const parent = {
@@ -94,9 +135,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         messageKeys.messagesByIds,
         messageKeys.threadReplies,
       ]) {
-        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+        queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
       }
-      void invalidateEntityNotifications(notification.entity_id);
+      fireAndForget(
+        invalidateEntityNotifications(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'channel_invite' }, () => {
       refreshChannel(notification);
@@ -110,14 +154,23 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'call_started' }, () => {
       refreshChannel(notification);
     })
+    // DSS's `external_chat_changed` push already refreshes what an open page shows.
+    .with({ tag: 'external_chat_message' }, () => {})
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);
+    })
+    .with({ tag: 'reminder' }, () => {
+      if (notification.entity_type !== 'email_thread') return;
+      fireAndForget(
+        refreshDeliveredEmailReminder(notification.entity_id),
+        'notifications'
+      );
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
     })
     .with({ tag: 'invite_to_team' }, () => {
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: teamKeys.userInvites.queryKey,
       });
     })

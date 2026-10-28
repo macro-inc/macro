@@ -27,7 +27,16 @@ export interface PageSeo {
 }
 
 export const SITE_NAME = 'Macro';
-export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og-image.jpg`;
+export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og/home-unified-2026-10-27.png`;
+
+// Homepage only: other product and article cards retain their own images.
+const HOMEPAGE_VIDEO_TAGS = [
+  ['og:video', `${APP_BASE_URL}/og/home-unified-2026-10-27.mp4`],
+  ['og:video:secure_url', `${APP_BASE_URL}/og/home-unified-2026-10-27.mp4`],
+  ['og:video:type', 'video/mp4'],
+  ['og:video:width', '1200'],
+  ['og:video:height', '630'],
+] as const;
 
 export function canonicalUrl(path: string): string {
   return path === '/' ? `${APP_BASE_URL}/` : `${APP_BASE_URL}${path}`;
@@ -73,6 +82,12 @@ export function buildSeoTagsHtml(seo: PageSeo): string[] {
     `<meta data-seo property="og:type" content="${type}">`,
     `<meta data-seo property="og:image" content="${escapeAttr(seo.image ?? DEFAULT_OG_IMAGE)}">`,
   ];
+  if (seo.path === '/') {
+    for (const [property, content] of HOMEPAGE_VIDEO_TAGS)
+      tags.push(
+        `<meta data-seo property="${property}" content="${escapeAttr(content)}">`
+      );
+  }
   if (type === 'article' && seo.publishedTime) {
     tags.push(
       `<meta data-seo property="article:published_time" content="${escapeAttr(seo.publishedTime)}">`
@@ -85,6 +100,7 @@ export function buildSeoTagsHtml(seo: PageSeo): string[] {
   }
   tags.push(
     '<meta data-seo name="twitter:card" content="summary_large_image">',
+    `<meta data-seo name="twitter:image" content="${escapeAttr(seo.image ?? DEFAULT_OG_IMAGE)}">`,
     '<meta data-seo name="twitter:site" content="@macrodotcom">'
   );
   if (seo.noindex) {
@@ -155,6 +171,10 @@ export function setPageSeo(seo: PageSeo): void {
   upsertMeta('property', 'og:url', url);
   upsertMeta('property', 'og:type', type);
   upsertMeta('property', 'og:image', seo.image ?? DEFAULT_OG_IMAGE);
+  for (const [property, content] of HOMEPAGE_VIDEO_TAGS) {
+    if (seo.path === '/') upsertMeta('property', property, content);
+    else removeMeta('property', property);
+  }
 
   if (type === 'article' && seo.publishedTime) {
     upsertMeta('property', 'article:published_time', seo.publishedTime);
@@ -169,6 +189,7 @@ export function setPageSeo(seo: PageSeo): void {
   }
 
   upsertMeta('name', 'twitter:card', 'summary_large_image');
+  upsertMeta('name', 'twitter:image', seo.image ?? DEFAULT_OG_IMAGE);
   upsertMeta('name', 'twitter:site', '@macrodotcom');
 
   if (seo.noindex) {

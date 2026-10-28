@@ -1,5 +1,5 @@
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import { isDocumentEntity, isSkillEntity } from '@entity';
+import { isDocumentEntity, isSkillEntity } from '@entity/types/entity';
 import {
   config,
   IMAGE_EXTENSIONS,

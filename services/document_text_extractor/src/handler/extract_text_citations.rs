@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     model::key::DocumentKey,
-    service::{self},
+    service::{self, db::DocumentTextOutcome},
 };
 
 use anyhow::{Context, Result};
@@ -203,6 +203,13 @@ pub async fn extract_text_from_document(
             tracing::warn!("ran into encrypted pdf, skipping");
             return Ok(None);
         }
+        // corrupt or unsupported pdfs fail the same way on every retry
+        Err(PdfiumError::PdfiumLibraryInternalError(
+            error @ (PdfiumInternalError::FormatError | PdfiumInternalError::SecurityError),
+        )) => {
+            tracing::warn!(error=?error, "pdfium cannot open pdf, skipping");
+            return Ok(None);
+        }
         Err(e) => {
             tracing::error!(error=?e, "pdfium failed to load pdf from bytes");
             return Err(Error::from(e));
@@ -217,9 +224,17 @@ pub async fn extract_text_from_document(
             Error::from(e)
         })?;
 
-    db.create_document_text(document_id, &extracted_text, token_count)
+    match db
+        .create_document_text(document_id, &extracted_text, token_count)
         .await
-        .context("unable to store extracted text in db")?;
+        .context("unable to store extracted text in db")?
+    {
+        DocumentTextOutcome::Stored => {}
+        DocumentTextOutcome::DocumentMissing => {
+            tracing::warn!(document_id=%document_id, "document no longer exists, skipping");
+            return Ok(None);
+        }
+    }
 
     db.insert_references(&references, document_id)
         .await

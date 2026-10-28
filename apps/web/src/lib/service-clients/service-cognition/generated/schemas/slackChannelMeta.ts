@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SlackChannelMetaChannelId } from './slackChannelMetaChannelId';
+import type { SlackChannelMetaMemberCount } from './slackChannelMetaMemberCount';
 import type { SlackChannelMetaPurpose } from './slackChannelMetaPurpose';
 import type { SlackParticipant } from './slackParticipant';
 
@@ -12,11 +13,20 @@ import type { SlackParticipant } from './slackParticipant';
  * Metadata for one staged Slack channel.
  */
 export interface SlackChannelMeta {
+  /** Whether Slack has archived this channel. */
+  archived?: boolean;
   /** Slack's channel id (e.g. `C0123456789`), stable across renames. */
   channel_id?: SlackChannelMetaChannelId;
+  /**
+   * Total human members in the Slack channel.
+   * @minimum 0
+   */
+  member_count?: SlackChannelMetaMemberCount;
+  /** Whether `participants` reflects a live membership read. */
+  members_resolved?: boolean;
   /** Channel name without the leading `#`. */
   name: string;
-  /** The channel's most relevant members, when discoverable. */
+  /** Slack members matched to the Macro team roster when discovery resolved membership. */
   participants?: SlackParticipant[];
   /** The channel's purpose/topic, when set. */
   purpose?: SlackChannelMetaPurpose;

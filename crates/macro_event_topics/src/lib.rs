@@ -53,6 +53,8 @@ topics! {
     MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
+    /// Committed GitHub pull request updates.
+    MacroGithubPullRequestsTopic => "macro.github_pull_requests",
     /// User-scoped full Soup items produced from entity updates.
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
@@ -85,4 +87,13 @@ topics! {
     MacroCalendarTopic => "macro.calendar",
     /// Agent session lifecycle facts: opened, turns, waiting for input, settled, stopped, renamed, deleted.
     MacroAgentSessionLifecycleTopic => "macro.agent_session_lifecycle",
+    /// Retired: runs of appended agent session log frames now travel over a
+    /// Redis Stream (`agent_session_realtime::outbound::redis_stream`). Kept
+    /// declared until every harness task publishing here has been replaced;
+    /// remove it, and its cluster topic, after that rollout.
+    MacroAgentSessionLogTopic => "macro.agent_session_log",
+    /// Database lifecycle (created, renamed, trashed, restored, purged) and table-change events.
+    MacroDatabasesTopic => "macro.databases",
+    /// Form lifecycle (created, renamed, trashed, restored, purged), sharing and response events.
+    MacroFormsTopic => "macro.forms",
 }

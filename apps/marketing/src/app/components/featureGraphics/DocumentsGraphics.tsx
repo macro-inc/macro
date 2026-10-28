@@ -77,7 +77,7 @@ function _ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': mobile() ? '15px' : props.large ? '18px' : '16px',
+        'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
         'font-weight': '700',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '42px' : '36px',
@@ -201,7 +201,7 @@ export function GithubStarButton() {
                 'align-items': 'center',
                 color: 'var(--c1)',
                 display: 'inline-flex',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': mobile() ? '15px' : '16px',
                 'font-weight': '700',
                 gap: '5px',
@@ -846,7 +846,7 @@ export function HeroDocWindow() {
               'white-space': 'nowrap',
             }}
           >
-            Q3 launch plan
+            Website launch plan
           </span>
           <span
             style={{
@@ -935,7 +935,7 @@ export function HeroDocWindow() {
                 margin: '0',
               }}
             >
-              Q3 launch plan
+              Website launch plan
             </h3>
             <div
               style={{
@@ -3617,12 +3617,13 @@ export function DocsAgentTeammateGraphic(
         }
       `}</style>
       <DocCropBand
-        label="Q3 launch plan: agents correct the launch date to Thursday and check it against Dana’s email"
+        label="Website launch plan: agents correct the launch date to Thursday and check it against Valentina’s email"
         peak={46}
       >
         <p style={cropLine(true)}>
-          Q3 launch plan. Gabriel owns the checklist, Teo is checking the invite
-          flow, and Dana is waiting for the final plan before the team call.
+          Website launch plan. Gabriel owns the checklist, Teo is checking the
+          invite flow, and Valentina is waiting for the final plan before the
+          team call.
         </p>
         <p style={cropLine()}>
           The team will run through onboarding before we share the plan. Every
@@ -3635,7 +3636,10 @@ export function DocsAgentTeammateGraphic(
               {cropShort('Thursday, 9:00 AM', 'Thursday')}
             </AgentSelection>
           </CropFocus>
-          {cropShort(', matching the email sent to Dana', ', per Dana’s email')}
+          {cropShort(
+            ', matching the email sent to Valentina',
+            ', per Valentina’s email'
+          )}
           <Show when={!props.launchReview}>
             <CropFocus>
               <AgentCaretMark name="Reviewer" color={COLLAB_B} />
@@ -3661,8 +3665,9 @@ export function DocsAgentTeammateGraphic(
           . Invited teammates should land in onboarding with their team intact.
         </p>
         <p style={cropLine(true)}>
-          Share the updated plan in the launch channel. Send Dana the link once
-          the invite check is complete, keeping the original email attached.
+          Share the updated plan in the launch channel. Send Valentina the link
+          once the invite check is complete, keeping the original email
+          attached.
         </p>
       </DocCropBand>
     </>
@@ -4556,7 +4561,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.02em',
@@ -4583,7 +4588,7 @@ function _ComparisonTable() {
       : 'transparent',
     color: macro ? 'var(--a0)' : 'var(--c2)',
     display: 'flex',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
     'font-weight': '700',
     'justify-content': 'center',
@@ -4844,7 +4849,7 @@ function _FaqSection() {
           style={{
             'font-family': 'display',
             'font-size': mobile() ? '34px' : '42px',
-            'font-weight': '420',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.018em',
             'line-height': 1.1,
             margin: 0,

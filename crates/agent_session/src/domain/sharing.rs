@@ -21,8 +21,35 @@ use super::{
 #[cfg(test)]
 mod test;
 
+/// Who owns the bot a session runs as, for deciding what its originating
+/// channel may do with the session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionBotOwnership {
+    /// A user's private agent.
+    User,
+    /// A team agent, or a first-party system bot that belongs to everyone.
+    Shared,
+}
+
+/// The access the channel a session was invoked from gets to it.
+///
+/// The invocation was public there, so the channel may always watch. It may
+/// also steer, unless the bot is someone's private agent: those sessions
+/// only their owner drives.
+pub fn originating_channel_access(bot: SessionBotOwnership) -> AccessLevel {
+    match bot {
+        SessionBotOwnership::User => AccessLevel::View,
+        SessionBotOwnership::Shared => AccessLevel::Edit,
+    }
+}
+
 /// Persistence capability for session sharing, independent of transport.
 pub trait SessionSharingRepo: Send + Sync + 'static {
+    /// Whether the session belongs to a private user-persona conversation.
+    fn is_private_conversation(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<bool>> + Send;
     /// Read canonical sharing settings and direct channel grants.
     fn permissions(
         &self,
@@ -119,6 +146,11 @@ impl<R: SessionSharingRepo> SessionSharing for SessionSharingService<R> {
         request: UpdateSharePermissionRequestV2,
     ) -> Result<SharePermissionV2> {
         let id = session_id(access)?;
+        if self.repo.is_private_conversation(id).await? {
+            return Err(AgentSessionError::InvalidSharing(
+                "an agent DM is private to its owner and cannot be shared",
+            ));
+        }
         validate(&request)?;
         let permissions = self.repo.permissions(id).await?;
         if access.acting_user_id().map(|user| user.as_ref()) != Some(permissions.owner.as_str()) {

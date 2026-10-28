@@ -3,19 +3,35 @@ import {
   type UrqlInfiniteQueryResult,
 } from '@app/lib/urql-solid';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import {
+  readRecordsByKeys,
+  selectRecords,
+} from '@graphql-cache/exchange/record-selection';
 import type { ApiThread } from '@service-email/generated/schemas';
 import {
+  EmailThreadIdentityFieldsFragmentDoc,
   EmailThreadPageDocument,
   type EmailThreadPageQuery,
   type EmailThreadPageQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import {
+  getGraphqlCacheHost,
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
-import type { Accessor } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  untrack,
+} from 'solid-js';
+import { registerActiveGraphqlSoupQuery } from '../../soup/graphql/active-queries';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
 /** REST-compatible pages exposed to the email query facade. */
@@ -82,6 +98,62 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
   );
 }
 
+type ThreadIdentity = {
+  requested: string;
+  canonical: string;
+  /** A failed lookup is not proof of a local draft. Only `local` forbids
+   * network reads after the session has abandoned its normalized cache. */
+  kind: 'remote' | 'local' | 'unknown';
+};
+
+/** Resolve a durable local route before contacting the server with its ID. */
+async function cachedThreadIdentity(
+  threadId: string,
+  previous?: ThreadIdentity
+): Promise<ThreadIdentity> {
+  const cacheRequired = graphqlCacheEnabled();
+  const host = cacheRequired ? getGraphqlCacheHost() : undefined;
+  if (cacheRequired && !host) {
+    throw new Error('Email cache is unavailable; thread identity is unknown');
+  }
+  const result = host
+    ? await readRecordsByKeys(
+        host,
+        selectRecords(EmailThreadIdentityFieldsFragmentDoc),
+        [`GraphqlSoupEmailThread:${threadId}`]
+      ).catch((error) => {
+        // Initialization may retire the host while this first read is pending.
+        // Only session-wide fallback makes an unresolved route safe to fetch.
+        if (graphqlCacheEnabled()) throw error;
+        return undefined;
+      })
+    : undefined;
+  // Cache fallback must not discard positive knowledge of an unsynced draft
+  // or an already-resolved server alias, even if the latest lookup failed.
+  if (
+    !result &&
+    !graphqlCacheEnabled() &&
+    previous?.requested === threadId &&
+    previous.kind !== 'unknown'
+  ) {
+    return previous;
+  }
+  const selected = result?.records[0];
+  return {
+    requested: threadId,
+    canonical: selected?.record.id ?? threadId,
+    // Pending edits do not make an existing server identity local again.
+    // Every authoritative Mail thread carries a projection capsule; only a
+    // newly created optimistic thread has no server capsule yet.
+    kind:
+      selected?.identity?.pending === true &&
+      selected.record.id === threadId &&
+      selected.record.cacheProjection === null
+        ? 'local'
+        : 'remote',
+  };
+}
+
 /**
  * Fetches the first page of an email thread through the persistent GraphQL
  * cache. A normal read still waits for the network, but while the persistent
@@ -93,9 +165,21 @@ export async function fetchGraphqlEmailThread(
   threadId: string,
   offset = 0
 ): Promise<ApiThread> {
+  getGraphqlSoupClient();
+  const identity = await cachedThreadIdentity(threadId);
+  // An asynchronous cache initialization failure can replace the client while
+  // resolving identity. Use the session's current transport after that read.
   const client = getGraphqlSoupClient();
+  if (identity.kind === 'local' && !graphqlCacheEnabled()) {
+    throw new ThrownResultError([
+      {
+        code: 'UNKNOWN',
+        message: 'Email cache is unavailable for this local draft',
+      },
+    ]);
+  }
   const variables: EmailThreadPageQueryVariables = {
-    threadId,
+    threadId: identity.canonical,
     offset,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
@@ -103,7 +187,10 @@ export async function fetchGraphqlEmailThread(
     .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
       EmailThreadPageDocument,
       variables,
-      { requestPolicy: 'cache-and-network' }
+      {
+        requestPolicy:
+          identity.kind === 'local' ? 'cache-only' : 'cache-and-network',
+      }
     )
     .toPromise();
 
@@ -141,8 +228,74 @@ export async function fetchGraphqlEmailThread(
 export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   threadId: Accessor<string>,
   options: Accessor<GraphqlEmailThreadQueryOptions<TData>>
-): GraphqlEmailThreadQuery<TData> {
-  return createUrqlInfiniteQuery<
+): {
+  query: GraphqlEmailThreadQuery<TData>;
+  resolvedThreadId: Accessor<string>;
+} {
+  // Client construction installs the host. Subscribe before the first read so
+  // settlement cannot leave a reopened local thread stuck on cache-only.
+  getGraphqlSoupClient();
+  const host = getGraphqlCacheHost();
+  const [identity, setIdentity] = createSignal<ThreadIdentity>();
+  const [returnedIdentity, setReturnedIdentity] = createSignal<{
+    requested: string;
+    queried: string;
+    canonical: string;
+  }>();
+  let request = 0;
+  let disposed = false;
+  const refreshIdentity = async () => {
+    const id = threadId();
+    const generation = ++request;
+    try {
+      const result = await cachedThreadIdentity(id, untrack(identity));
+      if (disposed || generation !== request || id !== threadId()) return;
+      setIdentity((previous) =>
+        previous?.requested === result.requested &&
+        previous.canonical === result.canonical &&
+        previous.kind === result.kind
+          ? previous
+          : result
+      );
+    } catch {
+      // An initially unreadable identity may still be a local draft. Preserve
+      // any known identity and policy; otherwise wait for resolution in cache.
+      if (!disposed && generation === request && id === threadId())
+        setIdentity((previous) =>
+          previous?.requested === id
+            ? previous
+            : {
+                requested: id,
+                canonical: id,
+                kind: 'unknown',
+              }
+        );
+    }
+  };
+  // The memo re-reads identity only when the id value changes, not whenever
+  // the accessor's underlying route or props signal does.
+  createEffect(
+    on(createMemo(threadId), () => {
+      fireAndForget(refreshIdentity(), 'email-thread');
+    })
+  );
+  const unsubscribe = host?.onCacheChanged(() => {
+    fireAndForget(refreshIdentity(), 'email-thread');
+  });
+  onCleanup(() => {
+    disposed = true;
+    unsubscribe?.();
+  });
+  const queryThreadId = () =>
+    identity()?.requested === threadId() ? identity()!.canonical : threadId();
+  const resolvedThreadId = () => {
+    const returned = returnedIdentity();
+    return returned?.requested === threadId() &&
+      returned.queried === queryThreadId()
+      ? returned.canonical
+      : queryThreadId();
+  };
+  const query = createUrqlInfiniteQuery<
     EmailThreadPageQuery,
     EmailThreadPageQueryVariables,
     number,
@@ -152,7 +305,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     client: getGraphqlSoupClient(),
     initialPageParam: 0,
     variables: (offset) => ({
-      threadId: threadId(),
+      threadId: queryThreadId(),
       offset,
       limit: DEFAULT_THREAD_MESSAGES_LIMIT,
     }),
@@ -163,9 +316,31 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       }
       return lastPageParam + thread.messages.length;
     },
-    enabled: options().enabled && threadId().length > 0,
-    requestPolicy: 'cache-and-network',
+    enabled:
+      options().enabled &&
+      (graphqlCacheEnabled()
+        ? !!getGraphqlCacheHost()
+        : identity()?.kind !== 'local') &&
+      threadId().length > 0 &&
+      identity()?.requested === threadId(),
+    requestPolicy:
+      identity()?.kind === 'local' ||
+      (identity()?.kind === 'unknown' && graphqlCacheEnabled())
+        ? 'cache-only'
+        : 'cache-and-network',
     keepPreviousData: false,
+    onResult: (result, { pageIndex }) => {
+      const canonical = result.data?.user.emailThread?.id;
+      const queried = result.operation.variables.threadId;
+      if (
+        pageIndex !== 0 ||
+        result.error ||
+        !canonical ||
+        queried !== untrack(queryThreadId)
+      )
+        return;
+      setReturnedIdentity({ requested: untrack(threadId), queried, canonical });
+    },
     select: ({ pages, pageParams }) => {
       const mapped = {
         pages: pages.map((page) =>
@@ -176,4 +351,23 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       return options().select?.(mapped) ?? (mapped as TData);
     },
   }));
+  // Cached threads observe the shared email record. Fetch-only readers instead
+  // opt into their own archive/unarchive completion, never generic Soup or
+  // read/unread refreshes (which can disrupt a successfully opened thread).
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () =>
+        query.isEnabled &&
+        !graphqlCacheEnabled() &&
+        identity()?.kind !== 'local',
+      target: () => ({ kind: 'email-archive', threadId: resolvedThreadId() }),
+      refresh: async () => {
+        await query.refetch({
+          requestPolicy: 'network-only',
+          throwOnError: true,
+        });
+      },
+    })
+  );
+  return { query, resolvedThreadId };
 }

@@ -32,7 +32,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             MessageParent::Initiative(_) => EntityType::Initiative,
             MessageParent::CrmCompany(_) => EntityType::CrmCompany,
             MessageParent::CrmContact(_) => EntityType::CrmContact,
-            MessageParent::Channel(_) => {
+            MessageParent::Channel(_) | MessageParent::Call(_) => {
                 return Err(rootcause::report!(
                     "comment notification requires discussion parent"
                 ));

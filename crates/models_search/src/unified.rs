@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::calendar_event::CalendarEventSearchScope;
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
 use crate::channel::{ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem};
 use crate::chat::ChatSearchResponseItemWithMetadata;
@@ -17,7 +18,7 @@ use item_filters::{
     CalendarEventFilters, CallFilters, ChannelFilters, ChatFilters, DocumentFilters, EmailFilters,
     EntityFilters, ProjectFilters, ast::document::resolve_file_types,
 };
-use model_file_type::FileAssociation;
+use model_file_type::{FileAssociation, FileType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -107,6 +108,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub include_crm: bool,
 
+    /// Which calendar events to search. Defaults to `own`: events on the
+    /// caller's own and delegated calendars. `shared_with_you` searches only
+    /// events shared with a channel the caller belongs to that are on none of
+    /// their calendars.
+    #[serde(default)]
+    pub calendar_event_scope: CalendarEventSearchScope,
+
     #[schemars(skip)]
     pub collapse: Option<bool>,
 }
@@ -121,6 +129,17 @@ pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
             | FileAssociation::Canvas(_)
             | FileAssociation::Md(_)
     )
+}
+
+/// Whether documents of a file type have their content indexed by the search
+/// processing service: the searchable associations, and the design files the
+/// native engines read - Figma designs, Photoshop documents, and Illustrator
+/// documents - while other vector files are not.
+pub fn is_searchable_file_type(file_type: &FileType) -> bool {
+    matches!(
+        file_type,
+        FileType::Fig | FileType::Psd | FileType::Psb | FileType::Ai
+    ) || is_searchable_association(&file_type.macro_app_path())
 }
 
 /// Converted entity filters for the search service.
@@ -177,7 +196,7 @@ fn expand_file_types_for_search(file_types: Vec<String>) -> Vec<String> {
     file_types
         .iter()
         .flat_map(|ft| resolve_file_types(ft))
-        .filter(|ty| is_searchable_association(&ty.macro_app_path()))
+        .filter(is_searchable_file_type)
         .map(|ty| ty.as_str().to_string())
         .collect()
 }

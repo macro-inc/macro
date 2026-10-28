@@ -2,21 +2,24 @@
 
 use xtask_paths::RepoGlob;
 
-/// Shared by web checks and preview builds so a cache-WASM, fold-WASM, or
-/// shared-package change cannot be tested without being built (or built
-/// without being tested). The push-to-main dev deploy is not path-gated at
-/// all — see [`crate::workflows::deploy_on_push`] for why.
+/// Shared by web checks and preview builds so a cache-WASM, fold-WASM,
+/// SQL-WASM, or shared-package change cannot be tested without being built
+/// (or built without being tested). The push-to-main dev deploy is not
+/// path-gated at all — see [`crate::workflows::deploy_on_push`] for why.
 pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("package.json"),
     RepoGlob::new("bun.lock"),
     RepoGlob::new("apps/web/**"),
     RepoGlob::new("packages/**"),
-    RepoGlob::new("crates/agent_fold/**"),
+    RepoGlob::new("crates/folds/agent_fold/**"),
     RepoGlob::new("crates/agent_runtime_protocol/**"),
     RepoGlob::new("crates/client/cache-core/**"),
     RepoGlob::new("crates/client/cache-turso/**"),
     RepoGlob::new("crates/client/cache-wasm/**"),
     RepoGlob::new("crates/client/turso-opfs/**"),
+    RepoGlob::new("crates/database_sql/**"),
+    RepoGlob::new("crates/filter_ast/**"),
+    RepoGlob::new("crates/item_filters/**"),
     RepoGlob::new("static_assets/schema.graphql"),
     RepoGlob::new("Cargo.toml"),
     RepoGlob::new("Cargo.lock"),

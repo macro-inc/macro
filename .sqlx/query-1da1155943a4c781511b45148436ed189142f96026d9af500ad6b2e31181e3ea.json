@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM database_view_positions placed\n        USING database_views board\n        WHERE placed.view_id = board.id AND board.table_id = ANY($1) AND placed.lane = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1da1155943a4c781511b45148436ed189142f96026d9af500ad6b2e31181e3ea"
+}

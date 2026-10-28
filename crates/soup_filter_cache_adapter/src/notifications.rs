@@ -14,8 +14,15 @@ mod batch;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
+/// Selected notification fields are stored by schema name, not response alias.
+/// `targetEntityType` is canonical; `entityType` is the deprecated Soup-only field
+/// that older bundles and cached records still carry. Both use the same values
+/// for the Soup partitions this adapter projects.
+const NOTIFICATION_TYPE_FIELDS: [&str; 2] = ["targetEntityType", "entityType"];
+
 /// Resolve edge and child aliases from the actual selection, not arbitrary payload fields.
 pub(super) fn selected_snapshot(
+    schema: &cache_core::meta::Schema,
     object: &serde_json::Map<String, serde_json::Value>,
     fields: &[&FieldNode],
 ) -> Option<serde_json::Value> {
@@ -28,6 +35,7 @@ pub(super) fn selected_snapshot(
             Some(values) => {
                 let mut child_fields = Vec::new();
                 collect_applicable_fields(
+                    schema,
                     &field.selection_set,
                     "GraphqlNotification",
                     &mut child_fields,
@@ -113,6 +121,7 @@ fn snapshot_facts(
         "GraphqlSoupProject" => "PROJECT",
         "GraphqlSoupChat" => "CHAT",
         "GraphqlSoupChannel" => "CHANNEL",
+        "GraphqlSoupDatabaseRow" => "DATABASE_ROW",
         _ => return Err(()),
     };
     let mut states = std::collections::BTreeMap::new();
@@ -124,8 +133,9 @@ fn snapshot_facts(
             .get("entityId")
             .and_then(serde_json::Value::as_str)
             .ok_or(())?;
-        let primary_type = notification
-            .get("entityType")
+        let primary_type = NOTIFICATION_TYPE_FIELDS
+            .iter()
+            .find_map(|field| notification.get(*field))
             .and_then(serde_json::Value::as_str)
             .ok_or(())?;
         if primary_id != id || primary_type != entity_type {
@@ -181,7 +191,10 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
     let CacheValue::String(id) = record.fields.get("entityId")? else {
         return None;
     };
-    let CacheValue::String(kind) = record.fields.get("entityType")? else {
+    let CacheValue::String(kind) = NOTIFICATION_TYPE_FIELDS
+        .iter()
+        .find_map(|field| record.fields.get(*field))?
+    else {
         return None;
     };
     let typename = match kind.as_str() {
@@ -189,6 +202,7 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
         "CHANNEL" => "GraphqlSoupChannel",
+        "DATABASE_ROW" => "GraphqlSoupDatabaseRow",
         _ => return None,
     };
     uuid::Uuid::parse_str(id).ok()?;
@@ -290,6 +304,7 @@ async fn retain_complete_parents<S: Storage>(
 /// stored in an optimistic layer: replay edits only this notification's
 /// contribution, even after another layer fails.
 pub async fn notification_projection_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation_name: Option<&str>,
@@ -301,7 +316,7 @@ pub async fn notification_projection_updates<S: Storage>(
     let operation = document
         .operation(operation_name)
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = normalize(operation, variables, data)
+    let updates = normalize(schema, operation, variables, data)
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
     let updates = updates
         .into_iter()

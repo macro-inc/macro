@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.index AS \"index!\", m.message_id, m.channel_id\n               FROM jsonb_to_recordset($1) AS s(index integer, channel text, ts bigint)\n               JOIN slack_import_message_map m ON m.team_id = $2\n                 AND m.slack_channel_id = s.channel AND m.slack_ts = s.ts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "index!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "547c9234ea07bf7994b7fc129156a8ce65b19977181ed5c45a33b3c58631d981"
+}

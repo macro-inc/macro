@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access WHERE source_type = $1 AND source_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "54b1b8d5631c23afdc951c97e5809b08ff47e47b80840df527aa7406a8ff079c"
+}

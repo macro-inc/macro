@@ -1,13 +1,15 @@
 import { MAX_RECONCILIATION_BASELINE } from '@app/lib/graphql-cache/protocol';
-import type { GraphqlSoupItem } from '@service-storage/graphql-soup';
+
+/** What reconciliation reads of a Soup record, whichever selection it came from. */
+type SoupRecord = { __typename: string; id: string };
 
 /** Normalized identity, shared by every Soup entity variant. */
-export const soupItemKey = (item: GraphqlSoupItem): string =>
+export const soupItemKey = (item: SoupRecord): string =>
   `${item.__typename}:${item.id}`;
 
 /** Same-query server membership and sort evidence; filtering stays in Rust. */
 export function soupReconciliationBaseline(
-  records: readonly GraphqlSoupItem[],
+  records: readonly SoupRecord[],
   sortMethod: 'CREATED_AT' | 'UPDATED_AT'
 ): Array<{ key: string; sortTimestamp: string }> | undefined {
   const entries = new Map<string, { key: string; sortTimestamp: string }>();
@@ -29,11 +31,11 @@ export function soupReconciliationBaseline(
 /** Rows discovered by server pagination after an overlay was computed. Do not
  * re-add covered baseline rows (including confirmed non-matches), or duplicate
  * local candidates that pagination now also returns. */
-export function unreconciledServerRecords(
-  records: readonly GraphqlSoupItem[],
+export function unreconciledServerRecords<Item extends SoupRecord>(
+  records: readonly Item[],
   baselineKeys: ReadonlySet<string>,
   displayedKeys: ReadonlySet<string>
-): GraphqlSoupItem[] {
+): Item[] {
   const seen = new Set([...baselineKeys, ...displayedKeys]);
   return records.filter((record) => {
     const key = soupItemKey(record);
@@ -45,11 +47,11 @@ export function unreconciledServerRecords(
 
 /** Materialize only reconciled survivors, preserving baseline display data if
  * a selected record is incomplete. Unrenderable new candidates are omitted. */
-export function materializeReconciledSoup(
+export function materializeReconciledSoup<Item extends SoupRecord>(
   keys: readonly string[],
-  selected: readonly { recordKey: string; record: GraphqlSoupItem }[],
-  baseline: readonly GraphqlSoupItem[]
-): GraphqlSoupItem[] {
+  selected: readonly { recordKey: string; record: Item }[],
+  baseline: readonly Item[]
+): Item[] {
   const records = new Map(
     baseline.map((record) => [soupItemKey(record), record])
   );

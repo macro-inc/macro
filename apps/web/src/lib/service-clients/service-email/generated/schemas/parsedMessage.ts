@@ -16,6 +16,8 @@ export interface ParsedMessage {
   body_parsed?: ParsedMessageBodyParsed;
   cc: ContactInfo[];
   db_id: string;
+  /** Draft edit generation captured with this message snapshot. */
+  draft_generation?: number;
   from?: ParsedMessageFrom;
   internal_date_ts?: ParsedMessageInternalDateTs;
   labels: LabelInfo[];

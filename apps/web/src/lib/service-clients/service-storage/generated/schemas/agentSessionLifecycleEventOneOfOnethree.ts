@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionLifecycleEventOneOfOnethreeEventType } from './agentSessionLifecycleEventOneOfOnethreeEventType';
-import type { SessionMentionedMetadata } from './sessionMentionedMetadata';
+import type { InputReceivedMetadata } from './inputReceivedMetadata';
 
 /**
- * A prompt named other users who can open the session.
+ * The question was answered or withdrawn.
  */
 export type AgentSessionLifecycleEventOneOfOnethree = {
   event_type: AgentSessionLifecycleEventOneOfOnethreeEventType;
-  /** A prompt named other users who can open the session. */
-  metadata: SessionMentionedMetadata;
+  /** The question was answered or withdrawn. */
+  metadata: InputReceivedMetadata;
 };

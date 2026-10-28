@@ -33,7 +33,11 @@ describe('typed record selection', () => {
       keys: ['GraphqlSoupDocument:item-1'],
     });
     expectTypeOf(records.records).toEqualTypeOf<
-      Array<{ recordKey: string; record: SoupItemFieldsFragment }>
+      Array<{
+        recordKey: string;
+        record: SoupItemFieldsFragment;
+        identity?: { mutationUuid: string | null; pending: boolean };
+      }>
     >();
     // @ts-expect-error Generated fragment records have no arbitrary field.
     records.records[0]?.record.missing;

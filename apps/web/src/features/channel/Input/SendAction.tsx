@@ -1,4 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cn, SendButton } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
@@ -28,8 +29,7 @@ export function SendAction(props: SendActionProps) {
   return (
     <SendButton
       appearance="composer"
-      tooltip={tooltipText()}
-      shortcut="enter"
+      tooltip={{ content: tooltipText(), shortcut: 'enter' }}
       aria-label={tooltipText()}
       data-input-action="send"
       pending={isBlockedByPending()}
@@ -37,10 +37,9 @@ export function SendAction(props: SendActionProps) {
       hidden={isMobile() && isBlockedByEmptyInput()}
       // Full-frame mobile/tablet: pill rounding to match the dock/accessory islands.
       class={cn('touch:rounded-full', local.class)}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        void commands.send();
-      }}
+      onPointerDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => fireAndForget(commands.send(), 'channel-input')}
       {...rest}
     />
   );

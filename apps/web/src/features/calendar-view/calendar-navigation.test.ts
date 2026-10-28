@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import type {
   SplitHandle,
   SplitManager,
@@ -22,14 +23,10 @@ describe('Calendar view navigation', () => {
         focusRequestId: expect.any(Number),
       },
       entryMetadata: {
-        route: {
-          matches: [
-            {
-              id: 'view-calendar',
-              params: { period: 'dayGridMonth' },
-            },
-          ],
-        },
+        route: paneRoute({
+          id: 'view-calendar',
+          params: { period: 'dayGridMonth' },
+        }),
         search: {
           calendar: { eventId: ['event-1'], occurrenceKey: ['instance-1'] },
         },
@@ -70,6 +67,20 @@ describe('Calendar view navigation', () => {
     expect(manager.openWithSplit).not.toHaveBeenCalled();
   });
 
+  it('retargets an existing Calendar without taking focus when asked not to', () => {
+    const replace = vi.fn();
+    const activate = vi.fn();
+    const manager = {
+      getSplitByContent: vi.fn(() => ({ replace, activate })),
+      openWithSplit: vi.fn(),
+    } as unknown as SplitManager;
+
+    openCalendarView({ eventId: 'event-4' }, { manager, activate: false });
+
+    expect(replace).toHaveBeenCalledOnce();
+    expect(activate).not.toHaveBeenCalled();
+  });
+
   it('opens the Calendar route when no instance exists', () => {
     const manager = {
       getSplitByContent: vi.fn(),
@@ -91,5 +102,19 @@ describe('Calendar view navigation', () => {
         mergeHistory: undefined,
       }
     );
+  });
+
+  it('says whether the Calendar opened', () => {
+    const opened = {
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(() => ({ status: 'navigating' })),
+    } as unknown as SplitManager;
+    const unavailable = {
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+    } as unknown as SplitManager;
+
+    expect(openCalendarView({}, { manager: opened })).toBe(true);
+    expect(openCalendarView({}, { manager: unavailable })).toBe(false);
   });
 });

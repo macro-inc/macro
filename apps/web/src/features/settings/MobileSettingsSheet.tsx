@@ -1,21 +1,39 @@
+import { t } from '@app/lib/i18n';
 import './MobileSettingsSheet.css';
+import { SearchBar } from '@app/components/view-shell';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
-import { ErrorBoundary, For, type JSX, Show, Suspense } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { SettingsSearchResults } from './components/settings-search-results';
+import { SettingsSearchTarget } from './components/settings-search-target';
+import {
+  type SettingsSearchResult,
+  searchSettings,
+} from './core/settings-search';
 import { SettingsSheetContext } from './primitives';
 
 type MobileSettingsSheetProps = {
   open: boolean;
   page?: SettingsTab;
   groups: SettingsTabGroup[];
+  searchGroups?: SettingsTabGroup[];
+  emailSignatures?: boolean;
   name: string;
   email: string;
   avatar: JSX.Element;
@@ -27,25 +45,32 @@ type MobileSettingsSheetProps = {
 
 /** Mobile presentation; account data and settings actions are supplied by the host. */
 export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
+  const [query, setQuery] = createSignal('');
+  const [selection, setSelection] = createSignal<SettingsSearchResult>();
+  const results = createMemo(() =>
+    searchSettings(props.searchGroups ?? props.groups, query(), {
+      emailSignatures: props.emailSignatures,
+    })
+  );
   let mainScrollTop = 0;
   let scrollRef: HTMLDivElement | undefined;
   let headingRef: HTMLHeadingElement | undefined;
-  // Legacy runtime links share the single Agents management navigation entry.
-  const navigationPage = () =>
-    props.page === 'Harness' ? 'Agents' : props.page;
+  const navigationPage = () => props.page;
 
   const pageLabel = () =>
     props.groups
       .flatMap((group) => group.items)
       .find((item) => item.tab === navigationPage())?.label ??
-    (props.page === 'Harness' ? 'Agents' : undefined) ??
+    (props.page === 'Harness' ? t('settingsNav.tabRuntimes') : undefined) ??
     props.page ??
-    'Settings';
+    t('settingsNav.settings');
 
-  const navigate = (page?: SettingsTab) => {
+  const navigate = (page?: SettingsTab, focusHeading = true) => {
+    setSelection(undefined);
     if (!props.page) mainScrollTop = scrollRef?.scrollTop ?? 0;
     props.onNavigate(page);
-    queueMicrotask(() => headingRef?.focus({ preventScroll: true }));
+    if (focusHeading)
+      queueMicrotask(() => headingRef?.focus({ preventScroll: true }));
   };
 
   return (
@@ -63,7 +88,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
-          aria-label="Settings"
+          aria-label={t('settingsNav.settings')}
           targetHeight={94}
           maxHeight={94}
           class="mobile-settings-sheet overflow-hidden [--mobile-content-inset-top:0px] [--mobile-content-inset-bottom:0px]"
@@ -74,7 +99,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Back to settings"
+                aria-label={t('settingsNav.backToSettings')}
                 class="size-11 bg-ink/6"
                 onClick={() => navigate()}
               >
@@ -92,7 +117,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               as={Button}
               variant="ghost"
               size="icon-sm"
-              aria-label="Close settings"
+              aria-label={t('settingsNav.closeSettings')}
               class="size-11 rounded-full bg-ink/6"
             >
               <XIcon class="size-5" />
@@ -113,7 +138,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
               >
                 <button
                   type="button"
-                  aria-label="Edit profile"
+                  aria-label={t('settingsNav.editProfile')}
                   onClick={() => navigate('Account')}
                   class="mx-6 mb-7 flex shrink-0 flex-col items-center rounded-3xl px-4 pb-3 pt-2 text-center active:bg-ink/3"
                 >
@@ -133,46 +158,66 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                   </span>
                 </button>
                 <div class="flex flex-col gap-6 px-3">
-                  <For each={props.groups}>
-                    {(group) => (
-                      <section>
-                        <h2 class="px-4 pb-2 text-sm font-medium text-ink-muted">
-                          {group.label}
-                        </h2>
-                        <div class="overflow-hidden rounded-[26px] bg-ink/5 p-1">
-                          <For each={group.items}>
-                            {(item, index) => (
-                              <>
-                                <Show when={index() > 0}>
-                                  <div class="ml-12 mr-3 h-px bg-ink/6" />
-                                </Show>
-                                <MobileDrawer.Item
-                                  onClick={() => navigate(item.tab)}
-                                  class="min-h-13 gap-3.5 px-3.5 text-base"
-                                >
-                                  <Dynamic
-                                    component={item.icon}
-                                    class="size-5 shrink-0"
-                                  />
-                                  <span class="min-w-0 flex-1 text-left">
-                                    {item.label}
-                                  </span>
-                                  <CaretRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
-                                </MobileDrawer.Item>
-                              </>
-                            )}
-                          </For>
-                        </div>
-                      </section>
-                    )}
-                  </For>
+                  <SearchBar
+                    label={t('settingsNav.searchSettings')}
+                    placeholder={t('settingsNav.searchSettings')}
+                    value={query()}
+                    onValueChange={setQuery}
+                    onEscape={() => setQuery('')}
+                  />
+                  <Show
+                    when={!query().trim()}
+                    fallback={
+                      <SettingsSearchResults
+                        results={results()}
+                        onSelect={(result) => {
+                          navigate(result.tab, false);
+                          setSelection({ ...result });
+                        }}
+                      />
+                    }
+                  >
+                    <For each={props.groups}>
+                      {(group) => (
+                        <section>
+                          <h2 class="px-4 pb-2 text-sm font-medium text-ink-muted">
+                            {group.label}
+                          </h2>
+                          <div class="overflow-hidden rounded-[26px] bg-ink/5 p-1">
+                            <For each={group.items}>
+                              {(item, index) => (
+                                <>
+                                  <Show when={index() > 0}>
+                                    <div class="ml-12 mr-3 h-px bg-ink/6" />
+                                  </Show>
+                                  <MobileDrawer.Item
+                                    onClick={() => navigate(item.tab)}
+                                    class="min-h-13 gap-3.5 px-3.5 text-base"
+                                  >
+                                    <Dynamic
+                                      component={item.icon}
+                                      class="size-5 shrink-0"
+                                    />
+                                    <span class="min-w-0 flex-1 text-left">
+                                      {item.label}
+                                    </span>
+                                    <CaretRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                                  </MobileDrawer.Item>
+                                </>
+                              )}
+                            </For>
+                          </div>
+                        </section>
+                      )}
+                    </For>
+                  </Show>
                   <div class="mb-3 rounded-[26px] bg-ink/5 p-1">
                     <MobileDrawer.Item
                       onClick={props.onLogout}
                       class="min-h-13 gap-3.5 px-3.5 text-base text-failure"
                     >
                       <SignOutIcon class="size-5" />
-                      Log out
+                      {t('settingsNav.logOut')}
                     </MobileDrawer.Item>
                   </div>
                 </div>
@@ -189,9 +234,11 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                     fallback={(_error, reset) => (
                       <div class="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
                         <p class="text-sm text-ink-muted">
-                          This settings page couldn’t load.
+                          {t('settingsNav.pageLoadFailed')}
                         </p>
-                        <Button onClick={reset}>Try again</Button>
+                        <Button variant="ghost" onClick={reset}>
+                          {t('settingsNav.tryAgain')}
+                        </Button>
                       </div>
                     )}
                   >
@@ -201,7 +248,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                           role="status"
                           class="p-8 text-center text-sm text-ink-muted"
                         >
-                          Loading settings…
+                          {t('settingsNav.loadingSettings')}
                         </div>
                       }
                     >
@@ -214,15 +261,21 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                         fallback={
                           <div class="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
                             <p role="status" class="text-sm text-ink-muted">
-                              This settings section is unavailable.
+                              {t('settingsNav.sectionUnavailable')}
                             </p>
-                            <Button onClick={() => navigate()}>
-                              Back to settings
+                            <Button variant="ghost" onClick={() => navigate()}>
+                              {t('settingsNav.backToSettings')}
                             </Button>
                           </div>
                         }
                       >
-                        {props.renderPage(page)}
+                        <SettingsSearchTarget
+                          result={
+                            selection()?.tab === page ? selection() : undefined
+                          }
+                        >
+                          {props.renderPage(page)}
+                        </SettingsSearchTarget>
                       </Show>
                     </Suspense>
                   </ErrorBoundary>

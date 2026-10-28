@@ -1,9 +1,10 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
-            SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
-            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
+            NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
+            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
+            WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -22,12 +23,15 @@ use system_properties::SystemPropertyKey;
 mod agent_session;
 mod calendar_event;
 mod candidate_gates;
+mod crm_association;
+mod database_row;
 mod expanded;
 pub mod grouping;
 mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
+mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -61,7 +65,7 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> Result<Vec<SoupProjectionHydration>, Self::Err> {
-        let calendar_req = req.clone();
+        let cursor_request = req.clone();
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
@@ -125,7 +129,7 @@ impl SoupRepo for PgSoupRepo {
             }
         };
         items.extend(
-            calendar_event::cursor_soup(&self.pool.0, calendar_req.clone())
+            calendar_event::cursor_soup(&self.pool.0, cursor_request.clone())
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -134,7 +138,7 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
-            agent_session::cursor_soup(&self.pool.0, calendar_req)
+            agent_session::cursor_soup(&self.pool.0, cursor_request)
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -150,7 +154,7 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
-        let calendar_req = req.clone();
+        let cursor_request = req.clone();
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
@@ -183,8 +187,8 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
         };
-        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req.clone()).await?);
-        items.extend(agent_session::cursor_soup(&self.pool.0, calendar_req).await?);
+        items.extend(calendar_event::cursor_soup(&self.pool.0, cursor_request.clone()).await?);
+        items.extend(agent_session::cursor_soup(&self.pool.0, cursor_request).await?);
         sort_and_truncate(&mut items, sort, limit);
         Ok(items)
     }
@@ -205,7 +209,7 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> Result<Vec<SoupProjectionHydration>, Self::Err> {
-        let calendar_req = req.clone();
+        let by_ids_request = req.clone();
         let mut items = expanded::by_ids::expanded_soup_by_ids_with_projection(
             &self.pool.0,
             req.user_id,
@@ -213,7 +217,7 @@ impl SoupRepo for PgSoupRepo {
         )
         .await?;
         items.extend(
-            calendar_event::by_ids(&self.pool.0, calendar_req.clone())
+            calendar_event::by_ids(&self.pool.0, by_ids_request.clone())
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -222,7 +226,7 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
-            agent_session::by_ids(&self.pool.0, calendar_req.clone())
+            agent_session::by_ids(&self.pool.0, by_ids_request.clone())
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -231,7 +235,16 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
-            initiative::by_ids(&self.pool.0, calendar_req)
+            initiative::by_ids(&self.pool.0, by_ids_request.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
+        items.extend(
+            database_row::by_ids(&self.pool.0, by_ids_request)
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -246,13 +259,14 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
-        let calendar_req = req.clone();
+        let by_ids_request = req.clone();
         let mut items =
             unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
                 .await?;
-        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req.clone()).await?);
-        items.extend(agent_session::by_ids(&self.pool.0, calendar_req.clone()).await?);
-        items.extend(initiative::by_ids(&self.pool.0, calendar_req).await?);
+        items.extend(calendar_event::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(agent_session::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(initiative::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(database_row::by_ids(&self.pool.0, by_ids_request).await?);
         Ok(items)
     }
 
@@ -293,6 +307,14 @@ impl SoupRepo for PgSoupRepo {
         .await
     }
 
+    async fn crm_property_edges<'a>(
+        &self,
+        company_ids: &'a [uuid::Uuid],
+        contact_ids: &'a [uuid::Uuid],
+    ) -> Result<Vec<CrmPropertyEdge>, Self::Err> {
+        crm_association::property_edges(&self.pool.0, company_ids, contact_ids).await
+    }
+
     async fn touched_soup_page<'a>(
         &self,
         req: TouchedSoupRequest<'a>,
@@ -305,6 +327,13 @@ impl SoupRepo for PgSoupRepo {
         req: NotifiedSoupRequest<'a>,
     ) -> Result<Vec<NotifiedEntity>, Self::Err> {
         notified::notified_soup_page(&self.pool.0, req).await
+    }
+
+    async fn work_feed_soup_page<'a>(
+        &self,
+        req: WorkFeedCandidateRequest<'a>,
+    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
+        work_feed::work_feed_soup_page(&self.pool.0, req).await
     }
 }
 
@@ -377,8 +406,14 @@ pub(crate) async fn populate_properties(
             .collect());
     }
 
+    // A database row's cells are its properties, so a row carries every one
+    // of them; any other item carries the system properties and the
+    // viewer's tags.
+    let (row_refs, entity_refs): (Vec<_>, Vec<_>) = entity_refs
+        .into_iter()
+        .partition(|reference| reference.entity_type == models_properties::EntityType::DatabaseRow);
     let property_ids = SystemPropertyKey::all_system_property_keys();
-    let properties_map =
+    let mut properties_map =
         properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
@@ -387,6 +422,13 @@ pub(crate) async fn populate_properties(
         )
         .await
         .map_err(|e| sqlx::Error::Decode(e.into()))?;
+    properties_map.extend(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
+            db, &row_refs,
+        )
+        .await
+        .map_err(|e| sqlx::Error::Decode(e.into()))?,
+    );
 
     // Items may repeat an id when grouped, so use `get` rather than `remove`.
     Ok(items
@@ -399,13 +441,14 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::CrmContact(_) => None,
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_)
                 | SoupItem::AgentSession(_) => None,
+                SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
             .unwrap_or_default();

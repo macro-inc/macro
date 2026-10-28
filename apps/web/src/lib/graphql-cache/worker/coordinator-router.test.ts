@@ -3,14 +3,17 @@ import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   databaseOwnerLockName,
+  type EngineOpenOutcome,
 } from './coordinator-protocol';
 import {
   type CoordinatorMessagePort,
   CoordinatorRouter,
 } from './coordinator-router';
+import type { CacheTakeoverMessage } from './coordinator-takeover';
 
 class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
+  readonly received: unknown[] = [];
   readonly events: string[] = [];
   closed = false;
   started = false;
@@ -38,6 +41,7 @@ class FakePort extends EventTarget {
   }
 
   receive(message: unknown): void {
+    this.received.push(message);
     if (this.effectProtocol) {
       this.dispatchEvent(new MessageEvent('message', { data: [1, message] }));
       return;
@@ -60,7 +64,8 @@ const version = {
 const register = async (
   router: CoordinatorRouter,
   port: FakePort,
-  tabId: string
+  tabId: string,
+  buildTime = 0
 ): Promise<void> => {
   await router.handleTabMessage(port as CoordinatorMessagePort, {
     ...version,
@@ -68,6 +73,8 @@ const register = async (
     scope: 'scope',
     tabId,
     livenessLockName: `graphql-cache-tab:scope:${tabId}`,
+    visible: true,
+    buildTime,
   });
 };
 
@@ -92,12 +99,27 @@ const ready = (
   enginePort: FakePort,
   tabId: string,
   ownerEpoch: number,
-  proof: 'opened-existing' | 'wiped-before-open'
+  proof: 'opened-existing' | 'wiped-before-open',
+  openOutcome: EngineOpenOutcome = proof === 'wiped-before-open'
+    ? 'reset-storage-uncertain'
+    : 'opened-existing'
 ): void => {
-  if (messagesOfKind(enginePort, 'open-engine').length === 0) {
+  const sent = (kind: string) =>
+    enginePort.received.some(
+      (message) => (message as { kind?: unknown }).kind === kind
+    );
+  if (!sent('engine-assets-ready')) {
     enginePort.receive({
       ...version,
       kind: 'engine-assets-ready',
+      tabId,
+      ownerEpoch,
+    });
+  }
+  if (!sent('owner-lock-acquired')) {
+    enginePort.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
       tabId,
       ownerEpoch,
     });
@@ -110,10 +132,7 @@ const ready = (
     ownerLockName: databaseOwnerLockName('scope'),
     ownerLockHeld: true,
     databaseActionProof: proof,
-    openOutcome:
-      proof === 'wiped-before-open'
-        ? 'reset-storage-uncertain'
-        : 'opened-existing',
+    openOutcome,
   });
 };
 
@@ -215,6 +234,140 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
+  it.each([
+    { planned: true, blocked: false },
+    { planned: false, blocked: false },
+    { planned: true, blocked: true },
+  ])(
+    'records a reset completed by an immediately draining owner (planned: $planned, blocked: $blocked)',
+    async ({ planned, blocked }) => {
+      vi.useFakeTimers();
+      const observations: Array<Record<string, unknown>> = [];
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => undefined,
+        telemetry: { record: (event) => observations.push(event), flush() {} },
+        handoffReadTimeoutMs: 0,
+      });
+      const tabA = new FakePort();
+      const tabB = new FakePort();
+      const engineA = new FakePort();
+      await register(router, tabA, 'tab-a');
+      await register(router, tabB, 'tab-b');
+      await attach(router, tabA, 'tab-a', 1, engineA);
+      ready(engineA, 'tab-a', 1, 'opened-existing');
+      await router.handleTabMessage(tabA, {
+        ...version,
+        kind: planned ? 'engine-lost' : 'navigation-departure',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        reason: 'old owner left',
+      });
+      const engineB = new FakePort();
+      await attach(router, tabB, 'tab-b', 2, engineB);
+      if (planned && !blocked)
+        await router.handleTabMessage(tabA, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId: 'tab-a',
+          visible: false,
+        });
+      await router.handleTabMessage(tabB, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'tab-b',
+        visible: false,
+      });
+      await router.handleTabMessage(tabB, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: { id: 99, kind: 'current-revision' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      const outcome = planned ? 'reset-storage-uncertain' : 'reset-corrupt';
+      ready(engineB, 'tab-b', 2, 'wiped-before-open', outcome);
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'draining',
+        ownerEpoch: 2,
+      });
+      expect(messagesOfKind(engineB, 'engine-request')).toEqual([]);
+      expect(messagesOfKind(tabB, 'engine-replaced')).toMatchObject([
+        { ownerEpoch: 2, openOutcome: outcome },
+      ]);
+      // Hosts learn the reset, but must not resume reads against the draining owner.
+      const resetIndex = tabB.events.lastIndexOf('post:engine-replaced');
+      expect(tabB.events[resetIndex + 1]).toBe('post:cache-read-availability');
+      expect(
+        messagesOfKind(tabB, 'cache-read-availability').at(-1)
+      ).toMatchObject({
+        ownerEpoch: 2,
+        state: blocked ? 'blocked' : 'waiting',
+      });
+      const reason = planned ? 'abrupt-owner-loss' : 'integrity-failure';
+      for (const name of [
+        'graphql_cache.storage_reset_required',
+        'graphql_cache.logical_reset',
+        'graphql_cache.reset_wipe',
+      ]) {
+        expect(
+          observations.filter((event) => event.name === name)
+        ).toMatchObject([{ resetReason: reason }]);
+      }
+      const wipes = observations.filter(
+        (event) => event.name === 'graphql_cache.reset_wipe'
+      );
+      expect(wipes).toMatchObject([
+        { outcome: 'success', openOutcome: outcome },
+      ]);
+      if (planned) {
+        expect(wipes[0]).toHaveProperty('resetAttempt', 'wipe-before-open');
+        // A later drain failure must not retroactively fail the completed reset.
+        engineB.receive({
+          ...version,
+          kind: 'engine-fatal',
+          tabId: 'tab-b',
+          ownerEpoch: 2,
+          reason: 'drain failed after ready',
+          fatalCode: 'runtime-failure',
+        });
+        expect(
+          observations.filter(
+            (event) => event.name === 'graphql_cache.reset_wipe'
+          )
+        ).toEqual(wipes);
+      } else {
+        expect(wipes[0]).not.toHaveProperty('resetAttempt');
+        engineB.receive({
+          ...version,
+          kind: 'engine-drained',
+          tabId: 'tab-b',
+          ownerEpoch: 2,
+        });
+        expect(router.snapshot()?.state.kind).toBe('parked');
+        await router.handleTabMessage(tabB, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId: 'tab-b',
+          visible: true,
+        });
+        const engineC = new FakePort();
+        await attach(router, tabB, 'tab-b', 3, engineC);
+        ready(engineC, 'tab-b', 3, 'opened-existing');
+        expect(messagesOfKind(tabB, 'engine-replaced')).toMatchObject([
+          { ownerEpoch: 2, openOutcome: 'reset-corrupt' },
+          { ownerEpoch: 3, openOutcome: 'opened-existing' },
+        ]);
+        expect(messagesOfKind(engineC, 'engine-request')).toHaveLength(1);
+        expect(
+          observations.filter(
+            (event) => event.name === 'graphql_cache.reset_wipe'
+          )
+        ).toEqual(wipes);
+      }
+    }
+  );
+
   it('backs off repeated recovery attempts and terminal-fails at the retry limit', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
@@ -231,6 +384,12 @@ describe('CoordinatorRouter', () => {
     initialEngine.receive({
       ...version,
       kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    initialEngine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
@@ -262,6 +421,12 @@ describe('CoordinatorRouter', () => {
       engine.receive({
         ...version,
         kind: 'engine-assets-ready',
+        tabId,
+        ownerEpoch: state.ownerEpoch,
+      });
+      engine.receive({
+        ...version,
+        kind: 'owner-lock-acquired',
         tabId,
         ownerEpoch: state.ownerEpoch,
       });
@@ -345,6 +510,8 @@ describe('CoordinatorRouter', () => {
       scope: 'scope',
       tabId: 'stale-tab',
       livenessLockName: 'graphql-cache-tab:scope:stale-tab',
+      visible: true,
+      buildTime: 0,
     });
 
     stalePort.onmessageerror?.();
@@ -380,6 +547,30 @@ describe('CoordinatorRouter', () => {
       })
     );
     expect(router.snapshot()).toBeUndefined();
+  });
+
+  it('reports an unknown message kind from a newer tab as a protocol error', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const port = new FakePort();
+    await register(router, port, 'tab-a');
+    const fromNewerTab = JSON.parse('"tab-took-a-nap"');
+
+    await expect(
+      router.handleTabMessage(port as CoordinatorMessagePort, {
+        ...version,
+        kind: fromNewerTab,
+        tabId: 'tab-a',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(messagesOfKind(port, 'protocol-error')).toContainEqual(
+      expect.objectContaining({
+        error: 'invalid tab-took-a-nap coordinator envelope',
+      })
+    );
   });
 
   it('routes colliding tab ids through unique engine ids, restores responses, and fans pushes', async () => {
@@ -691,10 +882,712 @@ describe('CoordinatorRouter', () => {
     );
   });
 
+  const heldLocks = (names: () => string[]) => async (): Promise<string[]> =>
+    names();
+
+  const livenessLocks = (...tabIds: string[]) =>
+    tabIds.map((tabId) => `graphql-cache-tab:scope:${tabId}`);
+
+  const busy = (engine: FakePort): void => {
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-busy',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+  };
+
+  const fakeTakeoverChannel = () => {
+    const posted: CacheTakeoverMessage[] = [];
+    let deliver: ((message: CacheTakeoverMessage) => void) | undefined;
+    return {
+      posted,
+      open: (
+        _scope: string,
+        onMessage: (message: CacheTakeoverMessage) => void
+      ) => {
+        deliver = onMessage;
+        return {
+          post: (message: CacheTakeoverMessage) => posted.push(message),
+          close: () => {},
+        };
+      },
+      deliver: (message: CacheTakeoverMessage) => deliver?.(message),
+    };
+  };
+
+  /** Two tabs of this build queue work while another build's tab is alive
+   * and the engine finds the owner lock busy. */
+  const askForAnotherBuildsDatabase = async () => {
+    const observations: Array<{ name: string; ownerEvent?: string }> = [];
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      takeoverReplyTimeoutMs: 100,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      queryHeldLockNames: heldLocks(() =>
+        livenessLocks('tab-a', 'tab-b', 'other-build-tab')
+      ),
+      openTakeoverChannel: channel.open,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a', 2_000);
+    await register(router, tabB, 'tab-b', 1_900);
+    for (const [tab, tabId, request] of [
+      [tabA, 'tab-a', { id: 1, kind: 'init', scope: 'scope' }],
+      [tabB, 'tab-b', { id: 2, kind: 'clear' }],
+    ] as const) {
+      await router.handleTabMessage(tab as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId,
+        request,
+      });
+    }
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(0);
+    return { router, channel, observations, tabA, tabB, engine };
+  };
+
+  const expectFailedClosed = (
+    tabA: FakePort,
+    tabB: FakePort,
+    reason: string
+  ): void => {
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining(reason),
+      }),
+    ]);
+    for (const [tab, requestId] of [
+      [tabA, 1],
+      [tabB, 2],
+    ] as const) {
+      expect(messagesOfKind(tab, 'cache-message')).toEqual([
+        expect.objectContaining({
+          message: expect.objectContaining({
+            id: requestId,
+            ok: false,
+            errorCode: 'owner-lock-unavailable',
+          }),
+        }),
+      ]);
+      expect(messagesOfKind(tab, 'cache-unavailable')).toHaveLength(1);
+    }
+  };
+
+  it('asks another build for its database and fails closed if nobody answers', async () => {
+    vi.useFakeTimers();
+    const { router, channel, observations, tabA, tabB, engine } =
+      await askForAnotherBuildsDatabase();
+
+    // The request carries the newest build among this coordinator's tabs.
+    expect(channel.posted).toEqual([
+      {
+        takeover: 1,
+        kind: 'request',
+        scope: 'scope',
+        requestId: expect.stringMatching(/^1:/),
+        buildTime: 2_000,
+      },
+    ]);
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(channel.posted).toHaveLength(1);
+    expect(messagesOfKind(tabB, 'cache-unavailable')).toHaveLength(0);
+
+    // Builds from before handover never answer.
+    await vi.advanceTimersByTimeAsync(1);
+    expectFailedClosed(tabA, tabB, 'another build keeps the database');
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'owner-lock-unavailable'
+      )
+    ).toHaveLength(1);
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+
+    // Nothing waits in line for the lock; a new tab starts a fresh attempt.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const tabC = new FakePort();
+    await register(router, tabC, 'tab-c', 2_000);
+    expect(messagesOfKind(tabC, 'become-owner')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      }),
+    ]);
+  });
+
+  it('keeps waiting when the unknown lock was a tab of this build still registering', async () => {
+    vi.useFakeTimers();
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      takeoverReplyTimeoutMs: 100,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      // tab-late holds its liveness lock before it sends register-tab.
+      queryHeldLockNames: heldLocks(() => livenessLocks('tab-a', 'tab-late')),
+      openTakeoverChannel: channel.open,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 2_000);
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.posted).toHaveLength(1);
+
+    await register(router, new FakePort(), 'tab-late', 2_000);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      phase: 'awaiting-owner-lock',
+    });
+    // Later busy reports find only this build's tabs and ask nobody.
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(channel.posted).toHaveLength(1);
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+  });
+
+  it('fails closed at once when the holding build keeps its database', async () => {
+    vi.useFakeTimers();
+    const { channel, tabA, tabB } = await askForAnotherBuildsDatabase();
+    const [request] = channel.posted;
+    if (request?.kind !== 'request') throw new Error('missing request');
+
+    channel.deliver({
+      takeover: 1,
+      kind: 'reply',
+      scope: 'scope',
+      requestId: request.requestId,
+      decision: 'keep',
+    });
+
+    expectFailedClosed(tabA, tabB, 'another build keeps the database');
+  });
+
+  it('keeps retrying the lock while the holding build hands it over', async () => {
+    vi.useFakeTimers();
+    const { router, channel, observations, tabA, tabB, engine } =
+      await askForAnotherBuildsDatabase();
+    const [request] = channel.posted;
+    if (request?.kind !== 'request') throw new Error('missing request');
+
+    // A reply to some other request changes nothing.
+    channel.deliver({
+      takeover: 1,
+      kind: 'reply',
+      scope: 'scope',
+      requestId: 'another-request',
+      decision: 'keep',
+    });
+    channel.deliver({
+      takeover: 1,
+      kind: 'reply',
+      scope: 'scope',
+      requestId: request.requestId,
+      decision: 'yield',
+    });
+    for (let attempt = 2; attempt <= 4; attempt += 1) busy(engine);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(messagesOfKind(tabB, 'cache-unavailable')).toHaveLength(0);
+    expect(channel.posted).toHaveLength(1);
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'takeover-granted'
+      )
+    ).toHaveLength(1);
+
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      tabId: 'tab-a',
+    });
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([]);
+  });
+
+  it('asks for nothing once the engine took the lock during the lock query', async () => {
+    vi.useFakeTimers();
+    const channel = fakeTakeoverChannel();
+    let answerQuery: ((names: string[]) => void) | undefined;
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      queryHeldLockNames: () =>
+        new Promise<string[]>((resolve) => {
+          answerQuery = resolve;
+        }),
+      openTakeoverChannel: channel.open,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 2_000);
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+
+    busy(engine);
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    answerQuery?.(livenessLocks('tab-a', 'other-build-tab'));
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(channel.posted).toEqual([]);
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      phase: 'opening-database',
+    });
+  });
+
+  it("never takes a departed owner's lingering liveness lock for another build", async () => {
+    vi.useFakeTimers();
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      takeoverReplyTimeoutMs: 100,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      // The departed page's lock is still held while its document unloads.
+      queryHeldLockNames: heldLocks(() => livenessLocks('tab-a', 'tab-b')),
+      openTakeoverChannel: channel.open,
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a', 1_000);
+    await register(router, tabB, 'tab-b', 1_000);
+    const first = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, first);
+    ready(first, 'tab-a', 1, 'opened-existing');
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'page navigation',
+    });
+    const next = new FakePort();
+    await attach(router, tabB, 'tab-b', 2, next);
+    next.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+    });
+
+    // The departing engine still holds the lock for a moment.
+    next.receive({
+      ...version,
+      kind: 'owner-lock-busy',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(channel.posted).toEqual([]);
+    expect(messagesOfKind(tabB, 'cache-unavailable')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      phase: 'awaiting-owner-lock',
+    });
+  });
+
+  /** An active engine of an older build, plus a second tab of that build. */
+  const holdTheDatabase = async (buildTime: number) => {
+    vi.useFakeTimers();
+    const observations: Array<{ name: string; ownerEvent?: string }> = [];
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      openTakeoverChannel: channel.open,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a', buildTime);
+    await register(router, tabB, 'tab-b', buildTime);
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    const ask = (requestBuildTime: number) =>
+      channel.deliver({
+        takeover: 1,
+        kind: 'request',
+        scope: 'scope',
+        requestId: 'request-1',
+        buildTime: requestBuildTime,
+      });
+    return { router, channel, observations, tabA, tabB, engine, ask };
+  };
+
+  it('keeps its database for a build that is not newer', async () => {
+    const { router, channel, tabA, tabB, engine, ask } =
+      await holdTheDatabase(2_000);
+
+    ask(2_000);
+    ask(1_000);
+
+    expect(channel.posted).toEqual([
+      expect.objectContaining({ kind: 'reply', decision: 'keep' }),
+      expect.objectContaining({ kind: 'reply', decision: 'keep' }),
+    ]);
+    expect(router.snapshot()?.state.kind).toBe('active');
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toEqual([]);
+    }
+  });
+
+  it('hands its database to a newer build and sends every tab there', async () => {
+    const { router, channel, observations, tabA, tabB, engine, ask } =
+      await holdTheDatabase(1_000);
+
+    ask(2_000);
+
+    expect(channel.posted).toEqual([
+      {
+        takeover: 1,
+        kind: 'reply',
+        scope: 'scope',
+        requestId: 'request-1',
+        decision: 'yield',
+      },
+    ]);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+    }
+    // The owner's page stops its engine itself when it leaves.
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([]);
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'superseded'
+      )
+    ).toHaveLength(1);
+    // Superseded tabs are refused quietly while they wait to reload.
+    await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+      ...version,
+      kind: 'cache-request',
+      tabId: 'tab-b',
+      request: { id: 5, kind: 'clear' },
+    });
+    expect(messagesOfKind(tabB, 'cache-message')).toEqual([
+      expect.objectContaining({
+        message: expect.objectContaining({
+          id: 5,
+          ok: false,
+          errorCode: 'owner-lock-unavailable',
+        }),
+      }),
+    ]);
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'page navigation',
+    });
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'abrupt-loss'
+      )
+    ).toEqual([]);
+
+    // Nothing is elected again. A late tab of this build runs uncached rather
+    // than reloading, which could land on this build again, and a second
+    // request finds nothing left to hand over.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const tabC = new FakePort();
+    await register(router, tabC, 'tab-c', 1_000);
+    for (const tab of [tabA, tabB, tabC]) {
+      expect(messagesOfKind(tab, 'become-owner')).toHaveLength(
+        tab === tabA ? 1 : 0
+      );
+    }
+    expect(messagesOfKind(tabC, 'cache-superseded')).toEqual([]);
+    expect(messagesOfKind(tabC, 'cache-unavailable')).toHaveLength(1);
+    ask(3_000);
+    expect(channel.posted).toHaveLength(1);
+  });
+
+  it('sends the tabs of an idle older build to the newer one without answering', async () => {
+    vi.useFakeTimers();
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      openTakeoverChannel: channel.open,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 1_000);
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-unavailable',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+
+    channel.deliver({
+      takeover: 1,
+      kind: 'request',
+      scope: 'scope',
+      requestId: 'request-1',
+      buildTime: 2_000,
+    });
+
+    expect(channel.posted).toEqual([]);
+    expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+  });
+
+  it('retries a busy lock within one build until the engine gives up', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      queryHeldLockNames: heldLocks(() => livenessLocks('tab-a')),
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      phase: 'awaiting-owner-lock',
+    });
+
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-unavailable',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expect(messagesOfKind(tab, 'cache-unavailable')).toHaveLength(1);
+    expect(messagesOfKind(tab, 'terminate-engine')).toEqual([
+      expect.objectContaining({
+        reason: expect.stringContaining('the engine stopped retrying'),
+      }),
+    ]);
+  });
+
+  it('fails closed without a wipe when an open finds the files still busy', async () => {
+    vi.useFakeTimers();
+    const observations: Array<{ name: string; ownerEvent?: string }> = [];
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+      ...version,
+      kind: 'cache-request',
+      tabId: 'tab-b',
+      request: { id: 1, kind: 'clear' },
+    });
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    for (const kind of [
+      'engine-assets-ready',
+      'owner-lock-acquired',
+    ] as const) {
+      engine.receive({ ...version, kind, tabId: 'tab-a', ownerEpoch: 1 });
+    }
+
+    // A predecessor, such as a reloading tab's worker, kept the files open.
+    engine.receive({
+      ...version,
+      kind: 'activation-failed',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'OPFS sync handle open failed (NoModificationAllowedError)',
+      failureCode: 'storage-busy',
+    });
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 1,
+        reason: expect.stringContaining('files stayed busy'),
+      }),
+    ]);
+    expect(messagesOfKind(tabB, 'cache-message')).toEqual([
+      expect.objectContaining({
+        message: expect.objectContaining({
+          id: 1,
+          ok: false,
+          errorCode: 'owner-lock-unavailable',
+        }),
+      }),
+    ]);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+        expect.objectContaining({
+          reason: expect.stringContaining('files are still open'),
+        }),
+      ]);
+      expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
+    }
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'storage-busy'
+      )
+    ).toHaveLength(1);
+    expect(
+      observations.filter(
+        (observation) =>
+          observation.name === 'graphql_cache.reset_wipe' ||
+          observation.name === 'graphql_cache.storage_reset_required'
+      )
+    ).toEqual([]);
+
+    // Nothing retries in the background. A tab that registers later opens
+    // the existing database instead of wiping it.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+    const tabC = new FakePort();
+    await register(router, tabC, 'tab-c');
+    expect(messagesOfKind(tabC, 'become-owner')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      }),
+    ]);
+  });
+
+  it('lets the owner delete stale databases only when no other build has tabs', async () => {
+    vi.useFakeTimers();
+    let locks = livenessLocks('tab-a', 'old-build-tab');
+    const setup = async () => {
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => {},
+        queryHeldLockNames: heldLocks(() => locks),
+      });
+      const tab = new FakePort();
+      await register(router, tab, 'tab-a');
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await vi.advanceTimersByTimeAsync(0);
+      return tab;
+    };
+
+    expect(
+      messagesOfKind(await setup(), 'remove-stale-databases')
+    ).toHaveLength(0);
+
+    locks = livenessLocks('tab-a');
+    expect(messagesOfKind(await setup(), 'remove-stale-databases')).toEqual([
+      {
+        ...version,
+        kind: 'remove-stale-databases',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+      },
+    ]);
+  });
+
+  it('replaces an engine that stops reporting while it tries the owner lock', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      ownerLockWaitTimeoutMs: 30,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+
+    await vi.advanceTimersByTimeAsync(30);
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+      expect.objectContaining({
+        reason: 'engine owner lock watchdog timed out',
+      }),
+    ]);
+    // It never had the storage grant, so its replacement keeps the database.
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      }),
+    ]);
+  });
+
   it('allows slow asset loading and reports phase budgets to owners and late joiners', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
       assetLoadTimeoutMs: 100,
+      ownerLockWaitTimeoutMs: 30,
       activationTimeoutMs: 10,
       verifyTabLockHeld: async () => true,
       watchTabLock: () => () => {},
@@ -718,6 +1611,18 @@ describe('CoordinatorRouter', () => {
     engine.receive({
       ...version,
       kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    // Loading assets grants no storage access; the lock wait comes first.
+    expect(messagesOfKind(engine, 'open-engine')).toHaveLength(0);
+    expect(messagesOfKind(tabB, 'engine-startup').at(-1)).toMatchObject({
+      phase: 'awaiting-owner-lock',
+      timeoutMs: 30,
+    });
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
@@ -794,9 +1699,119 @@ describe('CoordinatorRouter', () => {
     ]);
     const late = new FakePort();
     await register(router, late, 'tab-b');
-    expect(messagesOfKind(late, 'terminal-error')).toEqual([
-      expect.objectContaining({ storageUntouched: true }),
+    expect(messagesOfKind(late, 'terminal-error')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 7,
+      databaseAction: 'open-existing',
+    });
+    // A fresh registration gets a fresh bounded budget, not another immediate
+    // terminal error from the previous host's exhausted cycle.
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(messagesOfKind(late, 'become-owner')).toHaveLength(6);
+    expect(messagesOfKind(tab, 'become-owner')).toHaveLength(6);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'failed',
+      storageUntouched: true,
+    });
+  });
+
+  it('pauses a hidden storage-open watchdog without treating suspension as a failure', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      assetLoadTimeoutMs: 10,
+      activationTimeoutMs: 10,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+    });
+    const owner = new FakePort();
+    const engine = new FakePort();
+    await register(router, owner, 'owner');
+    await attach(router, owner, 'owner', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'owner',
+      ownerEpoch: 1,
+    });
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
+      tabId: 'owner',
+      ownerEpoch: 1,
+    });
+    await router.handleTabMessage(owner, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'owner',
+      visible: false,
+    });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      phase: 'opening-database',
+    });
+    expect(messagesOfKind(owner, 'terminate-engine')).toEqual([]);
+    await router.handleTabMessage(owner, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'owner',
+      visible: true,
+    });
+    await vi.advanceTimersByTimeAsync(11);
+    expect(messagesOfKind(owner, 'terminate-engine')).toHaveLength(1);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      ownerEpoch: 2,
+      databaseAction: 'wipe-before-open',
+    });
+  });
+
+  it('resumes bounded startup reads when the original owner becomes visible before readiness', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+    });
+    const owner = new FakePort();
+    const client = new FakePort();
+    const engine = new FakePort();
+    await register(router, owner, 'owner');
+    await attach(router, owner, 'owner', 1, engine);
+    await register(router, client, 'client');
+    await router.handleTabMessage(owner, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'owner',
+      visible: false,
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(messagesOfKind(client, 'cache-read-availability')).toMatchObject([
+      { ownerEpoch: 1, state: 'waiting' },
+      { ownerEpoch: 1, state: 'blocked' },
     ]);
+    expect(messagesOfKind(owner, 'terminate-engine')).toEqual([]);
+    expect(messagesOfKind(client, 'become-owner')).toEqual([]);
+    expect(router.snapshot()?.state.kind).toBe('activating');
+    await router.handleTabMessage(owner, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'owner',
+      visible: true,
+    });
+    ready(engine, 'owner', 1, 'opened-existing');
+    expect(messagesOfKind(client, 'cache-read-availability')).toMatchObject([
+      { ownerEpoch: 1, state: 'waiting' },
+      { ownerEpoch: 1, state: 'blocked' },
+      { ownerEpoch: 1, state: 'ready' },
+    ]);
+    expect(messagesOfKind(client, 'engine-replaced')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      tabId: 'owner',
+      ownerEpoch: 1,
+    });
   });
 
   it('preserves the owner and in-flight work through repeated missed heartbeats', async () => {
@@ -965,6 +1980,12 @@ describe('CoordinatorRouter', () => {
     openingEngine.receive({
       ...version,
       kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    openingEngine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
@@ -1156,6 +2177,8 @@ describe('CoordinatorRouter', () => {
       scope: 'scope',
       tabId: 'tab-a',
       livenessLockName: 'graphql-cache-tab:scope:tab-a',
+      visible: true,
+      buildTime: 0,
     });
     await vi.waitFor(() =>
       expect(messagesOfKind(tabA, 'registered')).toHaveLength(1)
@@ -1332,6 +2355,12 @@ describe('CoordinatorRouter', () => {
     engine.receive({
       ...version,
       kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    engine.receive({
+      ...version,
+      kind: 'owner-lock-acquired',
       tabId: 'tab-a',
       ownerEpoch: 1,
     });

@@ -6,11 +6,12 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use constant_time_eq::constant_time_eq;
 use model_user::UserContext;
 use rootcause::Report;
+use tracing::Level;
 
 use super::{
     models::{
         BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError, ValidatedCredential,
     },
     ports::{
         BotAuthorizer, HarnessAuthorizer, JwtValidator, MacroAuthorizationService,
@@ -154,8 +155,16 @@ where
         })
     }
 
+    #[tracing::instrument(skip_all, err(level = Level::DEBUG))]
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.validator.validate_credential(jwt)
+    }
+
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(
             bot_id = tracing::field::Empty,
@@ -194,7 +203,7 @@ where
     }
 
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(user_id = tracing::field::Empty)
     )]
@@ -212,7 +221,7 @@ where
     }
 
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(
             harness_id = tracing::field::Empty,

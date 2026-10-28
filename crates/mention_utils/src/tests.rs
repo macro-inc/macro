@@ -1,9 +1,10 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    NullXmlFormatter, ParsedAgentSessionMention, ParsedContactMention, ParsedDateMention,
-    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
-    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter, XmlTag,
+    NullXmlFormatter, ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention,
+    ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedPullRequestMention, ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment,
+    XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -791,7 +792,7 @@ fn parse_pull_request_mention() {
     assert_eq!(rendered, "macro/macro#123");
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, label })),
+        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, label, .. })),
     ] => {
         assert_eq!(id.as_ref(), "foreign-1");
         assert_eq!(label.as_deref(), Some("macro/macro#123"));
@@ -804,6 +805,67 @@ fn parse_pull_request_mention_without_label() {
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "Pull request");
+}
+
+#[test]
+fn parse_pull_request_mention_by_github_url() {
+    let input = r#"See <m-pr-mention>{"url":"https://github.com/macro-inc/macro/pull/7945","label":""}</m-pr-mention>."#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "See macro-inc/macro#7945.");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(&out.0[..], [
+        TextSegment::Plain("See "),
+        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, url, .. })),
+        TextSegment::Plain("."),
+    ] => {
+        assert!(id.is_empty());
+        assert_eq!(url.as_deref(), Some("https://github.com/macro-inc/macro/pull/7945"));
+    });
+}
+
+#[test]
+fn pull_request_github_ref_reads_a_url_written_as_the_id() {
+    let input = r#"<m-pr-mention>{"id":"https://github.com/macro-inc/macro/pull/7945","url":null}</m-pr-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "macro-inc/macro#7945");
+}
+
+#[test]
+fn pull_request_github_ref_ignores_non_pull_urls() {
+    for url in [
+        "https://github.com/macro-inc/macro/issues/7945",
+        "https://example.com/macro-inc/macro/pull/7945",
+        "https://github.com/macro-inc/macro/pull/79x",
+    ] {
+        let input = format!(r#"<m-pr-mention>{{"url":"{url}"}}</m-pr-mention>"#);
+        let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(&input).unwrap()).0;
+        assert_eq!(rendered, "Pull request", "{url}");
+    }
+    let input =
+        r#"<m-pr-mention>{"url":"https://www.github.com/a/b/pull/12/files#x"}</m-pr-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "a/b#12");
+}
+
+#[test]
+fn parse_booking_link_mention() {
+    let input = r#"Book here: <m-booking-link-mention>{"profileId":"profile-1","slug":"intro","url":"https://macro.com/app/book/profile-1/intro","label":""}</m-booking-link-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "Book here: intro");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(&out.0[..], [
+        TextSegment::Plain("Book here: "),
+        TextSegment::Xml(XmlTag::BookingLink(ParsedBookingLinkMention {
+            profile_id,
+            slug,
+            url,
+            ..
+        })),
+    ] => {
+        assert_eq!(profile_id.as_ref(), "profile-1");
+        assert_eq!(slug.as_deref(), Some("intro"));
+        assert_eq!(url.as_ref(), "https://macro.com/app/book/profile-1/intro");
+    });
 }
 
 // =============================================================================

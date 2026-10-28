@@ -1,0 +1,1521 @@
+{
+  "auth": "AUTH token/with+odd=chars~*!",
+  "user_agent": "whatsmeow-rs-test/1.0",
+  "media_keys": [
+    {
+      "media_type": "WhatsApp Image Keys",
+      "mms_type": "image",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "9eec22fdf8297f59632d79711adc9ed2",
+      "cipher_key": "3d46bb135bc7abfbe9906600d04538d68c3390c423b80bb390b4ccd7babe7d39",
+      "mac_key": "b60ea78adc0f4cc6828d6d93f08a03c829362343a08170e2af7b9686de1e54a8",
+      "ref_key": "c73d53bdd058ed552b730ac5c3733ad2d9415549b426390848396f82a4498839"
+    },
+    {
+      "media_type": "WhatsApp Video Keys",
+      "mms_type": "video",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "293451e11439ba681d55a8be34733a47",
+      "cipher_key": "740dbf00f76ee065cd32865e7e95eb60f2bd40a9682699768cc056e17d72050c",
+      "mac_key": "79da58694bc08c043361b8e811da301e70c45110cfbc876c77cf0f31ae943a1d",
+      "ref_key": "5dc15c57c72d422d4002bd7cdf2139524d221a947221aa257a3a34f2ccc4e3d9"
+    },
+    {
+      "media_type": "WhatsApp Audio Keys",
+      "mms_type": "audio",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "7e1de9660e74284748f27255b4d722ca",
+      "cipher_key": "0c41620d1764bd3d0bc5676b1a09e00207bae918cf43310b2df053c50558bd14",
+      "mac_key": "5280ccf7fa7b357b76597ff35f7d28316fa20ca3b4d1c7dc480d4746fc6171b8",
+      "ref_key": "e8a6a618cf334d6a7b02b709fe19771b026e4cc78ce5ba912d116064bd5bb380"
+    },
+    {
+      "media_type": "WhatsApp Document Keys",
+      "mms_type": "document",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "cb42d215dc7132af71548c4048d8aeb2",
+      "cipher_key": "ad8263fb3d01ec5718e222e407e074cd6088b6809314039354f774fded4e6d91",
+      "mac_key": "7445972d87a5765100d66b28bf8a7a075f75284b4bc19a9f17206000a346e1d1",
+      "ref_key": "124f950348af443fbb02d69608a5679810c58749ddf8c8598107b82017e9fb77"
+    },
+    {
+      "media_type": "WhatsApp History Keys",
+      "mms_type": "md-msg-hist",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "853d43d13a6b100cc55630633e348b4b",
+      "cipher_key": "ee21357548048adebb3d70805d57b886fcabac6a487ed480289d10d32062f313",
+      "mac_key": "94dfe0eaa382434c2b3f426a2111cbb6ad890a4bf17bc777a060aa4f3809f357",
+      "ref_key": "47710ce06d15c418e24d4953408b125b73915b8aa03d7687b962abec4dca23e0"
+    },
+    {
+      "media_type": "WhatsApp App State Keys",
+      "mms_type": "md-app-state",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "9f85645e77056b9e45eb937a4a43ffbc",
+      "cipher_key": "eef686039ae20ae7920f73e798b24e84025b9f8060e06f2c81163dc8c37fda2f",
+      "mac_key": "95e517e5587cd1d57b57dc13b1687e2b995b6612a8dd0e682258f4d0bd493555",
+      "ref_key": "7e79121a5e3a420adc9384f70588bf0819b61443d91f2f61142b573c42c8eacd"
+    },
+    {
+      "media_type": "WhatsApp Sticker Pack Keys",
+      "mms_type": "sticker-pack",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "f2e85632f92841601cee96716b603a20",
+      "cipher_key": "92104f943a197422500ba4b8347928907a28aca387d92fe776d7bc330b18274e",
+      "mac_key": "0fdd15eb08f7185a687fad96aefb84408dd9423d1622cfc02a286a45c5f05ed3",
+      "ref_key": "381bb7f62114504e501aa3466bb29dc1748b8aa2a1db18b1e6f2f8b4ce8fd715"
+    },
+    {
+      "media_type": "WhatsApp Link Thumbnail Keys",
+      "mms_type": "thumbnail-link",
+      "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "iv": "2cd0841c59d9b148cc6ea9166baca5e3",
+      "cipher_key": "7b809302bca50c76ad46299392d938614c2a484e7a4ee015bf8d5e3d32e8d093",
+      "mac_key": "a9a909a0f54b05fa192b025139b7a3130e691e20240f1e7c55430f6fcf535a7a",
+      "ref_key": "583d24305ab2b3420f19b745e0b26dade6565d7c51088cda446dd920e2acb4f1"
+    }
+  ],
+  "validate": [
+    {
+      "iv": "82d2a4f7d706ee0c0f6bb255f3611cf2",
+      "file": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184",
+      "mac_key": "5bb83cffa91cc51dd51a0e4ba9f4943b1de8713811fd998774501152e7e942c5",
+      "mac": "d1c84737775419acb094",
+      "error": ""
+    },
+    {
+      "iv": "82d2a4f7d706ee0c0f6bb255f3611cf2",
+      "file": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184",
+      "mac_key": "5bb83cffa91cc51dd51a0e4ba9f4943b1de8713811fd998774501152e7e942c5",
+      "mac": "d0c84737775419acb094",
+      "error": "invalid media hmac"
+    },
+    {
+      "iv": "82d2a4f7d706ee0c0f6bb255f3611cf2",
+      "file": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184",
+      "mac_key": "5bb83cffa91cc51dd51a0e4ba9f4943b1de8713811fd998774501152e7e942c5",
+      "mac": "d1c84737775419acb0",
+      "error": "invalid media hmac"
+    },
+    {
+      "iv": "9eec22fdf8297f59632d79711adc9ed2",
+      "file": "505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+      "mac_key": "b60ea78adc0f4cc6828d6d93f08a03c829362343a08170e2af7b9686de1e54a8",
+      "mac": "00010203040506070809",
+      "error": "invalid media hmac"
+    }
+  ],
+  "upload": {
+    "media_type": "WhatsApp Image Keys",
+    "plaintext": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+    "response_json": "{\"url\":\"https://mmg.whatsapp.net/o1/v/t62.7118-24/f1/m231/up.enc?ccb=9-4\",\"direct_path\":\"/o1/v/t62.7118-24/f1/m231/up.enc?ccb=9-4\u0026oh=01_Q5\u0026oe=68\",\"handle\":\"\",\"object_id\":\"obj-1\",\"extra\":true}",
+    "requests": [
+      {
+        "host": 0,
+        "method": "POST",
+        "request_uri": "/mms/image/5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=?auth=AUTH+token%2Fwith%2Bodd%3Dchars~%2A%21\u0026token=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI%3D",
+        "headers": {
+          "Content-Length": "138",
+          "Origin": "https://web.whatsapp.com",
+          "Referer": "https://web.whatsapp.com/",
+          "User-Agent": "Go-http-client/1.1"
+        },
+        "body": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184d1c84737775419acb094"
+      }
+    ],
+    "url": "https://mmg.whatsapp.net/o1/v/t62.7118-24/f1/m231/up.enc?ccb=9-4",
+    "direct_path": "/o1/v/t62.7118-24/f1/m231/up.enc?ccb=9-4\u0026oh=01_Q5\u0026oe=68",
+    "handle": "",
+    "object_id": "obj-1",
+    "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+    "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+    "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+    "file_length": 115
+  },
+  "upload_newsletter": {
+    "media_type": "WhatsApp Video Keys",
+    "plaintext": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+    "response_json": "{\"url\":\"https://mmg.whatsapp.net/newsletter/x\",\"direct_path\":\"/newsletter/x?a=b\",\"handle\":\"handle-1\"}",
+    "requests": [
+      {
+        "host": 0,
+        "method": "POST",
+        "request_uri": "/newsletter/newsletter-video/56zleMLaWZElOCF27wyjDuWhUqVayCeBGULfmaqiZRs=?auth=AUTH+token%2Fwith%2Bodd%3Dchars~%2A%21\u0026token=56zleMLaWZElOCF27wyjDuWhUqVayCeBGULfmaqiZRs%3D",
+        "headers": {
+          "Content-Length": "115",
+          "Origin": "https://web.whatsapp.com",
+          "Referer": "https://web.whatsapp.com/",
+          "User-Agent": "Go-http-client/1.1"
+        },
+        "body": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420"
+      }
+    ],
+    "url": "https://mmg.whatsapp.net/newsletter/x",
+    "direct_path": "/newsletter/x?a=b",
+    "handle": "handle-1",
+    "object_id": "",
+    "media_key": null,
+    "file_enc_sha256": null,
+    "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+    "file_length": 115
+  },
+  "downloads": [
+    {
+      "name": "ok",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "next_host_on_500",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "retry_on_503",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 503,
+            "retry_after": "0",
+            "body": null
+          },
+          {
+            "status": 429,
+            "retry_after": "0",
+            "body": null
+          },
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "retries_exhausted",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 502,
+            "retry_after": "0",
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "not_found",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 404,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "download failed with status code 404",
+      "to_file": false
+    },
+    {
+      "name": "gone",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 410,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "download failed with status code 410",
+      "to_file": false
+    },
+    {
+      "name": "last_host_500",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: download failed with status code 500",
+      "to_file": false
+    },
+    {
+      "name": "bad_hmac",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "5b596692f203383392a3bdeee934def4e765ae92369c7bd1928bcdfb7eaa8100",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184d1c84737775419acb095"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184d1c84737775419acb095"
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=W1lmkvIDODOSo73u6TTe9OdlrpI2nHvRkovN-36qgQA=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=W1lmkvIDODOSo73u6TTe9OdlrpI2nHvRkovN-36qgQA=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: invalid media hmac",
+      "to_file": false
+    },
+    {
+      "name": "bad_enc_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=iBCtWB5Z8rw5KLJhcHpxMI9-E56wSCA2bcTVwY2YAiU=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=iBCtWB5Z8rw5KLJhcHpxMI9-E56wSCA2bcTVwY2YAiU=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: hash of media ciphertext doesn't match",
+      "to_file": false
+    },
+    {
+      "name": "bad_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "hash of media plaintext doesn't match",
+      "to_file": false
+    },
+    {
+      "name": "too_short",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "0102030405060708090a"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "unencrypted",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": null,
+      "file_sha256": "e3e1eda7e8eba1f5a068ecbbf96b4d964aea22457890e3f87fba27cfe3b757c4",
+      "file_enc_sha256": null,
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "706c61696e206e6577736c6574746572206d65646961"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "706c61696e206e6577736c6574746572206d65646961",
+      "error": "",
+      "to_file": false
+    },
+    {
+      "name": "unencrypted_bad_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": null,
+      "file_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "file_enc_sha256": null,
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "706c61696e206e6577736c6574746572206d65646961"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: hash of unencrypted media doesn't match",
+      "to_file": false
+    },
+    {
+      "name": "no_slash",
+      "direct_path": "v/no-slash",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": null,
+      "data": null,
+      "error": "media download path does not start with slash: v/no-slash",
+      "to_file": false
+    },
+    {
+      "name": "ok",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": true
+    },
+    {
+      "name": "next_host_on_500",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": true
+    },
+    {
+      "name": "retry_on_503",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 503,
+            "retry_after": "0",
+            "body": null
+          },
+          {
+            "status": 429,
+            "retry_after": "0",
+            "body": null
+          },
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": true
+    },
+    {
+      "name": "retries_exhausted",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 502,
+            "retry_after": "0",
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "77686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f61642077686174736d656f77206d656469612075706c6f616420",
+      "error": "",
+      "to_file": true
+    },
+    {
+      "name": "not_found",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 404,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "download failed with status code 404",
+      "to_file": true
+    },
+    {
+      "name": "gone",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 410,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "download failed with status code 410",
+      "to_file": true
+    },
+    {
+      "name": "last_host_500",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 500,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: download failed with status code 500",
+      "to_file": true
+    },
+    {
+      "name": "bad_hmac",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "5b596692f203383392a3bdeee934def4e765ae92369c7bd1928bcdfb7eaa8100",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184d1c84737775419acb095"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": "307e9550bb6bc0077e8ce2d008b7ae058bf4a4151ed61be21aa8c5490fa24b34f7eef210d7af8bdd201cbc21d10167c944b079dab9b5937b7951222ee83c0547e2f43ae79b6a7ed892e4b4540df8c59c18bd0dbd61cafc1e9e886e5cbd38b2b03bf8222392103d3d709306000ea6063e112e0c96e3f90c98250f2816ccc2d184d1c84737775419acb095"
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=W1lmkvIDODOSo73u6TTe9OdlrpI2nHvRkovN-36qgQA=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=W1lmkvIDODOSo73u6TTe9OdlrpI2nHvRkovN-36qgQA=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: invalid media hmac",
+      "to_file": true
+    },
+    {
+      "name": "bad_enc_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=iBCtWB5Z8rw5KLJhcHpxMI9-E56wSCA2bcTVwY2YAiU=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=iBCtWB5Z8rw5KLJhcHpxMI9-E56wSCA2bcTVwY2YAiU=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: hash of media ciphertext doesn't match",
+      "to_file": true
+    },
+    {
+      "name": "bad_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "hash of media plaintext doesn't match",
+      "to_file": true
+    },
+    {
+      "name": "too_short",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "0102030405060708090a"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: invalid media hmac",
+      "to_file": true
+    },
+    {
+      "name": "unencrypted",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": null,
+      "file_sha256": "e3e1eda7e8eba1f5a068ecbbf96b4d964aea22457890e3f87fba27cfe3b757c4",
+      "file_enc_sha256": null,
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "706c61696e206e6577736c6574746572206d65646961"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": "706c61696e206e6577736c6574746572206d65646961",
+      "error": "",
+      "to_file": true
+    },
+    {
+      "name": "unencrypted_bad_sha256",
+      "direct_path": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0",
+      "media_key": null,
+      "file_sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "file_enc_sha256": null,
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": "706c61696e206e6577736c6574746572206d65646961"
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": [
+        {
+          "host": 0,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        },
+        {
+          "host": 1,
+          "method": "GET",
+          "request_uri": "/v/t62.7118-24/12345_67890_n.enc?ccb=11-4\u0026oh=01_Q5Aa\u0026oe=6700\u0026_nc_sid=5e03e0\u0026hash=\u0026mms-type=image\u0026__wa-mms=",
+          "headers": {
+            "Origin": "https://web.whatsapp.com",
+            "Referer": "https://web.whatsapp.com/",
+            "User-Agent": "whatsmeow-rs-test/1.0"
+          },
+          "body": ""
+        }
+      ],
+      "data": null,
+      "error": "failed to download media from last host: hash of unencrypted media doesn't match",
+      "to_file": true
+    },
+    {
+      "name": "no_slash",
+      "direct_path": "v/no-slash",
+      "media_key": "61b6d24e801b23e06fc2df9405a203aad8389f7ffc8740b4a5885b4f5ff9391a",
+      "file_sha256": "e7ace578c2da599125382176ef0ca30ee5a152a55ac827811942df99aaa2651b",
+      "file_enc_sha256": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+      "responses": [
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ],
+        [
+          {
+            "status": 200,
+            "body": null
+          }
+        ]
+      ],
+      "requests": null,
+      "data": null,
+      "error": "media download path does not start with slash: v/no-slash",
+      "to_file": true
+    }
+  ],
+  "delete": {
+    "media_type": "WhatsApp History Keys",
+    "direct_path": "/v/t62.15575-24/hist.enc?ccb=11-4\u0026oh=01",
+    "enc_file_hash": "e69282bc1221dd82495aa9024b08fd6383ab8b9297108c6ac779278b47b0b322",
+    "enc_handle": "enc-handle",
+    "companion_meta_nonce": "companion-nonce",
+    "requests": [
+      {
+        "host": 0,
+        "method": "DELETE",
+        "request_uri": "/mms/md-msg-hist/5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI=?auth=AUTH+token%2Fwith%2Bodd%3Dchars~%2A%21\u0026d_md=L3YvdDYyLjE1NTc1LTI0L2hpc3QuZW5j\u0026e_handle=enc-handle\u0026token=5pKCvBIh3YJJWqkCSwj9Y4Ori5KXEIxqx3kni0ewsyI%3D",
+        "headers": {
+          "Companion_user_secret": "companion-nonce",
+          "Origin": "https://web.whatsapp.com",
+          "Referer": "https://web.whatsapp.com/",
+          "User-Agent": "Go-http-client/1.1"
+        },
+        "body": ""
+      }
+    ]
+  },
+  "media_conn": {
+    "response": "00f8081906fa000308ff861234b5678a1f0414f801f80a3aa9fc1c4155544820746f6b656e2f776974682b6f64643d63686172737e2a21bdbe7cff8321600f63cff803f80472468bf801f80158f8015ef8057246fc1d6d656469612d616d73322d312e63646e2e77686174736170702e6e657404bc",
+    "auth": "AUTH token/with+odd=chars~*!",
+    "auth_ttl": 21600,
+    "ttl": 300,
+    "max_buckets": 12,
+    "hosts": [
+      {
+        "hostname": "mmg.whatsapp.net"
+      },
+      {
+        "hostname": "media-ams2-1.cdn.whatsapp.net"
+      }
+    ],
+    "request": "00f80a1908ff861234b5678a2f16c2045a11fa0003f801f8013a"
+  }
+}
