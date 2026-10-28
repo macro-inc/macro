@@ -172,6 +172,7 @@ export type ReferredFrom =
   | 'sidebar'
   | 'dock'
   | 'home'
+  | 'board'
   | 'entity-actions-menu'
   | 'hotkey'
   | 'quick-access'

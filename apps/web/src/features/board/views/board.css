@@ -1,0 +1,18 @@
+/* Nodes are positioned with `transform`, so entrance motion uses the
+   individual `scale` property, which composes with it. */
+@keyframes board-node-in {
+  from {
+    opacity: 0;
+    scale: 0.9;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-board-node] {
+    animation: board-node-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}

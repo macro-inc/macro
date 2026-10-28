@@ -1,0 +1,178 @@
+import './board.css';
+import { ViewShell } from '@app/components/view-shell';
+import { useViewTabHotkeys } from '@app/components/view-shell/use-view-tab-hotkeys';
+import { t } from '@app/lib/i18n';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import { Button } from '@ui';
+import { createSignal, Match, Switch } from 'solid-js';
+import { useBoard } from '../context/board-context';
+import {
+  BOARD_VARIANTS,
+  type BoardVariant,
+  variantCode,
+} from '../core/variants';
+import { createBoardMemory } from '../primitives/board-memory';
+import { createBoardScene } from '../primitives/board-scene';
+import { BoardModal } from './board-modal';
+import { BoardSidebar, variantDescription, variantName } from './board-sidebar';
+import { BubblesBoard } from './bubbles-board';
+import { NeighborhoodsBoard } from './neighborhoods-board';
+import { PeopleBoard } from './people-board';
+import { RadarBoard } from './radar-board';
+import { RiverBoard } from './river-board';
+import type { VariantProps } from './variant-shared';
+
+/**
+ * The company board: a variant picker beside a pannable, zoomable board of
+ * what is happening. Opening an item shows it in a modal over the board;
+ * the host owns which variant is selected.
+ */
+export function BoardView(props: {
+  variant: BoardVariant;
+  onVariantChange: (variant: BoardVariant) => void;
+  /** Number keys and Tab cycle variants while this scope is active. */
+  hotkeys?: { scopeId: string; enabled: () => boolean };
+}) {
+  const board = useBoard();
+  const memory = createBoardMemory(board.storage);
+  const scene = createBoardScene(board, memory);
+  const [openKey, setOpenKey] = createSignal<string>();
+
+  const closeModal = () => {
+    const key = openKey();
+    setOpenKey(undefined);
+    if (key) board.close(key);
+  };
+
+  const step = (offset: 1 | -1) => {
+    const index = BOARD_VARIANTS.indexOf(props.variant);
+    const next =
+      BOARD_VARIANTS[
+        (index + offset + BOARD_VARIANTS.length) % BOARD_VARIANTS.length
+      ];
+    props.onVariantChange(next);
+  };
+
+  if (props.hotkeys) {
+    const hotkeys = props.hotkeys;
+    useViewTabHotkeys({
+      scopeId: hotkeys.scopeId,
+      enabled: hotkeys.enabled,
+      ids: () => BOARD_VARIANTS,
+      activeId: () => props.variant,
+      setActiveId: props.onVariantChange,
+    });
+  }
+
+  const variantProps: VariantProps = {
+    scene,
+    memory,
+    onOpen: (key) => {
+      memory.markSeen(key, board.now());
+      if (board.open(key) === 'modal') setOpenKey(key);
+    },
+    onDismiss: (key, activityAt) => {
+      memory.dismiss(key, activityAt);
+      if (openKey() === key) closeModal();
+    },
+    onRetry: () => board.source.retry(),
+  };
+
+  const openItem = () => {
+    const key = openKey();
+    return key === undefined ? undefined : scene.item(key);
+  };
+
+  return (
+    <>
+      <ViewShell.Root asidePreferenceKey="board" resizable>
+        <ViewShell.Aside>
+          <BoardSidebar
+            variant={props.variant}
+            onVariantChange={props.onVariantChange}
+            scene={scene}
+            memory={memory}
+          />
+        </ViewShell.Aside>
+        <ViewShell.Main class="flex flex-col overflow-hidden">
+          <ViewShell.TopBar>
+            <div class="flex min-w-0 flex-1 items-baseline gap-2">
+              <h1 class="shrink-0 text-sm font-semibold tracking-[-0.03em] text-ink">
+                {variantName(props.variant)}
+              </h1>
+              <span class="shrink-0 font-mono text-[11px] text-ink-extra-muted">
+                {variantCode(props.variant)}
+              </span>
+              <span class="min-w-0 truncate text-xs text-ink-muted">
+                {variantDescription(props.variant)}
+              </span>
+            </div>
+            <HeaderActionGroup label={t('board.variants')}>
+              <Button
+                variant="ghost"
+                size="icon-md"
+                label={variantName(
+                  BOARD_VARIANTS[
+                    (BOARD_VARIANTS.indexOf(props.variant) +
+                      BOARD_VARIANTS.length -
+                      1) %
+                      BOARD_VARIANTS.length
+                  ]
+                )}
+                onClick={() => step(-1)}
+              >
+                <CaretLeftIcon />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-md"
+                label={variantName(
+                  BOARD_VARIANTS[
+                    (BOARD_VARIANTS.indexOf(props.variant) + 1) %
+                      BOARD_VARIANTS.length
+                  ]
+                )}
+                onClick={() => step(1)}
+              >
+                <CaretRightIcon />
+              </Button>
+            </HeaderActionGroup>
+          </ViewShell.TopBar>
+          <div class="relative min-h-0 flex-1 overflow-hidden border-t border-edge-muted">
+            <Switch>
+              <Match when={props.variant === 'v1a'}>
+                <NeighborhoodsBoard {...variantProps} />
+              </Match>
+              <Match when={props.variant === 'v1b'}>
+                <BubblesBoard {...variantProps} />
+              </Match>
+              <Match when={props.variant === 'v1c'}>
+                <RiverBoard {...variantProps} />
+              </Match>
+              <Match when={props.variant === 'v1d'}>
+                <RadarBoard {...variantProps} />
+              </Match>
+              <Match when={props.variant === 'v1e'}>
+                <PeopleBoard {...variantProps} />
+              </Match>
+            </Switch>
+          </div>
+        </ViewShell.Main>
+      </ViewShell.Root>
+      <BoardModal
+        item={openItem()}
+        onClose={closeModal}
+        onDismiss={(key) => {
+          const item = scene.item(key);
+          if (item) variantProps.onDismiss(key, item.lastActivityAt);
+        }}
+        onOpenInSplit={(key, newSplit) => {
+          closeModal();
+          board.openInSplit(key, { newSplit });
+        }}
+      />
+    </>
+  );
+}
