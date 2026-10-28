@@ -40,6 +40,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           onOpenTask={props.onOpenTask}
           onCreateTask={props.onCreateTask}
           onCloseTask={() => {}}
+          hideTaskProject
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
               projectId,

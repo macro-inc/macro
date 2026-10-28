@@ -41,6 +41,12 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
+caret mapping) has a backend-free timing regression:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/collaboration/browser-test/playwright.config.ts`.
+Keep reconcile and caret lookups linear in the document: no `getChildren()` or
+container scan per node.
+
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
 slides into a short window; the phone drawer shows late requests. The same
@@ -91,6 +97,11 @@ checks project ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
+
+Block formatting passes a forward copy of the selection to Lexical's
+`$setBlocksType` so backward selections include their first paragraph and keep
+the editor's actual selection direction. The Markdown core browser suite's
+`quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -204,6 +215,10 @@ the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
+Agent split headers show live viewers through `BlockLiveIndicators` with the
+resolved session ID; keep the existing `AgentSessionProvider` subscription to
+`agent_session` rather than enabling legacy block tracking of placeholder IDs.
+
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
@@ -299,6 +314,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.

@@ -1,5 +1,12 @@
 # AI Chat (Agents)
 
+Agent session split headers show other current viewers' avatars, excluding your
+own, with up to three avatars and a count for additional viewers. Presence uses
+the resolved session ID, including sessions opened from the create menu. Open
+the same shared session in two signed-in browser contexts and check that each
+shows the other viewer; closing one session removes its avatar from the other.
+Desktop and touch headers use the same avatar group.
+
 User-sent messages in chat and agent transcripts use an ink-colored bubble with
 `InvertUtil` in light themes. Dark themes use `Layer depth={3}` for the slightly
 lighter bubble with the normal text palette. Preview Markdown and controls at
@@ -1380,7 +1387,9 @@ its own session. A message that alone takes more than half of the model's
 window is refused with "This message is too long. Split it into smaller messages
 or attach it as a file." `/compact` is an ordinary message to every agent: the
 transcript shows it as sent, followed by the agent's reply; a "Context compacted"
-line appears only when the agent reports a compaction.
+line appears only when the agent reports a compaction, at the point in the reply
+where the summary landed: a summary that finishes while a tool runs splits the
+tool group, with the running call above the line and later steps below it.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
 answer: screenshots as images, recordings as video players, and `.txt` / `.log`

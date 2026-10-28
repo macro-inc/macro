@@ -42,6 +42,10 @@ soft delete/restore/purge, and bulk upload into a project tree.
   `src/domain/service.rs` → `src/inbound/axum_router.rs`.
 - Add an AI tool: `src/inbound/toolset.rs` → the `ai_tools` feature gate in
   `Cargo.toml`.
+- Copy a folder tree in from elsewhere (an import): create each folder with
+  `ProjectService::create_project_dated_by_contents`. It starts never edited
+  and leaves its parent alone; documents created in it with their own dates
+  date it and the folders above it.
 
 ## Tool contracts
 

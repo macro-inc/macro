@@ -2438,8 +2438,8 @@ filter, and tap a result to insert a single mention. The menu should remain
 visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
-text and inline mention chips (tasks, docs, channels, skills, …) by the title
-shown on the chip.
+text and every inline mention chip (people, groups, tasks, docs, channels,
+skills, dates, tags, …) by the title shown on the chip.
 
 On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
 available actions) appears above the floating header, comment input, and bottom
@@ -3060,6 +3060,15 @@ types do not show these tabs.
 In a disposable Markdown document, change several paragraphs in one edit, then
 undo and redo. Verify the text, paragraph count, and a second peer agree after
 each operation; wait for saving to finish and reload to check persistence.
+
+Undo timing has a backend-free browser regression over a 4,000-paragraph
+document (about the length of Moby-Dick): undoing typing and undoing the
+deletion of a thousand paragraphs each stay within a time budget.
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/collaboration/browser-test/playwright.config.ts`
+from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
+`document.id` and `editor.node_count`; the `editor.history.loro` child covers
+Loro's undo and the mirror read, and `editor.history.apply` lasts until the
+reconciled editor update commits.
 
 ### Task mention status
 

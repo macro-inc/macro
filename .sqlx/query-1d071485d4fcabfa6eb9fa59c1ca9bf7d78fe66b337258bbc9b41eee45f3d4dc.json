@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO \"Project\" (name, \"userId\", \"parentId\", \"createdAt\", \"updatedAt\")\n        VALUES ($1, $2, $3, NOW(), NOW())\n        RETURNING\n            id,\n            name,\n            \"userId\" AS user_id,\n            \"parentId\" AS parent_id,\n            \"createdAt\"::timestamptz AS created_at,\n            \"updatedAt\"::timestamptz AS updated_at,\n            \"deletedAt\"::timestamptz AS deleted_at\n        ",
+  "query": "\n        INSERT INTO \"Project\" (name, \"userId\", \"parentId\", \"createdAt\", \"updatedAt\")\n        VALUES ($1, $2, $3, NOW(), COALESCE($4::timestamp, NOW()::timestamp))\n        RETURNING\n            id,\n            name,\n            \"userId\" AS user_id,\n            \"parentId\" AS parent_id,\n            \"createdAt\"::timestamptz AS created_at,\n            \"updatedAt\"::timestamptz AS updated_at,\n            \"deletedAt\"::timestamptz AS deleted_at\n        ",
   "describe": {
     "columns": [
       {
@@ -43,7 +43,8 @@
       "Left": [
         "Text",
         "Text",
-        "Text"
+        "Text",
+        "Timestamp"
       ]
     },
     "nullable": [
@@ -56,5 +57,5 @@
       null
     ]
   },
-  "hash": "933dfce0a31e88e5aeefacfbc04301874e36cc9b22b07598ec907cd233b732d8"
+  "hash": "1d071485d4fcabfa6eb9fa59c1ca9bf7d78fe66b337258bbc9b41eee45f3d4dc"
 }

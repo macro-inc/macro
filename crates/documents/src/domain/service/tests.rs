@@ -2431,6 +2431,7 @@ fn new_document(file_type: FileType) -> NewDocument {
         team_id: None,
         share_with_team: false,
         created_at: None,
+        updated_at: None,
         sub_type: None,
         skip_history: false,
         initial_link_share: InitialLinkShare::EntityDefault,
@@ -3721,4 +3722,82 @@ async fn native_canvas_location_uses_sync_without_an_object_url() {
         result,
         LocationResponseV3::SyncServiceContent { .. }
     ));
+}
+
+#[tokio::test]
+async fn a_document_with_its_own_dates_dates_its_folder_by_them() {
+    let created_at = chrono::DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let updated_at = chrono::DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_update_project_modified().times(0);
+    repo.expect_extend_project_dates()
+        .withf(move |project_id, created, updated| {
+            project_id == "00000000-0000-0000-0000-000000000009"
+                && *created == created_at
+                && *updated == updated_at
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    document.created_at = Some(created_at);
+    document.updated_at = Some(updated_at);
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_document_without_dates_marks_its_folder_updated_now() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_extend_project_dates().times(0);
+    repo.expect_update_project_modified()
+        .withf(|project_id| project_id == "00000000-0000-0000-0000-000000000009")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
 }
