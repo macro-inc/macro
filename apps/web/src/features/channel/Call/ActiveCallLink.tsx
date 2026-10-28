@@ -25,6 +25,7 @@ function ActiveCallLinkContent() {
       url={url()}
       onCopy={copy}
       disabled={!call.activeCallId()}
+      compact
     />
   );
 }

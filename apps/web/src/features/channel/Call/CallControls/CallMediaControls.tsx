@@ -46,6 +46,7 @@ function backgroundChoice(effect: BackgroundEffect): BackgroundChoice {
 export function CallMediaControls(props: {
   media: CallMediaControlsState;
   onLeave: () => void | Promise<void>;
+  extra?: JSX.Element;
 }) {
   const call = props.media;
   const [applyingBackground, setApplyingBackground] = createSignal(false);
@@ -108,6 +109,7 @@ export function CallMediaControls(props: {
         onToggleScreen={() => fire(call.toggleScreenShare)}
         onLeave={() => fire(props.onLeave)}
         error={error()}
+        extra={props.extra}
         audioMenu={
           <>
             <Dropdown.Group>

@@ -251,10 +251,11 @@ share the setup ID and that media failures remain visible when join succeeds.
 
 ### Sharing a call
 
-With quick calls enabled, channel calls use the same **Copy Meeting Url** button
-as instant and scheduled calls. Clicking it creates the share link and copies it;
-opening the call tab alone does not create a link. If loading fails, click again
-to retry. If clipboard access fails, a selectable URL appears below the button.
+With quick calls enabled, channel calls have a **Copy Meeting Url** link icon in
+the call control bar, between screen share and Leave call. Clicking it creates the
+share link and copies it, showing a checkmark for a few seconds; opening the call
+tab alone does not create a link. If loading fails, click again to retry. If
+clipboard access fails, a selectable URL appears above the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the

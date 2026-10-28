@@ -70,6 +70,8 @@ export function CallControlBar(props: {
   audioMenu: JSX.Element;
   /** Dropdown items for the camera and its background effect. */
   videoMenu: JSX.Element;
+  /** Host-specific buttons placed before Leave call. */
+  extra?: JSX.Element;
   error?: string;
 }) {
   return (
@@ -118,6 +120,7 @@ export function CallControlBar(props: {
         >
           <Screencast />
         </Button>
+        {props.extra}
         <Button
           size="icon-lg"
           variant="danger"

@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-import { type Accessor, Show } from 'solid-js';
+import { type Accessor, type JSX, Show } from 'solid-js';
 import { useMaybeNativeCallState } from '../native-call-state';
 import { setNativeCallKitVideoOverlayMode } from '../use-callkit';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
@@ -9,6 +9,8 @@ export type CallControlsProps = {
   /** Leave / hang up — parent supplies tab switch, `leaveCall()`, etc. */
   onLeave: () => void | Promise<void>;
   when?: boolean | Accessor<boolean>;
+  /** Extra buttons inside the control bar, before Leave call. */
+  extra?: JSX.Element;
 };
 
 function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
@@ -44,7 +46,10 @@ export function CallControls(props: CallControlsProps) {
         </div>
       </Show>
       <Show when={!nativeCall?.snapshot()}>
-        <CallControlsDefaultAndPanelRow onLeave={props.onLeave} />
+        <CallControlsDefaultAndPanelRow
+          onLeave={props.onLeave}
+          extra={props.extra}
+        />
       </Show>
     </Show>
   );

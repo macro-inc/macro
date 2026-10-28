@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CallMediaControls,
@@ -19,7 +19,7 @@ afterEach(cleanup);
 const device = (deviceId: string, label: string) =>
   ({ deviceId, label }) as MediaDeviceInfo;
 
-function setup() {
+function setup(extra?: () => JSX.Element) {
   const [audioMuted, setAudioMuted] = createSignal(false);
   const [background, setBackground] = createSignal<BackgroundEffect>({
     type: 'none',
@@ -51,7 +51,9 @@ function setup() {
     }),
   } satisfies CallMediaControlsState;
   const leave = vi.fn();
-  render(() => <CallMediaControls media={media} onLeave={leave} />);
+  render(() => (
+    <CallMediaControls media={media} onLeave={leave} extra={extra?.()} />
+  ));
   return { media, leave };
 }
 
@@ -70,6 +72,16 @@ async function choose(role: string, name: string) {
 }
 
 describe('call controls', () => {
+  it('places extra buttons in the bar before Leave call', () => {
+    setup(() => <button type="button">Copy Meeting Url</button>);
+    const extra = screen.getByRole('button', { name: 'Copy Meeting Url' });
+    const leave = screen.getByRole('button', { name: 'Leave call' });
+    expect(extra.closest('[data-call-controls]')).not.toBeNull();
+    expect(
+      extra.compareDocumentPosition(leave) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it('toggles the microphone without opening its settings', () => {
     const { media } = setup();
     const toggle = screen.getByRole('button', { name: 'Mute microphone' });

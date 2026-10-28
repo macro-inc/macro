@@ -227,6 +227,8 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: {
   onLeave: () => void;
+  /** Extra buttons inside the control bar, before Leave call. */
+  controlsExtra?: JSXElement;
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
   localName?: string;
@@ -482,7 +484,7 @@ export function CallOverlay(props: {
             class="col-start-2 flex min-w-0 justify-center"
             classList={{ '@max-[500px]/call:col-start-1': canChat() }}
           >
-            <CallControls onLeave={props.onLeave} />
+            <CallControls onLeave={props.onLeave} extra={props.controlsExtra} />
           </div>
           <Show when={canChat()}>
             <div class="justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm">
