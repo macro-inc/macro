@@ -145,6 +145,8 @@ pub struct ValidatedGithubWebhookEvent {
     pub event_type: String,
     /// The parsed JSON payload
     pub payload: serde_json::Value,
+    /// The `X-GitHub-Delivery` header, when the request carried one.
+    pub delivery_id: Option<String>,
 }
 
 impl ValidatedGithubWebhookEvent {
@@ -153,7 +155,14 @@ impl ValidatedGithubWebhookEvent {
         Self {
             event_type,
             payload,
+            delivery_id: None,
         }
+    }
+
+    /// Record the delivery id GitHub sent with the event.
+    pub fn with_delivery_id(mut self, delivery_id: Option<String>) -> Self {
+        self.delivery_id = delivery_id;
+        self
     }
 
     /// Parse the raw event type string into a [`GithubWebhookEventType`].
