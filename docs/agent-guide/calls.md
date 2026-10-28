@@ -180,7 +180,7 @@ Check channel, scheduled, and instant calls with another participant remaining
 and as the last participant, including at phone width. During a delayed leave,
 the page shows `Leaving call…` without flashing setup; navigating elsewhere must
 not be undone when cleanup finishes. Inline channel call controls return to
-Messages on leave and open the record when that hangup ends the call.
+Messages on leave and stay in the channel, even when that hangup ends the call.
 `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.

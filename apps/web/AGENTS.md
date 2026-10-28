@@ -317,9 +317,9 @@ the user's newest account for that app from the last fifteen minutes.
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
   immediately and failed writes roll back; calendar grid selections also mark
   the canonical event read, excluding team projections.
-- Route explicit call exits using the server's `callEnded` result: ended calls
-  open their record; ongoing channel and scheduled calls return to the channel
-  and Calendar. Preserve the session ID and send the server leave before media
+- Route explicit meeting-page exits using the server's `callEnded` result: ended
+  calls open their record; ongoing channel and scheduled calls return to the
+  channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
