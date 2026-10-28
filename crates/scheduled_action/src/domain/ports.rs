@@ -5,6 +5,7 @@ use super::models::{
     ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
+use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
@@ -148,6 +149,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         input: CreateScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// `create_action` for a routine activated from `template_id`, recorded
+    /// as given: callers check that the template exists.
+    fn create_action_from_template(
+        &self,
+        principal: &CreationPrincipal,
+        input: CreateScheduledAction,
+        template_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Actions `user_id` can access. Legacy clients see cron actions only;
     /// backend clients opt into events. ID-based operations and workers must
     /// never authorize through this list.
@@ -185,6 +195,52 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+}
+
+/// Templates shared from routines, keyed by their source routine's ID.
+pub trait RoutineTemplateRepo: Send + Sync + 'static {
+    /// Create the template or replace its snapshot, keeping its creation time.
+    fn upsert_template(
+        &self,
+        snapshot: TemplateSnapshot,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// A missing template is `Ok(())`.
+    fn delete_template(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
+
+    fn get_template(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<Option<RoutineTemplate>>> + Send;
+}
+
+/// Sharing routines as templates and activating them.
+pub trait RoutineTemplateService: Send + Sync + 'static {
+    /// Share the receipt's routine, or replace its shared snapshot with the
+    /// routine's current configuration.
+    fn share_template(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        input: ShareRoutineTemplate,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// Stop sharing. Routines already activated from it keep running.
+    fn unshare_template(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Read a template by its unguessable ID for any authenticated viewer.
+    fn get_template(&self, id: Uuid) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+
+    /// Create the principal's own routine from a shared template. The input
+    /// is the activator's filled-in configuration, validated like any create.
+    fn activate_template(
+        &self,
+        principal: &CreationPrincipal,
+        template_id: Uuid,
+        input: CreateScheduledAction,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 
 pub trait ScheduledActionDispatcher {

@@ -14,6 +14,7 @@ import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActi
 import type { ScheduledActionId } from './scheduledActionId';
 import type { ScheduledActionNextRunAt } from './scheduledActionNextRunAt';
 import type { ScheduledActionTask } from './scheduledActionTask';
+import type { ScheduledActionTemplateId } from './scheduledActionTemplateId';
 
 export interface ScheduledAction {
   claimed?: ScheduledActionClaimed;
@@ -38,6 +39,8 @@ rather than failing to parse. */
   /** Whether the action's runs are listed in Home and the Agents list. */
   run_visibility: RunVisibility;
   task: ScheduledActionTask;
+  /** The shared template this routine was activated from, if any. */
+  template_id?: ScheduledActionTemplateId;
   trigger: ActionTrigger;
   updated_at: string;
 }

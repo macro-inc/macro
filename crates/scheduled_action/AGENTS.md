@@ -16,6 +16,8 @@ each run.
   (Kafka or polled) turns into a dispatched run.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
+- `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
+  routine as a template and activating it as someone else's routine.
 - `services/agent_harness_service/src/scheduling.rs`: the sole runtime host;
   this crate has no deployed binary.
 
@@ -26,6 +28,10 @@ each run.
   gateway.
 - An authenticated caller with a routine ID can read its detail; listing,
   run history, and mutations stay owner-scoped.
+- Templates: the owner shares a snapshot of a routine (keyed by the routine's
+  ID) with its references marked as variables; any authenticated caller reads
+  it, and activating creates the caller's own routine with `template_id`
+  pointing back. Filling variables happens in the client.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
@@ -74,6 +80,8 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
   which builds its own `ScheduledAction`.
+- `template_id` is a plain pointer, not a foreign key: activated routines keep
+  it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
 

@@ -1106,10 +1106,45 @@ An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
 instead of opening the routine. Routines do not appear in the mention menu.
-Anyone signed in with the link can view its settings, instructions, and
-triggers. Only the owner can edit, enable, run,
-duplicate, delete, or view run history; other users do not see those controls.
+Only the owner sees a routine's editor and can edit, enable, run, duplicate,
+delete, or view run history. Anyone else who opens a routine link sees its
+template when the owner shared one, and otherwise "isn't shared as a template".
 Run conversations keep their own permissions.
+
+### Routine templates
+
+A routine runs as its owner, so it is shared as a template, never directly.
+The three-dot menu's **Share as template** opens **Share: name**. It explains
+what people get, takes a **Description**, and lists **What changes for each
+person**: every mention in the instructions plus the schedules' time zone, each
+with tabs. People can be **The person activating** (the owner's own mention
+starts here), **Same for everyone**, or **They choose**; items are **Same for
+everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
+zone. **Share template** publishes a snapshot of the saved routine;
+**Update template** re-snapshots it. Once shared, the dialog shows how many
+routines were activated from it, a channel-or-people picker with **Send** that
+posts the routine mention, **Copy template link** (the routine's own URL), and
+**Stop sharing**, which hides the template while activated routines keep
+running.
+
+Opening a shared routine someone else owns shows the template laid out like a
+routine's Overview: **Activate for me** at the right of the top bar, then the
+name, description, **Template by author**, activation count, triggers (marked
+"Doesn't run until you activate it"), read-only instructions, and
+**References**: dashed chips fill in as the viewer, amber ones they can't open. **Activate for me** opens **Activate for me: name**: the routine
+as it will run on the left, and on the right **Your call · N left** for each
+reference they can't open or must choose (**Keep it** / **Leave out**),
+**Filled in as you**, and **Works for you as is**. **Activate** stays disabled
+until every reference is decided, then creates the viewer's own enabled
+routine and opens it. A left-out reference becomes plain text. That routine
+behaves like any other, with a **Created from template ↗** chip beside its
+model chip that opens the template.
+
+A channel message that mentions a shared routine shows a template card under
+its text: name, author, description, triggers, activation count, **View
+template**, and **Activate for me** (hidden for the author). Mentions of
+routines that aren't shared show no card. On phones both dialogs open as
+bottom sheets.
 
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows

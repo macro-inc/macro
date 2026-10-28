@@ -375,6 +375,11 @@ Event triggers use `{ type: 'events', filters: [{ events, entities, condition }]
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+Routines run as their owner, so share one as a template instead:
+`routine.shareAsTemplate({ description, variables })` publishes a snapshot,
+`routine.template()` reads it (undefined when not shared), and
+`routine.activateTemplate(options)` creates the caller's own routine from it.
+`routine.sourceTemplate()` returns the routine a template came from.
 
 ### Agents, conversations and hosts
 

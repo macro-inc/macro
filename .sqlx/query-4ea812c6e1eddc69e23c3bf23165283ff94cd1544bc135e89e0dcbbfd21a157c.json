@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility\n            FROM scheduled_action\n            WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL\n              AND (claimed IS NULL OR claimed < $1)\n            ORDER BY next_run_at ASC, id ASC\n            LIMIT $2\n            ",
+  "query": "\n            INSERT INTO scheduled_action\n                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,\n                 trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,\n                 run_visibility, template_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id\n            ",
   "describe": {
     "columns": [
       {
@@ -92,12 +92,31 @@
         "ordinal": 17,
         "name": "run_visibility",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "template_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
         "Timestamptz",
-        "Int8"
+        "Bool",
+        "Text",
+        "Jsonb",
+        "Int8",
+        "Timestamptz",
+        "Jsonb",
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -118,8 +137,9 @@
       false,
       true,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "c148e946377acc6405255402d91bcb1b838ae21eb64bc1b8e9f33c0d5eec0671"
+  "hash": "4ea812c6e1eddc69e23c3bf23165283ff94cd1544bc135e89e0dcbbfd21a157c"
 }
