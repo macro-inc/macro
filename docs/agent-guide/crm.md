@@ -263,8 +263,6 @@ focused row) opens the task detail view at `/app/tasks/<task-id>`, including on
 mobile. Shift-click opens it in a separate split. Verify that the task's status
 and properties appear, rather than the regular Drive markdown editor.
 
-The backend-free list-state browser regression is
-`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts list-states.browser.e2e.ts`.
 Verify the real CRM routes separately with accessible and inaccessible databases,
 multiple matching rows per database, empty matches, and a second page of results.
 

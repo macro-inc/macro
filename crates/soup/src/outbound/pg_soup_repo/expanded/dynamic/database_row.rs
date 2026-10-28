@@ -2,9 +2,6 @@
 //! when its database is untrashed and the viewer holds a grant on it, or edits
 //! a live form over it.
 
-#[cfg(test)]
-mod test;
-
 use filter_ast::Expr;
 use item_filters::ast::database_row::DatabaseRowLiteral;
 use models_pagination::SimpleSortMethod;
