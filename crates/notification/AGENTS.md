@@ -68,6 +68,12 @@ through the same service.
 
 ## Gotchas
 
+- `user_notification` carries copies of its notification's `event_item_type`,
+  `event_item_id` and `notification_event_type`, set by the
+  `user_notification_copy_entity` insert trigger. Entity reads find a viewer's
+  rows through `idx_user_notification_viewer_entity` on those copies, so a
+  migration that rewrites those `notification` columns must update
+  `user_notification` too.
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,
   `schema`, and the default `kafka` for the Kafka publishers and consumer); building without the feature a caller needs silently drops the
   module instead of failing loudly — check `Cargo.toml` before assuming an
