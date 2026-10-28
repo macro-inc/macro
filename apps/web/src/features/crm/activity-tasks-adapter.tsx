@@ -74,7 +74,7 @@ function ActivityTasksBody(props: {
         }
       >
         <ViewCreateButton
-          label="New task"
+          aria-label="New task"
           onClick={() => props.onCreateTask()}
         />
       </Show>

@@ -46,8 +46,7 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
         <Button
           variant="ghost"
           size="icon-xs"
-          label={t('tabs.closeTab')}
-          noTouchResize
+          aria-label={t('tabs.closeTab')}
           class={cn(
             'shrink-0',
             !active() && 'invisible not-touch:group-hover:visible'
@@ -88,8 +87,8 @@ export function DesktopTabStrip() {
           <Button
             variant="ghost"
             size="icon-sm"
-            label={t('tabs.newTab')}
-            hotkey={TOKENS.tabs.new}
+            aria-label={t('tabs.newTab')}
+            tooltip={{ content: t('tabs.newTab'), hotkey: TOKENS.tabs.new }}
             onClick={() => tabManager().newTab()}
           >
             <PlusIcon class="size-4" />

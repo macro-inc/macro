@@ -73,7 +73,7 @@ Shared neutral borders use `border-primary`, `border-secondary`, `border-tertiar
 
 The Create menu's submit action uses the shared accent-colored `primary` variant so its background and text contrast stay paired; do not locally override accent colors while leaving the derived accent text unchanged.
 
-This keeps the current button materials without a second JavaScript material recipe. Variants, interaction selectors, and optional finish selection remain in the shared Button recipe. Checks and visual review remain paused.
+This keeps the current button materials without a second JavaScript material recipe. Variants, interaction selectors, and optional finish selection remain in the shared Button recipe. Browser verification remains separately authorized.
 
 The existing native iOS glass press handler recognizes `touch:glass` on standalone controls and ButtonGroup frames. A group owns the press effect; its flat segments do not add their own glass layers. CSS continues to own the material, including its reduced-motion behavior.
 
@@ -104,11 +104,11 @@ Calendar notes, calendar attachments, shared-event actions, and file-download co
 
 ## Caller variant audit
 
-Omitted variants were reviewed by action role without changing Button's global default. Utility, navigation, dismiss, and local remove actions now use ghost; final submit actions use primary; neutral launchers and pagination now use secondary. Permanent membership removals use danger. Caller-controlled pass-through wrappers remain intact; group inheritance now requires explicit `ButtonGroup.Button` composition. Header actions explicitly use ghost because their group frame disappears on touch devices. Existing sizes and handlers are unchanged by the variant audit. Checks and browser verification remain paused.
+Omitted variants were reviewed by action role without changing Button's global default. Utility, navigation, dismiss, and local remove actions now use ghost; final submit actions use primary; neutral launchers and pagination now use secondary. Permanent membership removals use danger. Caller-controlled pass-through wrappers remain intact; group inheritance now requires explicit `ButtonGroup.Button` composition. Header actions explicitly use ghost because their group frame disappears on touch devices. Existing sizes and handlers are unchanged by the variant audit. Browser verification remains separately authorized.
 
 ## Development and validation
 
-The dev server runs from this worktree on port 3007 with HTTPS disabled and the existing hosted development API proxy enabled. Known hosted API and WebSocket requests use same-origin `/__macro_dev/` forwarding; backend CORS policies remain unchanged. It reuses the existing local dependency directory; no dependencies were downloaded. Start it with:
+The dev server runs from this worktree on port 3007 with HTTPS disabled and the existing hosted development API proxy enabled. Known hosted API and WebSocket requests use same-origin `/__macro_dev/` forwarding; backend CORS policies remain unchanged. Use an isolated worktree-local dependency installation from `bun.lock`; a shared checkout's `node_modules` can resolve stale workspace exports and dependency patches. Start it with:
 
 ```sh
 MACRO_DEV_HTTPS=false MACRO_DEV_PROXY=true PORT=3007 bun run dev:server --strictPort
@@ -116,4 +116,4 @@ MACRO_DEV_HTTPS=false MACRO_DEV_PROXY=true PORT=3007 bun run dev:server --strict
 
 Proxy forwarding was enabled after CORS errors were reported. The failing response was not captured, so this is a development transport workaround rather than a confirmed endpoint-level diagnosis.
 
-Targeted CI-repair validation covers TypeScript, Biome, and affected unit suites. Browser verification and a full local build remain unperformed; starting the preview does not establish visual correctness.
+After merging main, the frontend type check, changed-file Biome check, and complete frontend unit suite pass (19,235 tests passed, two skipped). The unit suite needs Brotli and wasm-pack on PATH; its agent-fold fixture builds the local WASM prerequisite. Keep Vitest's filesystem cache specific to the dependency installation so cached paths do not reference a previous checkout. Browser verification and a full application build remain unperformed; passing these checks does not establish visual correctness.
