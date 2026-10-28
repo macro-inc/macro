@@ -372,12 +372,13 @@ vi.mock('@ui', async () => {
     children?: JSX.Element;
     disabled?: boolean;
     tooltip?: string;
+    'aria-label'?: string;
     onClick?: () => void;
   }) => (
     <button
       disabled={props.disabled}
       onClick={props.onClick}
-      aria-label={props.tooltip}
+      aria-label={props['aria-label'] ?? props.tooltip}
     >
       {props.children}
     </button>
@@ -423,7 +424,7 @@ vi.mock('@ui', async () => {
       ItemIndicator: Container,
       Group: Container,
     }),
-    ButtonGroup: Object.assign(Container, { Divider: () => null }),
+    ButtonGroup: Object.assign(Container, { Button, Divider: () => null }),
     Tabs: (props: {
       'aria-label'?: string;
       onChange?: (value: string) => void;
@@ -1641,7 +1642,7 @@ describe('native project sharing', () => {
     );
   });
 
-  it('copies the project route instead of a block URL', () => {
+  it('copies the project link that pastes as a mention', () => {
     mocks.inBlock = false;
     render(() => (
       <ShareTrigger
@@ -1652,7 +1653,7 @@ describe('native project sharing', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
-      'https://macro.com/app/component/initiative-view~initiative-1~overview'
+      'https://macro.com/app/initiative/initiative-1'
     );
   });
 });

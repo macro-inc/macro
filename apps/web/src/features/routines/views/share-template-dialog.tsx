@@ -184,7 +184,7 @@ export function ShareTemplateDialog(props: {
           <ActionDialogShell.Footer class="justify-between">
             <Show when={props.template} fallback={<span />}>
               <div class="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => props.onCopyLink()}>
+                <Button variant="secondary" onClick={() => props.onCopyLink()}>
                   <LinkIcon />
                   Copy template link
                 </Button>
@@ -198,7 +198,7 @@ export function ShareTemplateDialog(props: {
               </div>
             </Show>
             <Button
-              variant="cta"
+              variant="primary"
               disabled={props.pending || props.template === undefined}
               onClick={() => props.onShare()}
             >

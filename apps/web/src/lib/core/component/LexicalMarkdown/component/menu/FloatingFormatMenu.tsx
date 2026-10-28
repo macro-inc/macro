@@ -266,11 +266,13 @@ export function FloatingFormatMenu(props: {
 
   const InlineButton = (buttonProps: { item: InlineOption }) => (
     <Button
-      label={buttonProps.item.label}
-      shortcut={buttonProps.item.shortcut}
+      aria-label={buttonProps.item.label}
+      tooltip={{
+        content: buttonProps.item.label,
+        shortcut: buttonProps.item.shortcut,
+      }}
       size="icon-sm"
-      depth={3}
-      variant={selection()?.[buttonProps.item.format] ? 'accent' : 'ghost'}
+      variant={selection()?.[buttonProps.item.format] ? 'primary' : 'ghost'}
       onPointerDown={(e: PointerEvent) => e.preventDefault()}
       onClick={(e: MouseEvent | KeyboardEvent) => {
         e.preventDefault();
@@ -290,11 +292,10 @@ export function FloatingFormatMenu(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
-          depth={3}
           tooltip="More formatting"
           tabIndex={-1}
         >
-          <DotsThreeLarge />
+          <DotsThreeLarge class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content onCloseAutoFocus={refocusEditor}>
           <Dropdown.Group>
@@ -325,7 +326,6 @@ export function FloatingFormatMenu(props: {
           variant="ghost"
           size="sm"
           class="gap-1"
-          depth={3}
           tooltip="Text style"
           tabIndex={-1}
         >
@@ -385,7 +385,6 @@ export function FloatingFormatMenu(props: {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                depth={3}
                 onPointerDown={(e: PointerEvent) => e.preventDefault()}
                 onClick={handleLink}
                 tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}

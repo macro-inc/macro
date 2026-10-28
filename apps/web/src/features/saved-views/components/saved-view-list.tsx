@@ -42,7 +42,8 @@ function Header(props: {
         {(onCreate) => (
           <CollapsibleSection.Action
             ref={props.createButtonRef}
-            label={t('viewMenus.newSavedView')}
+            aria-label={t('viewMenus.newSavedView')}
+            tooltip={t('viewMenus.newSavedView')}
             onClick={onCreate()}
           >
             <PlusIcon class="size-3.5" />
@@ -149,7 +150,8 @@ export function SavedViewListRow(props: {
           <Dropdown placement="bottom-end">
             <Dropdown.Trigger
               as={ViewSidebar.Control}
-              label={t('viewMenus.viewActions', { name: props.view.name })}
+              aria-label={t('viewMenus.viewActions', { name: props.view.name })}
+              tooltip={t('viewMenus.viewActions', { name: props.view.name })}
             >
               <DotsIcon class="size-4" />
             </Dropdown.Trigger>

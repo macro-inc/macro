@@ -418,13 +418,14 @@ export const SoupView = (props: SoupViewProps) => {
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
+                        aria-label="View documentation"
+                        tooltip="View documentation"
                         size="icon-sm"
                         variant="ghost"
                         class="@max-[380px]/split-header:hidden"
-                        label="View documentation"
                         onClick={() => openExternalUrl(url())}
                       >
-                        <InfoIcon />
+                        <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     )}
                   </Show>
@@ -475,6 +476,7 @@ export const SoupView = (props: SoupViewProps) => {
                 <Show when={props.filterBarVariant !== 'tag'}>
                   <HeaderActionGroup label="Filters">
                     <UnifiedFilterDropdown
+                      grouped
                       hideLabel
                       variant="ghost"
                       open={filterOpen}
@@ -484,9 +486,9 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
                 <HeaderActionGroup label="View options">
                   <Show when={!isComponentListView('home')}>
-                    <SoupViewContextSort />
+                    <SoupViewContextSort grouped />
                   </Show>
-                  <SoupViewContextGroup hideLabel variant="ghost" />
+                  <SoupViewContextGroup grouped hideLabel variant="ghost" />
                 </HeaderActionGroup>
                 <Show when={props.showCreateButton !== false}>
                   <SoupViewCreateButton />
@@ -1208,7 +1210,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                           soupNavigationTouchHighlight(el);
                         }}
                         scrollerRef={setListScrollerRef}
-                        virtualizerClass={'scrollbar-hidden space-y-2'}
+                        virtualizerClass="scrollbar-hidden space-y-2"
                         class="overflow-hidden flex min-w-0"
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
@@ -1304,9 +1306,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="outline"
-                                              size="sm"
-                                              depth={2}
+                                              variant="secondary"
+                                              size="xs"
                                               class={cn({
                                                 'bg-surface': !highlighted(),
                                                 'border-transparent':
@@ -1320,9 +1321,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="outline"
-                                            size="sm"
-                                            depth={2}
+                                            variant="secondary"
+                                            size="xs"
                                             class={cn({
                                               'bg-surface': !highlighted(),
                                               'border-transparent':

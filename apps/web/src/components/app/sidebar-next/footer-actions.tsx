@@ -57,15 +57,14 @@ const MobileAppButton = () => {
   return (
     <Show when={!isNativeMobilePlatform() && isTabAvailable('Mobile App')}>
       <Button
+        aria-label={t('nav.getMobileApp')}
         variant="ghost"
         size="icon-md"
         class={cn(
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label={t('nav.getMobileApp')}
-        tooltip={t('nav.getMobileApp')}
-        tooltipPlacement="right"
+        tooltip={{ content: t('nav.getMobileApp'), placement: 'right' }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
@@ -134,21 +133,23 @@ export const FooterActions = (props: {
         triggerClass="size-10"
       >
         <Button
+          aria-label={t('nav.settings')}
           variant="ghost"
           size="icon-md"
           class={cn(
             'size-10 cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
-          label={t('nav.settings')}
           aria-description={
             accountName()
               ? t('nav.signedInAs', { name: accountName() ?? '' })
               : undefined
           }
-          tooltip={t('nav.settings')}
-          tooltipPlacement="right"
-          hotkey={TOKENS.global.toggleSettings}
+          tooltip={{
+            content: t('nav.settings'),
+            placement: 'right',
+            hotkey: TOKENS.global.toggleSettings,
+          }}
           draggable={false}
           aria-current={isSettingsActive() ? 'page' : undefined}
           data-active={isSettingsActive() ? '' : undefined}

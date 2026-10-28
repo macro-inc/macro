@@ -71,7 +71,7 @@ export function RoutineTemplateView(props: {
           />
           <Show when={props.canActivate}>
             <Button
-              variant="cta"
+              variant="primary"
               size="md"
               class="ml-auto shrink-0"
               onClick={() => props.onActivate()}

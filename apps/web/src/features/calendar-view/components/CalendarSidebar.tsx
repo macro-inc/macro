@@ -284,7 +284,7 @@ function CalendarSidebarOverlayClose() {
   return (
     <Show when={shell.aside.isOverlay() && isTouchDevice()}>
       <ViewSidebar.Control
-        label="Close calendar navigation"
+        aria-label="Close calendar navigation"
         onClick={shell.aside.collapse}
       >
         <CloseIcon class="size-4" />

@@ -15,12 +15,13 @@ export function Topbar(props: {
     <ViewShell.TopBar class="touch:flex">
       <Show when={props.onBack}>
         <Button
+          aria-label="Back to conversations"
+          tooltip="Back to conversations"
           variant="ghost"
           size="icon-md"
-          label="Back to conversations"
           onClick={props.onBack}
         >
-          <ArrowLeft />
+          <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       <div class="flex min-w-0 items-center gap-1">

@@ -74,15 +74,6 @@ export interface AgentInputProps {
    */
   hasQueuedMessages?: boolean;
   /**
-   * Advancing the queue would not advance it right now, so Enter and the
-   * button stay inert (the control reads Stop). Either a stop is already on
-   * its way - the queue advances when the turn it ends actually ends, so a
-   * second stop does nothing but post again - or the prompt that last
-   * advanced is still unconfirmed, so there is no turn the server has opened
-   * for a stop to end.
-   */
-  sendNextHeld?: boolean;
-  /**
    * Enter or the send button with an empty input and a queued message. Falls
    * back to `onStop`, which is the mechanism: the queue advances when the
    * turn it waits on ends.
@@ -210,23 +201,21 @@ export function AgentInput(props: AgentInputProps) {
   // Deliberately not gated on `busy`. A speculated stop reads as done
   // everywhere else, so `busy` is already false while the runtime is still
   // winding the turn down - and that is exactly when a waiting message is
-  // most worth advancing. What does gate it is `sendNextHeld`: a stop already
-  // in flight, or a previous advance the log has not confirmed yet. Attached
-  // files are something to send in their own right, so they hold it back too.
+  // most worth advancing. Attached files are something to send in their own
+  // right, so they hold it back.
   const canSendNext = () =>
     !dictation.active() &&
     markdown().trim().length === 0 &&
     attachments().length === 0 &&
     props.hasQueuedMessages === true &&
-    !props.sendNextHeld &&
     !props.disabled &&
     !props.readOnly &&
     props.onStop !== undefined;
 
   const sendNext = () => {
     if (!canSendNext()) return;
-    // Stop bypasses the server queue: the fold shows it at once as a pending
-    // Stopped line, and when the runtime ends the cancelled turn the server
+    // Without `onSendNext`, Stop is the mechanism: it bypasses the server
+    // queue, the fold shows it at once as a pending Stopped line, and when the runtime ends the cancelled turn the server
     // dispatches the oldest waiting action, so the queue remains FIFO. How
     // soon that is depends on the runtime - a booting sandbox cannot be
     // interrupted until it is up.
@@ -467,9 +456,10 @@ export function AgentInput(props: AgentInputProps) {
                           }
                         >
                           <Button
-                            variant={isTouchDevice() ? 'ghost' : 'strong'}
-                            size="icon-composer"
-                            label="Stop"
+                            aria-label="Stop"
+                            tooltip="Stop"
+                            variant={isTouchDevice() ? 'ghost' : 'secondary'}
+                            size="icon-md"
                             disabled={props.disabled || props.readOnly}
                             onClick={() => props.onStop?.()}
                             class={
@@ -487,8 +477,10 @@ export function AgentInput(props: AgentInputProps) {
                         appearance="composer"
                         intent="flush"
                         aria-label="Flush queued messages"
-                        tooltip="Flush queued messages"
-                        shortcut="Enter"
+                        tooltip={{
+                          content: 'Flush queued messages',
+                          shortcut: 'Enter',
+                        }}
                         onClick={sendNext}
                         disabled={!canSendNext()}
                       />

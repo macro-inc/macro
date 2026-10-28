@@ -273,7 +273,7 @@ export function CodeBoxAccessory(props: {
                   deleteCode();
                 }}
               >
-                <TrashCan />
+                <TrashCan class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <CopyButton
@@ -383,9 +383,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
   };
 
   return (
-    <div class={'absolute top-12 inset-x-0 bottom-0 z-10 p-2'}>
-      {renderSvg()}
-    </div>
+    <div class="absolute top-12 inset-x-0 bottom-0 z-10 p-2">{renderSvg()}</div>
   );
 }
 

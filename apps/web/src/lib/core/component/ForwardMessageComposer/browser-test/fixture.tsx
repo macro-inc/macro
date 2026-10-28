@@ -45,6 +45,7 @@ function Draft() {
         <ForwardMessageComposer composer={composer} />
         <div class="p-4 flex justify-end">
           <Button
+            variant="primary"
             disabled={composer.isUploading()}
             onClick={() => {
               if (!composer.isUploading())

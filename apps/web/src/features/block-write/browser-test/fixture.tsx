@@ -438,7 +438,7 @@ function Fixture() {
               onReady={setEditor}
               actions={(download) => (
                 <Dropdown>
-                  <Dropdown.Trigger label="Document options">
+                  <Dropdown.Trigger aria-label="Document options">
                     …
                   </Dropdown.Trigger>
                   <Dropdown.Content>
@@ -571,7 +571,7 @@ function LocalFixture() {
                   onReady={index() === 0 ? setEditor : undefined}
                   actions={(download) => (
                     <Dropdown>
-                      <Dropdown.Trigger label="Document options">
+                      <Dropdown.Trigger aria-label="Document options">
                         …
                       </Dropdown.Trigger>
                       <Dropdown.Content>

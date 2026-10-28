@@ -4,7 +4,7 @@ import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import { Button, Dropdown } from '@ui';
+import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
@@ -104,6 +104,7 @@ export function RoutineDetailView(props: {
             isOwned() && (
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
+                  as={ButtonGroup.Button}
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Routine actions"
@@ -111,23 +112,25 @@ export function RoutineDetailView(props: {
                   <DotsIcon class="size-5" />
                 </Dropdown.Trigger>
                 <Dropdown.Content portalScope="local">
-                  <Dropdown.Item
-                    disabled={!state() || props.source.duplicationPending()}
-                    onSelect={() => props.source.duplicate()}
-                  >
-                    <CopyIcon class="size-4" />
-                    Duplicate
-                  </Dropdown.Item>
-                  <Dropdown.Item onSelect={props.onShareTemplate}>
-                    <ShareIcon class="size-4" />
-                    Share as template
-                  </Dropdown.Item>
-                  <Show when={isOwned()}>
-                    <Dropdown.Item onSelect={props.onDelete}>
-                      <TrashIcon class="size-4" />
-                      Delete
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      disabled={!state() || props.source.duplicationPending()}
+                      onSelect={() => props.source.duplicate()}
+                    >
+                      <CopyIcon class="size-4" />
+                      Duplicate
                     </Dropdown.Item>
-                  </Show>
+                    <Dropdown.Item onSelect={props.onShareTemplate}>
+                      <ShareIcon class="size-4" />
+                      Share as template
+                    </Dropdown.Item>
+                    <Show when={isOwned()}>
+                      <Dropdown.Item onSelect={props.onDelete}>
+                        <TrashIcon class="size-4" />
+                        Delete
+                      </Dropdown.Item>
+                    </Show>
+                  </Dropdown.Group>
                 </Dropdown.Content>
               </Dropdown>
             )
@@ -136,7 +139,7 @@ export function RoutineDetailView(props: {
             <Show when={routine().templateId}>
               {(templateId) => (
                 <Button
-                  variant="accent"
+                  variant="primary"
                   size="sm"
                   onClick={() => props.onOpenTemplate(templateId())}
                 >

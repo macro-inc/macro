@@ -112,7 +112,7 @@ function CustomHeaderDemo() {
                 tooltip="Copy path"
                 onClick={() => setCopied(entry.file.path)}
               >
-                <CopyIcon />
+                <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </>
           )}

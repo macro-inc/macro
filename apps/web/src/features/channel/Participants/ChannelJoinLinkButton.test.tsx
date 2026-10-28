@@ -34,13 +34,13 @@ vi.mock('@queries/channel/join-links', () => ({
 vi.mock('@ui', () => ({
   Button: (props: {
     children: JSX.Element;
-    label?: string;
+    'aria-label'?: string;
     disabled?: boolean;
     onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
   }) => (
     <button
       type="button"
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       disabled={props.disabled}
       onClick={props.onClick}
     >

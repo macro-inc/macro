@@ -107,7 +107,7 @@ function StepButton(props: ButtonProps) {
   const readOnly = useContext(ReadOnlyContext);
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       {...props}
       disabled={props.disabled || readOnly?.()}
     />
@@ -121,7 +121,8 @@ function IncrementTrigger(props: NumberUnitInputIncrementProps) {
       as={StepButton}
       type="button"
       size="icon-md"
-      label="Increase value"
+      aria-label="Increase value"
+      tooltip="Increase value"
       {...rest}
     >
       {local.children ?? <Plus class="size-3.5" />}
@@ -136,7 +137,8 @@ function DecrementTrigger(props: NumberUnitInputDecrementProps) {
       as={StepButton}
       type="button"
       size="icon-md"
-      label="Decrease value"
+      aria-label="Decrease value"
+      tooltip="Decrease value"
       {...rest}
     >
       {local.children ?? <Minus class="size-3.5" />}

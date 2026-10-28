@@ -235,9 +235,10 @@ function ToolbarMenu(props: {
   return (
     <Dropdown placement="bottom-start" modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         variant="ghost"
         size="icon-sm"
-        label={props.label}
         data-docx-menu={props.testId}
       >
         {props.icon}
@@ -296,15 +297,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
         <Show when={props.canEdit}>
           <Toolbar.Group>
             <Toolbar.Button
-              label="Undo"
-              shortcut="Mod+Z"
+              aria-label="Undo"
+              tooltip={{ content: 'Undo', shortcut: 'Mod+Z' }}
               onClick={() => props.onUndo()}
             >
               <ArrowCounterClockwise />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Redo"
-              shortcut="Mod+Shift+Z"
+              aria-label="Redo"
+              tooltip={{ content: 'Redo', shortcut: 'Mod+Shift+Z' }}
               onClick={() => props.onRedo()}
             >
               <ArrowClockwise />
@@ -391,8 +392,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
             <For each={INLINE}>
               {(item) => (
                 <Toolbar.Button
-                  label={item.label}
-                  shortcut={item.shortcut}
+                  aria-label={item.label}
+                  tooltip={{ content: item.label, shortcut: item.shortcut }}
                   aria-pressed={!!props.format[item.format]}
                   onClick={() => props.onFormat(item.format)}
                 >
@@ -445,7 +446,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </For>
             </ToolbarMenu>
             <Toolbar.Button
-              label="Clear formatting"
+              aria-label="Clear formatting"
+              tooltip="Clear formatting"
               onClick={() => props.onClearFormat()}
             >
               <TextTSlash />
@@ -454,13 +456,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
-              label="Bulleted list"
+              aria-label="Bulleted list"
+              tooltip="Bulleted list"
               onClick={() => props.onList('bullet')}
             >
               <ListBullets />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Numbered list"
+              aria-label="Numbered list"
+              tooltip="Numbered list"
               onClick={() => props.onList('number')}
             >
               <ListNumbers />
@@ -471,7 +475,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
             <For each={ALIGNMENTS}>
               {(item) => (
                 <Toolbar.Button
-                  label={item.label}
+                  aria-label={item.label}
+                  tooltip={item.label}
                   onClick={() => props.onAlign(item.alignment)}
                 >
                   {item.icon()}
@@ -479,14 +484,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
               )}
             </For>
             <Toolbar.Button
-              label="Decrease indent"
-              shortcut="Shift+Tab"
+              aria-label="Decrease indent"
+              tooltip={{ content: 'Decrease indent', shortcut: 'Shift+Tab' }}
               onClick={() => props.onIndent(false)}
             >
               <TextOutdent />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Increase indent"
+              aria-label="Increase indent"
+              tooltip="Increase indent"
               onClick={() => props.onIndent(true)}
             >
               <TextIndent />
@@ -516,7 +522,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
           </Toolbar.Group>
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Button
-            label="Insert table"
+            aria-label="Insert table"
+            tooltip="Insert table"
             onClick={() => props.onInsertTable()}
           >
             <Table />
@@ -555,7 +562,12 @@ export function DocxToolbar(props: DocxToolbarProps) {
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
-              label={props.tracking ? 'Stop tracking changes' : 'Track changes'}
+              aria-label={
+                props.tracking ? 'Stop tracking changes' : 'Track changes'
+              }
+              tooltip={
+                props.tracking ? 'Stop tracking changes' : 'Track changes'
+              }
               aria-pressed={props.tracking}
               data-docx-track-changes
               onClick={() => props.onToggleTracking()}
@@ -563,7 +575,12 @@ export function DocxToolbar(props: DocxToolbarProps) {
               <GitDiff />
             </Toolbar.Button>
             <Toolbar.Button
-              label={
+              aria-label={
+                props.showMarkup
+                  ? 'Hide tracked changes'
+                  : 'Show tracked changes'
+              }
+              tooltip={
                 props.showMarkup
                   ? 'Hide tracked changes'
                   : 'Show tracked changes'
@@ -577,27 +594,31 @@ export function DocxToolbar(props: DocxToolbarProps) {
             </Toolbar.Button>
             <Show when={props.tracking || props.onRevision}>
               <Toolbar.Button
-                label="Accept change"
+                aria-label="Accept change"
+                tooltip="Accept change"
                 disabled={!props.onRevision}
                 onClick={() => props.onAccept(false)}
               >
                 <Check />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Reject change"
+                aria-label="Reject change"
+                tooltip="Reject change"
                 disabled={!props.onRevision}
                 onClick={() => props.onReject(false)}
               >
                 <X />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Accept all changes"
+                aria-label="Accept all changes"
+                tooltip="Accept all changes"
                 onClick={() => props.onAccept(true)}
               >
                 <Checks />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Reject all changes"
+                aria-label="Reject all changes"
+                tooltip="Reject all changes"
                 onClick={() => props.onReject(true)}
               >
                 <XCircle />
@@ -608,16 +629,16 @@ export function DocxToolbar(props: DocxToolbarProps) {
         </Show>
         <Show when={props.canComment}>
           <Toolbar.Button
-            label="Comment on selection"
-            shortcut="Mod+Alt+M"
+            aria-label="Comment on selection"
+            tooltip={{ content: 'Comment on selection', shortcut: 'Mod+Alt+M' }}
             onClick={() => props.onComment()}
           >
             <ChatCircleText />
           </Toolbar.Button>
         </Show>
         <Toolbar.Button
-          label="Find and replace"
-          shortcut="Mod+F"
+          aria-label="Find and replace"
+          tooltip={{ content: 'Find and replace', shortcut: 'Mod+F' }}
           onClick={() => props.onFind()}
         >
           <MagnifyingGlass />

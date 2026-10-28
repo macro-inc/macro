@@ -194,8 +194,8 @@ While an agent works, a draft can be sent to its queue. Above the queue,
 message. The empty composer offers the same action as **Flush queued messages**
 with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
 **Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send-next actions disable and
-Steer is hidden during stopping/starting and for read-only sessions.
+draft or queue, the busy composer offers **Stop**. Send next and Steer stay
+available while a previous one is starting; read-only sessions get neither.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -1802,12 +1802,12 @@ must stay hidden; subsequent live messages must still appear.
   with a ring so it reads as flushing the queue rather than sending a new message);
   pressing Enter or clicking that button cancels the current turn so the queue drains
   in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. The advance is held — the flush control is
-  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
-  advance sent is still unconfirmed (it shows as a pending bubble); once the server
-  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
-  Enters therefore advance one entry, not two: each advance ends the turn the server is
-  actually running. Typed composer text still takes priority and Enter
+  flush sends whatever is already next. Each advance or Steer shows its message as a
+  pending bubble at once and drops its row; consecutive ones never wait on each other in
+  the UI. Their steer requests go out one at a time in press order, each after the
+  previous message leaves the server queue, so three rapid presses send three messages,
+  each once, in that order. A refused steer brings its row back labelled `Not sent`; it
+  stays queued and can be steered again. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued

@@ -211,6 +211,12 @@ function QueuedInFlightDemo() {
       kind: 'prompt',
       prompt: 'Also mention the flush control',
     },
+    {
+      actionId: 'refused',
+      kind: 'prompt',
+      prompt: 'This steer was refused, so it stays queued',
+      sendFailed: true,
+    },
   ]);
   const [note, setNote] = createSignal(
     'Steer jumps that message ahead. With the box empty, the ringed arrow flushes the queue.'

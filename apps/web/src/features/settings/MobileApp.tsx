@@ -45,9 +45,9 @@ export function MobileApp() {
               <ArrowUpRightIcon class="size-3.5 opacity-70" />
             </a>
             <CopyButton
+              aria-label="Copy App Store link"
               variant="ghost"
               size="sm"
-              label="Copy App Store link"
               tooltip="Copy App Store link"
               onClick={() => copy(APP_STORE_URL)}
             >

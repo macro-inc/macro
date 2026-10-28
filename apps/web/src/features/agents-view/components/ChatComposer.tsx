@@ -114,7 +114,6 @@ export function ChatComposer(props: {
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
     !hasContent() &&
-    !props.session?.sendNextHeld &&
     props.session?.hasQueuedMessages &&
     props.session.onStop &&
     !disabled();
@@ -472,10 +471,11 @@ export function ChatComposer(props: {
                         when={canSendNext()}
                         fallback={
                           <Button
-                            variant="strong"
+                            aria-label="Stop"
+                            tooltip="Stop"
+                            variant="secondary"
                             class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-composer"
-                            label="Stop"
+                            size="icon-md"
                             disabled={disabled()}
                             onClick={() => props.session?.onStop?.()}
                           >
@@ -488,8 +488,10 @@ export function ChatComposer(props: {
                           class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
                           intent="flush"
                           aria-label="Flush queued messages"
-                          tooltip="Flush queued messages"
-                          shortcut="Enter"
+                          tooltip={{
+                            content: 'Flush queued messages',
+                            shortcut: 'Enter',
+                          }}
                           onClick={sendNext}
                         />
                       </Show>

@@ -205,7 +205,11 @@ export function CrmRecordDetail(props: {
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
               <HeaderActionGroup label="Sharing">
-                <CrmCopyLinkButton type={current().type} id={current().id} />
+                <CrmCopyLinkButton
+                  grouped
+                  type={current().type}
+                  id={current().id}
+                />
               </HeaderActionGroup>
               <SidePanel.Toggle />
             </div>
@@ -334,7 +338,7 @@ function DetailError(props: {
     <div class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted">
       <p>This {props.record} couldn’t be loaded.</p>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" onClick={props.onRetry}>
+        <Button variant="secondary" size="sm" onClick={props.onRetry}>
           Try again
         </Button>
         <Button variant="ghost" size="sm" onClick={props.onBack}>

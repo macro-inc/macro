@@ -587,7 +587,7 @@ export function HomeList(props: HomeListProps) {
                 >
                   <span>Home couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => fireAndForget(source.refresh(), 'home')}
                   >

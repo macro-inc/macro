@@ -200,13 +200,13 @@ export function ActivateTemplateDialog(props: {
             </p>
             <div class="flex gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => props.onOpenChange(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="cta"
+                variant="primary"
                 disabled={props.undecided > 0 || props.pending}
                 onClick={() => props.onActivate()}
               >
