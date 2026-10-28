@@ -728,8 +728,9 @@ how to add the bot to channels and use its token with the Macro SDK. **Create
 bot** keeps Profile and Channels visible. **Advanced** starts collapsed on both
 desktop and mobile and contains:
 
-- **Agent → Show in model selector**: makes the bot available when starting an
-  AI chat; connect an agent such as Codex or Hermes to handle requests. This
+- **Agent → Enable AI agent**: makes the bot available in the model selector
+  and lets it respond to mentions, using a chat agent or a connected external
+  runtime. Saving an agent configuration enables it regardless of harness. This
   section remains gated by the agents rollout.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.
