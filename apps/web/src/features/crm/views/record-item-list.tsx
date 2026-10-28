@@ -177,7 +177,11 @@ export function RecordItemList(props: {
         <Match when={items().length > 0}>
           <ListEntityMetadataQueryProvider>
             <ListLayoutProvider ref={listRef} narrowLayout={props.narrowLayout}>
-              <div ref={setListRef} class="flex min-h-0 flex-1 flex-col">
+              <div
+                ref={setListRef}
+                class="flex flex-col"
+                classList={{ 'min-h-0 flex-1': filteredItems().length === 0 }}
+              >
                 <Show when={filteredItems().length === 0}>
                   <Show
                     when={
