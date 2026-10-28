@@ -219,9 +219,9 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-with **Open chat** at the top-right of the call. Desktop chat fills the call
-content height; phones use a bottom sheet. Messages persist with that call
-session and are visible in its recording page after it ends.
+with **Open chat** at the right of the header, aligned with **Copy Meeting Url**.
+Desktop chat fills the call content height; phones use a bottom sheet. Messages
+persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
 mentioning one invokes it in the call thread. Reply on any live message, including

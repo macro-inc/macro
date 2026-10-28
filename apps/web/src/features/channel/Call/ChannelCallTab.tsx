@@ -6,7 +6,14 @@ import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallExitPath } from './call-exit';
@@ -158,6 +165,7 @@ export function ChannelCallTab(props: {
     }
   }
 
+  const [chatButtonMount, setChatButtonMount] = createSignal<HTMLDivElement>();
   return (
     <Switch
       fallback={
@@ -170,11 +178,15 @@ export function ChannelCallTab(props: {
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
         <div class="flex size-full min-h-0 flex-col">
-          <div class="px-2 pt-2">
+          <div class="flex items-center justify-between gap-2 px-2 pt-2">
             <ActiveCallLink />
+            <div ref={setChatButtonMount} class="ml-auto shrink-0" />
           </div>
           <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={handleLeave} />
+            <CallOverlay
+              onLeave={handleLeave}
+              chatButtonMount={chatButtonMount()}
+            />
           </div>
         </div>
       </Match>

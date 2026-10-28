@@ -16,6 +16,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import {
@@ -232,6 +233,8 @@ export function CallOverlay(props: {
   localName?: string;
   /** The host may hide chat until account or guest session credentials are ready. */
   showChat?: boolean;
+  /** Places the toggle in the host's meeting-link action row. */
+  chatButtonMount?: HTMLElement;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
 }) {
@@ -313,23 +316,29 @@ export function CallOverlay(props: {
     return 'grid-cols-3';
   };
 
+  const chatToggle = (
+    <Show when={canChat()}>
+      <Button
+        ref={chatButton}
+        variant="outline"
+        size="icon-lg"
+        label={chatOpen() ? 'Close chat' : 'Open chat'}
+        aria-pressed={chatOpen()}
+        aria-expanded={chatOpen()}
+        aria-controls={chatId}
+        onClick={toggleChat}
+      >
+        <ChatIcon class="size-4" />
+      </Button>
+    </Show>
+  );
   return (
     <div class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)">
-      <Show when={canChat()}>
-        <div class="absolute right-3 top-3 z-30">
-          <Button
-            ref={chatButton}
-            variant="outline"
-            size="icon-md"
-            label={chatOpen() ? 'Close chat' : 'Open chat'}
-            aria-pressed={chatOpen()}
-            aria-expanded={chatOpen()}
-            aria-controls={chatId}
-            onClick={toggleChat}
-          >
-            <ChatIcon class="size-4" />
-          </Button>
-        </div>
+      <Show
+        when={props.chatButtonMount}
+        fallback={<div class="absolute right-3 top-3 z-30">{chatToggle}</div>}
+      >
+        {(mount) => <Portal mount={mount()}>{chatToggle}</Portal>}
       </Show>
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">

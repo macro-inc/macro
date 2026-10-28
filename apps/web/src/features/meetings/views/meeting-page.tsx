@@ -59,12 +59,14 @@ export function MeetingPage(props: {
   renderCall: (
     onLeave: () => void,
     name: Accessor<string>,
-    credentials: Accessor<MeetingCredentials | undefined>
+    credentials: Accessor<MeetingCredentials | undefined>,
+    chatButtonMount: Accessor<HTMLDivElement | undefined>
   ) => JSX.Element;
 }) {
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
+  const [chatButtonMount, setChatButtonMount] = createSignal<HTMLDivElement>();
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -189,9 +191,12 @@ export function MeetingPage(props: {
             title={ready()?.title || 'Call'}
             onRename={props.onRename}
           />
-          <Show when={props.url}>
-            {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
-          </Show>
+          <div class="flex flex-1 basis-56 items-center justify-between gap-2">
+            <Show when={props.url}>
+              {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
+            </Show>
+            <div ref={setChatButtonMount} class="ml-auto shrink-0" />
+          </div>
         </Show>
       </header>
       <Switch>
@@ -208,7 +213,8 @@ export function MeetingPage(props: {
             {props.renderCall(
               () => fireAndForget(leave(), 'meetings'),
               displayName,
-              session.credentials
+              session.credentials,
+              chatButtonMount
             )}
           </div>
         </Match>

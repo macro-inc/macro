@@ -1148,11 +1148,11 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button at the top-right of the call opens chat beside the
-video. The panel has a **Call chat** heading and spans the full call content
-height, including the media controls row; the controls stay centered under the
-video. In narrow desktop panes, chat overlays the video. On phones, chat opens
-in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
+The **Open chat** button at the right of the header, aligned with
+**Copy Meeting Url**, opens chat beside the video. The panel has a **Call chat**
+heading and spans the full call content height, including the media controls row;
+the controls stay centered under the video. In narrow desktop panes, chat overlays
+the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
 to dismiss it. On desktop, **Close chat** or Escape closes the panel. Closing
 returns focus to the chat button, and reopening preserves the draft and scroll
 position. The call continues while chat is open or closed.
