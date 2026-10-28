@@ -81,6 +81,12 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Share message image paste, file selection, drop, removal during upload, and
+upload failure have desktop, phone, and tablet browser coverage:
+`bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
+Keep the shared uploader from restoring removed attachments or publishing after
+the composer is disposed. The Share button and shortcut use the same upload guard.
+
 Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
 in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and explicit type/name boosts. Task projects use the `initiative`
