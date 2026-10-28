@@ -1,3 +1,4 @@
+import { file, YAML } from 'bun';
 import { beforeAll, expect, mock, test } from 'bun:test';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -70,8 +71,11 @@ beforeAll(async () => {
   await pulumi.runtime.waitForRPCs();
 });
 
-function resource(type: string): pulumi.runtime.MockResourceArgs {
-  const value = resources.find((r) => r.type === type);
+function resource(
+  type: string,
+  registered = resources
+): pulumi.runtime.MockResourceArgs {
+  const value = registered.find((r) => r.type === type);
   if (!value) throw new Error(`Missing ${type}`);
   return value;
 }
@@ -105,6 +109,64 @@ test('extension access is scoped to the existing Datadog key, not all secrets', 
       Resource: secretArn,
     },
   ]);
+});
+
+test.each([
+  'dev',
+  'prod',
+])('%s config schedules deletion and alerts when invocations stop', async (stack) => {
+  const parsed = YAML.parse(
+    await file(new URL(`./Pulumi.${stack}.yaml`, import.meta.url)).text()
+  );
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('config' in parsed) ||
+    !parsed.config ||
+    typeof parsed.config !== 'object'
+  ) {
+    throw new Error('Missing stack config');
+  }
+  pulumi.runtime.setAllConfig({
+    'aws:region': 'us-east-1',
+    ...Object.fromEntries(
+      Object.entries(parsed.config)
+        .filter(([, value]) => typeof value === 'boolean')
+        .map(([key, value]) => [key, String(value)])
+    ),
+  });
+  const config = new pulumi.Config('notification-service');
+  const start = resources.length;
+  const { NotificationRetention } = await import('./retention');
+  new NotificationRetention(`retention-${stack}`, {
+    databaseUrl: pulumi.secret('test-database'),
+    enabled: config.getBoolean('notification_retention_enabled') ?? false,
+    dryRun: config.getBoolean('notification_retention_dry_run') ?? true,
+    vpc: {
+      vpcId: 'vpc-test',
+      publicSubnetIds: [],
+      privateSubnetIds: ['subnet-test'],
+    },
+    tags: { environment: stack },
+  });
+  await pulumi.runtime.waitForRPCs();
+  const registered = resources.slice(start);
+  expect(
+    resource('aws:cloudwatch/eventRule:EventRule', registered).inputs
+  ).toMatchObject({ state: 'ENABLED', scheduleExpression: 'rate(5 minutes)' });
+  expect(
+    JSON.parse(
+      resource('aws:cloudwatch/eventTarget:EventTarget', registered).inputs
+        .input
+    )
+  ).toEqual({ dry_run: false });
+  expect(
+    registered.find(
+      (r) =>
+        r.type === 'aws:cloudwatch/metricAlarm:MetricAlarm' &&
+        r.inputs.metricName === 'Invocations'
+    )?.inputs
+  ).toMatchObject({ actionsEnabled: true, treatMissingData: 'breaching' });
 });
 
 test('telemetry does not enable cleanup or duplicate the existing log path', () => {

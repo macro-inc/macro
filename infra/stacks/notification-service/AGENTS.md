@@ -14,8 +14,10 @@ From `infra/`:
 
 ## Gotchas
 
-- Keep retention disabled/dry-run until explicitly approved. Deployment does not
-  authorize deletion; `docs/runbooks/notification-retention.md` owns rollout.
+- Dev and prod configs enable 30-day retention in deletion mode every five
+  minutes. Deploying either stack activates cleanup; deployment still needs
+  explicit approval and the checks in `docs/runbooks/notification-retention.md`.
+- Keep the disabled/dry-run defaults for missing config and empty manual events.
 - The retention function needs its pinned x86_64 Datadog extension to receive
   gRPC OTLP; the ECS sidecar default alone does not work in Lambda.
 - Pass the existing Datadog key ARN, not its value, and scope the role to that key.

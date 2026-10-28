@@ -1,9 +1,13 @@
 # Notification retention
 
 The internal `notification_retention_handler` Lambda removes notifications older
-than 30 complete UTC days. Its EventBridge schedule is **disabled** in both dev
-and prod, and its event payload defaults to **dry-run**. Deploying the code or
-migrations alone does not purge history.
+than 30 complete UTC days. Both dev and prod stack configs **enable** its
+five-minute EventBridge schedule in **deletion mode**. Deploying either
+notification-service stack activates cleanup, including the historical backlog;
+committing the config or applying migrations alone does not. These are desired
+settings, not proof of the deployed schedule's state. Missing stack settings
+still default to disabled/dry-run, and manual invocations with `{}` remain
+read-only.
 
 ## Semantics
 
@@ -137,10 +141,13 @@ at Kafka: it does **not** measure time queued before PostgreSQL NOTIFY is forwar
 or acknowledge client delivery. Existing best-effort loss/reconnect semantics
 remain unchanged; no durable outbox is added by this observability change.
 
-Before the next deletion canary, after approved deployments:
+Before first enabling deletion in an environment, verify these prerequisites;
+code approval does not establish that the live checks have passed:
 
-1. Deploy the notification-service stack (extension + worker) and DSS (consumer
-   telemetry). Keep both cleanup schedules disabled and dry-run enabled.
+1. For a telemetry-only deployment of the notification-service stack (extension
+   + worker) and DSS (consumer telemetry), explicitly override the checked-in
+   retention settings to disabled/dry-run before deploying. The checked-in
+   settings otherwise enable deletion on deployment.
 2. Invoke explicit dry runs and verify the complete invocation and batch/read
    spans in Datadog, with the correct service/env and no exporter/flush errors.
 3. Confirm health logs from each running DSS instance, including healthy zero
@@ -157,8 +164,12 @@ Before the next deletion canary, after approved deployments:
 
 ## Rollout
 
-Production deletion needs explicit approval and a verified backup/PITR recovery
-procedure. Do not run a historical `DELETE` inside a migration.
+Deployment needs explicit approval; production deletion also needs a verified
+backup/PITR recovery procedure. The checked-in dev and prod settings select the
+final deletion stage below; they do not verify the rollout prerequisites.
+For an environment that has not completed them, explicitly override the config
+to disabled/dry-run before its first deployment and follow the staged checks.
+Do not run a historical `DELETE` inside a migration.
 
 1. Apply the additive migrations through the normal approved database workflow.
    The retention index is built concurrently in its own nontransactional
@@ -166,9 +177,10 @@ procedure. Do not run a historical `DELETE` inside a migration.
    changing its contract. Verify the index is valid. If a concurrent build fails,
    inspect its invalid index and repair/retry under the database deployment
    procedure rather than marking the migration successful.
-2. Deploy the notification-service stack. Its deployment configuration also builds
-   the new Lambda. Keep `notification_retention_enabled: false` and
-   `notification_retention_dry_run: true` initially.
+2. For an initial staged rollout, set `notification_retention_enabled: false`
+   and `notification_retention_dry_run: true` before deploying the
+   notification-service stack. These override the checked-in deletion settings.
+   Its deployment configuration also builds the Lambda.
 3. Inspect age distribution, recipient/receipt fanout, and query plans against
    representative data. Use plain `EXPLAIN` for production deletion plans;
    `EXPLAIN ANALYZE DELETE` actually deletes data.

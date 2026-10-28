@@ -34,7 +34,7 @@ type Args = {
   tags: Record<string, string>;
 };
 
-/** Isolated maintenance worker: disabled initially, then preview before deleting. */
+/** Isolated maintenance worker with explicit scheduling and dry-run controls. */
 export class NotificationRetention extends pulumi.ComponentResource {
   readonly lambda: aws.lambda.Function;
 
