@@ -10,8 +10,7 @@ let
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-For $remote_addr;
   '';
-  # Unauthenticated paging endpoints. GoAlert checks the integration key or
-  # Twilio's request signature on each.
+  # Unauthenticated paging endpoints. GoAlert checks the integration key on each.
   pagingIngress = ''
     limit_except POST { deny all; }
     limit_req zone=paging burst=50 nodelay;
@@ -159,9 +158,8 @@ in
     }
     location ^~ /api/v2/generic/incoming { ${pagingIngress} }
     location ^~ /api/v2/heartbeat/ { ${pagingIngress} }
-    location ^~ /api/v2/twilio/ { ${pagingIngress} }
     # Grafana pages GoAlert over loopback; other inbound integrations are unused.
-    location ~ ^/(api/v2/(grafana|prometheusalertmanager|site24x7|mailgun|uik)|v1/webhooks|health/) {
+    location ~ ^/(api/v2/(grafana|prometheusalertmanager|site24x7|mailgun|uik|twilio)|v1/webhooks|health/) {
       return 404;
     }
     location / {

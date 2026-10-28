@@ -14,12 +14,13 @@ us-east-1. `README.md` is the full operations guide.
 
 ## Recipes
 
-- Change a Grafana prod alert rule: edit `infra/alerts/rules.json`; `nixos/alerting.nix` generates it.
+- Change a Grafana prod alert rule: edit `prodRules` in `nixos/alerting.nix`, and
+  its Datadog copy in `infra/stacks/monitoring/monitors/` by hand.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
   the unit → README secret list. Add the unit to `secretConsumers` in `host.nix`.
-- Upgrade GoAlert: bump `version` and `hash` in `nixos/goalert/package.nix`.
+- Upgrade GoAlert: bump `version` and the hashes in `nixos/goalert/package.nix`.
 
 ## Checks
 
@@ -33,8 +34,9 @@ From `infra/`: `bun run check`, then Biome on changed `.ts`.
 
 - Changes ship only as a new AMI plus an approved deploy; never `pulumi up` or
   publish an image without explicit permission.
-- Secrets come from the stack's own Secrets Manager secret in us-east-2, not
-  Doppler, so the host never depends on production to boot.
+- The host reads secrets from the stack's own Secrets Manager secret in
+  us-east-2, so it never depends on production to boot. Doppler
+  `observability/prd` holds the values; copy changes into the secret.
 - A service listed in `host.nix` `services` gets `ProtectSystem=strict`, metadata
   blocking and the bootstrap dependency; one that needs the instance role must be
   in the `IPAddressDeny` exception list or run as its own unit.
@@ -44,5 +46,3 @@ From `infra/`: `bun run check`, then Biome on changed `.ts`.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
   in through the Grafana unit's environment.
-- Catalog descriptions use Datadog template variables; add any new one to the
-  replacement list in `alerting.nix` or evaluation fails.

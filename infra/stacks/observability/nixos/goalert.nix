@@ -1,7 +1,9 @@
 # GoAlert on-call paging, its Postgres, and the Macro Alerts relay.
 #
-# Everything here runs in Ohio and talks only to loopback, Twilio and Google, so
-# paging keeps working while production or its database is down.
+# Everything here runs in Ohio and talks only to loopback, so paging keeps
+# working while production or its database is down. Pages reach the Macro
+# Alerts channel through the relay; phone paging (Twilio) and Google login are
+# not set up yet.
 {
   config,
   lib,
@@ -21,24 +23,8 @@ let
   # start. `@name@` strings are replaced with the credential of that name.
   goalertConfig = {
     General.ApplicationName = "Macro On-Call";
-    Auth.DisableBasic = true;
-    # GoAlert cannot restrict OIDC logins to a domain. The Google OAuth client
-    # must use the Internal audience so only Workspace accounts can sign in.
-    OIDC = {
-      Enable = true;
-      NewUsers = true;
-      OverrideName = "Google";
-      IssuerURL = "https://accounts.google.com";
-      ClientID = "@goalert_oidc_client_id@";
-      ClientSecret = "@goalert_oidc_client_secret@";
-      Scopes = "openid profile email";
-    };
-    Twilio = {
-      Enable = true;
-      AccountSID = "@twilio_account_sid@";
-      AuthToken = "@twilio_auth_token@";
-      FromNumber = "@twilio_from_number@";
-    };
+    # One `admin` login, created by apply-config.py from goalert_admin_password.
+    Auth.DisableBasic = false;
     Webhook = {
       Enable = true;
       AllowedURLs = [ relayUrl ];
@@ -62,11 +48,13 @@ let
   '';
   backup = pkgs.writeShellScript "goalert-backup" ''
     set -euo pipefail
+    # Dump to a file first, so a failed dump never replaces a good backup.
+    dump="$(mktemp)"
+    ${config.services.postgresql.package}/bin/pg_dump --format=custom --file="$dump" goalert
     # One object per weekday keeps a rolling week without a lifecycle rule on
     # a bucket whose retention Loki owns.
-    ${config.services.postgresql.package}/bin/pg_dump --format=custom goalert |
-      ${lib.getExe pkgs.awscli2} s3 cp --only-show-errors - \
-        "s3://$LOGS_BUCKET/goalert/goalert-$(date +%a).dump"
+    ${lib.getExe pkgs.awscli2} s3 cp --only-show-errors "$dump" \
+      "s3://$LOGS_BUCKET/goalert/goalert-$(date +%a).dump"
   '';
 in
 {
@@ -104,14 +92,10 @@ in
         EnvironmentFile = "/opt/observability/runtime.env";
         LoadCredential = map credential [
           "goalert_encryption_key"
-          "goalert_oidc_client_id"
-          "goalert_oidc_client_secret"
-          "twilio_account_sid"
-          "twilio_auth_token"
-          "twilio_from_number"
+          "goalert_admin_password"
         ];
         ExecStartPre = [
-          "${pkgs.python3}/bin/python3 ${./goalert/apply-config.py} ${lib.getExe goalert} ${pkgs.writeText "goalert-config.json" (builtins.toJSON goalertConfig)}"
+          "${pkgs.python3}/bin/python3 ${./goalert/apply-config.py} ${lib.getExe goalert} ${pkgs.writeText "goalert-config.json" (builtins.toJSON goalertConfig)} ${config.services.postgresql.package}/bin/psql"
         ];
         ExecStart = start;
         MemoryMax = "768M";

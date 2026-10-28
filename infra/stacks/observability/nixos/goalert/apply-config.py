@@ -1,8 +1,9 @@
-"""Migrate GoAlert's database and replace its config with the Nix-declared one.
+"""Migrate GoAlert's database, replace its config with the Nix-declared one, and
+create the `admin` login if it does not exist.
 
 GoAlert keeps application config only in Postgres. Running this before every
 start makes the Nix attrset the source of truth: edits in the admin UI last
-only until the next restart. Secret placeholders such as `@twilio_auth_token@`
+only until the next restart. Secret placeholders such as `@goalert_admin_password@`
 are replaced with credential files; values never pass through a shell.
 """
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-goalert, template_path = sys.argv[1], sys.argv[2]
+goalert, template_path, psql = sys.argv[1], sys.argv[2], sys.argv[3]
 credentials = Path(os.environ['CREDENTIALS_DIRECTORY'])
 
 
@@ -34,3 +35,14 @@ subprocess.run([goalert, 'migrate'], env=environment, check=True)
 subprocess.run(
     [goalert, 'set-config'], env=environment, input=json.dumps(config), text=True, check=True,
 )
+admin_exists = subprocess.run(
+    [psql, '-tAc', "select 1 from auth_basic_users where username = 'admin'", environment['GOALERT_DB_URL']],
+    env=environment, capture_output=True, text=True, check=True,
+).stdout.strip()
+if not admin_exists:
+    # `add-user` takes the password only as an argument; this runs once, on first boot.
+    subprocess.run(
+        [goalert, 'add-user', '--admin', '--user', 'admin', '--email', 'admin@macro.com',
+         '--pass', (credentials / 'goalert_admin_password').read_text()],
+        env=environment, check=True,
+    )

@@ -15,8 +15,7 @@ result = subprocess.run(
 values = json.loads(json.loads(result.stdout)['SecretString'])
 keys = [
     'google_client_id', 'google_client_secret', 'grafana_secret_key', 'otlp_token',
-    'goalert_encryption_key', 'goalert_oidc_client_id', 'goalert_oidc_client_secret',
-    'twilio_account_sid', 'twilio_auth_token', 'twilio_from_number',
+    'goalert_encryption_key', 'goalert_admin_password',
     'macro_alerts_webhook_url', 'macro_alerts_bot_token',
 ]
 # Validate the entire bundle before writing any file. Token is at least 32 bytes.
@@ -26,11 +25,9 @@ for key in keys:
         raise SystemExit(f'Missing or invalid secret field: {key}')
     if '\n' in value or '\r' in value:
         raise SystemExit(f'Secret must be a single line: {key}')
-for key in ['grafana_secret_key', 'otlp_token', 'goalert_encryption_key']:
+for key in ['grafana_secret_key', 'otlp_token', 'goalert_encryption_key', 'goalert_admin_password']:
     if len(values[key]) < 32:
         raise SystemExit(f'Secret too short: {key}')
-if not re.fullmatch(r'\+[1-9]\d{7,14}', values['twilio_from_number']):
-    raise SystemExit('twilio_from_number must be an E.164 number')
 if not values['macro_alerts_webhook_url'].startswith('https://'):
     raise SystemExit('macro_alerts_webhook_url must use HTTPS')
 # GoAlert creates its Grafana integration key, so it can only be added after the

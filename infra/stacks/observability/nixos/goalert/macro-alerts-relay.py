@@ -7,6 +7,7 @@ in this one service. Each request is forwarded once; the sender owns retries.
 import json
 import logging
 import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import urllib.request
@@ -73,13 +74,21 @@ class Relay(BaseHTTPRequestHandler):
             headers={'Content-Type': 'application/json', 'x-macro-channel-bot-token': BOT_TOKEN},
             method='POST',
         )
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=FORWARD_TIMEOUT_SECONDS) as response:
                 status = response.status
         except OSError as error:
-            logging.warning('Macro Alerts delivery failed for %s: %s', self.path, error)
+            logging.warning(
+                'forward source=%s outcome=failed elapsed_ms=%d error=%s',
+                self.path, (time.monotonic() - started) * 1000, error,
+            )
             self.send_error(502)
             return
+        logging.info(
+            'forward source=%s status=%d elapsed_ms=%d',
+            self.path, status, (time.monotonic() - started) * 1000,
+        )
         self.send_response(204 if 200 <= status < 300 else 502)
         self.end_headers()
 
