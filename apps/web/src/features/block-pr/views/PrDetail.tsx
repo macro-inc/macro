@@ -23,7 +23,15 @@ import {
   useRefreshGithubPullRequest,
 } from '@queries/storage/github-pull-requests';
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
-import { Button, ButtonGroup, CopyButton, cn, Layer, Scroll, Tooltip } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  CopyButton,
+  cn,
+  Layer,
+  Scroll,
+  Tooltip,
+} from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import { confirmMergePullRequest } from '../component/MergePullRequestButton';
 import { PrChangesProvider } from '../component/PrChanges';
