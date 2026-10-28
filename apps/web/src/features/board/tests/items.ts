@@ -9,7 +9,7 @@ export function author(
   overrides: Partial<BoardAuthor> = {}
 ): BoardAuthor {
   return {
-    id: `macro|${name.toLowerCase()}@macro.com`,
+    id: `macro|${name.toLowerCase()}@example.com`,
     kind: 'person',
     name,
     isSelf: false,

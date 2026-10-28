@@ -163,7 +163,7 @@ describe('toBoardItem', () => {
           notification('n1', 5, {
             tag: 'channel_message_send',
             content: {
-              channelType: 'direct_message',
+              channelType: 'directMessage',
               messageId: 'm1',
               messageContent: 'Can you look at the offer letter?',
             },
