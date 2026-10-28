@@ -202,7 +202,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   their durable queue entries may survive the old engine.
 - Dispatch live GraphQL notification callbacks before cache persistence so hidden
   tabs can show browser alerts; keep cache-dependent channel reconciliation
-  behind ordered writes and never replay alerts when the cache resumes.
+  behind ordered writes and never replay alerts when the cache resumes. Link
+  cache queue/apply spans to receipt and mark listener failures without stopping
+  the remaining callbacks.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.

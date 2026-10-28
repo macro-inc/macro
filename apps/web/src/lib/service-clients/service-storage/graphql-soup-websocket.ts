@@ -2,7 +2,7 @@ import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
 import {
@@ -180,12 +180,14 @@ export function subscribeToGraphqlNotificationPatches(
 }
 
 export function publishNotificationPatch(
-  patch: GraphqlNotificationPatch
+  patch: GraphqlNotificationPatch,
+  span: Pick<Span, 'error'>
 ): void {
   for (const listener of notificationPatchListeners) {
     try {
       listener(patch);
     } catch (error) {
+      span.error(error);
       Telemetry.error(error, { surface: 'graphql-notifications' });
     }
   }

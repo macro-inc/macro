@@ -16,6 +16,12 @@ reconciliation catch up afterward. The backend-free `parking.browser.e2e.ts`
 regression exercises that boundary with real storage and simulated visibility;
 OS banner presentation still needs the manual check above.
 
+For delayed cache catch-up, find `notification.receive` by `notification.id`.
+Its linked `graphql.subscription.cache_queue` and
+`graphql.subscription.cache_apply` phases distinguish waiting behind an earlier
+event from applying the event to storage. Receipt completes without waiting for
+these phases; listener errors mark receipt, while cache errors mark application.
+
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
 controls system notification delivery for this installation. The Notifications
 page is always present, in the same place on web, desktop, and mobile; Account

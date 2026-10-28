@@ -274,7 +274,13 @@ the subscription transport, publishes notification callbacks before persistence
 in both cached and uncached clients. The normalized-cache exchange still applies
 subscription effects serially before cache-dependent channel reconciliation.
 Resuming storage never republishes the notification callback. `notification.receive`
-spans record the notification ID, patch type, and page visibility without content.
+spans record the notification ID, patch type, and page visibility without content;
+listener failures mark this span while remaining listeners still run. Result-local
+weak context links `graphql.subscription.cache_queue` (the wait behind earlier
+subscription effects) and `graphql.subscription.cache_apply` (cache application,
+including parked-storage waits) to that receipt, even after its immediate span
+ends. Cache failures mark the application phase without recording payloads or
+replaying delivery. This context never enters GraphQL extensions or the wire.
 
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
