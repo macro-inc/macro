@@ -9,7 +9,17 @@ the message text, including link labels and mention names, once per preview.
 Verify wide and narrow rows and channel/thread cards; links and mentions remain
 interactive inside the opened conversation.
 
+Conversation headers and shared detail breadcrumbs use the same identity icon:
+the recipient for human DMs, the persona for agent DMs, and the channel picture
+or glyph for named channels. Message and thread breadcrumbs resolve identity
+from their parent channel rather than the message or thread ID.
+
 ## Message links
+
+A channel search namespace with `threadId` and no `messageId` targets the thread
+root. Home, Chat, and the full-screen touch conversation normalize this URL in
+the shared channel search schema; an explicit message continues to target its
+reply within that thread.
 
 Bare URLs, common bare domains, and email addresses are clickable in opened
 messages, including agent/API messages and older messages. Explicit Markdown
@@ -267,15 +277,16 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Message composer
 
-Channel messages and thread replies have a microphone next to Send, including
-the collapsed composer. It uses the same OpenAI Whisper dictation and scrolling
-volume timeline as AI chat. **Use dictation** appends text to the draft without
+Channel messages and thread replies have a microphone next to Send on pointer
+devices. It uses the same OpenAI Whisper dictation and scrolling volume
+timeline as AI chat. **Use dictation** appends text to the draft without
 sending; **Cancel dictation** or Escape preserves the existing draft. Sending
 is blocked during dictation, including keyboard and external send actions.
-When local recognition is unavailable, confirming uploads the in-memory audio
-to Whisper. This fallback is available on all plans without consuming chat credits.
-Browsers without microphone recording show a disabled button.
-The first click downloads a language pack when needed; click again to record.
+Confirming uploads the in-memory audio to Whisper, which is available on all
+plans without consuming chat credits. Browsers without microphone recording
+show a disabled button. Touch devices have no microphone in either the
+collapsed or the expanded composer — their keyboards already dictate — so Send
+is the only control on that edge.
 
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
@@ -617,14 +628,14 @@ Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
 Verify a message link in a fresh browser tab as well as inside an open channel:
 the initial page should center the requested message, including older history.
-On a cold notification open, the destination shows one conversation placeholder
+On a cold notification open, the destination shows the three-block Macro loader
 while channel metadata and the targeted message window load in parallel. It
 must not briefly fetch or display the latest messages before resolving an
 uncached message link. Explicit thread replies load their parent window and
 replies together; known root messages skip the message-kind lookup. Throttle
-these requests and verify the placeholder transitions directly to the target,
-without a blank body or Macro spinner. A newer link supersedes an unresolved
-one, while a jump inside an already-mounted conversation preserves its composer.
+these requests and verify the loader transitions directly to the target,
+without a blank body or message-shaped placeholders. A newer link supersedes an
+unresolved one, while a jump inside an already-mounted conversation preserves its composer.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
@@ -1026,8 +1037,8 @@ Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
 The mobile dock Search button opens the independent Search route. Its Channels
-and People categories search cached channel names and people directly; the
-conversation list does not constrain results. Full-text search is explicit,
+and People categories search the complete channel list, cached channel names,
+and people directly; the conversation list does not constrain results. Full-text search is explicit,
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.
@@ -1120,6 +1131,10 @@ scroll position, and input focus. To check stale-cache recovery, mark notificati
 read/done in another tab, then repeat the action in a stale tab. Empty or partial
 changed-row responses must still reconcile mounted Soup and notification readers,
 without resetting loaded pages or starting an unused global notification feed.
+With the normalized cache, a Done writes the rows it left out as done
+(`confirmEntityNotificationsDone`), and a mark seen that left out a row the tab
+showed unseen reads every reader again; otherwise only readers the cache does not
+maintain are read again.
 Undo must use only the mutation's returned IDs, not IDs from the subsequent refresh.
 The backend must support the new edge arguments before deploying the frontend
 that requests them.
@@ -1351,8 +1366,8 @@ For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,
 the cleared composer should retain focus, and a pinned chat should remain at the
 bottom through composer resizing and server acknowledgement. Check that restoring
-the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
-and check that sent text does not return. Scroll into history before an incoming
+the caret after send does not pan the page while the keyboard resizes. Repeat with the
+keyboard's own dictation and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
 
 For composer cleanup, repeatedly open and leave channels and threads, then

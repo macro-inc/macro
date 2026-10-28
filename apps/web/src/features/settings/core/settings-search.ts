@@ -135,6 +135,15 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Appearance',
+    title: 'Interface language',
+    target: 'Language',
+    // The word for "language" in each interface language, so people can find
+    // it in their own.
+    keywords:
+      'translate translation locale team personal sprache langue idioma lingua taal språk sprog kieli język язык 言語 언어 语言 語言 भाषा bahasa ngôn ngữ ภาษา',
+  },
+  {
+    tab: 'Appearance',
     title: 'Show tooltips',
     target: 'Show tooltips',
     keywords: 'hover hints help',
@@ -267,18 +276,22 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Mobile App',
-    title: 'Get the mobile app',
-    keywords: 'download phone ios android qr code',
+    title: 'Mobile app version and download',
+    keywords: 'download phone ios android qr code version build bundle',
   },
 ];
 
+/**
+ * Lowercased words with Latin accents stripped. Any script counts, so a label
+ * in the interface language (German, Japanese, Hindi) is searchable too.
+ */
 function words(value: string): string[] {
   return (
     value
       .toLowerCase()
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
-      .match(/[a-z0-9]+/g) ?? []
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
   );
 }
 
@@ -347,7 +360,10 @@ export function searchSettings(
   return entries
     .map((entry) => {
       const titleWords = words(entry.title);
-      const otherWords = words(`${entry.keywords} ${entry.page.label}`);
+      // The English label keeps English searches working in any language.
+      const otherWords = words(
+        `${entry.keywords} ${entry.page.label} ${entry.page.englishLabel}`
+      );
       const scores = tokens.map((token) =>
         Math.max(
           0,

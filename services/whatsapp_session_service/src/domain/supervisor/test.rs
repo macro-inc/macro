@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::{Signal, Supervisor, SupervisorConfig, SupervisorError};
 use crate::domain::ports::{
     AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, AccountSignal,
-    FleetHealth, LeaseError,
+    FleetHealth, LeaseError, Traced,
 };
 
 /// Locks shared by every fake replica, like advisory locks on one server.
@@ -75,10 +75,12 @@ enum RunnerEvent {
 }
 
 /// Runs until released or stopped. With `ignore_release`, only a stop ends
-/// it, like an account whose in-flight send never gets an acknowledgement.
+/// it, like an account whose in-flight send never gets an acknowledgement;
+/// with `ignore_stop` too, nothing does, like a runner stuck in a send.
 struct FakeRunner {
     events: mpsc::UnboundedSender<RunnerEvent>,
     ignore_release: bool,
+    ignore_stop: bool,
 }
 
 impl AccountRunner for FakeRunner {
@@ -86,7 +88,7 @@ impl AccountRunner for FakeRunner {
         self.events.send(RunnerEvent::Started(account)).unwrap();
         loop {
             tokio::select! {
-                () = control.stop.cancelled() => {
+                () = control.stop.cancelled(), if !self.ignore_stop => {
                     self.events.send(RunnerEvent::Stopped(account)).unwrap();
                     return AccountExit::Stopped;
                 }
@@ -95,7 +97,7 @@ impl AccountRunner for FakeRunner {
                     return AccountExit::Released;
                 }
                 Some(signal) = control.signals.recv() => {
-                    self.events.send(RunnerEvent::Signal(account, signal)).unwrap();
+                    self.events.send(RunnerEvent::Signal(account, signal.signal)).unwrap();
                 }
             }
         }
@@ -129,6 +131,7 @@ async fn takes_free_accounts_up_to_its_cap_and_forwards_their_signals() {
         Arc::new(FakeRunner {
             events,
             ignore_release: false,
+            ignore_stop: false,
         }),
         CONFIG,
     );
@@ -145,9 +148,18 @@ async fn takes_free_accounts_up_to_its_cap_and_forwards_their_signals() {
         runner_events.recv().await,
         Some(RunnerEvent::Started(second))
     );
-    signals.send(Signal::SendRequested(second)).await.unwrap();
-    signals.send(Signal::SendRequested(third)).await.unwrap();
-    signals.send(Signal::GroupsRequested(first)).await.unwrap();
+    signals
+        .send(Signal::SendRequested(second).into())
+        .await
+        .unwrap();
+    signals
+        .send(Signal::SendRequested(third).into())
+        .await
+        .unwrap();
+    signals
+        .send(Signal::GroupsRequested(first).into())
+        .await
+        .unwrap();
     assert_eq!(
         runner_events.recv().await,
         Some(RunnerEvent::Signal(second, AccountSignal::Send))
@@ -162,6 +174,71 @@ async fn takes_free_accounts_up_to_its_cap_and_forwards_their_signals() {
         "the third account stays free for another replica"
     );
 
+    shutdown.cancel();
+    running.await.unwrap().unwrap();
+}
+
+/// Reports that it started, then each signal with the id of the span it
+/// arrived in.
+struct SpanRunner {
+    started: mpsc::UnboundedSender<Uuid>,
+    signals: mpsc::UnboundedSender<(AccountSignal, Option<tracing::span::Id>)>,
+}
+
+impl AccountRunner for SpanRunner {
+    async fn run(&self, account: Uuid, mut control: AccountControl) -> AccountExit {
+        self.started.send(account).unwrap();
+        loop {
+            tokio::select! {
+                () = control.stop.cancelled() => return AccountExit::Stopped,
+                () = control.release.cancelled() => return AccountExit::Released,
+                Some(Traced { signal, span }) = control.signals.recv() => {
+                    self.signals.send((signal, span.id())).unwrap();
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_forwarded_signal_carries_the_span_of_its_notification() {
+    let _subscriber = tracing::subscriber::set_default(tracing_subscriber::registry());
+    let account = Uuid::from_u128(1);
+    let (announced, _announcements) = mpsc::unbounded_channel();
+    let (reported, mut received) = mpsc::unbounded_channel();
+    let (started, mut starts) = mpsc::unbounded_channel();
+    let supervisor = Supervisor::new(
+        FakeLocks::default(),
+        FakeDirectory {
+            candidates: vec![account],
+            announced,
+        },
+        Arc::new(SpanRunner {
+            started,
+            signals: reported,
+        }),
+        CONFIG,
+    );
+    let (signals, mut receiver) = mpsc::channel(8);
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    let running = tokio::spawn(async move { supervisor.run(&mut receiver, stop).await });
+    assert_eq!(starts.recv().await, Some(account));
+
+    let notification = tracing::info_span!("whatsapp.signal.receive");
+    signals
+        .send(Traced {
+            signal: Signal::SendRequested(account),
+            span: notification.clone(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        received.recv().await,
+        Some((AccountSignal::Send, notification.id()))
+    );
+    assert!(notification.id().is_some());
     shutdown.cancel();
     running.await.unwrap().unwrap();
 }
@@ -182,6 +259,7 @@ async fn drain_releases_every_account_then_unlocks_and_announces_it() {
         Arc::new(FakeRunner {
             events,
             ignore_release: false,
+            ignore_stop: false,
         }),
         CONFIG,
     );
@@ -231,6 +309,7 @@ async fn drain_stops_an_account_that_does_not_release_in_time_and_still_announce
         Arc::new(FakeRunner {
             events,
             ignore_release: true,
+            ignore_stop: false,
         }),
         CONFIG,
     );
@@ -255,6 +334,46 @@ async fn drain_stops_an_account_that_does_not_release_in_time_and_still_announce
 }
 
 #[tokio::test(start_paused = true)]
+async fn drain_aborts_an_account_that_ignores_its_stop_and_still_announces_it() {
+    let account = Uuid::from_u128(1);
+    let locks = FakeLocks::default();
+    let (announced, mut announcements) = mpsc::unbounded_channel();
+    let (events, mut runner_events) = mpsc::unbounded_channel();
+    let supervisor = Supervisor::new(
+        locks.clone(),
+        FakeDirectory {
+            candidates: vec![account],
+            announced,
+        },
+        Arc::new(FakeRunner {
+            events,
+            ignore_release: true,
+            ignore_stop: true,
+        }),
+        CONFIG,
+    );
+    let (_signals, mut receiver) = mpsc::channel(8);
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    let running = tokio::spawn(async move { supervisor.run(&mut receiver, stop).await });
+    assert_eq!(
+        runner_events.recv().await,
+        Some(RunnerEvent::Started(account))
+    );
+
+    let started = tokio::time::Instant::now();
+    shutdown.cancel();
+    running.await.unwrap().unwrap();
+
+    assert_eq!(
+        started.elapsed(),
+        CONFIG.release_timeout + CONFIG.stop_timeout
+    );
+    assert_eq!(announcements.recv().await, Some(account));
+    assert!(locks.held.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
 async fn losing_the_locks_stops_every_account_without_unlocking_or_announcing() {
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
@@ -270,6 +389,7 @@ async fn losing_the_locks_stops_every_account_without_unlocking_or_announcing() 
         Arc::new(FakeRunner {
             events,
             ignore_release: false,
+            ignore_stop: false,
         }),
         CONFIG,
     );

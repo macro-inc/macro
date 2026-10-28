@@ -32,6 +32,7 @@ import { Dynamic } from 'solid-js/web';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
+import { TaskSavedViewsList } from '../views/task-saved-views';
 
 const TASK_NAV_ITEMS = [
   { id: 'my-tasks', label: 'My Tasks', icon: CheckSquareIcon },
@@ -52,7 +53,7 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
       >
         {(item) => (
           <ViewSidebar.Item
-            active={state.tab === item.id}
+            active={!state.savedViewActive && state.tab === item.id}
             onClick={() => {
               setTab(item.id);
               props.onNavigate?.();
@@ -172,7 +173,7 @@ export function TasksSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation">
+    <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
       <SidebarCreateHeader
         title="Tasks"
         searchLabel="Search tasks"
@@ -203,6 +204,7 @@ export function TasksSidebar() {
 
       <ViewSidebar.Content>
         <TasksNavigation />
+        <TaskSavedViewsList />
 
         <TaskFavorites
           open={isSidebarSectionOpen('favorites')}
@@ -231,8 +233,12 @@ export function TasksSidebar() {
             }}
           />
         </Show>
-        <ConnectorImportSidebar category="tasks" class="mt-auto" />
       </ViewSidebar.Content>
+      {/* Overlays the sidebar's bottom so the projects list keeps its height. */}
+      <ConnectorImportSidebar
+        category="tasks"
+        class="absolute inset-x-(--sidebar-gutter) bottom-(--sidebar-content-inset) z-10"
+      />
     </ViewSidebar.Root>
   );
 }

@@ -5,6 +5,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use external_chat::domain::models::{BackfillState, ExternalChatError};
+use external_chat::domain::ports::ExternalChatResult;
 use tokio::sync::{Notify, Semaphore, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -13,17 +15,14 @@ use whatsapp_linked::domain::events::{
     BackfillWork, ClaimedSend, HistoryPage, Lease, OutgoingContent, PairingUpdate, PairingWork,
     SendOutcome, SessionScope,
 };
-use whatsapp_linked::domain::models::{
-    AccountState, BackfillState, GroupInfo, LinkedError, PairingState,
-};
-use whatsapp_linked::domain::ports::LinkedResult;
+use whatsapp_linked::domain::models::{AccountState, GroupInfo, PairingState};
 use whatsapp_linked::domain::session::SessionService;
 
 use super::inbound::InboundGate;
 use super::media::{MEDIA_LIMIT_BYTES, MediaImports, TRANSFERS_PER_ACCOUNT};
 use super::ports::{
     AccountControl, AccountExit, AccountRunner, AccountSignal, SendFailure, SessionConnector,
-    SessionError, SessionEvent, UploadedMedia, WhatsAppSession,
+    SessionError, SessionEvent, Traced, UploadedMedia, WhatsAppSession,
 };
 
 #[cfg(test)]
@@ -93,13 +92,13 @@ enum Next {
     Exit(AccountExit),
 }
 
-fn is_fenced(report: &rootcause::Report<LinkedError>) -> bool {
-    matches!(report.current_context(), LinkedError::Fenced)
+fn is_fenced(report: &rootcause::Report<ExternalChatError>) -> bool {
+    matches!(report.current_context(), ExternalChatError::Fenced)
 }
 
 /// Fenced ends the account; any other domain error is logged and survived.
 fn survive<Value>(
-    result: LinkedResult<Value>,
+    result: ExternalChatResult<Value>,
     step: &'static str,
 ) -> Result<Option<Value>, AccountExit> {
     match result {
@@ -121,7 +120,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
     async fn run(&self, account: Uuid, control: AccountControl) -> AccountExit {
         let lease = match self.sessions.begin_lease(account).await {
             Ok(lease) => lease,
-            Err(report) if matches!(report.current_context(), LinkedError::NotFound) => {
+            Err(report) if matches!(report.current_context(), ExternalChatError::NotFound) => {
                 return AccountExit::Idle;
             }
             Err(report) => {
@@ -151,9 +150,12 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
             account_id = %account,
             lease_epoch = lease.scope.lease_epoch,
             paired = tracing::field::Empty,
+            fresh_device = tracing::field::Empty,
             pairing = pairing.is_some(),
             outcome = tracing::field::Empty,
         );
+        // Linked, not parented: the session outlives the signal that started it.
+        connect_span.follows_from(&control.cause);
         let gate = Arc::new(InboundGate::new(self.sessions.clone(), lease.scope));
         let opened = self
             .open(&lease, pairing.as_ref(), Arc::clone(&gate))
@@ -165,6 +167,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
                 Ok(Some(_)) => "connecting",
                 Ok(None) => "idle",
                 Err(AccountExit::Fenced) => "fenced",
+                Err(AccountExit::Idle) => "device_unreadable",
                 Err(_) => "failed",
             },
         );
@@ -178,7 +181,8 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         let media_wake = Arc::new(Notify::new());
         let (connected, connected_receiver) = watch::channel(false);
         let media_stop = CancellationToken::new();
-        let imports = tokio::spawn(
+        // Aborted if this runner is: the import loop never outlives it.
+        let imports = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
             MediaImports {
                 sessions: self.sessions.clone(),
                 scope: lease.scope,
@@ -190,7 +194,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
                 fenced: gate.fenced.clone(),
             }
             .run(media_stop.clone()),
-        );
+        ));
         let mut running = Running {
             sessions: &self.sessions,
             config: self.config,
@@ -203,13 +207,20 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
             pairing,
             reconnecting: false,
             groups_refreshed_at: None,
+            release: control.release.clone(),
+            stop: control.stop.clone(),
         };
         let exit = running.serve(events, control).await;
         media_stop.cancel();
         if exit == AccountExit::Stopped {
             imports.abort();
         }
-        let _ = imports.await;
+        match imports.await {
+            Err(error) if error.is_panic() => {
+                tracing::error!(error = %error, "The WhatsApp attachment import loop panicked");
+            }
+            Ok(()) | Err(_) => {}
+        }
         exit
     }
 }
@@ -219,6 +230,12 @@ impl<Connector: SessionConnector> AccountSessions<Connector> {
     /// device has no pairing transaction to serve. Pairing an account that
     /// is not connected starts from a fresh device: the old one was logged
     /// out or disconnected and its keys are useless.
+    ///
+    /// A stored device that can never be read again (KMS lost its data key)
+    /// is replaced when pairing, once. Without a pairing, a connected account
+    /// with such a device is recorded as logged out, so its owner is asked to
+    /// reconnect. A KMS outage replaces nothing: the account fails, and the
+    /// next rescan tries again.
     async fn open(
         &self,
         lease: &Lease,
@@ -226,15 +243,38 @@ impl<Connector: SessionConnector> AccountSessions<Connector> {
         gate: Arc<InboundGate>,
     ) -> Result<Option<(Connector::Session, mpsc::UnboundedReceiver<SessionEvent>)>, AccountExit>
     {
-        let fresh_device = pairing.is_some() && lease.state != AccountState::Connected;
-        let (session, events) = match self.connector.open(lease.scope, fresh_device, gate).await {
-            Ok(opened) => opened,
-            Err(SessionError::Fenced) => return Err(AccountExit::Fenced),
-            Err(error) => {
-                tracing::error!(error = %error, "Opening the WhatsApp device failed");
-                return Err(AccountExit::Failed);
+        let mut fresh_device = pairing.is_some() && lease.state != AccountState::Connected;
+        let mut replaced = false;
+        let (session, events) = loop {
+            match self
+                .connector
+                .open(lease.scope, fresh_device, gate.clone())
+                .await
+            {
+                Ok(opened) => break opened,
+                Err(SessionError::Fenced) => return Err(AccountExit::Fenced),
+                Err(SessionError::DeviceUnreadable) if pairing.is_some() && !replaced => {
+                    tracing::warn!(
+                        fresh_device,
+                        "The stored WhatsApp device cannot be read; pairing a fresh one"
+                    );
+                    fresh_device = true;
+                    replaced = true;
+                }
+                Err(SessionError::DeviceUnreadable) if pairing.is_none() => {
+                    tracing::error!(
+                        "The stored WhatsApp device cannot be read; the owner must reconnect"
+                    );
+                    survive(self.sessions.logged_out(lease.scope).await, "logged_out")?;
+                    return Err(AccountExit::Idle);
+                }
+                Err(error) => {
+                    tracing::error!(error = %error, "Opening the WhatsApp device failed");
+                    return Err(AccountExit::Failed);
+                }
             }
         };
+        tracing::Span::current().record("fresh_device", fresh_device);
         let paired = session.identity_jid().await.is_some();
         tracing::Span::current().record("paired", paired);
         if !paired {
@@ -271,6 +311,9 @@ struct Running<'service, Session> {
     reconnecting: bool,
     /// When the group list was last read, for rate limiting requested refreshes.
     groups_refreshed_at: Option<tokio::time::Instant>,
+    /// The runner's release and stop requests, checked between sends.
+    release: CancellationToken,
+    stop: CancellationToken,
 }
 
 impl<Session: WhatsAppSession> Running<'_, Session> {
@@ -354,13 +397,8 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 let result = self.confirm_passkey(code).await;
                 self.exit_on(result)
             }
-            SessionEvent::PairFailed => {
-                let result = self.update_pairing(PairingUpdate::Failed).await;
-                match result {
-                    Ok(()) => Next::Exit(AccountExit::Idle),
-                    Err(exit) => Next::Exit(exit),
-                }
-            }
+            SessionEvent::PairExpired => self.end_pairing(PairingUpdate::Expired).await,
+            SessionEvent::PairFailed => self.end_pairing(PairingUpdate::Failed).await,
             SessionEvent::Connected => {
                 if self.reconnecting {
                     tracing::info!(
@@ -393,11 +431,18 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 Next::Exit(AccountExit::Failed)
             }
             SessionEvent::Chats(chats) => {
-                let result = survive(
-                    self.sessions.update_chats(self.scope, &chats).await,
-                    "update_chats",
-                )
-                .map(|_| ());
+                let result = async {
+                    let anchored = survive(
+                        self.sessions.update_chats(self.scope, &chats).await,
+                        "update_chats",
+                    )?;
+                    // A chat waiting for its first message got one: import now.
+                    if anchored == Some(true) {
+                        Box::pin(self.backfill(false)).await?;
+                    }
+                    Ok(())
+                }
+                .await;
                 self.exit_on(result)
             }
             SessionEvent::HistoryPage(page) => {
@@ -461,14 +506,26 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
         .await
     }
 
-    async fn on_signal(&mut self, signal: AccountSignal) -> Next {
-        let result = match signal {
-            AccountSignal::Pairing(pairing) => self.check_pairing(pairing).await,
-            AccountSignal::Send => self.dispatch_sends().await,
-            AccountSignal::Groups => self.requested_refresh().await,
-            AccountSignal::Changed => self.account_changed().await,
-            AccountSignal::Resync => self.resync().await,
-        };
+    /// Handles a signal inside a child of the notification's span, so the
+    /// sender's trace continues into what it caused here.
+    async fn on_signal(&mut self, Traced { signal, span }: Traced<AccountSignal>) -> Next {
+        let handling = tracing::info_span!(
+            parent: &span,
+            "whatsapp.account.signal",
+            account_id = %self.scope.account_id,
+            signal = ?signal,
+        );
+        let result = async {
+            match signal {
+                AccountSignal::Pairing(pairing) => self.check_pairing(pairing).await,
+                AccountSignal::Send => self.dispatch_sends().await,
+                AccountSignal::Groups => self.requested_refresh().await,
+                AccountSignal::Changed => self.account_changed().await,
+                AccountSignal::Resync => self.resync().await,
+            }
+        }
+        .instrument(handling)
+        .await;
         self.exit_on(result)
     }
 
@@ -592,6 +649,14 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
         }
     }
 
+    /// WhatsApp ended the pairing; the session goes idle until the next one.
+    async fn end_pairing(&mut self, update: PairingUpdate) -> Next {
+        match self.update_pairing(update).await {
+            Ok(()) => Next::Exit(AccountExit::Idle),
+            Err(exit) => Next::Exit(exit),
+        }
+    }
+
     /// Hands the owner's passkey assertion to WhatsApp, once.
     async fn forward_passkey(&mut self, pairing: Uuid) -> Result<(), AccountExit> {
         let Some(Some(response)) = survive(
@@ -691,12 +756,12 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                     if elapsed(group.requested_at) >= self.config.backfill_timeout {
                         tracing::info!(
                             account_id = %self.scope.account_id,
-                            group_id = %group.group_id,
+                            chat_id = %group.chat_id,
                             "The phone did not answer a history request; waiting for it"
                         );
                         survive(
                             self.sessions
-                                .backfill_unanswered(self.scope, group.group_id)
+                                .backfill_unanswered(self.scope, group.chat_id)
                                 .await,
                             "backfill_unanswered",
                         )?;
@@ -715,13 +780,21 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
     /// before the group was added and so was not kept).
     async fn request_page(&mut self, group: &BackfillWork) -> Result<(), AccountExit> {
         let Some(before) = group.cursor.as_ref().or(group.anchor.as_ref()) else {
-            // No message seen in this chat yet: the first one starts it.
+            // No message known in this chat yet: the first one starts it.
+            if group.state != BackfillState::WaitingForMessage {
+                survive(
+                    self.sessions
+                        .backfill_waiting_for_message(self.scope, group.chat_id)
+                        .await,
+                    "backfill_waiting_for_message",
+                )?;
+            }
             return Ok(());
         };
         let span = tracing::info_span!(
             "whatsapp.backfill.request",
             account_id = %self.scope.account_id,
-            group_id = %group.group_id,
+            chat_id = %group.chat_id,
             imported = group.imported,
             first = group.cursor.is_none(),
             outcome = tracing::field::Empty,
@@ -743,7 +816,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                     tracing::Span::current().record("outcome", "requested");
                     survive(
                         self.sessions
-                            .backfill_requested(self.scope, group.group_id)
+                            .backfill_requested(self.scope, group.chat_id)
                             .await,
                         "backfill_requested",
                     )?;
@@ -843,6 +916,10 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 return Ok(());
             }
             for send in &claimed {
+                // Claims not dispatched yet go back on release or takeover.
+                if self.release.is_cancelled() || self.stop.is_cancelled() {
+                    return Ok(());
+                }
                 self.dispatch(send).await?;
             }
         }
@@ -882,11 +959,11 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             "whatsapp.send.dispatch",
             account_id = %self.scope.account_id,
             send_id = %send.id,
-            group_sequence = send.group_sequence,
+            chat_sequence = send.chat_sequence,
             outcome = tracing::field::Empty,
         );
         // The dispatch joins the trace of the request that recorded the send.
-        whatsapp_linked::outbound::trace_context::adopt(&span, send.traceparent.as_deref());
+        external_chat::signals::trace_context::adopt(&span, send.traceparent.as_deref());
         async {
             let uploaded = self.upload(send).await?;
             let message_id = self.session.new_message_id().await;

@@ -9,7 +9,7 @@ use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarT
 use macro_event_broker::MacroEventBroker;
 
 use super::{
-    ics::{CalendarEventIcs, render_event_ics},
+    ics::{CalendarEventExportAccess, CalendarEventForward, CalendarEventIcs, render_event_ics},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -17,11 +17,11 @@ use super::{
         GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarProviderError,
-        CalendarProviderErrorKind, CalendarReauthNotifier, CalendarRepository,
-        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
-        RetiredCalendarEvent,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
+        CalendarEventWrite, CalendarEventWriteOutcome, CalendarOccurrenceService,
+        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, RetiredCalendarEvent,
     },
 };
 
@@ -237,6 +237,40 @@ where
         }))
     }
 
+    /// The .ics a forward of the requester's own copy of an event carries,
+    /// and that copy's inbox, which sends it. `None` unless `event_id` is a
+    /// live copy held through one of the requester's own inboxes: a channel
+    /// share or a delegated inbox's copy has no inbox of theirs to send from.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventForward>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        let Some(copy) = copies.into_iter().find(|copy| copy.event_id == event_id) else {
+            return Ok(None);
+        };
+        let Some(event) = self
+            .repository
+            .event_export(requester_id, event_id)
+            .await?
+            .filter(|event| event.access == CalendarEventExportAccess::OwnCopy)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(CalendarEventForward {
+            ics: CalendarEventIcs {
+                document: render_event_ics(&event),
+                title: event.title,
+            },
+            inbox: copy.inbox,
+        }))
+    }
+
     /// Re-arm the watched inbox's sync job for a push notification whose
     /// channel token the adapter already verified. Returns whether the
     /// notification matched an active channel.
@@ -257,6 +291,19 @@ where
             .schedule_google_sync_for_link(email_link_id)
             .await?;
         Ok(true)
+    }
+}
+
+impl<R> CalendarEventForwardSource for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send {
+        CalendarService::event_forward(self, requester_id, event_id)
     }
 }
 

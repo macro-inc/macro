@@ -1,10 +1,11 @@
 //! Gmail message capability implementation.
 
+use std::collections::HashMap;
+
 use base64::{
     Engine as _,
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
-use models_email::email::service::message::Message;
 use models_email::email::service::thread::ThreadSummary;
 use models_email::gmail::MessagePart;
 use uuid::Uuid;
@@ -135,13 +136,36 @@ impl MailboxMessageClient for GmailApiClientRepository {
         access_token: &AccessToken,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         let resource = self
             .client
             .get_thread(access_token.expose_secret(), provider_thread_id)
             .await
             .map_err(map_gmail_error)?;
-        Ok(map_thread_resource_to_service(resource, link_id)?.messages)
+        // Collect calendar parts from the wire messages before conversion
+        // consumes them, so a thread read needs no messages.get per message.
+        let mut calendar_parts = resource
+            .messages
+            .iter()
+            .map(|message| {
+                Ok((
+                    message.id.clone(),
+                    collect_calendar_parts(&message.payload)?,
+                ))
+            })
+            .collect::<Result<HashMap<_, _>, EmailApiError>>()?;
+        Ok(map_thread_resource_to_service(resource, link_id)?
+            .messages
+            .into_iter()
+            .map(|message| MessageWithCalendarParts {
+                calendar_parts: message
+                    .provider_id
+                    .as_ref()
+                    .and_then(|id| calendar_parts.remove(id))
+                    .unwrap_or_default(),
+                message,
+            })
+            .collect())
     }
 
     async fn list_threads(
@@ -185,6 +209,24 @@ impl MailboxMessageClient for GmailApiClientRepository {
             .modify_message_labels(
                 access_token.expose_secret(),
                 provider_message_id,
+                label_ids_to_add,
+                label_ids_to_remove,
+            )
+            .await
+            .map_err(map_gmail_error)
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> Result<(), EmailApiError> {
+        self.client
+            .batch_modify_message_labels(
+                access_token.expose_secret(),
+                provider_message_ids,
                 label_ids_to_add,
                 label_ids_to_remove,
             )

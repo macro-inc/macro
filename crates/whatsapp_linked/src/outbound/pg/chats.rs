@@ -6,95 +6,181 @@ use crate::domain::events::{BackfillWork, ChatUpdate, HistoryPage, MessageAnchor
 use crate::domain::ports::StoredChat;
 use chrono::{Duration, Utc};
 
-/// Upsert chat-list rows; signal the owner's list once if any row changed.
+/// Several updates of one chat in a batch, as one.
+fn merge(into: &mut ChatUpdate, update: &ChatUpdate) {
+    if !into.create && update.create {
+        into.kind = update.kind;
+    }
+    into.create |= update.create;
+    into.name = update.name.clone().or(into.name.take());
+    into.last_activity_at = into.last_activity_at.max(update.last_activity_at);
+    into.archived = update.archived.or(into.archived);
+    into.pinned = update.pinned.or(into.pinned);
+    if update
+        .anchor
+        .as_ref()
+        .is_some_and(|anchor| into.anchor.as_ref().is_none_or(|kept| kept.at <= anchor.at))
+    {
+        into.anchor = update.anchor.clone();
+    }
+}
+
+/// Upsert chat-list rows in a few statements for the whole batch; signal the
+/// owner's list once if any row changed. A message for an added chat that was
+/// waiting for one makes it `pending`; returns whether that happened.
 pub(super) async fn update_chats_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     chats: &[ChatUpdate],
-) -> LinkedResult<()> {
-    let mut changed = false;
+) -> ExternalChatResult<bool> {
+    let mut merged: std::collections::BTreeMap<String, ChatUpdate> = Default::default();
     for chat in chats {
-        let anchor = chat
-            .anchor
-            .as_ref()
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(failure)?;
-        let name = chat
+        let mut chat = chat.clone();
+        chat.name = chat
             .name
             .as_deref()
             .map(str::trim)
             .filter(|name| !name.is_empty())
             .map(|name| name.chars().take(256).collect::<String>());
-        let rows = if chat.create {
-            sqlx::query!(
-                r#"INSERT INTO whatsapp_chat AS c (account_id, chat_jid, kind, name, last_activity_at, archived, pinned, anchor)
-                VALUES ($1, $2, $3, $4, $5, COALESCE($6, false), COALESCE($7, false), $8)
-                ON CONFLICT (account_id, chat_jid) DO UPDATE SET
-                    name = COALESCE(excluded.name, c.name),
-                    last_activity_at = GREATEST(c.last_activity_at, excluded.last_activity_at),
-                    archived = COALESCE($6, c.archived),
-                    pinned = COALESCE($7, c.pinned),
-                    anchor = CASE WHEN excluded.anchor IS NOT NULL AND (c.anchor IS NULL
-                        OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz)
-                        THEN excluded.anchor ELSE c.anchor END,
-                    updated_at = now()
-                WHERE c.name IS DISTINCT FROM COALESCE(excluded.name, c.name)
-                   OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, excluded.last_activity_at)
-                   OR c.archived IS DISTINCT FROM COALESCE($6, c.archived)
-                   OR c.pinned IS DISTINCT FROM COALESCE($7, c.pinned)
-                   OR (excluded.anchor IS NOT NULL AND c.anchor IS DISTINCT FROM excluded.anchor AND (c.anchor IS NULL
-                       OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz))"#,
-                account.id,
-                chat.jid,
-                chat.kind.as_str(),
-                name,
-                chat.last_activity_at,
-                chat.archived,
-                chat.pinned,
-                anchor
-            )
-            .execute(&mut **tx)
-            .await
-        } else {
-            sqlx::query!(
-                r#"UPDATE whatsapp_chat c SET
-                    name = COALESCE($3, c.name),
-                    last_activity_at = GREATEST(c.last_activity_at, $4),
-                    archived = COALESCE($5, c.archived),
-                    pinned = COALESCE($6, c.pinned),
-                    updated_at = now()
-                WHERE c.account_id = $1 AND c.chat_jid = $2
-                  AND (c.name IS DISTINCT FROM COALESCE($3, c.name)
-                    OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, $4)
-                    OR c.archived IS DISTINCT FROM COALESCE($5, c.archived)
-                    OR c.pinned IS DISTINCT FROM COALESCE($6, c.pinned))"#,
-                account.id,
-                chat.jid,
-                name,
-                chat.last_activity_at,
-                chat.archived,
-                chat.pinned
-            )
-            .execute(&mut **tx)
-            .await
+        match merged.get_mut(&chat.jid) {
+            Some(kept) => merge(kept, &chat),
+            None => {
+                merged.insert(chat.jid.clone(), chat);
+            }
         }
+    }
+    let (created, updated): (Vec<&ChatUpdate>, Vec<&ChatUpdate>) =
+        merged.values().partition(|chat| chat.create);
+    let anchors = created
+        .iter()
+        .map(|chat| chat.anchor.as_ref().map(serde_json::to_value).transpose())
+        .collect::<Result<Vec<_>, _>>()
         .map_err(failure)?;
-        changed |= rows.rows_affected() > 0;
+    let inserted = sqlx::query!(
+        r#"WITH input AS (
+            SELECT * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::timestamptz[], $6::bool[], $7::bool[], $8::jsonb[])
+                AS i(chat_jid, kind, name, last_activity_at, archived, pinned, anchor))
+        INSERT INTO whatsapp_chat AS c (account_id, chat_jid, kind, name, last_activity_at, archived, pinned, anchor)
+        SELECT $1, i.chat_jid, i.kind, i.name, i.last_activity_at, COALESCE(i.archived, false), COALESCE(i.pinned, false), i.anchor
+        FROM input i
+        ON CONFLICT (account_id, chat_jid) DO UPDATE SET
+            name = COALESCE(excluded.name, c.name),
+            last_activity_at = GREATEST(c.last_activity_at, excluded.last_activity_at),
+            archived = COALESCE((SELECT i.archived FROM input i WHERE i.chat_jid = excluded.chat_jid), c.archived),
+            pinned = COALESCE((SELECT i.pinned FROM input i WHERE i.chat_jid = excluded.chat_jid), c.pinned),
+            anchor = CASE WHEN excluded.anchor IS NOT NULL AND (c.anchor IS NULL
+                OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz)
+                THEN excluded.anchor ELSE c.anchor END,
+            updated_at = now()
+        WHERE c.name IS DISTINCT FROM COALESCE(excluded.name, c.name)
+           OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, excluded.last_activity_at)
+           OR c.archived IS DISTINCT FROM COALESCE((SELECT i.archived FROM input i WHERE i.chat_jid = excluded.chat_jid), c.archived)
+           OR c.pinned IS DISTINCT FROM COALESCE((SELECT i.pinned FROM input i WHERE i.chat_jid = excluded.chat_jid), c.pinned)
+           OR (excluded.anchor IS NOT NULL AND c.anchor IS DISTINCT FROM excluded.anchor AND (c.anchor IS NULL
+               OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz))"#,
+        account.id,
+        &created.iter().map(|chat| chat.jid.clone()).collect::<Vec<_>>(),
+        &created.iter().map(|chat| chat.kind.as_ref().to_owned()).collect::<Vec<_>>(),
+        &created.iter().map(|chat| chat.name.clone()).collect::<Vec<_>>() as &[Option<String>],
+        &created.iter().map(|chat| chat.last_activity_at).collect::<Vec<_>>() as &[Option<chrono::DateTime<Utc>>],
+        &created.iter().map(|chat| chat.archived).collect::<Vec<_>>() as &[Option<bool>],
+        &created.iter().map(|chat| chat.pinned).collect::<Vec<_>>() as &[Option<bool>],
+        &anchors as &[Option<serde_json::Value>],
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?
+    .rows_affected();
+    let renamed_rows = sqlx::query!(
+        r#"UPDATE whatsapp_chat c SET
+            name = COALESCE(i.name, c.name),
+            last_activity_at = GREATEST(c.last_activity_at, i.last_activity_at),
+            archived = COALESCE(i.archived, c.archived),
+            pinned = COALESCE(i.pinned, c.pinned),
+            updated_at = now()
+        FROM UNNEST($2::text[], $3::text[], $4::timestamptz[], $5::bool[], $6::bool[])
+            AS i(chat_jid, name, last_activity_at, archived, pinned)
+        WHERE c.account_id = $1 AND c.chat_jid = i.chat_jid
+          AND (c.name IS DISTINCT FROM COALESCE(i.name, c.name)
+            OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, i.last_activity_at)
+            OR c.archived IS DISTINCT FROM COALESCE(i.archived, c.archived)
+            OR c.pinned IS DISTINCT FROM COALESCE(i.pinned, c.pinned))"#,
+        account.id,
+        &updated
+            .iter()
+            .map(|chat| chat.jid.clone())
+            .collect::<Vec<_>>(),
+        &updated
+            .iter()
+            .map(|chat| chat.name.clone())
+            .collect::<Vec<_>>() as &[Option<String>],
+        &updated
+            .iter()
+            .map(|chat| chat.last_activity_at)
+            .collect::<Vec<_>>() as &[Option<chrono::DateTime<Utc>>],
+        &updated.iter().map(|chat| chat.archived).collect::<Vec<_>>() as &[Option<bool>],
+        &updated.iter().map(|chat| chat.pinned).collect::<Vec<_>>() as &[Option<bool>],
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?
+    .rows_affected();
+    let changed = inserted + renamed_rows > 0;
+    let anchored_jids: Vec<String> = merged
+        .values()
+        .filter(|chat| chat.anchor.is_some())
+        .map(|chat| chat.jid.clone())
+        .collect();
+    let ready = sqlx::query_scalar!(
+        r#"UPDATE external_chat SET backfill_state = 'pending'
+        WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = ANY($2) AND state = 'active'
+          AND backfill_state = 'waiting_for_message'
+        RETURNING id"#,
+        account.user_id,
+        &anchored_jids
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(failure)?;
+    let anchored = !ready.is_empty();
+    // The owner's added direct chats follow the person's name.
+    let named: Vec<(String, String)> = merged
+        .values()
+        .filter(|chat| chat.kind == ExternalChatKind::Direct)
+        .filter_map(|chat| Some((chat.jid.clone(), chat.name.clone()?)))
+        .collect();
+    let renamed = sqlx::query_scalar!(
+        r#"UPDATE external_chat g SET name = i.name
+        FROM UNNEST($2::text[], $3::text[]) AS i(jid, name)
+        WHERE g.user_id = $1 AND g.provider = 'whatsapp' AND g.remote_id = i.jid AND g.kind = 'direct' AND g.state = 'active'
+          AND g.name <> i.name
+        RETURNING g.id"#,
+        account.user_id,
+        &named.iter().map(|(jid, _)| jid.clone()).collect::<Vec<_>>(),
+        &named.iter().map(|(_, name)| name.clone()).collect::<Vec<_>>(),
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(failure)?;
+    for chat_id in ready.into_iter().chain(renamed) {
+        notify_change(tx, Change::Chat { chat_id }).await?;
     }
     if changed {
         notify_change(
             tx,
-            signals::Change::Groups {
+            Change::Chats {
                 account_id: account.id,
             },
         )
         .await?;
     }
-    Ok(())
+    Ok(anchored)
 }
 
-pub(super) async fn account_chats(pool: &PgPool, account: Uuid) -> LinkedResult<Vec<StoredChat>> {
+pub(super) async fn account_chats(
+    pool: &PgPool,
+    account: Uuid,
+) -> ExternalChatResult<Vec<StoredChat>> {
     sqlx::query!(
         r#"SELECT chat_jid, kind, name, last_activity_at, archived, pinned FROM whatsapp_chat
         WHERE account_id = $1 ORDER BY last_activity_at DESC NULLS LAST, chat_jid LIMIT 5000"#,
@@ -106,7 +192,11 @@ pub(super) async fn account_chats(pool: &PgPool, account: Uuid) -> LinkedResult<
     .into_iter()
     .map(|row| {
         Ok(StoredChat {
-            kind: ChatKind::parse(&row.kind).ok_or(LinkedError::Unavailable)?,
+            kind: row
+                .kind
+                .parse::<ExternalChatKind>()
+                .ok()
+                .ok_or_else(|| corrupt(format_args!("kind {:?}", row.kind)))?,
             jid: row.chat_jid,
             name: row.name,
             last_activity_at: row.last_activity_at,
@@ -117,24 +207,45 @@ pub(super) async fn account_chats(pool: &PgPool, account: Uuid) -> LinkedResult<
     .collect()
 }
 
-fn backfill_state(value: &str) -> LinkedResult<BackfillState> {
-    BackfillState::parse(value).ok_or_else(|| LinkedError::Unavailable.into())
+fn backfill_state(value: &str) -> ExternalChatResult<BackfillState> {
+    BackfillState::parse(value).ok_or_else(|| corrupt(format_args!("backfill state {value:?}")))
 }
 
 pub(super) async fn backfill_work_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
-) -> LinkedResult<Vec<BackfillWork>> {
+) -> ExternalChatResult<Vec<BackfillWork>> {
+    // The anchor is the chat list's newest message, else the newest message
+    // of the chat stored in Macro that this account saw (in this group, or in
+    // an earlier or someone else's group for the same chat).
     sqlx::query!(
-        r#"SELECT g.id, g.group_jid, g.backfill_state AS "state!", g.backfill_imported, g.backfill_cursor,
-            g.adopted_at, g.backfill_requested_at, c.anchor AS "anchor?"
-        FROM whatsapp_group g
-        LEFT JOIN whatsapp_chat c ON c.account_id = $1 AND c.chat_jid = g.group_jid
+        r#"SELECT g.id, g.remote_id, g.backfill_state AS "state!", g.backfill_imported, g.backfill_cursor,
+            g.adopted_at, g.backfill_requested_at, COALESCE(c.anchor, stored.anchor) AS "anchor?"
+        FROM external_chat g
+        LEFT JOIN whatsapp_chat c ON c.account_id = $1 AND c.chat_jid = g.remote_id
+        LEFT JOIN LATERAL (
+            SELECT jsonb_build_object(
+                'id', m.source_id,
+                'at', m.source_at,
+                'fromMe', EXISTS (SELECT 1 FROM whatsapp_identity_alias a
+                    WHERE a.chat_id = m.chat_id AND a.person_id = m.person_id AND a.jid = $3),
+                'senderJid', (SELECT a.jid FROM whatsapp_identity_alias a
+                    WHERE a.chat_id = m.chat_id AND a.person_id = m.person_id
+                    ORDER BY a.jid LIKE '%@lid' DESC, a.jid LIMIT 1)) AS anchor
+            FROM external_chat_message m JOIN external_chat other ON other.id = m.chat_id
+            WHERE c.anchor IS NULL AND other.remote_id = g.remote_id
+              AND m.kind = 'message' AND m.message_id IS NOT NULL
+              AND (m.chat_id = g.id OR EXISTS (SELECT 1 FROM whatsapp_message_observation o
+                  WHERE o.chat_id = m.chat_id AND o.person_id = m.person_id
+                    AND o.source_id = m.source_id AND o.account_id = $1))
+            ORDER BY m.source_at DESC, m.id DESC LIMIT 1
+        ) stored ON true
         WHERE g.user_id = $2 AND g.state = 'active'
-          AND g.backfill_state IN ('pending', 'running', 'waiting_for_phone')
+          AND g.backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')
         ORDER BY g.adopted_at, g.id LIMIT 20"#,
         account.id,
-        account.user_id
+        account.user_id,
+        account.identity_jid
     )
     .fetch_all(&mut **tx)
     .await
@@ -142,8 +253,8 @@ pub(super) async fn backfill_work_in(
     .into_iter()
     .map(|row| {
         Ok(BackfillWork {
-            group_id: row.id,
-            group_jid: row.group_jid,
+            chat_id: row.id,
+            group_jid: row.remote_id,
             state: backfill_state(&row.state)?,
             imported: row.backfill_imported.max(0) as u32,
             cursor: row.backfill_cursor.map(decode).transpose()?,
@@ -163,13 +274,13 @@ pub(super) async fn set_backfill_in(
     group: Uuid,
     state: BackfillState,
     stamp_request: bool,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     let previous = sqlx::query_scalar!(
-        r#"UPDATE whatsapp_group g SET backfill_state = $3,
+        r#"UPDATE external_chat g SET backfill_state = $3,
             backfill_requested_at = CASE WHEN $4 THEN now() ELSE g.backfill_requested_at END
-        FROM (SELECT id, backfill_state FROM whatsapp_group WHERE id = $1 FOR UPDATE) old
+        FROM (SELECT id, backfill_state FROM external_chat WHERE id = $1 FOR UPDATE) old
         WHERE g.id = old.id AND g.user_id = $2
-          AND g.backfill_state IN ('pending', 'running', 'waiting_for_phone')
+          AND g.backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')
         RETURNING old.backfill_state AS "previous!""#,
         group,
         account.user_id,
@@ -180,7 +291,7 @@ pub(super) async fn set_backfill_in(
     .await
     .map_err(failure)?;
     if previous.is_some_and(|previous| previous != state.as_str()) {
-        notify_change(tx, signals::Change::Group { group_id: group }).await?;
+        notify_change(tx, Change::Chat { chat_id: group }).await?;
     }
     Ok(())
 }
@@ -217,11 +328,11 @@ pub(super) async fn backfill_page_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     page: &HistoryPage,
-) -> LinkedResult<Vec<(Uuid, BackfillState)>> {
+) -> ExternalChatResult<Vec<(Uuid, BackfillState)>> {
     let rows = sqlx::query!(
-        r#"SELECT id, backfill_imported, backfill_cursor, adopted_at FROM whatsapp_group
-        WHERE user_id = $1 AND group_jid = $2 AND state = 'active'
-          AND backfill_state IN ('pending', 'running', 'waiting_for_phone')
+        r#"SELECT id, backfill_imported, backfill_cursor, adopted_at FROM external_chat
+        WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = $2 AND state = 'active'
+          AND backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')
         ORDER BY id FOR UPDATE"#,
         account.user_id,
         page.chat_jid
@@ -245,7 +356,7 @@ pub(super) async fn backfill_page_in(
             .map_err(failure)?;
         // A running group is ready for its next page: no request outstanding.
         sqlx::query!(
-            r#"UPDATE whatsapp_group SET backfill_state = $2, backfill_imported = $3, backfill_cursor = $4,
+            r#"UPDATE external_chat SET backfill_state = $2, backfill_imported = $3, backfill_cursor = $4,
                 backfill_requested_at = NULL
             WHERE id = $1"#,
             row.id,
@@ -256,7 +367,7 @@ pub(super) async fn backfill_page_in(
         .execute(&mut **tx)
         .await
         .map_err(failure)?;
-        notify_change(tx, signals::Change::Group { group_id: row.id }).await?;
+        notify_change(tx, Change::Chat { chat_id: row.id }).await?;
         states.push((row.id, state));
     }
     Ok(states)

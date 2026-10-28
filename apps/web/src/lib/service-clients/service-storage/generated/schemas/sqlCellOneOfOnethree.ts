@@ -4,15 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { RowId } from './rowId';
 import type { SqlCellOneOfOnethreeType } from './sqlCellOneOfOnethreeType';
 
 /**
- * A table row's own id, the `row_id` column.
+ * The referenced entity ids; one for single-valued columns.
  */
 export type SqlCellOneOfOnethree = {
   type: SqlCellOneOfOnethreeType;
-  /** A table row's own id, the `row_id` column. */
-  value: RowId;
+  /** The referenced entity ids; one for single-valued columns. */
+  value: string[];
 };

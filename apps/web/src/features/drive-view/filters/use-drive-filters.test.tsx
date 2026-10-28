@@ -70,6 +70,7 @@ it.each(['pointer', 'keyboard'])(
       facets: {},
       expandedFolderIds: [],
       favoritesOpen: true,
+      databasesOpen: true,
       rootOpen: true,
     });
     render(() => {

@@ -9,23 +9,35 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     ViewAccessLevel,
 };
+use external_chat::domain::models::{
+    AddChat, ChatRef, ExternalChatKind, ExternalChatProvider, ReplyContent, SendAuthority,
+    SendReply,
+};
+use external_chat::domain::ports::ExternalChatResult;
+use external_chat::domain::service::ExternalChatService;
+use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
 use whatsapp_fake_server::{FakePhone, FakeWhatsApp};
-use whatsapp_linked::domain::models::{
-    AccountState, AdoptGroup, Binding, ChatKind, Features, ReplyContent, SendAuthority, SendReply,
-};
-use whatsapp_linked::domain::ports::{Authorizer, LinkedResult};
-use whatsapp_linked::domain::service::LinkedService;
-use whatsapp_linked::outbound::pg::PgLinkedRepository;
+use whatsapp_linked::domain::models::AccountState;
+use whatsapp_linked::domain::provider::WhatsAppProvider;
+use whatsapp_linked::domain::service::WhatsAppService;
+use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 use whatsmeow::types::Jid;
 
 use super::*;
 
+mod direct_chats;
+mod group_kinds;
 mod message_types;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
+/// A test user's id, typed.
+fn person(user: &str) -> macro_user_id::user_id::MacroUserIdStr<'static> {
+    user.to_owned().try_into().expect("test user ids are valid")
+}
+
 const ALICE: &str = "macro|alice@example.com";
 const BOB: &str = "macro|bob@example.com";
 
@@ -48,13 +60,6 @@ async fn take_fleet_slot(pool: &PgPool) -> PgConnection {
 
 struct Allow;
 
-#[async_trait]
-impl Authorizer for Allow {
-    async fn require_group_owner(&self, _: Uuid, _: &str) -> LinkedResult<()> {
-        Ok(())
-    }
-}
-
 /// The database, the DSS-side domain service and the fake WhatsApp world:
 /// Alice and Bob (Macro users with their own WhatsApp) and a customer who is
 /// only on WhatsApp, all in one group.
@@ -62,7 +67,8 @@ struct World {
     /// Holds the fleet lock until the scenario ends (see [`take_fleet_slot`]).
     _fleet_slot: PgConnection,
     pool: PgPool,
-    linked: LinkedService,
+    linked: WhatsAppService,
+    external: ExternalChatService<WhatsAppProvider>,
     whatsapp: FakeWhatsApp,
     kms: SharedKms,
     alice: FakePhone,
@@ -78,14 +84,11 @@ impl World {
         for id in [ALICE, BOB] {
             user(&pool, id).await;
         }
-        let linked = LinkedService::new(
-            Features {
-                pairing: true,
-                adoption: true,
-                sending: true,
-            },
-            Arc::new(PgLinkedRepository::new(pool.clone())),
-            Arc::new(Allow),
+        let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+        let linked = WhatsAppService::new(repository.clone());
+        let external = ExternalChatService::new(
+            Arc::new(WhatsAppProvider::new(repository)),
+            Arc::new(PgExternalChatRepository::new(pool.clone())),
             Arc::new(Allow),
         );
         let whatsapp = FakeWhatsApp::start().await.unwrap();
@@ -97,6 +100,7 @@ impl World {
             _fleet_slot: fleet_slot,
             pool,
             linked,
+            external,
             whatsapp,
             kms: SharedKms::new(),
             alice,
@@ -116,12 +120,12 @@ impl World {
     async fn pair(&self, user: &str, phone: &FakePhone) -> Jid {
         let pairing = self
             .linked
-            .connect(user, false, SendAuthority::Human)
+            .connect(&person(user), false, SendAuthority::Human)
             .await
             .unwrap();
         let qr = wait_for_rows(&self.pool, TIMEOUT, || async {
             self.linked
-                .pair_state(user, pairing.id, SendAuthority::Human)
+                .pair_state(&person(user), pairing.id, SendAuthority::Human)
                 .await
                 .ok()?
                 .qr
@@ -134,7 +138,7 @@ impl World {
             .expect("the phone approves the QR code");
         let identity = phone.jid().to_string();
         wait_for_rows(&self.pool, TIMEOUT, || async {
-            let account = self.linked.account(user).await.ok()??;
+            let account = self.linked.account(&person(user)).await.ok()??;
             (account.state == AccountState::Connected
                 && account.identity_jid.as_deref() == Some(identity.as_str()))
             .then_some(())
@@ -157,17 +161,28 @@ impl World {
     }
 
     /// Adopts the group for `user` once the replica has listed it.
-    async fn adopt(&self, user: &str, users: &[&str]) -> Binding {
+    async fn adopt(&self, user: &str, users: &[&str]) -> ChatRef {
         let group = self.group.to_string();
         wait_for_rows(&self.pool, TIMEOUT, || async {
-            let groups = self.linked.groups(user).await.ok()?;
-            groups.iter().any(|info| info.jid == group).then_some(())
+            let chats = self.linked.chats(&person(user)).await.ok()?.chats;
+            chats
+                .iter()
+                .any(|chat| chat.jid == group && chat.can_add)
+                .then_some(())
         })
         .await
         .expect("the replica lists the group");
         let binding = self
-            .linked
-            .adopt(user, &AdoptGroup { group_jid: group }, SendAuthority::Human)
+            .external
+            .add(
+                &person(user),
+                &AddChat {
+                    provider: ExternalChatProvider::WhatsApp,
+                    remote_id: group,
+                    kind: ExternalChatKind::Group,
+                },
+                SendAuthority::Human,
+            )
             .await
             .unwrap();
         let mut tx = self.pool.begin().await.unwrap();
@@ -175,7 +190,7 @@ impl World {
             entity_access_db_utils::direct_share::set(
                 &mut tx,
                 &binding.id,
-                EntityType::WhatsAppGroup,
+                EntityType::ExternalChat,
                 &(*viewer).to_owned().try_into().unwrap(),
                 Some(AccessLevel::View),
                 false,
@@ -189,13 +204,13 @@ impl World {
 
     /// A viewer opens the WhatsApp page; their account's refreshed roster
     /// makes it an observer of a group shared with them.
-    async fn observe(&self, user: &str, binding: &Binding) {
-        self.linked.groups(user).await.unwrap();
+    async fn observe(&self, user: &str, binding: &ChatRef) {
+        self.linked.chats(&person(user)).await.unwrap();
         let observing = wait_for_rows(&self.pool, TIMEOUT, || async {
             sqlx::query_scalar!(
-                r#"SELECT m.account_id FROM whatsapp_group_membership m
+                r#"SELECT m.account_id FROM whatsapp_chat_membership m
                 JOIN whatsapp_linked_account a ON a.id = m.account_id
-                WHERE m.binding_id = $1 AND a.user_id = $2 AND m.consent_ended_at IS NULL AND m.remote_member"#,
+                WHERE m.chat_id = $1 AND a.user_id = $2 AND m.consent_ended_at IS NULL AND m.remote_member"#,
                 binding.id,
                 user
             )
@@ -209,7 +224,7 @@ impl World {
     }
 
     /// Alice paired and observing the adopted group.
-    async fn alice_adopted(&self) -> (Jid, Binding) {
+    async fn alice_adopted(&self) -> (Jid, ChatRef) {
         let device = self.pair(ALICE, &self.alice).await;
         let binding = self.adopt(ALICE, &[]).await;
         (device, binding)
@@ -217,7 +232,7 @@ impl World {
 
     /// Waits until the WhatsApp message `source_id` is a standalone group message and
     /// returns every stored copy of it (there must be one).
-    async fn timeline(&self, binding: &Binding, source_id: &str) -> Vec<String> {
+    async fn timeline(&self, binding: &ChatRef, source_id: &str) -> Vec<String> {
         let copies = wait_for_rows(&self.pool, TIMEOUT, || async {
             let copies = group_messages(&self.pool, binding.id, source_id).await;
             (!copies.is_empty()).then_some(copies)
@@ -268,7 +283,7 @@ impl World {
             (
                 "external messages (source, origin, message)",
                 sqlx::query_scalar!(
-                    r#"SELECT source_id || ' ' || origin || ' ' || coalesce(message_id::text, '-') AS "row!" FROM whatsapp_group_message"#
+                    r#"SELECT source_id || ' ' || origin || ' ' || coalesce(message_id::text, '-') AS "row!" FROM external_chat_message"#
                 )
                 .fetch_all(pool)
                 .await,
@@ -294,7 +309,7 @@ impl World {
                 sqlx::query_scalar!(
                     r#"SELECT c.chat_jid || ' ' || c.kind || ' ' || coalesce(c.anchor->>'id', '-') || ' '
                         || coalesce((SELECT string_agg(coalesce(g.backfill_state, '-') || '/' || g.backfill_imported, ',')
-                            FROM whatsapp_group g WHERE g.group_jid = c.chat_jid), '') AS "row!"
+                            FROM external_chat g WHERE g.remote_id = c.chat_jid), '') AS "row!"
                     FROM whatsapp_chat c"#
                 )
                 .fetch_all(pool)
@@ -320,8 +335,8 @@ impl World {
         dump
     }
 
-    async fn send(&self, user: &str, binding: &Binding, text: &str) -> Uuid {
-        self.linked
+    async fn send(&self, user: &str, binding: &ChatRef, text: &str) -> Uuid {
+        self.external
             .send_reply(
                 &receipt::<ViewAccessLevel>(user, binding.id),
                 &SendReply {
@@ -393,7 +408,7 @@ fn receipt<Permission: entity_access::domain::models::RequiredPermission>(
         EntityAccessAuth::Authenticated(user.to_owned().try_into().unwrap()),
         Entity {
             entity_id: channel.to_string(),
-            entity_type: EntityType::WhatsAppGroup,
+            entity_type: EntityType::ExternalChat,
         },
         EntityPermission::AccessLevel {
             access_level: AccessLevel::View,
@@ -405,7 +420,7 @@ fn receipt<Permission: entity_access::domain::models::RequiredPermission>(
 /// The content of every standalone message for one WhatsApp message.
 async fn group_messages(pool: &PgPool, binding: Uuid, source_id: &str) -> Vec<String> {
     sqlx::query_scalar!(
-        "SELECT body FROM whatsapp_group_message WHERE binding_id=$1 AND source_id=$2 AND message_id IS NOT NULL",
+        "SELECT body FROM external_chat_message WHERE chat_id=$1 AND source_id=$2 AND message_id IS NOT NULL",
         binding,
         source_id
     )
@@ -416,7 +431,7 @@ async fn group_messages(pool: &PgPool, binding: Uuid, source_id: &str) -> Vec<St
 
 async fn observations(pool: &PgPool, binding: Uuid, source_id: &str) -> i64 {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM whatsapp_message_observation WHERE binding_id = $1 AND source_id = $2"#,
+        r#"SELECT count(*) AS "count!" FROM whatsapp_message_observation WHERE chat_id = $1 AND source_id = $2"#,
         binding,
         source_id
     )
@@ -717,9 +732,9 @@ async fn a_phone_image_is_downloaded_for_import(pool: PgPool) {
     assert!(copies[0].contains("the damaged box"), "{copies:?}");
     let downloaded = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query_scalar!(
-            "SELECT b.bytes FROM whatsapp_group_attachment a
-             JOIN whatsapp_media_blob b ON b.document_id = a.document_id
-             WHERE a.binding_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
+            "SELECT b.bytes FROM external_chat_attachment a
+             JOIN external_chat_media_blob b ON b.id = a.blob_id
+             WHERE a.chat_id = $1 AND a.source_id = $2 AND a.state = 'downloaded'",
             binding.id,
             &source
         )
@@ -745,7 +760,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
 
     let photo = b"a photo attached in Macro".repeat(40);
     let uploaded = world
-        .linked
+        .external
         .upload_attachment(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             "label.jpg",
@@ -756,7 +771,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
         .await
         .unwrap();
     let send = world
-        .linked
+        .external
         .send_reply(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             &SendReply {
@@ -804,7 +819,7 @@ async fn a_message_queued_before_a_crash_is_ingested_once(pool: PgPool) {
     // Hold ingestion back so the replica can only queue the event, then
     // crash it in that window.
     let mut blocker = world.pool.begin().await.unwrap();
-    sqlx::raw_sql("LOCK TABLE whatsapp_group_message IN SHARE ROW EXCLUSIVE MODE")
+    sqlx::raw_sql("LOCK TABLE external_chat_message IN SHARE ROW EXCLUSIVE MODE")
         .execute(&mut *blocker)
         .await
         .unwrap();
@@ -845,8 +860,11 @@ async fn a_message_queued_before_a_crash_is_ingested_once(pool: PgPool) {
 }
 
 #[async_trait]
-impl whatsapp_linked::domain::ports::SendRateLimiter for Allow {
-    async fn check(&self, _: &str) -> LinkedResult<()> {
+impl external_chat::domain::ports::SendRateLimiter for Allow {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -862,7 +880,7 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
         .rename_group(&world.group, "Escalations, renamed");
     let renamed = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query_scalar!(
-            "SELECT name FROM whatsapp_group WHERE id = $1 AND name = 'Escalations, renamed'",
+            "SELECT name FROM external_chat WHERE id = $1 AND name = 'Escalations, renamed'",
             binding.id
         )
         .fetch_optional(&world.pool)
@@ -877,7 +895,7 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
     let line = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query!(
             r#"SELECT rich->>'action' AS "action!", rich->>'value' AS value, (rich->>'byWhatsapp')::boolean AS "by_whatsapp!"
-            FROM whatsapp_group_message WHERE binding_id = $1 AND kind = 'system' AND message_id IS NOT NULL"#,
+            FROM external_chat_message WHERE chat_id = $1 AND kind = 'system' AND message_id IS NOT NULL"#,
             binding.id
         )
         .fetch_optional(&world.pool)
@@ -898,7 +916,7 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
     world.whatsapp.remove_from_group(&world.group, &world.alice);
     let left = wait_for_rows(&world.pool, TIMEOUT, || async {
         let listed = sqlx::query_scalar!(
-            r#"SELECT count(*) AS "count!" FROM whatsapp_group_roster r
+            r#"SELECT count(*) AS "count!" FROM whatsapp_roster r
             JOIN whatsapp_linked_account a ON a.id = r.account_id WHERE a.user_id = $1"#,
             ALICE
         )
@@ -912,8 +930,8 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
         .expect(left, "removal drops the group from Alice's list")
         .await;
     let detail = world
-        .linked
-        .adopted_groups(ALICE)
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -951,9 +969,9 @@ async fn senders_named_only_by_lid_land_as_the_people_they_are(pool: PgPool) {
 
     let authors = sqlx::query!(
         r#"SELECT m.source_id, p.user_id, array_agg(a.jid ORDER BY a.jid) AS "aliases!"
-        FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id
+        FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
         JOIN whatsapp_identity_alias a ON a.person_id = p.id
-        WHERE m.binding_id = $1 GROUP BY m.source_id, p.user_id"#,
+        WHERE m.chat_id = $1 GROUP BY m.source_id, p.user_id"#,
         binding.id
     )
     .fetch_all(&world.pool)
@@ -994,10 +1012,10 @@ async fn senders_named_only_by_lid_land_as_the_people_they_are(pool: PgPool) {
 }
 
 /// The group's backfill state and count once it is one of `states`.
-async fn backfill_state(world: &World, binding: &Binding, states: &[&str]) -> (String, i32) {
+async fn backfill_state(world: &World, binding: &ChatRef, states: &[&str]) -> (String, i32) {
     let state = wait_for_rows(&world.pool, TIMEOUT, || async {
         let row = sqlx::query!(
-            "SELECT backfill_state, backfill_imported FROM whatsapp_group WHERE id = $1",
+            "SELECT backfill_state, backfill_imported FROM external_chat WHERE id = $1",
             binding.id
         )
         .fetch_one(&world.pool)
@@ -1018,7 +1036,7 @@ async fn backfill_state(world: &World, binding: &Binding, states: &[&str]) -> (S
 /// stamps whole seconds, so time does not order them within a test).
 async fn origins(pool: &PgPool, binding: Uuid) -> Vec<(String, String)> {
     sqlx::query!(
-        "SELECT body, origin FROM whatsapp_group_message WHERE binding_id = $1 AND message_id IS NOT NULL ORDER BY body",
+        "SELECT body, origin FROM external_chat_message WHERE chat_id = $1 AND message_id IS NOT NULL ORDER BY body",
         binding
     )
     .fetch_all(pool)
@@ -1075,8 +1093,8 @@ async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool
         ]
     );
     let summary = world
-        .linked
-        .adopted_groups(ALICE)
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -1084,7 +1102,7 @@ async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool
         .unwrap();
     assert_eq!(summary.unread_count, 0, "history is never unread");
     let notifying = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM whatsapp_group_message WHERE binding_id = $1 AND origin <> 'history'"#,
+        r#"SELECT count(*) AS "count!" FROM external_chat_message WHERE chat_id = $1 AND origin <> 'history'"#,
         binding.id
     )
     .fetch_one(&world.pool)
@@ -1145,7 +1163,39 @@ async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(
     // "old one" may also have arrived live, within adoption's clock skew.
     assert_eq!(
         (stored[0].1.as_str(), stored[1].1.as_str()),
-        ("whatsapp", "whatsapp")
+        ("remote", "remote")
+    );
+    replica.drain(TIMEOUT).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_quiet_group_waits_for_its_first_message_then_imports(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    world.pair(ALICE, &world.alice).await;
+    let binding = world.adopt(ALICE, &[]).await;
+    assert_eq!(
+        backfill_state(&world, &binding, &["waiting_for_message"]).await,
+        ("waiting_for_message".to_owned(), 0),
+        "nobody posted: nothing to start importing from"
+    );
+
+    let first = world
+        .customer
+        .send_text(&world.group, "anyone here?")
+        .await
+        .unwrap();
+    world.timeline(&binding, &first).await;
+    assert_eq!(
+        backfill_state(&world, &binding, &["done", "partial"])
+            .await
+            .0,
+        "done",
+        "the first message starts the import, which finds nothing earlier"
+    );
+    assert_eq!(
+        origins(&world.pool, binding.id).await,
+        [("anyone here?".to_owned(), "remote".to_owned())]
     );
     replica.drain(TIMEOUT).await.unwrap();
 }
@@ -1172,7 +1222,7 @@ async fn the_chat_list_follows_history_sync_and_live_messages(pool: PgPool) {
         .await
         .unwrap();
     let listed = wait_for_rows(&world.pool, TIMEOUT, || async {
-        let chats = world.linked.chats(ALICE).await.ok()?.chats;
+        let chats = world.linked.chats(&person(ALICE)).await.ok()?.chats;
         let direct = chats
             .iter()
             .find(|chat| chat.jid == world.customer.jid().to_string())?
@@ -1193,14 +1243,11 @@ async fn the_chat_list_follows_history_sync_and_live_messages(pool: PgPool) {
     let (direct, group) = world
         .expect(listed, "history sync lists the direct chat and the group")
         .await;
-    assert_eq!(direct.kind, ChatKind::Direct);
+    assert_eq!(direct.kind, ExternalChatKind::Direct);
     assert_eq!(direct.name, "Customer");
-    assert!(!direct.can_add);
-    assert_eq!(
-        direct.cannot_add_reason.as_deref(),
-        Some("direct chats can't be added to Macro yet")
-    );
-    assert_eq!(group.kind, ChatKind::Group);
+    assert!(direct.can_add);
+    assert_eq!(direct.cannot_add_reason, None);
+    assert_eq!(group.kind, ExternalChatKind::Group);
     assert_eq!(group.name, "Customer escalations");
     assert!(group.can_add);
 
@@ -1211,11 +1258,43 @@ async fn the_chat_list_follows_history_sync_and_live_messages(pool: PgPool) {
         .await
         .unwrap();
     let top = wait_for_rows(&world.pool, TIMEOUT, || async {
-        let chats = world.linked.chats(ALICE).await.ok()?.chats;
+        let chats = world.linked.chats(&person(ALICE)).await.ok()?.chats;
         (chats.first()?.jid == world.bob.jid().to_string()).then(|| chats[0].clone())
     })
     .await;
     let top = world.expect(top, "Bob's new chat is first").await;
     assert_eq!(top.name, "Bob");
     replica.drain(TIMEOUT).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_device_whose_kms_key_was_lost_asks_to_reconnect_and_pairs_again(pool: PgPool) {
+    let world = World::new(pool).await;
+    let replica = world.replica().await;
+    world.pair(ALICE, &world.alice).await;
+    replica.drain(TIMEOUT).await.unwrap();
+
+    // KMS lost the key that wrapped Alice's device (a new LocalStack): the
+    // next replica can never read it, so Alice is asked to reconnect.
+    let lost = Replica::start(
+        &world.pool.connect_options(),
+        &world.whatsapp,
+        &SharedKms::new(),
+    )
+    .await;
+    let logged_out = wait_for_rows(&world.pool, TIMEOUT, || async {
+        let account = world.linked.account(&person(ALICE)).await.ok()??;
+        (account.state == AccountState::LoggedOut).then_some(())
+    })
+    .await;
+    world
+        .expect(
+            logged_out,
+            "an unreadable device marks the account logged out",
+        )
+        .await;
+
+    // Pairing again replaces the device instead of failing to open it.
+    world.pair(ALICE, &world.alice).await;
+    lost.drain(TIMEOUT).await.unwrap();
 }

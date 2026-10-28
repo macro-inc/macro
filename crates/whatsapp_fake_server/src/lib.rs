@@ -331,13 +331,47 @@ impl FakeWhatsApp {
     /// Creates a group of the given phones' users (the first is the
     /// creator) and notifies their linked devices; returns the group JID.
     pub fn create_group(&self, subject: &str, members: &[&FakePhone]) -> Jid {
+        self.new_group(subject, members, |_| {})
+    }
+
+    /// Creates a community of the given phones' users with its announcement
+    /// group, as WhatsApp does; returns the community and announcement JIDs.
+    pub fn create_community(&self, subject: &str, members: &[&FakePhone]) -> (Jid, Jid) {
+        let community = self.new_group(subject, members, |group| {
+            group.community_parent = true;
+        });
+        let announcements = self.new_group(subject, members, |group| {
+            group.community = Some(community.user.clone());
+            group.announcements = true;
+        });
+        (community, announcements)
+    }
+
+    /// Creates a group inside a community; returns its JID.
+    pub fn create_community_group(
+        &self,
+        community: &Jid,
+        subject: &str,
+        members: &[&FakePhone],
+    ) -> Jid {
+        self.new_group(subject, members, |group| {
+            group.community = Some(community.user.clone());
+        })
+    }
+
+    fn new_group(
+        &self,
+        subject: &str,
+        members: &[&FakePhone],
+        settings: impl FnOnce(&mut state::Group),
+    ) -> Jid {
         let mut state = self.shared.lock();
         let id = format!("120363{:012}", state.number());
         let created = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs())
             .unwrap_or_default();
-        let group = Group {
+        let mut group = Group {
             id: id.clone(),
             subject: subject.to_owned(),
             creator: members
@@ -351,7 +385,12 @@ impl FakeWhatsApp {
                 .collect(),
             admins: Vec::new(),
             description: None,
+            disappearing: None,
+            community_parent: false,
+            community: None,
+            announcements: false,
         };
+        settings(&mut group);
         let group_node = state.group_node(&group);
         let creator = state
             .users

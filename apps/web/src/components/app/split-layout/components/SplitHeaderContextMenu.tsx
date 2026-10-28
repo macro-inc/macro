@@ -1,4 +1,5 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
+import { t } from '@app/lib/i18n';
 import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import {
   ContextMenuContent,
@@ -87,10 +88,10 @@ export function SplitHeaderContextMenu(props: ParentProps) {
           2
         )
       );
-      toast.success('Debug info copied to clipboard');
+      toast.success(t('splitMenu.toastDebugInfoCopied'));
     } catch (error) {
       console.error('Failed to copy split debug info', error);
-      toast.failure('Failed to copy debug info');
+      toast.failure(t('splitMenu.toastCopyDebugInfoFailed'));
     }
   };
 
@@ -100,36 +101,36 @@ export function SplitHeaderContextMenu(props: ParentProps) {
         {props.children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-60">
+        <ContextMenuContent class="min-w-60 max-w-[min(22rem,calc(100vw-1rem))]">
           <MenuItem
             icon={SplitIcon}
             iconClass="rotate-180"
-            text="New split left"
+            text={t('splitMenu.newSplitLeft')}
             disabled={!layout.manager.canAppendSplit()}
             onClick={() => insertSplitBeside('left', newSplitContent())}
           />
           <MenuItem
             icon={SplitIcon}
-            text="New split right"
+            text={t('splitMenu.newSplitRight')}
             disabled={!layout.manager.canAppendSplit()}
             onClick={() => insertSplitBeside('right', newSplitContent())}
           />
           <MenuItem
             icon={CopyIcon}
-            text="Duplicate split"
+            text={t('splitMenu.duplicateSplit')}
             disabled={!layout.manager.canAppendSplit() || !canDuplicateSplit()}
             onClick={() => insertSplitBeside('right', duplicateContent())}
           />
           <MenuSeparator />
           <MenuItem
             icon={ArrowLeft}
-            text="Swap split left"
+            text={t('splitMenu.swapSplitLeft')}
             disabled={!canSwapWith('left')}
             onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
           />
           <MenuItem
             icon={ArrowRight}
-            text="Swap split right"
+            text={t('splitMenu.swapSplitRight')}
             disabled={!canSwapWith('right')}
             onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
           />
@@ -138,7 +139,9 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             icon={panel.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
             hotkeyToken={TOKENS.window.spotlight.toggle}
             text={
-              panel.handle.isSpotLight() ? 'Minimize split' : 'Spotlight split'
+              panel.handle.isSpotLight()
+                ? t('splitMenu.minimizeSplit')
+                : t('splitMenu.spotlightSplit')
             }
             disabled={!canToggleSpotlight()}
             onClick={() => panel.handle.toggleSpotlight()}
@@ -146,14 +149,14 @@ export function SplitHeaderContextMenu(props: ParentProps) {
           <MenuItem
             icon={CloseIcon}
             hotkeyToken={TOKENS.split.close}
-            text="Close split"
+            text={t('splitMenu.closeSplit')}
             disabled={!canCloseSplit()}
             onClick={() => panel.handle.close()}
           />
           <MenuSeparator />
           <MenuItem
             icon={CloseIcon}
-            text="Close other splits"
+            text={t('splitMenu.closeOtherSplits')}
             disabled={!hasOtherSplits()}
             onClick={() => {
               const currentSplitId = panel.handle.id;
@@ -171,14 +174,14 @@ export function SplitHeaderContextMenu(props: ParentProps) {
           />
           <MenuItem
             icon={ArrowClockwise}
-            text="Reset sizes"
+            text={t('splitMenu.resetSizes')}
             disabled={!hasOtherSplits()}
             onClick={() => layout.manager.resizeContext()?.reset()}
           />
           <MenuSeparator />
           <MenuItem
             icon={CopyIcon}
-            text="Copy debug info"
+            text={t('splitMenu.copyDebugInfo')}
             onClick={copyDebugInfo}
           />
         </ContextMenuContent>

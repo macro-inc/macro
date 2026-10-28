@@ -53,12 +53,56 @@ impl std::fmt::Debug for GeneratedDataKey {
 
 /// A KMS operation failed.
 ///
-/// Deliberately opaque: the AWS error can tell "wrong encryption context"
-/// from "no permission", and a caller that can tell them apart can probe. The
-/// detail belongs in CloudTrail.
+/// Deliberately opaque about why KMS refused: the AWS error can tell "wrong
+/// encryption context" from "no permission", and a caller that can tell them
+/// apart can probe. The detail belongs in CloudTrail. It only says whether
+/// trying again can help.
 #[derive(Debug, thiserror::Error)]
 #[error("whatsapp data key kms operation failed")]
-pub struct WhatsAppKmsError;
+pub struct WhatsAppKmsError {
+    retryable: bool,
+}
+
+impl WhatsAppKmsError {
+    /// KMS answered and refused (wrong key or context, key gone or disabled,
+    /// no permission): the same call fails again.
+    pub const fn refused() -> Self {
+        Self { retryable: false }
+    }
+
+    /// KMS could not be reached or asked to slow down: the call can succeed
+    /// later.
+    pub const fn unavailable() -> Self {
+        Self { retryable: true }
+    }
+
+    /// Whether the same call can succeed later.
+    pub const fn is_retryable(&self) -> bool {
+        self.retryable
+    }
+
+    /// Classifies an AWS SDK failure: throttling, KMS-side outages and
+    /// transport failures are retryable; every other service error is a
+    /// refusal.
+    fn from_sdk<Error, Response>(error: &aws_sdk_kms::error::SdkError<Error, Response>) -> Self
+    where
+        Error: aws_sdk_kms::error::ProvideErrorMetadata,
+    {
+        use aws_sdk_kms::error::SdkError;
+        match error {
+            SdkError::ServiceError(service) => match service.err().code() {
+                Some(
+                    "ThrottlingException"
+                    | "KMSInternalException"
+                    | "DependencyTimeoutException"
+                    | "KeyUnavailableException",
+                ) => Self::unavailable(),
+                _ => Self::refused(),
+            },
+            _ => Self::unavailable(),
+        }
+    }
+}
 
 /// The KMS operations the store needs, as a seam tests can stand in for.
 pub trait WhatsAppKms: Send + Sync {
@@ -128,15 +172,17 @@ impl WhatsAppKms for AwsWhatsAppKms {
             .set_encryption_context(Some(encryption_context))
             .send()
             .await
-            .map_err(|_| WhatsAppKmsError)?;
-        let plaintext = response.plaintext.ok_or(WhatsAppKmsError)?;
-        let ciphertext = response.ciphertext_blob.ok_or(WhatsAppKmsError)?;
+            .map_err(|error| WhatsAppKmsError::from_sdk(&error))?;
+        let plaintext = response.plaintext.ok_or(WhatsAppKmsError::refused())?;
+        let ciphertext = response
+            .ciphertext_blob
+            .ok_or(WhatsAppKmsError::refused())?;
         Ok(GeneratedDataKey {
             plaintext: Zeroizing::new(plaintext.into_inner()),
             ciphertext: ciphertext.into_inner(),
             // The response names the fully qualified ARN even when the
             // configured id is an alias, which is what the row records.
-            kms_key_id: response.key_id.ok_or(WhatsAppKmsError)?,
+            kms_key_id: response.key_id.ok_or(WhatsAppKmsError::refused())?,
         })
     }
 
@@ -158,8 +204,8 @@ impl WhatsAppKms for AwsWhatsAppKms {
             .set_encryption_context(Some(encryption_context))
             .send()
             .await
-            .map_err(|_| WhatsAppKmsError)?;
-        let plaintext = response.plaintext.ok_or(WhatsAppKmsError)?;
+            .map_err(|error| WhatsAppKmsError::from_sdk(&error))?;
+        let plaintext = response.plaintext.ok_or(WhatsAppKmsError::refused())?;
         Ok(Zeroizing::new(plaintext.into_inner()))
     }
 }

@@ -4,7 +4,11 @@ import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAiUsageBilling, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
-import { usePermissions, useUserId } from '@core/context/user';
+import {
+  useLicenseStatus,
+  usePermissions,
+  useUserId,
+} from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import {
@@ -47,6 +51,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const permissions = usePermissions();
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+  const licenseStatus = useLicenseStatus();
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
@@ -112,6 +117,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         trialEligibility.isSuccess && queryReadyGate(trialEligibility)
           ? trialEligibility.data.eligible
           : undefined,
+      trialing: licenseStatus() === 'trialing',
     });
 
   const handleCheckout = async (plan: PaidPlan) => {

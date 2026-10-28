@@ -19,6 +19,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
+import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -861,6 +862,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   };
 
+  // A mouse press reaches the server before the click that opens its channel.
+  // Touch presses also start scrolls, which would fetch every row they cross.
+  const prefetchRow = (rowId: ChannelRailRow['id'], event: PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    // Threads-tab rows filter the thread list in place.
+    if (tab() === 'threads') return;
+    const row = visibleRows().find((row) => row.id === rowId);
+    if (row?.kind === 'conversation') {
+      // A message target loads around that message instead.
+      if (!row.channel.target) prefetchLatestChannelMessages(row.channel.id);
+    } else if (
+      row?.kind === 'favorite' &&
+      row.favorite.entityType === 'channel'
+    ) {
+      prefetchLatestChannelMessages(row.favorite.entityId);
+    }
+  };
+
   // Explain shared versus private scope before creating or changing labels.
   const createLabelMutation = useCreateChannelLabelMutation();
   const renameLabelMutation = useRenameChannelLabelMutation();
@@ -1215,6 +1234,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSortBy,
     registerRootRef: setListRoot,
     activateRow,
+    prefetchRow,
     registerScrollRef: (group, element) => {
       setSectionScrollRoots((current) => ({
         ...current,

@@ -12,11 +12,15 @@ import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  BlockItemSplitLabel,
+  SplitTitleFileMenu,
+} from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   returnSplitToRecentListView,
@@ -25,10 +29,12 @@ import {
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
@@ -155,6 +161,28 @@ function FormBlockContent(props: {
       <SplitHeaderLeft>
         <BlockItemSplitLabel name={name} />
       </SplitHeaderLeft>
+      <Show when={source.detail()}>
+        {(detail) => (
+          <SplitTitleFileMenu>
+            <SplitFileMenu
+              id={formId}
+              itemType="form"
+              entityKind="form"
+              name={detail().form.name}
+              entity={{
+                type: 'form',
+                id: formId,
+                name: detail().form.name,
+                ownerId: detail().form.ownerId,
+                access: detail().access,
+              }}
+              permissions={getPermissions(detail().access)}
+              ops={[]}
+              buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
+            />
+          </SplitTitleFileMenu>
+        )}
+      </Show>
       <SplitHeaderRight>
         <Show
           when={

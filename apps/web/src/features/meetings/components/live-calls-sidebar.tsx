@@ -1,19 +1,22 @@
 import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
-import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Tooltip } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
-import type { ActiveQuickCall } from '../context/call-sidebar';
 
-type LiveCallDisplay = Pick<ActiveQuickCall, 'id' | 'url'> & {
+export type LiveCallRow = {
+  id: string;
   label: string;
+  /** The user is already in this call, so the row opens it instead. */
+  joined: boolean;
 };
 
-export function LiveCallsSidebar(props: {
-  calls: readonly LiveCallDisplay[];
-  onJoin: (call: LiveCallDisplay) => void;
+export function LiveCallsSidebar<T extends LiveCallRow>(props: {
+  calls: readonly T[];
+  onSelect: (call: T) => void;
 }) {
   const titleId = createUniqueId();
+  const action = (call: LiveCallRow) => (call.joined ? 'Open' : 'Join');
 
   return (
     <Show when={props.calls.length > 0}>
@@ -24,8 +27,9 @@ export function LiveCallsSidebar(props: {
       >
         <h2
           id={titleId}
-          class="flex h-(--sidebar-row-height) shrink-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted"
+          class="flex h-(--sidebar-row-height) shrink-0 items-center gap-2 px-(--sidebar-item-inset) text-xs font-medium text-ink-muted"
         >
+          <span class="size-1.5 rounded-full bg-accent motion-safe:animate-pulse" />
           Live
         </h2>
         <div class="flex min-h-0 flex-col gap-(--sidebar-row-gap) overflow-y-auto overscroll-contain">
@@ -37,13 +41,20 @@ export function LiveCallsSidebar(props: {
                 class="min-w-0 shrink-0"
               >
                 <ViewSidebar.Item
-                  aria-label={`Join ${call().label}`}
-                  onClick={() => props.onJoin(call())}
+                  aria-label={`${action(call())} ${call().label}`}
+                  class="bg-accent-bg text-ink not-disabled:hover:bg-accent-bg not-disabled:hover:overlay-hover"
+                  onClick={() => props.onSelect(call())}
                 >
                   <ViewSidebar.Icon class="text-accent">
-                    <PhoneIncomingIcon class="incoming-call-shake" />
+                    <PhoneCallIcon />
                   </ViewSidebar.Icon>
                   <span class="min-w-0 flex-1 truncate">{call().label}</span>
+                  <span
+                    aria-hidden="true"
+                    class="ml-auto shrink-0 text-xs font-medium text-accent"
+                  >
+                    {action(call())}
+                  </span>
                 </ViewSidebar.Item>
               </Tooltip>
             )}

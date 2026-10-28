@@ -23,6 +23,7 @@ export function ActivitySection(
     onSearchChange: (value: string) => void;
     createLabel: string;
     onCreate: () => void;
+    controls?: JSX.Element;
   }>
 ) {
   const view = useCrmWorkspace();
@@ -50,6 +51,7 @@ export function ActivitySection(
         fallback={
           <ViewShell.Header class="py-2">
             <div class="flex min-w-0 items-center gap-3">
+              {props.controls}
               <SearchBar
                 ref={(element) => {
                   focusSearch = () => {
@@ -73,6 +75,7 @@ export function ActivitySection(
         }
       >
         <ListHeader title={props.title ?? props.label}>
+          {props.controls}
           <ViewCreateButton
             label={props.createLabel}
             onClick={props.onCreate}

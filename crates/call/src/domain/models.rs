@@ -152,6 +152,15 @@ pub struct VerifiedRingToken {
     pub room: Option<String>,
 }
 
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Response for the leave/end call operation.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

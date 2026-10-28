@@ -1,10 +1,12 @@
 use chrono::{DateTime, TimeZone, Utc};
+use external_chat::domain::models::MediaPresentation;
+use external_chat::domain::rich::{
+    Call, CallOutcome, PollVote, RichContent, SystemAction, SystemLine,
+};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    InboundKind, Message as InboundMessage, MessageKind, ReceiptState, RichContent, Target,
+    InboundKind, Message as InboundMessage, MessageKind, ReceiptState, Target,
 };
-use whatsapp_linked::domain::models::MediaPresentation;
-use whatsapp_linked::domain::rich::{Call, CallOutcome, PollVote, SystemAction, SystemLine};
 use whatsmeow::Event;
 use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e;
@@ -202,7 +204,7 @@ fn a_quote_reaction_edit_and_delete_point_at_their_target() {
 }
 
 #[test]
-fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
+fn media_becomes_a_placeholder_and_status_updates_are_ignored() {
     let media = inbound(map_event(
         ACCOUNT,
         &group_message(
@@ -220,10 +222,10 @@ fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
     };
     assert_eq!(media.kind, MessageKind::Unsupported);
 
-    let direct = Event::Message(Box::new(Message {
+    let status = Event::Message(Box::new(Message {
         info: MessageInfo {
             source: MessageSource {
-                chat: "15552223333@s.whatsapp.net".parse().unwrap(),
+                chat: "status@broadcast".parse().unwrap(),
                 sender: "15552223333@s.whatsapp.net".parse().unwrap(),
                 ..MessageSource::default()
             },
@@ -231,12 +233,96 @@ fn media_becomes_a_placeholder_and_direct_chats_are_ignored() {
             ..MessageInfo::default()
         },
         message: Some(wa_e2e::Message {
-            conversation: Some("private".to_owned()),
+            conversation: Some("my status".to_owned()),
             ..Default::default()
         }),
         ..Message::default()
     }));
-    assert!(map_event(ACCOUNT, &direct, now(), &plain_locator).is_empty());
+    assert!(map_event(ACCOUNT, &status, now(), &plain_locator).is_empty());
+}
+
+fn direct_message(source: MessageSource, text: &str) -> Event {
+    Event::Message(Box::new(Message {
+        info: MessageInfo {
+            source,
+            id: "3EB0DM".to_owned(),
+            timestamp: Some(Utc.with_ymd_and_hms(2026, 10, 21, 11, 59, 0).unwrap()),
+            ..MessageInfo::default()
+        },
+        message: Some(wa_e2e::Message {
+            conversation: Some(text.to_owned()),
+            ..Default::default()
+        }),
+        ..Message::default()
+    }))
+}
+
+#[test]
+fn a_direct_chat_goes_by_the_persons_number_with_their_lid_alongside() {
+    // WhatsApp addresses the chat by LID and names the number alongside.
+    let by_lid = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "987654321@lid".parse().unwrap(),
+                sender: "987654321@lid".parse().unwrap(),
+                sender_alt: "15552223333@s.whatsapp.net".parse().unwrap(),
+                ..MessageSource::default()
+            },
+            "hi",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (
+            by_lid.group_jid.as_str(),
+            by_lid.chat_alternate_jid.as_deref()
+        ),
+        ("15552223333@s.whatsapp.net", Some("987654321@lid"))
+    );
+    // Our own message from the phone names the recipient's other address.
+    let own = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "15552223333@s.whatsapp.net".parse().unwrap(),
+                sender: "15550000001@s.whatsapp.net".parse().unwrap(),
+                recipient_alt: "987654321@lid".parse().unwrap(),
+                is_from_me: true,
+                ..MessageSource::default()
+            },
+            "on it",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (own.group_jid.as_str(), own.chat_alternate_jid.as_deref()),
+        ("15552223333@s.whatsapp.net", Some("987654321@lid"))
+    );
+    let InboundKind::Message(message) = own.kind else {
+        panic!("expected a message");
+    };
+    assert!(message.from_me);
+    // Without the other address, the chat stays as addressed.
+    let bare = inbound(map_event(
+        ACCOUNT,
+        &direct_message(
+            MessageSource {
+                chat: "987654321@lid".parse().unwrap(),
+                sender: "987654321@lid".parse().unwrap(),
+                ..MessageSource::default()
+            },
+            "hello",
+        ),
+        now(),
+        &plain_locator,
+    ));
+    assert_eq!(
+        (bare.group_jid.as_str(), bare.chat_alternate_jid),
+        ("987654321@lid", None)
+    );
 }
 
 #[test]
@@ -493,7 +579,7 @@ async fn a_message_from_me_addressed_by_lid_carries_the_from_me_flag_and_own_pai
         &plain_locator,
     ));
 
-    super::complete_sender(&lids, &mut event).await;
+    super::complete_sender(&lids, &mut event).await.unwrap();
 
     assert_eq!(
         sender_of(&event),
@@ -528,8 +614,8 @@ async fn another_member_addressed_only_by_lid_is_paired_from_the_lid_store() {
         &plain_locator,
     ));
 
-    super::complete_sender(&lids, &mut known).await;
-    super::complete_sender(&lids, &mut unknown).await;
+    super::complete_sender(&lids, &mut known).await.unwrap();
+    super::complete_sender(&lids, &mut unknown).await.unwrap();
 
     assert_eq!(
         sender_of(&known),
@@ -553,7 +639,10 @@ fn a_live_message_moves_its_chat_up_with_the_message_as_anchor() {
     let chat = super::message_chat(&message).expect("a chat update");
 
     assert_eq!(chat.jid, "120363000000000001@g.us");
-    assert_eq!(chat.kind, whatsapp_linked::domain::models::ChatKind::Group);
+    assert_eq!(
+        chat.kind,
+        external_chat::domain::models::ExternalChatKind::Group
+    );
     assert_eq!(chat.name, None, "groups are named by their roster");
     assert!(chat.create);
     let anchor = chat.anchor.expect("an anchor");
@@ -929,33 +1018,37 @@ fn pins_and_call_logs_become_system_lines() {
 }
 
 #[test]
-fn view_once_media_stays_a_placeholder() {
-    let mut event = group_message(
-        "3EB0ONCE",
-        wa_e2e::Message {
-            image_message: Some(Box::new(wa_e2e::ImageMessage {
-                media_key: Some(vec![1; 32]),
-                file_enc_sha256: Some(vec![2; 32]),
-                file_sha256: Some(vec![3; 32]),
-                file_length: Some(10),
-                mimetype: Some("image/jpeg".to_owned()),
-                ..Default::default()
-            })),
+fn view_once_media_is_kept_like_any_media_and_marked() {
+    let image = |view_once_flag: Option<bool>| wa_e2e::Message {
+        image_message: Some(Box::new(wa_e2e::ImageMessage {
+            direct_path: Some("/v/once".to_owned()),
+            media_key: Some(vec![1; 32]),
+            file_enc_sha256: Some(vec![2; 32]),
+            file_sha256: Some(vec![3; 32]),
+            file_length: Some(10),
+            mimetype: Some("image/jpeg".to_owned()),
+            caption: Some("just once".to_owned()),
+            view_once: view_once_flag,
             ..Default::default()
-        },
-    );
-    if let Event::Message(message) = &mut event {
+        })),
+        ..Default::default()
+    };
+    // Unwrapped from a view-once wrapper by the port.
+    let mut wrapped = group_message("3EB0ONCE", image(None));
+    if let Event::Message(message) = &mut wrapped {
         message.is_view_once = true;
     }
+    // Flagged on the media itself.
+    let flagged = group_message("3EB0ONCE2", image(Some(true)));
 
-    let message = media_message(&event);
-
-    assert_eq!(message.kind, MessageKind::Unsupported);
-    assert_eq!(
-        message.text,
-        "View-once message \u{2014} open it on your phone"
-    );
-    assert!(message.media.is_empty());
+    for event in [wrapped, flagged] {
+        let message = media_message(&event);
+        assert_eq!(message.kind, MessageKind::Text);
+        assert_eq!(message.text, "just once");
+        assert_eq!(message.media.len(), 1, "the image is imported");
+        assert!(message.view_once);
+    }
+    assert!(!media_message(&group_message("3EB0PLAIN", image(None))).view_once);
 }
 
 #[test]
@@ -1138,4 +1231,73 @@ fn history_stub_messages_become_system_lines() {
     };
     assert_eq!(line.action, SystemAction::ParticipantsAdded);
     assert_eq!(line.participants, vec!["15550002222@s.whatsapp.net"]);
+}
+
+/// A LID store that cannot be read.
+struct BrokenLids;
+
+#[async_trait::async_trait]
+impl whatsmeow::store::LidStore for BrokenLids {
+    async fn put_many_lid_mappings(
+        &self,
+        _mappings: &[whatsmeow::store::LidMapping],
+    ) -> Result<(), whatsmeow::store::StoreError> {
+        Err(whatsmeow::store::StoreError::StoreIsNil)
+    }
+
+    async fn put_lid_mapping(
+        &self,
+        _lid: &whatsmeow::types::Jid,
+        _jid: &whatsmeow::types::Jid,
+    ) -> Result<(), whatsmeow::store::StoreError> {
+        Err(whatsmeow::store::StoreError::StoreIsNil)
+    }
+
+    async fn get_pn_for_lid(
+        &self,
+        _lid: &whatsmeow::types::Jid,
+    ) -> Result<Option<whatsmeow::types::Jid>, whatsmeow::store::StoreError> {
+        Err(whatsmeow::store::StoreError::StoreIsNil)
+    }
+
+    async fn get_lid_for_pn(
+        &self,
+        _pn: &whatsmeow::types::Jid,
+    ) -> Result<Option<whatsmeow::types::Jid>, whatsmeow::store::StoreError> {
+        Err(whatsmeow::store::StoreError::StoreIsNil)
+    }
+
+    async fn get_many_lids_for_pns(
+        &self,
+        _pns: &[whatsmeow::types::Jid],
+    ) -> Result<
+        std::collections::HashMap<whatsmeow::types::Jid, whatsmeow::types::Jid>,
+        whatsmeow::store::StoreError,
+    > {
+        Err(whatsmeow::store::StoreError::StoreIsNil)
+    }
+}
+
+/// Without the other address the gate could drop a message of an added
+/// direct chat as unadopted, so a store failure must reach the caller, which
+/// leaves the message unacknowledged for WhatsApp to redeliver.
+#[tokio::test]
+async fn a_lid_store_failure_is_reported_instead_of_completing_nothing() {
+    let mut event = inbound(map_event(
+        ACCOUNT,
+        &lid_message("3EB0F004", "987654321@lid", false),
+        now(),
+        &plain_locator,
+    ));
+
+    assert!(
+        super::complete_addresses(&BrokenLids, &mut event)
+            .await
+            .is_err()
+    );
+    assert!(
+        super::complete_sender(&BrokenLids, &mut event)
+            .await
+            .is_err()
+    );
 }

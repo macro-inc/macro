@@ -71,6 +71,8 @@ pub enum AiFeature {
     AgentSession,
     /// Choosing the repository an agent session's first prompt belongs to.
     AgentRepositoryChoice,
+    /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
+    AgentModeChoice,
     /// User-confirmed audio transcription.
     Dictation,
     /// Image generation and editing.

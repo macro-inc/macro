@@ -64,11 +64,13 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__DecideReview",
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and

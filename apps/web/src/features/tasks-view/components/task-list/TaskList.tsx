@@ -97,6 +97,7 @@ export type TaskListProps = {
   emptyContent?: JSX.Element;
   loadingContent?: JSX.Element;
   errorContent?: JSX.Element;
+  referencePropertyIds?: readonly string[];
 };
 
 export function TaskList(props: TaskListProps) {
@@ -552,6 +553,7 @@ export function TaskList(props: TaskListProps) {
                             }}
                           >
                             <TaskListEntity
+                              referencePropertyIds={props.referencePropertyIds}
                               showProject={projectsEnabled()}
                               rowId={entityRow().id}
                               entity={entityRow().entity}

@@ -1,4 +1,5 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
+import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
@@ -123,8 +124,10 @@ export function StaticSplitLabel(props: {
                   >
                     <InlineTitleEditor
                       value={props.label}
-                      placeholder="Untitled"
-                      ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                      placeholder={t('splitMenu.untitled')}
+                      ariaLabel={
+                        props.renameAriaLabel ?? t('entityActions.rename')
+                      }
                       onRename={onRename()}
                       class="text-sm"
                       autofocus
@@ -206,15 +209,15 @@ export function SplitPermissionsBadge() {
   const showBadge = () => !canEdit();
 
   const tooltip = () => {
-    if (!canView()) return 'No Access';
-    if (canComment()) return 'Comment Only';
-    return 'View Only';
+    if (!canView()) return t('splitMenu.noAccess');
+    if (canComment()) return t('splitMenu.commentOnly');
+    return t('splitMenu.viewOnly');
   };
 
   const text = () => {
-    if (!canView()) return 'no access';
-    if (canComment()) return 'comment only';
-    return 'viewer';
+    if (!canView()) return t('splitMenu.badgeNoAccess');
+    if (canComment()) return t('splitMenu.badgeCommentOnly');
+    return t('splitMenu.badgeViewer');
   };
 
   return (

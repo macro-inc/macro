@@ -64,7 +64,7 @@ vi.mock('@channel/channel-invite-button', () => ({
   ChannelInviteButton: () => null,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
-  ChannelTopIcon: () => null,
+  ChannelTitleIcon: () => null,
 }));
 vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
   ChannelParticipantsTab: () => null,

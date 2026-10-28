@@ -4,6 +4,7 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -306,7 +307,7 @@ export function BookingWorkspaceView(props: {
                     aria-current={
                       selectedOwnerId() === scope.id ? 'true' : undefined
                     }
-                    title={scope.teamId ? scope.name : 'Personal'}
+                    title={scope.teamId ? scope.name : t('viewMenus.personal')}
                     disabled={isSaving()}
                     {...pressHandlers(() => selectOwner(scope.id))}
                   >
@@ -478,9 +479,9 @@ export function BookingWorkspaceView(props: {
               fallback={
                 <div class="flex min-w-0 flex-1 items-center gap-2">
                   <div class="flex min-w-0 items-center gap-1">
-                    <h1 class="min-w-0 truncate pl-2 text-sm font-semibold">
+                    <ViewSidebar.Title caret={false} class="pl-2">
                       {tab().label}
-                    </h1>
+                    </ViewSidebar.Title>
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -681,9 +682,9 @@ export function BookingWorkspaceView(props: {
                     bookingsTitle={
                       !isTouchDevice() ? (
                         <div class="flex items-center gap-2">
-                          <h1 class="text-sm font-semibold text-ink">
+                          <ViewSidebar.Title caret={false}>
                             Bookings
-                          </h1>
+                          </ViewSidebar.Title>
                           <div class="hidden @min-[900px]/split-header:flex">
                             <OwnerBadge scope={current.scope()} />
                           </div>
@@ -715,9 +716,9 @@ export function BookingWorkspaceView(props: {
                     insightsTitle={
                       !isTouchDevice() ? (
                         <div class="flex items-center gap-2">
-                          <h1 class="text-sm font-semibold text-ink">
+                          <ViewSidebar.Title caret={false}>
                             Insights
-                          </h1>
+                          </ViewSidebar.Title>
                           <div class="hidden @min-[900px]/split-header:flex">
                             <OwnerBadge scope={current.scope()} />
                           </div>
@@ -732,9 +733,9 @@ export function BookingWorkspaceView(props: {
                     owner={current}
                     pageTitle={
                       !isTouchDevice() ? (
-                        <h1 class="text-sm font-semibold text-ink">
+                        <ViewSidebar.Title caret={false}>
                           Booking page
-                        </h1>
+                        </ViewSidebar.Title>
                       ) : undefined
                     }
                   />

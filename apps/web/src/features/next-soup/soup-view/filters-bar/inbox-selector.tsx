@@ -1,5 +1,6 @@
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
@@ -32,11 +33,14 @@ export function InboxSelector() {
 
   const label = () => {
     const ids = inboxFilter();
-    if (ids === undefined) return 'All inboxes';
-    if (ids.length === 0) return 'No inboxes';
+    if (ids === undefined) return t('viewMenus.allInboxes');
+    if (ids.length === 0) return t('viewMenus.noInboxes');
     if (ids.length === 1)
-      return picker.options().find((o) => o.id === ids[0])?.label ?? '1 inbox';
-    return `${ids.length} inboxes`;
+      return (
+        picker.options().find((o) => o.id === ids[0])?.label ??
+        t('viewMenus.oneInbox')
+      );
+    return t('viewMenus.inboxCount', { count: ids.length });
   };
 
   const Selector = (selectorProps: { hideLabel?: boolean }) => (
@@ -45,12 +49,14 @@ export function InboxSelector() {
       activeIds={picker.activeIds}
       onChange={(ids) => (ids.length ? picker.onChange(ids) : picker.reset())}
       onOnly={picker.selectOnly}
-      placeholder="Search inboxes..."
+      placeholder={t('viewMenus.searchInboxes')}
       preserveOrder
       action={
         multiInboxFlag().enabled
           ? {
-              label: 'Connect another account',
+              get label() {
+                return t('viewMenus.connectAnotherAccount');
+              },
               icon: () => <PlusIcon class="size-4" />,
               onSelect: () => addInbox(),
             }
@@ -82,14 +88,18 @@ export function InboxSelector() {
       variant="outline"
       size="sm"
       depth={2}
-      aria-label={buttonProps.hideLabel ? 'Connect another account' : undefined}
-      tooltip={buttonProps.hideLabel ? 'Connect another account' : undefined}
+      aria-label={
+        buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined
+      }
+      tooltip={
+        buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined
+      }
       class={cn('bg-surface gap-1', buttonProps.hideLabel && 'px-1')}
       onClick={() => addInbox()}
     >
       <TrayIcon />
       <Show when={!buttonProps.hideLabel}>
-        <span class="truncate">Connect another account</span>
+        <span class="truncate">{t('viewMenus.connectAnotherAccount')}</span>
       </Show>
     </Button>
   );

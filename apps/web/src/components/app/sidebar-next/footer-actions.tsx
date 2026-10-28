@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { UserIcon } from '@core/component/UserIcon';
@@ -6,6 +7,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
@@ -35,8 +37,8 @@ const isSettingsActive = () => {
 
 /**
  * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store QR code. Hidden wherever that page is unavailable, e.g. inside
- * the native app.
+ * App Store QR code. Hidden inside the native app, where that page shows the
+ * installed app's version instead, and wherever the page is unavailable.
  */
 const MobileAppButton = () => {
   const analytics = useAnalytics();
@@ -53,7 +55,7 @@ const MobileAppButton = () => {
   };
 
   return (
-    <Show when={isTabAvailable('Mobile App')}>
+    <Show when={!isNativeMobilePlatform() && isTabAvailable('Mobile App')}>
       <Button
         variant="ghost"
         size="icon-md"
@@ -61,8 +63,8 @@ const MobileAppButton = () => {
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label="Get the mobile app"
-        tooltip="Get the mobile app"
+        label={t('nav.getMobileApp')}
+        tooltip={t('nav.getMobileApp')}
         tooltipPlacement="right"
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
@@ -138,11 +140,13 @@ export const FooterActions = (props: {
             'size-10 cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
-          label="Settings"
+          label={t('nav.settings')}
           aria-description={
-            accountName() ? `Signed in as ${accountName()}` : undefined
+            accountName()
+              ? t('nav.signedInAs', { name: accountName() ?? '' })
+              : undefined
           }
-          tooltip="Settings"
+          tooltip={t('nav.settings')}
           tooltipPlacement="right"
           hotkey={TOKENS.global.toggleSettings}
           draggable={false}

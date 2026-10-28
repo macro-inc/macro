@@ -39,6 +39,18 @@ Composer typeahead menus choosing the side with room for their full list
 phone screen and below one near the top, have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+Event details placement has a backend-free browser regression: the desktop
+popover stays beside its event when join requests arrive after it opens, and
+slides into a short window; the phone drawer shows late requests:
+`bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
+Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
+above the event whenever a late section changes its height.
+
+The desktop app's local runtime setup (find an agent, connect, create the
+agent, retry, open a session) has a backend-free browser regression over a
+scripted runtime:
+`bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
+
 Meeting-note creation, linking, optional team access, retry, and unlinking have desktop and
 phone browser coverage in `features/calendar-notes`:
 `bunx playwright test --config src/features/calendar-notes/browser-test/playwright.config.ts`.
@@ -62,6 +74,10 @@ Gate event notes and document Share meeting-link controls with
 `enable-calendar-meeting-notes` before mounting their query sources; it defaults
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
+
+Channel composer draft persistence has a backend-free browser regression:
+`bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
+It types a draft, remounts the composer over it, and checks the blank lines survive.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -114,6 +130,16 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 ## Canvas collaboration
 
+Document sync uses the `sync-via-gateway` PostHog flag in both deployed dev and
+production. Off or unknown flag values use direct sync sockets.
+Local stacks with the updated DSS can opt in with `VITE_SYNC_VIA_GATEWAY=true`;
+`false` forces direct sync. The choice is made when a sync source is created
+and stays fixed for its lifetime. PostHog can serve a cached value on reload;
+recreate document sessions after the client receives the updated flag to change
+transport. This is not an immediate kill switch for open sessions. Finish deploying the updated
+DSS before enabling; the dedicated `/sync/ws` socket hosts routing independently
+of the connection-gateway notification socket. The PostHog key keeps its historical name.
+
 Saved canvases use the shared Loro runtime; the stored JSON is only the original
 migration seed. Keep whole-file simple-save out of scene editing. Canvas
 initialization, WAL/snapshot recovery and teardown live in
@@ -131,6 +157,8 @@ The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
+Keep editor newline handling local; result-opening handlers must yield
+Shift+Enter while an editor owns focus instead of adding shared hotkey flags.
 
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
@@ -142,15 +170,22 @@ plugin redirects external popups and breaks the embedded iframe's return path.
 `pipedream-connect.html` is a separate Vite entry, served at
 `/app/pipedream-connect.html`, without a Macro browser login. The Connect token
 and one-time state travel only in its URL fragment, which the page removes on
-load. Its **Return to Macro** link is consumed by the Tauri navigation bridge
+load. When Connect finishes it opens the `macro://` callback itself, keeping
+**Return to Macro** as a fallback link; the Tauri navigation bridge consumes it
 without changing the active route. Backend registration still verifies account
-ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
+ownership. Done, logout, and the ten-minute timeout retire pending callbacks.
+
+Connect can close without reporting success (an OAuth provider severs its
+consent popup's opener) even though Pipedream created the account. Every close
+without success, on web and native, asks `/pipedream/mcp/recover` to register
+the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+- Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,
@@ -185,25 +220,42 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   even with retained user data; preserve session state on transient failures.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
-  uncertain enqueues. See `docs/graphql-normalized-cache-plan.md`.
+  uncertain enqueues. Space failed coordinator registrations with bounded,
+  cancelable waits; a missing startup frame is not proof of untouched storage.
+  See `docs/graphql-normalized-cache-plan.md`.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
   their durable queue entries may survive the old engine.
+- Dispatch live GraphQL notification callbacks before cache persistence so hidden
+  tabs can show browser alerts; keep cache-dependent channel reconciliation
+  behind ordered writes and never replay alerts when the cache resumes. Link
+  cache queue/apply spans to receipt and mark listener failures without stopping
+  the remaining callbacks.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Coalesce broad browser cache-change hints across the coordinator's in-flight
+  backlog, not the engine's per-message queue; keep reset fences, mutation
+  settlements, and query-specific invalidations immediate.
+- Retry still-current query reads once when engine replacement invalidates their
+  snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
+  Keep network forwarding deduplicated and cache-only reads off the network.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
+- Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
+- Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
 - Mobile dock search owns transient category/mode state in `features/command/mobile`; reuse the shared entity source and explicit full-text adapter rather than overlaying the dock query on view tabs or saved facets. See `docs/agent-guide/search.md` at the repository root.
-- Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person to their existing one-to-one DM while preserving name/email matching.
+- Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person against both recent DMs and DMs found by the current search while preserving name/email matching.
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
+- Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
 - Reserve the safe area plus the category row above mobile Search, and only the safe area above Channels; their hidden split headers must not add another blank strip.
@@ -211,6 +263,7 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
@@ -233,7 +286,7 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
-- Keep adopted WhatsApp groups in External at `/external/whatsapp/:id` (`/whatsapp-group/:id` redirects) with their own queries; sharing controls viewing and the viewer's own WhatsApp membership controls sending. Never route them through channel context or services.
+- Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.
@@ -246,8 +299,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar row notifications through the notification source so read
-  dots update immediately and failed writes roll back; grid selections also mark
+- Mark loaded calendar and agent-session row notifications through the
+  notification source (`markRowNotificationsSeenOnOpen`) so read dots update
+  immediately and failed writes roll back; calendar grid selections also mark
   the canonical event read, excluding team projections.
 - Route explicit call exits using the server's `callEnded` result: ended calls
   open their record; ongoing channel and scheduled calls return to the channel
@@ -263,12 +317,19 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
+- Include unsynced email working copies in Drafts and mobile name search even
+  before a GraphQL save, and warm sending accounts alongside backfill. Preserve
+  inbox, alias, and facet scope.
 - Draft autosaves preserve active email thread messages; evict inactive legacy
   caches on save and the active cache on thread exit. Revalidate GraphQL thread
   pages only when a save cannot patch the message list (missing snapshot or a
   move between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Task composer submissions retain an account/context-scoped local copy until
+  the create response confirms success; never clear newer composer input from a
+  late callback or automatically retry an uncertain create. Keep recovery copies
+  through restarts and remove them on explicit logout. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
@@ -297,6 +358,12 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+- Render user-visible text in new UI, and every menu and navigation label,
+  with `t()` from `@app/lib/i18n`, adding only the English to
+  `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
+  in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
+  The resolved interface language is reported to PostHog as the person
+  property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
@@ -304,7 +371,7 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch
 matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
-the startup bundle, and Lexical nodes.
+the startup bundle, Lexical nodes, and translated menu labels.
 
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives
@@ -354,8 +421,8 @@ Generate APNs validators with `scripts/generate-api-schema.ts`; its compact
 `generated/push.ts` entry avoids importing every notification-service schema
 on the startup path. Carry known channel root IDs in push navigation (a null
 `threadId` means the message itself is the root), prefetch the target window
-alongside channel metadata, and keep the channel loading shell stable until
-that target can be positioned.
+alongside channel metadata, and keep the shared Macro loading indicator visible
+until that target can be positioned.
 
 ## macOS notification activation
 
@@ -524,7 +591,10 @@ instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
 Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
 `createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Download hands off directly to browser downloads
+bound to the same controller. Call recording menus and the list-row Download
+(`makeDownloadAction`) use the same controller; the list action runs it under
+its own root, because choosing a context-menu item disposes the menu's owner.
+Download hands off directly to browser downloads
 or the native save picker. Show channel Download on hover or keyboard focus,
 always on touch, without a footer. Keep system Share inside the touch Download
 menu; desktop Share belongs to Macro permissions. Do not add a custom

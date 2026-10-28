@@ -316,9 +316,9 @@ function UserMessage(props: { message: FoldedMessage }) {
           postedAt={props.message.postedAt ?? undefined}
           onOpen={
             origin()?.destination
-              ? () => {
+              ? (options) => {
                   const destination = origin()?.destination;
-                  if (destination) openOrigin(destination);
+                  if (destination) openOrigin(destination, options);
                 }
               : undefined
           }

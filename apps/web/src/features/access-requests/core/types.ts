@@ -10,7 +10,7 @@ export type ShareEntity = {
     | 'call'
     | 'email_thread'
     | 'agent_session'
-    | 'whatsapp_group';
+    | 'external_chat';
   entityId: string;
 };
 export type AccessRequest = {
@@ -56,7 +56,7 @@ export function shareEntity(
     case 'call':
     case 'email_thread':
     case 'agent_session':
-    case 'whatsapp_group':
+    case 'external_chat':
       return { entityType: itemType, entityId: id };
   }
 }

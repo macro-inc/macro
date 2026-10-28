@@ -2,6 +2,7 @@ import { ICON_SIZE_CLASSES } from './entity-icon-sizes';
 
 export { ICON_SIZE_CLASSES } from './entity-icon-sizes';
 
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
   blockAcceptedFileExtensionSet,
@@ -98,13 +99,14 @@ import Spreadsheet from '@icon/system/regular/table.svg';
 import Table from '@icon/system/regular/table.svg';
 import Users from '@icon/system/regular/users.svg';
 import UsersThree from '@icon/system/regular/users-three.svg';
+import ChatsCircle from '@phosphor/chats-circle.svg';
 import FigmaLogo from '@phosphor/figma-logo.svg';
-import WhatsappLogo from '@phosphor/whatsapp-logo.svg';
+import ChatsCircleBold from '@phosphor-icons/core/bold/chats-circle-bold.svg';
 import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
-import WhatsappLogoBold from '@phosphor-icons/core/bold/whatsapp-logo-bold.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
@@ -140,7 +142,7 @@ export type EntityWithValidIcon =
   | 'html'
   | 'initiative'
   | 'reminder'
-  | 'whatsapp_group';
+  | 'external_chat';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -149,12 +151,13 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
-  whatsapp_group: {
-    icon: WhatsappLogo,
-    boldIcon: WhatsappLogoBold,
+  // A chat glyph until the provider is known; see `providerIcon`.
+  external_chat: {
+    icon: ChatsCircle,
+    boldIcon: ChatsCircleBold,
     foreground: 'text-communication',
     background: 'bg-communication/20',
-    prettyName: 'WhatsApp group',
+    prettyName: 'External chat',
   },
   document: {
     icon: File,
@@ -577,6 +580,8 @@ export type EntityIconProps = {
    * Render the icon with a subtle background color?
    */
   useBackground?: boolean;
+  /** An `external_chat`'s provider, to draw its logo instead of a chat glyph. */
+  provider?: ExternalChatProvider;
   class?: string;
 };
 
@@ -593,7 +598,7 @@ export function EntityIcon(props: EntityIconProps) {
     return props.targetType || 'default';
   };
 
-  const config = () => getIconConfig(getName(), props.weight);
+  const config = () => getIconConfig(getName(), props.weight, props.provider);
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -648,13 +653,30 @@ export function CustomEntityIcon(
 
 export function getIconConfig(
   targetType: EntityWithValidIcon | FileType | (string & {}),
-  weight: NonNullable<EntityIconProps['weight']> = 'regular'
+  weight: NonNullable<EntityIconProps['weight']> = 'regular',
+  provider?: ExternalChatProvider
 ) {
   const key = validateEntity(targetType);
-  const config = ENTITY_ICON_CONFIGS[key];
+  const config = providerIcon(ENTITY_ICON_CONFIGS[key], key, provider);
   return {
     ...config,
     icon: weight === 'bold' ? config.boldIcon : config.icon,
+  };
+}
+
+/** An external chat draws its provider's logo once the provider is known. */
+function providerIcon(
+  config: IconConfig,
+  key: EntityWithValidIcon,
+  provider: ExternalChatProvider | undefined
+): IconConfig {
+  if (key !== 'external_chat' || !provider) return config;
+  const identity = providerIdentity(provider);
+  return {
+    ...config,
+    icon: identity.icon,
+    boldIcon: identity.boldIcon,
+    prettyName: `${identity.label} chat`,
   };
 }
 

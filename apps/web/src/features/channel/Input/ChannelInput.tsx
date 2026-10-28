@@ -101,7 +101,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
  * What the composer offers beyond text, formatting and file attachments.
  * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
  */
-export type ChannelInputFeatures = {
+type ChannelInputFeatures = {
   /**
    * `@` mentions of people, agents and Macro items, including Ask Macro.
    * `'participants'` offers only the `participants` prop: no agents, items,
@@ -204,11 +204,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  addMenu: JSX.Element;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -218,7 +215,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -241,11 +237,7 @@ function DefaultActions(props: {
         />
       }
     >
-      <IosDefaultActions
-        input={props.input}
-        dictation={props.dictation}
-        addMenu={props.addMenu}
-      />
+      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
     </Show>
   );
 }
@@ -866,7 +858,6 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>

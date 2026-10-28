@@ -122,6 +122,15 @@ Neither new alert detects successful responses that apply no edits, or failures
 during periods without editing requests. The end-to-end canary remains a
 follow-up.
 
+## Native call push coverage
+
+`monitors/calls.ts` adds one log monitor that alerts on any rejected iOS or
+Android call push, excluding stale device registrations. A `pulumi preview`
+after it is added should show that one create and nothing else.
+
+It sees only publishes SNS rejects. A push that SNS accepts and the device then
+drops leaves no backend trace.
+
 ## GraphQL soup rollout coverage
 
 `monitors/graphql-soup.ts` declares 15 new monitors for the `enable-graphql-soup`

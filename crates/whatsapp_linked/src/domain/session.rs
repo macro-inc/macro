@@ -3,7 +3,13 @@
 //! [`SessionService::begin_lease`]; every write is fenced by that epoch, and a
 //! `Fenced` error means the replica must stop the account immediately.
 
-use super::{events::*, models::*, ports::*, service::is_group_jid};
+use super::{
+    events::*,
+    jid::{Jid, JidKind, is_group_jid, is_person_jid},
+    models::*,
+    ports::*,
+};
+use external_chat::domain::{models::*, ports::ExternalChatResult, rich::RichContent};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -29,7 +35,7 @@ impl SessionService {
     /// epoch, which fences every older replica, and records the previous
     /// replica's in-flight sends as `unknown`.
     #[tracing::instrument(name = "whatsapp.session.begin_lease", skip_all, err, fields(account_id = %account, lease_epoch))]
-    pub async fn begin_lease(&self, account: Uuid) -> LinkedResult<Lease> {
+    pub async fn begin_lease(&self, account: Uuid) -> ExternalChatResult<Lease> {
         let lease = self.repository.begin_lease(account).await?;
         tracing::Span::current().record("lease_epoch", lease.scope.lease_epoch);
         if lease.sends_marked_unknown > 0 {
@@ -44,36 +50,45 @@ impl SessionService {
     /// Hand the account over: undispatched claims return to `pending`. Call after
     /// in-flight sends have recorded their outcome and before unlocking.
     #[tracing::instrument(name = "whatsapp.session.release_lease", skip_all, err, fields(account_id = %scope.account_id, lease_epoch = scope.lease_epoch))]
-    pub async fn release_lease(&self, scope: SessionScope) -> LinkedResult<()> {
+    pub async fn release_lease(&self, scope: SessionScope) -> ExternalChatResult<()> {
         self.repository.release_lease(scope).await
     }
 
+    /// Tell other replicas an unlocked account still needs a session. Call
+    /// after unlocking, or the next replica's lock attempt loses the race.
+    pub async fn announce_released(&self, account: Uuid) -> ExternalChatResult<()> {
+        self.repository.announce_released(account).await
+    }
+
     /// Lifecycle of an account, for discovery and stop decisions.
-    pub async fn account_state(&self, account: Uuid) -> LinkedResult<Option<AccountState>> {
+    pub async fn account_state(&self, account: Uuid) -> ExternalChatResult<Option<AccountState>> {
         self.repository.account_state(account).await
     }
 
     /// Accounts that need a replica (connected, or pairing with a live
     /// transaction) and whose advisory lock nobody holds, least recently updated first.
-    pub async fn discoverable_accounts(&self, limit: i64) -> LinkedResult<Vec<Uuid>> {
+    pub async fn discoverable_accounts(&self, limit: i64) -> ExternalChatResult<Vec<Uuid>> {
         self.repository
             .discoverable_accounts(limit.clamp(1, 1000))
             .await
     }
 
     /// Fleet-wide counts for health checks and monitors.
-    pub async fn fleet_health(&self) -> LinkedResult<FleetHealth> {
+    pub async fn fleet_health(&self) -> ExternalChatResult<FleetHealth> {
         self.repository.fleet_health().await
     }
 
     /// Resolve a `whatsapp_pairing_requested` payload. Terminal states mean the
     /// replica should stop pairing (and log out a cancelled device).
-    pub async fn pairing_work(&self, pairing: Uuid) -> LinkedResult<Option<PairingWork>> {
+    pub async fn pairing_work(&self, pairing: Uuid) -> ExternalChatResult<Option<PairingWork>> {
         self.repository.pairing_work(pairing).await
     }
 
     /// The account's live pairing transaction, checked after taking a lease.
-    pub async fn live_pairing(&self, scope: SessionScope) -> LinkedResult<Option<PairingWork>> {
+    pub async fn live_pairing(
+        &self,
+        scope: SessionScope,
+    ) -> ExternalChatResult<Option<PairingWork>> {
         self.repository.live_pairing(scope).await
     }
 
@@ -87,20 +102,24 @@ impl SessionService {
         scope: SessionScope,
         pairing: Uuid,
         update: PairingUpdate,
-    ) -> LinkedResult<PairingWork> {
+    ) -> ExternalChatResult<PairingWork> {
         let (name, valid) = match &update {
             PairingUpdate::Qr(code) => ("qr", !code.is_empty() && code.len() <= 4096),
             PairingUpdate::PairCode(code) => ("pair_code", !code.is_empty() && code.len() <= 64),
             PairingUpdate::Passkey { challenge } => (
                 "passkey",
-                challenge.is_object() && challenge.to_string().len() <= 32 * 1024,
+                challenge.is_object() && challenge.to_string().len() <= PASSKEY_LIMIT_BYTES,
             ),
-            PairingUpdate::Success { identity_jid } => ("success", is_user_jid(identity_jid)),
+            PairingUpdate::Success { identity_jid } => (
+                "success",
+                Jid::parse(identity_jid).is_some_and(|jid| jid.kind == JidKind::Phone),
+            ),
+            PairingUpdate::Expired => ("expired", true),
             PairingUpdate::Failed => ("failed", true),
         };
         tracing::Span::current().record("update", name);
         if !valid {
-            return Err(LinkedError::Invalid("invalid pairing update").into());
+            return Err(ExternalChatError::Invalid("invalid pairing update").into());
         }
         self.repository
             .update_pairing(scope, pairing, &update)
@@ -112,7 +131,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         pairing: Uuid,
-    ) -> LinkedResult<Option<serde_json::Value>> {
+    ) -> ExternalChatResult<Option<serde_json::Value>> {
         self.repository.take_passkey_response(scope, pairing).await
     }
 
@@ -123,7 +142,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<MediaImport>> {
+    ) -> ExternalChatResult<Vec<MediaImport>> {
         let claimed = self
             .repository
             .claim_media_imports(scope, limit.clamp(1, 16))
@@ -132,17 +151,17 @@ impl SessionService {
         Ok(claimed)
     }
 
-    /// Hand over decrypted bytes for an import. DSS turns them into a private
-    /// document whose access inherits the group.
+    /// Hand over decrypted bytes for an import. DSS stores them as a static
+    /// file.
     #[tracing::instrument(name = "whatsapp.session.complete_media", skip_all, err, fields(account_id = %scope.account_id, size = bytes.len()))]
     pub async fn complete_media_import(
         &self,
         scope: SessionScope,
         attachment: &AttachmentRef,
         bytes: &[u8],
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         if bytes.is_empty() || bytes.len() > MEDIA_LIMIT_BYTES {
-            return Err(LinkedError::Invalid("attachment is empty or too large").into());
+            return Err(ExternalChatError::Invalid("attachment is empty or too large").into());
         }
         self.repository
             .complete_media_import(scope, attachment, bytes)
@@ -156,7 +175,7 @@ impl SessionService {
         scope: SessionScope,
         attachment: &AttachmentRef,
         failure: MediaFailure,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         self.repository
             .fail_media_import(scope, attachment, failure)
             .await
@@ -168,14 +187,14 @@ impl SessionService {
         &self,
         scope: SessionScope,
         send: Uuid,
-    ) -> LinkedResult<OutboundMedia> {
+    ) -> ExternalChatResult<OutboundMedia> {
         self.repository.outbound_media(scope, send).await
     }
 
     /// WhatsApp logged the device out or rejected its credentials. Consent ends;
     /// the owner must reconnect explicitly.
     #[tracing::instrument(name = "whatsapp.session.logged_out", skip_all, err, fields(account_id = %scope.account_id))]
-    pub async fn logged_out(&self, scope: SessionScope) -> LinkedResult<()> {
+    pub async fn logged_out(&self, scope: SessionScope) -> ExternalChatResult<()> {
         self.repository.logged_out(scope).await
     }
 
@@ -187,13 +206,13 @@ impl SessionService {
         scope: SessionScope,
         groups: &[GroupInfo],
         complete: bool,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         if groups.len() > 10_000
             || groups.iter().any(|g| {
                 !is_group_jid(&g.jid) || g.name.len() > 1024 || g.participants.len() > 5_000
             })
         {
-            return Err(LinkedError::Invalid("invalid group metadata").into());
+            return Err(ExternalChatError::Invalid("invalid group metadata").into());
         }
         self.repository.update_groups(scope, groups, complete).await
     }
@@ -201,7 +220,11 @@ impl SessionService {
     /// Report the current metadata of one group after a live group event (joined,
     /// renamed, participants changed). Signals pages only when something changed.
     #[tracing::instrument(name = "whatsapp.session.update_group", skip_all, err, fields(account_id = %scope.account_id))]
-    pub async fn update_group(&self, scope: SessionScope, group: &GroupInfo) -> LinkedResult<()> {
+    pub async fn update_group(
+        &self,
+        scope: SessionScope,
+        group: &GroupInfo,
+    ) -> ExternalChatResult<()> {
         self.update_groups(scope, std::slice::from_ref(group), false)
             .await
     }
@@ -214,57 +237,92 @@ impl SessionService {
         scope: SessionScope,
         group: &str,
         observed_at: chrono::DateTime<chrono::Utc>,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         if !is_group_jid(group) {
-            return Err(LinkedError::Invalid("invalid group").into());
+            return Err(ExternalChatError::Invalid("invalid group").into());
         }
         self.repository.group_left(scope, group, observed_at).await
     }
 
     /// Groups to keep: events from any other group are dropped before storage.
-    pub async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>> {
+    pub async fn observed_groups(&self, scope: SessionScope) -> ExternalChatResult<Vec<String>> {
         self.repository.observed_groups(scope).await
     }
 
     /// Record what the account learned about chats in its WhatsApp chat list
-    /// (history sync, live messages, contact and chat-setting updates).
-    #[tracing::instrument(name = "whatsapp.session.update_chats", skip_all, err, fields(account_id = %scope.account_id, count = chats.len()))]
+    /// (history sync, live messages, contact and chat-setting updates). A
+    /// batch is a whole history sync, so a chat whose JID or kind is invalid
+    /// is skipped (counted on the span) rather than refusing the rest.
+    #[tracing::instrument(name = "whatsapp.session.update_chats", skip_all, err, fields(account_id = %scope.account_id, count = chats.len(), skipped))]
     pub async fn update_chats(
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<bool> {
         let valid: Vec<ChatUpdate> = chats
             .iter()
             .filter(|chat| match chat.kind {
-                ChatKind::Group => is_group_jid(&chat.jid),
-                ChatKind::Direct => is_user_jid(&chat.jid) || is_lid_jid(&chat.jid),
+                ExternalChatKind::Group => is_group_jid(&chat.jid),
+                ExternalChatKind::Direct => is_person_jid(&chat.jid),
             })
             .cloned()
             .collect();
+        let skipped = chats.len() - valid.len();
+        tracing::Span::current().record("skipped", skipped);
+        if skipped > 0 {
+            tracing::debug!(
+                account_id = %scope.account_id,
+                skipped,
+                reason = "invalid_chat_jid",
+                "Skipped WhatsApp chats with an invalid JID"
+            );
+        }
         if valid.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         self.repository.update_chats(scope, &valid).await
     }
 
     /// The owner's groups still importing earlier messages from the phone.
     #[tracing::instrument(name = "whatsapp.session.backfill_work", skip_all, err, fields(account_id = %scope.account_id, count))]
-    pub async fn backfill_work(&self, scope: SessionScope) -> LinkedResult<Vec<BackfillWork>> {
+    pub async fn backfill_work(
+        &self,
+        scope: SessionScope,
+    ) -> ExternalChatResult<Vec<BackfillWork>> {
         let work = self.repository.backfill_work(scope).await?;
         tracing::Span::current().record("count", work.len());
         Ok(work)
     }
 
+    /// No message of an added chat is known to start importing from.
+    #[tracing::instrument(name = "whatsapp.session.backfill_waiting_for_message", skip_all, err, fields(account_id = %scope.account_id, chat_id = %group))]
+    pub async fn backfill_waiting_for_message(
+        &self,
+        scope: SessionScope,
+        group: Uuid,
+    ) -> ExternalChatResult<()> {
+        self.repository
+            .backfill_waiting_for_message(scope, group)
+            .await
+    }
+
     /// A page of earlier messages was requested from the phone just now.
-    #[tracing::instrument(name = "whatsapp.session.backfill_requested", skip_all, err, fields(account_id = %scope.account_id, group_id = %group))]
-    pub async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+    #[tracing::instrument(name = "whatsapp.session.backfill_requested", skip_all, err, fields(account_id = %scope.account_id, chat_id = %group))]
+    pub async fn backfill_requested(
+        &self,
+        scope: SessionScope,
+        group: Uuid,
+    ) -> ExternalChatResult<()> {
         self.repository.backfill_requested(scope, group).await
     }
 
     /// The phone did not answer; the import waits for it.
-    #[tracing::instrument(name = "whatsapp.session.backfill_unanswered", skip_all, err, fields(account_id = %scope.account_id, group_id = %group))]
-    pub async fn backfill_unanswered(&self, scope: SessionScope, group: Uuid) -> LinkedResult<()> {
+    #[tracing::instrument(name = "whatsapp.session.backfill_unanswered", skip_all, err, fields(account_id = %scope.account_id, chat_id = %group))]
+    pub async fn backfill_unanswered(
+        &self,
+        scope: SessionScope,
+        group: Uuid,
+    ) -> ExternalChatResult<()> {
         self.repository.backfill_unanswered(scope, group).await
     }
 
@@ -275,9 +333,9 @@ impl SessionService {
         &self,
         scope: SessionScope,
         page: &HistoryPage,
-    ) -> LinkedResult<Vec<(Uuid, BackfillState)>> {
-        if !is_group_jid(&page.chat_jid) {
-            return Ok(vec![]);
+    ) -> ExternalChatResult<Vec<(Uuid, BackfillState)>> {
+        if !is_group_jid(&page.chat_jid) && !is_person_jid(&page.chat_jid) {
+            return Err(ExternalChatError::Invalid("a history page names no WhatsApp chat").into());
         }
         self.repository.backfill_page(scope, page).await
     }
@@ -293,7 +351,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<IngestOutcome> {
+    ) -> ExternalChatResult<IngestOutcome> {
         let result = match validate_event(event) {
             Ok(()) => self.repository.ingest(scope, event).await,
             Err(error) => Err(error),
@@ -308,13 +366,13 @@ impl SessionService {
 
     /// Persist an event durably without notification or document work, so the protocol event can
     /// be acknowledged right after; `replay_deferred` ingests it. Idempotent on
-    /// `event_id`. `Unavailable` when the account's backlog is full: do not ack.
+    /// `event_id`. `Backlogged` when the account's backlog is full: do not ack.
     #[tracing::instrument(name = "whatsapp.session.enqueue_inbound", skip_all, err, fields(account_id = %scope.account_id, event_id = %event.event_id))]
     pub async fn enqueue_inbound(
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         validate_event(event)?;
         self.repository.enqueue_inbound(scope, event).await
     }
@@ -322,7 +380,7 @@ impl SessionService {
     /// Ingest enqueued events and retry deferred ones whose time has come.
     /// Returns how many applied. Call after `enqueue_inbound` and periodically.
     #[tracing::instrument(name = "whatsapp.session.replay_deferred", skip_all, err, fields(account_id = %scope.account_id, due, applied))]
-    pub async fn replay_deferred(&self, scope: SessionScope) -> LinkedResult<usize> {
+    pub async fn replay_deferred(&self, scope: SessionScope) -> ExternalChatResult<usize> {
         let due = self.repository.due_events(scope, 64).await?;
         tracing::Span::current().record("due", due.len());
         let mut applied = 0;
@@ -330,13 +388,14 @@ impl SessionService {
             match self.repository.ingest(scope, event).await {
                 Ok(IngestOutcome::Applied) => applied += 1,
                 Ok(_) => {}
-                Err(error) if matches!(error.current_context(), LinkedError::Fenced) => {
+                Err(error) if matches!(error.current_context(), ExternalChatError::Fenced) => {
                     return Err(error);
                 }
                 // One bad event never blocks the others; it stays deferred.
                 Err(error) => tracing::warn!(
                     event_id = %event.event_id,
                     code = error.current_context().code(),
+                    error = %error,
                     "Deferred WhatsApp event will retry"
                 ),
             }
@@ -351,7 +410,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<ClaimedSend>> {
+    ) -> ExternalChatResult<Vec<ClaimedSend>> {
         let claimed = self
             .repository
             .claim_sends(scope, limit.clamp(1, 64))
@@ -368,9 +427,9 @@ impl SessionService {
         scope: SessionScope,
         send: Uuid,
         source_id: &str,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         if source_id.is_empty() || source_id.len() > 256 {
-            return Err(LinkedError::Invalid("invalid message id").into());
+            return Err(ExternalChatError::Invalid("invalid message id").into());
         }
         self.repository.begin_dispatch(scope, send, source_id).await
     }
@@ -382,7 +441,7 @@ impl SessionService {
         scope: SessionScope,
         send: Uuid,
         outcome: SendOutcome,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let name = match &outcome {
             SendOutcome::Accepted { .. } => "accepted",
             SendOutcome::Rejected { .. } => "rejected",
@@ -395,25 +454,17 @@ impl SessionService {
     }
 }
 
-/// Phone-number user JIDs, the form a paired account reports.
-fn is_user_jid(jid: &str) -> bool {
-    jid.len() <= 256
-        && jid
-            .strip_suffix("@s.whatsapp.net")
-            .is_some_and(|user| !user.is_empty() && user.bytes().all(|b| b.is_ascii_digit()))
-}
-
-/// Phone-number or LID JIDs that can identify a person.
-fn is_person_jid(jid: &str) -> bool {
-    is_user_jid(jid)
-        || jid.strip_suffix("@lid").is_some_and(|user| {
-            !user.is_empty() && user.len() <= 64 && user.bytes().all(|b| b.is_ascii_digit())
-        })
-}
-
-pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
-    if !is_group_jid(&event.group_jid) {
-        return Err(LinkedError::Invalid("invalid group").into());
+pub(crate) fn validate_event(event: &InboundEvent) -> ExternalChatResult<()> {
+    let direct = is_person_jid(&event.group_jid);
+    if !is_group_jid(&event.group_jid) && !direct {
+        return Err(ExternalChatError::Invalid("invalid chat").into());
+    }
+    if event
+        .chat_alternate_jid
+        .as_deref()
+        .is_some_and(|alternate| !direct || !is_person_jid(alternate))
+    {
+        return Err(ExternalChatError::Invalid("invalid chat").into());
     }
     match &event.kind {
         InboundKind::Left => Ok(()),
@@ -426,7 +477,7 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
                     .any(|id| id.is_empty() || id.len() > 256)
                 || !is_person_jid(&receipt.participant_jid)
             {
-                return Err(LinkedError::Invalid("invalid receipt").into());
+                return Err(ExternalChatError::Invalid("invalid receipt").into());
             }
             Ok(())
         }
@@ -452,7 +503,7 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
                 || message.revision < 0
                 || message.media.len() > 10
             {
-                return Err(LinkedError::Invalid("invalid message").into());
+                return Err(ExternalChatError::Invalid("invalid message").into());
             }
             let needs_target = matches!(
                 message.kind,
@@ -462,7 +513,9 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
                     | MessageKind::PollVote
             );
             if needs_target && message.target.is_none() {
-                return Err(LinkedError::Invalid("message operation without a target").into());
+                return Err(
+                    ExternalChatError::Invalid("message operation without a target").into(),
+                );
             }
             let rich_fits = match (message.kind, &message.rich) {
                 (MessageKind::System, Some(RichContent::System(_)))
@@ -480,7 +533,7 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
                 (_, rich) => rich.is_none(),
             };
             if !rich_fits || message.mentions.len() > 256 {
-                return Err(LinkedError::Invalid("invalid message content").into());
+                return Err(ExternalChatError::Invalid("invalid message content").into());
             }
             // Only the verified author edits or deletes. Admin deletions need
             // separate role evidence and are not imported.
@@ -490,16 +543,9 @@ pub(crate) fn validate_event(event: &InboundEvent) -> LinkedResult<()> {
                         && sender.alternate_jid.as_deref() != Some(target.sender_jid.as_str())
                 })
             {
-                return Err(LinkedError::Forbidden.into());
+                return Err(ExternalChatError::Forbidden.into());
             }
             Ok(())
         }
     }
-}
-
-fn is_lid_jid(jid: &str) -> bool {
-    jid.len() <= 256
-        && jid
-            .strip_suffix("@lid")
-            .is_some_and(|user| !user.is_empty() && user.bytes().all(|b| b.is_ascii_digit()))
 }

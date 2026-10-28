@@ -116,3 +116,68 @@ async fn archive_does_not_report_success_when_the_service_rejects_the_write() {
     assert_eq!(response.errors[0].message, "email thread not found");
     assert_eq!(response.data, async_graphql::Value::Null);
 }
+
+#[tokio::test]
+async fn bulk_archive_reports_rejected_threads_and_returns_every_loadable_thread() {
+    let service = Arc::new(CapturingEmailMutationService {
+        reject_archive: true,
+        ..Default::default()
+    });
+    let accepted = Uuid::from_u128(42);
+    let response = schema(service.clone())
+        .execute(format!(
+            r#"mutation {{ setEmailThreadsArchived(input: {{threadIds: ["{accepted}", "{TEST_THREAD_ID}"], archived: true}}) {{ threads {{ id }} failedThreadIds }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["setEmailThreadsArchived"],
+        serde_json::json!({
+            "threads": [{ "id": accepted.to_string() }, { "id": TEST_THREAD_ID.to_string() }],
+            "failedThreadIds": [TEST_THREAD_ID.to_string()],
+        })
+    );
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec![CapturedMutation::ArchiveMany {
+            user_id: "macro|viewer@example.com".into(),
+            thread_ids: vec![accepted, TEST_THREAD_ID],
+            archived: true,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn bulk_archive_does_not_report_a_committed_thread_failed_when_its_reload_is_empty() {
+    // All Mail omits a trashed thread even though its archive write succeeded.
+    let service = Arc::new(CapturingEmailMutationService {
+        thread_load_missing: true,
+        ..Default::default()
+    });
+    let response = schema(service)
+        .execute(format!(
+            r#"mutation {{ setEmailThreadsArchived(input: {{threadIds: ["{}"], archived: true}}) {{ threads {{ id }} failedThreadIds }} }}"#,
+            Uuid::from_u128(42)
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["setEmailThreadsArchived"],
+        serde_json::json!({ "threads": [], "failedThreadIds": [] })
+    );
+}
+
+#[tokio::test]
+async fn bulk_archive_rejects_malformed_ids_before_writing() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let response = schema(service.clone())
+        .execute(
+            r#"mutation { setEmailThreadsArchived(input: {threadIds: ["bad-id"], archived: true}) { failedThreadIds } }"#,
+        )
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert!(service.calls.lock().unwrap().is_empty());
+}

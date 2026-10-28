@@ -75,6 +75,18 @@ pub struct UpdateThreadLabelsResult {
     pub failed_ids: Vec<Uuid>,
 }
 
+/// The most threads one bulk archive request may change.
+pub const MAX_BULK_ARCHIVE_THREADS: usize = 100;
+
+/// Result of archiving or unarchiving many threads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SetThreadsArchivedResult {
+    /// Threads whose archive state now matches the request.
+    pub updated_thread_ids: Vec<Uuid>,
+    /// Threads left unchanged because they could not be updated.
+    pub failed_thread_ids: Vec<Uuid>,
+}
+
 /// Well-known system label identifiers.
 pub mod system_labels {
     /// The UNREAD label.

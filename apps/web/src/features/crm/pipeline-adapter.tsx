@@ -30,8 +30,13 @@ import { DatabaseToolbar } from '../database/components/database-toolbar';
 import { DatabaseProvider, useDatabase } from '../database/context/database';
 import type { CardMove } from '../database/core/board-moves';
 import type { DatabaseCellValue } from '../database/core/database-view';
+import { newViewNeedsColumn } from '../database/core/view-creation';
 import type { ViewChange } from '../database/core/view-state';
-import { allRecordsView, boardLayout } from '../database/core/views';
+import {
+  allRecordsView,
+  boardLayout,
+  timelineLayout,
+} from '../database/core/views';
 import {
   type DatabaseOpFailure,
   databaseOpMessage,
@@ -249,11 +254,7 @@ function PipelineToolbar(props: {
       onCreateView={(created) =>
         props.views.create(props.view, created, columns()).map((view) => {
           props.onSelectView(view.id);
-          if (
-            created.layout === 'board' &&
-            created.groupBy.kind === 'new-status'
-          )
-            refreshColumns();
+          if (newViewNeedsColumn(created)) refreshColumns();
         })
       }
       onRenameView={(target, name) =>
@@ -276,6 +277,18 @@ function PipelineToolbar(props: {
           .with({ kind: 'board', groupBy: { kind: 'new-status' } }, () =>
             props.views
               .showAsBoardWithStatusColumn(target, columns())
+              .map(refreshColumns)
+          )
+          .with({ kind: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+            props.views
+              .update(target, {
+                layout: timelineLayout(range.columnId, columns()),
+              })
+              .map(() => undefined)
+          )
+          .with({ kind: 'timeline', range: { kind: 'new-column' } }, () =>
+            props.views
+              .showAsTimelineWithTimeRangeColumn(target, columns())
               .map(refreshColumns)
           )
           .exhaustive()

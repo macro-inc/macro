@@ -75,6 +75,29 @@ and focuses Search; Escape clears and closes it. Phone activity views keep the
 search field and creation action below the CRM navigation tabs. Record-detail
 tabs retain their own section toolbar.
 
+Activity rows show stored Companies and Contacts reference pills in the shared
+Soup row. Click a pill to open its record; Shift-click opens a new split without
+opening the parent item. The first two references appear inline; **+N** opens
+the remainder. Email matches still determine feed membership, but an address
+or domain match without a stored property does not add a display pill. The row
+uses shared property previews rather than a separate association lookup.
+Verify these interactions at desktop and phone widths.
+Sidebar Tasks use the normal Tasks filters (status, priority, assignee, creator,
+and tags), sorting and grouping, with list/board/Gantt layouts when enabled. Touch
+uses the normal list and filter drawer. The default is open tasks grouped by date.
+Email exposes the normal read/done, attachment, calendar and tag filters. Notes has
+creator/tag filters and Calls has audience/tag filters. Email, Notes and Calls support
+last-updated/created/viewed sorting, newest/oldest direction, and date/none grouping.
+Email defaults to last-update date groups; Notes and Calls start ungrouped. Date
+headings use the selected sort field and viewer-local time. Filter controls share one
+desktop header; touch puts filters, sorting and grouping in a drawer beside search.
+Each activity keeps its own settings, independent of the normal app views.
+Clear filters removes only refinements, never the fixed CRM restriction. Verify
+switching away and back preserves the filter, sorting and grouping choices, that
+changing a filter starts a fresh query, and that local-only attachment/audience
+filters continue through pages with no visible rows. Stored association pills remain
+inline, and record-detail controls remain unchanged.
+
 Verify activity loading with a CRM containing thousands of companies and
 contacts, not only an empty fixture. Opening a tab must settle without repeated
 requests; switching tabs must preserve filtering and scrolling must load older

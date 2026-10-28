@@ -5,6 +5,7 @@
 use super::*;
 use crate::domain::events::*;
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::RichContent;
 
 /// Deferred and quarantined events kept per account before ingestion pushes back.
 const MAX_RETAINED_EVENTS: i64 = 4096;
@@ -17,7 +18,7 @@ pub(super) struct Reservation {
     pub observer: Uuid,
     /// External author of a reaction, distinct from the target's author.
     pub reaction_actor: Option<Uuid>,
-    pub binding: Binding,
+    pub binding: ChatRef,
     /// Verified external person who authored the source message.
     pub person: Uuid,
     /// Group message.
@@ -38,7 +39,7 @@ pub(super) struct Reservation {
 pub(super) enum Reserve {
     /// Persist through this reservation.
     Reserved(Box<Reservation>),
-    /// Retry later: the target has not arrived or the binding needs an owner.
+    /// Retry later: the target has not arrived.
     Defer,
     /// The sender identity is ambiguous.
     Quarantine,
@@ -66,18 +67,18 @@ pub(super) async fn observed_bindings_in(
     group: &str,
     source_at: DateTime<Utc>,
     history: bool,
-) -> LinkedResult<Vec<Binding>> {
+) -> ExternalChatResult<Vec<ChatRef>> {
     sqlx::query_as!(
-        bindings::BindingRow,
-        r#"SELECT b.id, b.group_jid, b.user_id, b.state, b.adopted_at
-        FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id
-        WHERE b.group_jid = $1 AND b.state = 'active'
+        ChatRow,
+        r#"SELECT b.id, b.provider, b.remote_id, b.kind, b.user_id, b.state, b.adopted_at
+        FROM external_chat b JOIN whatsapp_chat_membership m ON m.chat_id = b.id
+        WHERE b.provider = 'whatsapp' AND b.remote_id = $1 AND b.state = 'active'
           AND m.account_id = $2 AND m.generation = $3 AND m.consent_ended_at IS NULL
           AND m.remote_member AND m.reconciled
           AND CASE WHEN $7 THEN b.user_id = $5 ELSE
             $4 >= date_trunc('second', b.adopted_at) - make_interval(secs => $6)
             AND $4 >= date_trunc('second', m.consent_at) - make_interval(secs => $6) END
-          AND whatsapp_group_can_view(b.id, $5)
+          AND external_chat_can_view(b.id, $5)
         ORDER BY b.id LIMIT 100"#,
         group,
         account.id,
@@ -91,7 +92,7 @@ pub(super) async fn observed_bindings_in(
     .await
     .map_err(failure)?
     .into_iter()
-    .map(bindings::binding)
+    .map(chat_ref)
     .collect()
 }
 
@@ -101,25 +102,25 @@ pub(super) async fn reserve_in(
     tx: &mut Transaction<'_, Postgres>,
     observer: Uuid,
     generation: i64,
-    binding: &Binding,
+    binding: &ChatRef,
     event: &InboundEvent,
     message: &Message,
     accepted_send: Option<Uuid>,
-) -> LinkedResult<Reserve> {
-    let current = sqlx::query!(
-        "SELECT state FROM whatsapp_group WHERE id = $1 FOR UPDATE",
+) -> ExternalChatResult<Reserve> {
+    let current = sqlx::query_scalar!(
+        "SELECT state FROM external_chat WHERE id = $1 FOR UPDATE",
         binding.id
     )
     .fetch_one(&mut **tx)
     .await
     .map_err(failure)?;
-    if current.state != "active" && accepted_send.is_none() {
+    if current != "active" && accepted_send.is_none() {
         return Ok(Reserve::Skip);
     }
     let sender = &message.sender;
     // A group change WhatsApp made without naming anyone belongs to the
     // group's own stand-in person, which has no alias.
-    let group_itself = sender.jid == binding.group_jid;
+    let group_itself = sender.jid == binding.remote_id;
     let mut aliases = vec![];
     if !group_itself {
         aliases.push(sender.jid.clone());
@@ -129,7 +130,7 @@ pub(super) async fn reserve_in(
         vec![Uuid::new_v5(&GROUP_PERSON_NAMESPACE, binding.id.as_bytes())]
     } else {
         sqlx::query_scalar!(
-            "SELECT DISTINCT person_id FROM whatsapp_identity_alias WHERE binding_id = $1 AND jid = ANY($2)",
+            "SELECT DISTINCT person_id FROM whatsapp_identity_alias WHERE chat_id = $1 AND jid = ANY($2)",
             binding.id,
             &aliases
         )
@@ -152,9 +153,9 @@ pub(super) async fn reserve_in(
     .map_err(failure)?;
     let person = people.first().copied().unwrap_or_else(Uuid::now_v7);
     sqlx::query!(
-        r#"INSERT INTO whatsapp_external_person (id, binding_id, user_id, display_name) VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id) DO UPDATE SET display_name = COALESCE(excluded.display_name, whatsapp_external_person.display_name),
-            user_id = COALESCE(excluded.user_id, whatsapp_external_person.user_id)"#,
+        r#"INSERT INTO external_chat_person (id, chat_id, user_id, display_name) VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO UPDATE SET display_name = COALESCE(excluded.display_name, external_chat_person.display_name),
+            user_id = COALESCE(excluded.user_id, external_chat_person.user_id)"#,
         person,
         binding.id,
         associated_user,
@@ -165,8 +166,8 @@ pub(super) async fn reserve_in(
     .map_err(failure)?;
     for alias in &aliases {
         sqlx::query!(
-            r#"INSERT INTO whatsapp_identity_alias (binding_id, jid, person_id, evidence_account_id, verified_at)
-            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (binding_id, jid) DO NOTHING"#,
+            r#"INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)
+            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (chat_id, jid) DO NOTHING"#,
             binding.id,
             alias,
             person,
@@ -183,11 +184,11 @@ pub(super) async fn reserve_in(
         let target = message
             .target
             .as_ref()
-            .ok_or(LinkedError::Invalid("reaction without a target"))?;
+            .ok_or(ExternalChatError::Invalid("reaction without a target"))?;
         let row = sqlx::query!(
             r#"SELECT m.person_id, m.message_id, m.origin, m.deleted_at, m.revision_content, m.content_revision, m.revised_at
-            FROM whatsapp_group_message m JOIN whatsapp_identity_alias a ON a.binding_id = m.binding_id AND a.person_id = m.person_id
-            WHERE m.binding_id = $1 AND a.jid = $2 AND m.source_id = $3"#,
+            FROM external_chat_message m JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id
+            WHERE m.chat_id = $1 AND a.jid = $2 AND m.source_id = $3"#,
             binding.id,
             target.sender_jid,
             target.source_id
@@ -217,7 +218,7 @@ pub(super) async fn reserve_in(
         message
             .target
             .as_ref()
-            .ok_or(LinkedError::Invalid("revision without a target"))?
+            .ok_or(ExternalChatError::Invalid("revision without a target"))?
             .source_id
             .clone()
     } else {
@@ -230,7 +231,7 @@ pub(super) async fn reserve_in(
     } else {
         sqlx::query!(
         r#"SELECT s.id, s.user_id FROM whatsapp_send s JOIN whatsapp_linked_account a ON a.id = s.account_id
-        WHERE s.group_id = $1 AND s.allocated_source_id = $2 AND a.identity_jid = ANY($3) AND s.dispatch_started_at IS NOT NULL
+        WHERE s.chat_id = $1 AND s.allocated_source_id = $2 AND a.identity_jid = ANY($3) AND s.dispatch_started_at IS NOT NULL
           AND ($4::uuid IS NULL OR s.id = $4)"#,
         binding.id,
         source,
@@ -242,14 +243,14 @@ pub(super) async fn reserve_in(
         .map_err(failure)?
     };
     if accepted_send.is_some() && !revision && send.is_none() {
-        return Err(LinkedError::Conflict.into());
+        return Err(ExternalChatError::Conflict.into());
     }
     let new_origin = if send.is_some() {
         "macro"
     } else if message.history {
         "history"
     } else {
-        "whatsapp"
+        "remote"
     };
     let deleted = (message.kind == MessageKind::Delete).then_some(event.source_at);
     let content = (message.kind == MessageKind::Edit).then(|| message.text.clone());
@@ -269,21 +270,22 @@ pub(super) async fn reserve_in(
     // lacked (an older importer stored polls and the like as placeholders);
     // revisions carry none of it and keep what is stored.
     sqlx::query!(
-        r#"INSERT INTO whatsapp_group_message (id, binding_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at,
-            kind, rich, mentions, forwarded)
-        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $12, $13, $14, $15)
-        ON CONFLICT (binding_id, person_id, source_id) DO UPDATE SET
-            deleted_at = COALESCE(whatsapp_group_message.deleted_at, excluded.deleted_at),
-            revision_content = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision
-                THEN excluded.revision_content ELSE whatsapp_group_message.revision_content END,
-            revised_at = CASE WHEN excluded.content_revision > whatsapp_group_message.content_revision
-                THEN excluded.revised_at ELSE whatsapp_group_message.revised_at END,
-            content_revision = GREATEST(whatsapp_group_message.content_revision, excluded.content_revision),
-            source_at = CASE WHEN $10 THEN whatsapp_group_message.source_at ELSE excluded.source_at END,
-            kind = CASE WHEN $10 THEN whatsapp_group_message.kind ELSE excluded.kind END,
-            rich = CASE WHEN $10 THEN whatsapp_group_message.rich ELSE COALESCE(excluded.rich, whatsapp_group_message.rich) END,
-            mentions = CASE WHEN $10 OR cardinality(excluded.mentions) = 0 THEN whatsapp_group_message.mentions ELSE excluded.mentions END,
-            forwarded = whatsapp_group_message.forwarded OR excluded.forwarded"#,
+        r#"INSERT INTO external_chat_message (id, chat_id, person_id, source_id, origin, source_at, content_revision, deleted_at, revision_content, revised_at,
+            kind, rich, mentions, forwarded, view_once)
+        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $12, $13, $14, $15, $16)
+        ON CONFLICT (chat_id, person_id, source_id) DO UPDATE SET
+            deleted_at = COALESCE(external_chat_message.deleted_at, excluded.deleted_at),
+            revision_content = CASE WHEN excluded.content_revision > external_chat_message.content_revision
+                THEN excluded.revision_content ELSE external_chat_message.revision_content END,
+            revised_at = CASE WHEN excluded.content_revision > external_chat_message.content_revision
+                THEN excluded.revised_at ELSE external_chat_message.revised_at END,
+            content_revision = GREATEST(external_chat_message.content_revision, excluded.content_revision),
+            source_at = CASE WHEN $10 THEN external_chat_message.source_at ELSE excluded.source_at END,
+            kind = CASE WHEN $10 THEN external_chat_message.kind ELSE excluded.kind END,
+            rich = CASE WHEN $10 THEN external_chat_message.rich ELSE COALESCE(excluded.rich, external_chat_message.rich) END,
+            mentions = CASE WHEN $10 OR cardinality(excluded.mentions) = 0 THEN external_chat_message.mentions ELSE excluded.mentions END,
+            forwarded = external_chat_message.forwarded OR excluded.forwarded,
+            view_once = external_chat_message.view_once OR excluded.view_once"#,
         binding.id,
         person,
         source,
@@ -298,13 +300,14 @@ pub(super) async fn reserve_in(
         entry_kind,
         rich,
         &message.mentions,
-        message.forwarded
+        message.forwarded,
+        message.view_once
     )
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
     sqlx::query!(
-        r#"INSERT INTO whatsapp_message_observation (binding_id, person_id, source_id, account_id, generation, observed_at)
+        r#"INSERT INTO whatsapp_message_observation (chat_id, person_id, source_id, account_id, generation, observed_at)
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING"#,
         binding.id,
         person,
@@ -318,7 +321,7 @@ pub(super) async fn reserve_in(
     .map_err(failure)?;
     let row = sqlx::query!(
         r#"SELECT id, message_id, origin, deleted_at, revision_content, content_revision, revised_at
-        FROM whatsapp_group_message WHERE binding_id = $1 AND person_id = $2 AND source_id = $3"#,
+        FROM external_chat_message WHERE chat_id = $1 AND person_id = $2 AND source_id = $3"#,
         binding.id,
         person,
         source
@@ -359,7 +362,7 @@ async fn reserve_attachments_in(
     tx: &mut Transaction<'_, Postgres>,
     r: &Reservation,
     message: &Message,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     for (ordinal, media) in message.media.iter().enumerate() {
         let state = if MediaKind::of(&media.mime).is_some() {
             "pending"
@@ -367,12 +370,12 @@ async fn reserve_attachments_in(
             "failed"
         };
         sqlx::query!(
-            r#"INSERT INTO whatsapp_group_attachment (binding_id, person_id, source_id, ordinal, document_id, sha256, state, account_id, locator, mime, filename, size,
+            r#"INSERT INTO external_chat_attachment (chat_id, person_id, source_id, ordinal, blob_id, sha256, state, account_id, locator, mime, filename, size,
                 width, height, duration_seconds, presentation)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-            ON CONFLICT (binding_id, person_id, source_id, ordinal) DO UPDATE SET account_id = excluded.account_id, locator = excluded.locator
-            WHERE whatsapp_group_attachment.state = 'pending'
-              AND (whatsapp_group_attachment.claimed_until IS NULL OR whatsapp_group_attachment.claimed_until < now())"#,
+            ON CONFLICT (chat_id, person_id, source_id, ordinal) DO UPDATE SET account_id = excluded.account_id, locator = excluded.locator
+            WHERE external_chat_attachment.state = 'pending'
+              AND (external_chat_attachment.claimed_until IS NULL OR external_chat_attachment.claimed_until < now())"#,
             r.binding.id,
             r.person,
             r.source,
@@ -397,25 +400,25 @@ async fn reserve_attachments_in(
     Ok(())
 }
 
-/// Persist the standalone group message or mutation, without group_id effects.
+/// Persist the standalone group message or mutation, without chat_id effects.
 pub(super) async fn persist_in(
     tx: &mut Transaction<'_, Postgres>,
     event: &InboundEvent,
     message: &Message,
     r: &Reservation,
-) -> LinkedResult<bool> {
+) -> ExternalChatResult<bool> {
     if message.kind == MessageKind::PollVote {
         let (Some(actor), Some(RichContent::PollVote(vote))) = (r.reaction_actor, &message.rich)
         else {
-            return Err(LinkedError::Invalid("poll vote without a choice").into());
+            return Err(ExternalChatError::Invalid("poll vote without a choice").into());
         };
         return Ok(sqlx::query!(
-            r#"INSERT INTO whatsapp_group_poll_vote (message_id, person_id, selected, user_id, source_id, revision, updated_at)
+            r#"INSERT INTO external_chat_poll_vote (message_id, person_id, selected, user_id, source_id, revision, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (message_id, person_id) DO UPDATE SET selected = excluded.selected, user_id = excluded.user_id,
                 source_id = excluded.source_id, revision = excluded.revision, updated_at = excluded.updated_at
             WHERE (excluded.revision, excluded.updated_at, excluded.source_id)
-                > (whatsapp_group_poll_vote.revision, whatsapp_group_poll_vote.updated_at, whatsapp_group_poll_vote.source_id)"#,
+                > (external_chat_poll_vote.revision, external_chat_poll_vote.updated_at, external_chat_poll_vote.source_id)"#,
             r.message,
             actor,
             &vote.selected,
@@ -431,19 +434,19 @@ pub(super) async fn persist_in(
             > 0);
     }
     if let Some(actor) = r.reaction_actor {
-        return Ok(sqlx::query!(r#"INSERT INTO whatsapp_group_reaction (message_id,person_id,emoji,user_id,source_id,revision,updated_at)
+        return Ok(sqlx::query!(r#"INSERT INTO external_chat_reaction (message_id,person_id,emoji,user_id,source_id,revision,updated_at)
             VALUES ($1,$2,$3,$4,$5,$6,$7)
             ON CONFLICT (message_id,person_id) DO UPDATE SET emoji = excluded.emoji,user_id = excluded.user_id,
                 source_id = excluded.source_id,revision = excluded.revision,updated_at = excluded.updated_at
-            WHERE (excluded.revision,excluded.updated_at,excluded.source_id) > (whatsapp_group_reaction.revision,whatsapp_group_reaction.updated_at,whatsapp_group_reaction.source_id)"#,
+            WHERE (excluded.revision,excluded.updated_at,excluded.source_id) > (external_chat_reaction.revision,external_chat_reaction.updated_at,external_chat_reaction.source_id)"#,
             r.message,actor,message.text,r.associated_user,message.source_id,message.revision,event.source_at)
             .execute(&mut **tx).await.map_err(failure)?.rows_affected() > 0);
     }
     let reply_to = if r.create {
         match message.target.as_ref() {
-            Some(target) => sqlx::query_scalar!(r#"SELECT m.id FROM whatsapp_group_message m
-                JOIN whatsapp_identity_alias a ON a.binding_id = m.binding_id AND a.person_id = m.person_id
-                WHERE m.binding_id = $1 AND m.source_id = $2 AND a.jid = $3 AND m.message_id IS NOT NULL"#,
+            Some(target) => sqlx::query_scalar!(r#"SELECT m.id FROM external_chat_message m
+                JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id
+                WHERE m.chat_id = $1 AND m.source_id = $2 AND a.jid = $3 AND m.message_id IS NOT NULL"#,
                 r.binding.id,target.source_id,target.sender_jid).fetch_optional(&mut **tx).await.map_err(failure)?,
             None => None,
         }
@@ -456,9 +459,9 @@ pub(super) async fn persist_in(
         r.revision_content.as_deref().unwrap_or(&message.text)
     };
     let changed = sqlx::query!(
-        r#"UPDATE whatsapp_group_message SET body = $4,
+        r#"UPDATE external_chat_message SET body = $4,
         reply_to = COALESCE(reply_to,$5), message_id = id
-        WHERE binding_id = $1 AND person_id = $2 AND source_id = $3
+        WHERE chat_id = $1 AND person_id = $2 AND source_id = $3
           AND (message_id IS NULL OR body IS DISTINCT FROM $4)"#,
         r.binding.id,
         r.person,
@@ -475,7 +478,7 @@ pub(super) async fn persist_in(
         reserve_attachments_in(tx, r, message).await?;
     }
     if r.deleted_at.is_some() {
-        sqlx::query!("UPDATE whatsapp_group_attachment SET state = 'deleted' WHERE binding_id = $1 AND person_id = $2 AND source_id = $3",r.binding.id,r.person,r.source)
+        sqlx::query!("UPDATE external_chat_attachment SET state = 'deleted', file_id = NULL WHERE chat_id = $1 AND person_id = $2 AND source_id = $3",r.binding.id,r.person,r.source)
             .execute(&mut **tx).await.map_err(failure)?;
     }
     Ok(r.create || changed || matches!(message.kind, MessageKind::Edit | MessageKind::Delete))
@@ -487,12 +490,12 @@ pub(super) async fn finish_in(
     tx: &mut Transaction<'_, Postgres>,
     r: &Reservation,
     changed: bool,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     if r.reaction_actor.is_none() {
         sqlx::query!(
-            r#"UPDATE whatsapp_group_message SET message_id = $4, effect_revision = effect_revision + CASE WHEN $5 THEN 1 ELSE 0 END,
+            r#"UPDATE external_chat_message SET message_id = $4, effect_revision = effect_revision + CASE WHEN $5 THEN 1 ELSE 0 END,
                 notification_retry_at = now(), origin = CASE WHEN $6 THEN 'macro' ELSE origin END
-            WHERE binding_id = $1 AND person_id = $2 AND source_id = $3"#,
+            WHERE chat_id = $1 AND person_id = $2 AND source_id = $3"#,
             r.binding.id,
             r.person,
             r.source,
@@ -505,8 +508,8 @@ pub(super) async fn finish_in(
         .map_err(failure)?;
     } else if changed {
         sqlx::query!(
-            r#"UPDATE whatsapp_group_message SET effect_revision = effect_revision + 1, notification_retry_at = now()
-            WHERE binding_id = $1 AND person_id = $2 AND source_id = $3"#,
+            r#"UPDATE external_chat_message SET effect_revision = effect_revision + 1, notification_retry_at = now()
+            WHERE chat_id = $1 AND person_id = $2 AND source_id = $3"#,
             r.binding.id,
             r.person,
             r.source
@@ -519,7 +522,7 @@ pub(super) async fn finish_in(
         sqlx::query!(
             r#"UPDATE whatsapp_send SET state = CASE WHEN state IN ('sending', 'unknown') THEN 'accepted' ELSE state END,
                 message_id = $4, claimed_epoch = NULL, updated_at = now()
-            WHERE group_id = $1 AND user_id = $2 AND allocated_source_id = $3 AND dispatch_started_at IS NOT NULL"#,
+            WHERE chat_id = $1 AND user_id = $2 AND allocated_source_id = $3 AND dispatch_started_at IS NOT NULL"#,
             r.binding.id,
             actor,
             r.source,
@@ -530,13 +533,13 @@ pub(super) async fn finish_in(
         .map_err(failure)?;
     }
     if changed {
-        notify(tx, signals::GROUP_EFFECTS, r.message).await?;
+        notify(tx, external_chat::signals::CHAT_EFFECTS, r.message).await?;
     }
     if changed || r.actor.is_some() {
         notify_change(
             tx,
-            signals::Change::Group {
-                group_id: r.binding.id,
+            Change::Chat {
+                chat_id: r.binding.id,
             },
         )
         .await?;
@@ -559,7 +562,7 @@ async fn resolve_sender_in(
     account: &Fenced,
     group: &str,
     message: &Message,
-) -> LinkedResult<Identity> {
+) -> ExternalChatResult<Identity> {
     let mut sender = message.sender.clone();
     if message.from_me
         && let Some(own) = &account.identity_jid
@@ -577,7 +580,7 @@ async fn resolve_sender_in(
         return Ok(sender);
     }
     sender.alternate_jid = sqlx::query_scalar!(
-        r#"SELECT p->>'jid' AS "jid!" FROM whatsapp_group_roster r
+        r#"SELECT p->>'jid' AS "jid!" FROM whatsapp_roster r
         CROSS JOIN LATERAL jsonb_array_elements(r.metadata->'participants') p
         WHERE r.account_id = $1 AND r.group_jid = $2 AND p->>'alternateJid' = $3
           AND p->>'jid' LIKE '%@s.whatsapp.net'
@@ -598,7 +601,7 @@ async fn retain_in(
     account: &Fenced,
     event: &InboundEvent,
     state: &str,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     let retained = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM whatsapp_inbound_event WHERE account_id = $1"#,
         account.id
@@ -607,7 +610,7 @@ async fn retain_in(
     .await
     .map_err(failure)?;
     if retained >= MAX_RETAINED_EVENTS {
-        return Err(LinkedError::Unavailable.into());
+        return Err(ExternalChatError::Backlogged.into());
     }
     let payload = serde_json::to_value(event).map_err(failure)?;
     sqlx::query!(
@@ -631,7 +634,7 @@ async fn apply_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     event: &InboundEvent,
-) -> LinkedResult<IngestOutcome> {
+) -> ExternalChatResult<IngestOutcome> {
     match &event.kind {
         InboundKind::Left => {
             groups::left_in(tx, account, &event.group_jid, event.observed_at).await?;
@@ -639,13 +642,13 @@ async fn apply_in(
         }
         InboundKind::Receipt(receipt) => {
             let stored = sqlx::query!(
-                r#"INSERT INTO whatsapp_participant_receipt (account_id, binding_id, source_id, participant_jid, receipt_state, source_at)
+                r#"INSERT INTO whatsapp_participant_receipt (account_id, chat_id, source_id, participant_jid, receipt_state, source_at)
                 SELECT $1, b.id, source.id, $5, $6, $7
-                FROM whatsapp_group b JOIN whatsapp_group_membership m ON m.binding_id = b.id
+                FROM external_chat b JOIN whatsapp_chat_membership m ON m.chat_id = b.id
                 CROSS JOIN (SELECT DISTINCT unnest($4::text[]) AS id) source
-                WHERE b.group_jid = $2 AND m.account_id = $1 AND m.generation = $3 AND m.consent_ended_at IS NULL
-                  AND whatsapp_group_can_view(b.id, $8)
-                ON CONFLICT (account_id, binding_id, source_id, participant_jid, receipt_state)
+                WHERE b.provider = 'whatsapp' AND b.remote_id = $2 AND m.account_id = $1 AND m.generation = $3 AND m.consent_ended_at IS NULL
+                  AND external_chat_can_view(b.id, $8)
+                ON CONFLICT (account_id, chat_id, source_id, participant_jid, receipt_state)
                 DO UPDATE SET source_at = GREATEST(whatsapp_participant_receipt.source_at, excluded.source_at)"#,
                 account.id,
                 event.group_jid,
@@ -721,12 +724,12 @@ async fn apply_in(
     }
 }
 
-impl PgLinkedRepository {
+impl PgWhatsAppRepository {
     pub(super) async fn ingest_event(
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<IngestOutcome> {
+    ) -> ExternalChatResult<IngestOutcome> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -748,7 +751,7 @@ impl PgLinkedRepository {
                 tx.commit().await.map_err(failure)?;
                 Ok(outcome)
             }
-            Err(error) if matches!(error.current_context(), LinkedError::Unavailable) => {
+            Err(error) if matches!(error.current_context(), ExternalChatError::Unavailable) => {
                 // Infrastructure failure: retain the event for retry when possible.
                 tx.rollback().await.map_err(failure)?;
                 let mut tx = self.pool.begin().await.map_err(failure)?;
@@ -758,6 +761,7 @@ impl PgLinkedRepository {
                 tracing::warn!(
                     event_id = %event.event_id,
                     code = error.current_context().code(),
+                    error = %error,
                     "WhatsApp event deferred after a persistence failure"
                 );
                 Ok(IngestOutcome::Deferred)
@@ -782,15 +786,15 @@ impl PgLinkedRepository {
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let observed = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM whatsapp_group g
-            JOIN whatsapp_group_membership m ON m.binding_id=g.id
-            WHERE g.group_jid=$1 AND g.state='active' AND m.account_id=$2 AND m.generation=$3
+            r#"SELECT EXISTS(SELECT 1 FROM external_chat g
+            JOIN whatsapp_chat_membership m ON m.chat_id=g.id
+            WHERE g.provider='whatsapp' AND g.remote_id=$1 AND g.state='active' AND m.account_id=$2 AND m.generation=$3
               AND m.consent_ended_at IS NULL AND m.remote_member AND m.reconciled
-              AND whatsapp_group_can_view(g.id,$4)) AS "observed!""#,
+              AND external_chat_can_view(g.id,$4)) AS "observed!""#,
             event.group_jid,
             account.id,
             account.generation,
@@ -810,7 +814,7 @@ impl PgLinkedRepository {
         .await
         .map_err(failure)?;
         if retained >= MAX_RETAINED_EVENTS {
-            return Err(LinkedError::Unavailable.into());
+            return Err(ExternalChatError::Backlogged.into());
         }
         let payload = serde_json::to_value(event).map_err(failure)?;
         sqlx::query!(
@@ -831,7 +835,7 @@ impl PgLinkedRepository {
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<InboundEvent>> {
+    ) -> ExternalChatResult<Vec<InboundEvent>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let dropped = sqlx::query_scalar!(

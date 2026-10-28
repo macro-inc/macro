@@ -1,3 +1,4 @@
+import type { ListFilterGroup } from '@app/components/view-shell';
 import type { CrmCompanyEntity } from '@entity';
 import {
   type Accessor,
@@ -5,6 +6,18 @@ import {
   createContext,
   useContext,
 } from 'solid-js';
+import type { SetStoreFunction, Store } from 'solid-js/store';
+import type { CrmActivityViewState } from '../core/activity-view';
+
+export type ActivityFilters = {
+  groups: Accessor<ListFilterGroup<string, string>[]>;
+  activeCount: Accessor<number>;
+  isSelected(group: string, option: string): boolean;
+  selectedIds(group: string): string[];
+  setSelected(group: string, option: string, selected: boolean): void;
+  clear(): void;
+};
+
 import type {
   CrmDisplayOptions,
   CrmListColumnId,
@@ -82,12 +95,29 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
-  createActivity(tab: Accessor<CrmSoupActivityTab>): ItemListSource;
+  createActivity(
+    tab: Accessor<CrmSoupActivityTab>,
+    options?: Accessor<CrmActivityViewState>
+  ): ItemListSource;
   /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
   createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
   openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
   openEmailComposer(recipient?: string): void;
-  openTaskComposer(): void;
+  createActivityState(
+    tab: CrmSoupActivityTab
+  ): readonly [
+    Store<CrmActivityViewState>,
+    SetStoreFunction<CrmActivityViewState>,
+  ];
+  createActivityFilters(
+    tab: CrmSoupActivityTab,
+    state: Store<CrmActivityViewState>,
+    setState: SetStoreFunction<CrmActivityViewState>
+  ): ActivityFilters;
+  ActivityTasks: Component<{ title?: import('solid-js').JSX.Element }>;
+  openTaskComposer(
+    options?: import('../../tasks-view/types').TaskCreateOptions
+  ): void;
   /** Newest mounted record source wins; cleanup restores the parent record source. */
   registerTaskComposerRecord(
     source: Accessor<CrmTaskRecord | undefined>

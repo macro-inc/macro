@@ -1,10 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import {
-  Macro,
-  WhatsAppMessage,
-  WhatsAppSend,
-  WhatsAppUpload,
-} from '../src/macro';
+import { ExternalChat, Macro, WhatsAppChat } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -13,77 +8,12 @@ afterEach(() => {
 
 const account = {
   id: 'account',
-  user_id: 'owner',
+  userId: 'owner',
   state: 'connected',
-  identity_jid: '15550000001@s.whatsapp.net',
-  authorization_generation: 1,
+  identityJid: '15550000001@s.whatsapp.net',
+  authorizationGeneration: 1,
 };
-const summary = {
-  id: 'group',
-  name: 'Support',
-  user_id: 'owner',
-  unread_count: 1,
-  last_message_at: '2026-10-21',
-  can_send: true,
-  send_reason: null,
-};
-const remote = {
-  jid: '12036301@g.us',
-  name: 'Remote support',
-  observedAt: '2026-10-21',
-  participants: [],
-  announce: false,
-  disappearing: false,
-  community: false,
-  group: null,
-  shared: null,
-};
-const detail = {
-  ...summary,
-  roster: remote,
-  sending_identity: account.identity_jid,
-  access_level: 'owner',
-  share_permission: {
-    id: 'permission',
-    owner: 'owner',
-    linkShare: null,
-    teamShareAccessLevel: null,
-  },
-  limits: {
-    text_limit_bytes: 16384,
-    mutation_window_seconds: 600,
-    max_attachments: 1,
-    attachment_limit_bytes: 33554432,
-    attachment_types: ['text/plain'],
-    mutations: ['reaction', 'edit', 'delete'],
-  },
-};
-const progress = {
-  id: 'intent',
-  group_id: 'group',
-  user_id: 'owner',
-  state: 'unknown',
-  message_id: null,
-  error_code: null,
-  created_at: '2026-10-21',
-  payload: {
-    idempotency_key: 'stable',
-    message: { type: 'text', text: 'hello' },
-  },
-};
-const message = {
-  id: 'message',
-  sender: { person_id: 'person', user_id: null, name: 'Customer' },
-  body: 'hello',
-  reply_to: null,
-  sent_at: '2026-10-21',
-  received_at: '2026-10-21',
-  edited_at: null,
-  deleted: false,
-  reactions: [],
-  attachments: [],
-  delivery_state: null,
-};
+const remote = { jid: '12036301@g.us' };
 
 function fixture(handler: (request: Request) => Response | Promise<Response>) {
   const requests: Request[] = [];
@@ -96,33 +26,59 @@ function fixture(handler: (request: Request) => Response | Promise<Response>) {
     token: 'owner-api-token',
     hosts: { storage: 'https://storage.example.test' },
   });
-  return { macro, requests, group: macro.whatsapp.byId('group') };
+  return { macro, requests };
 }
 
-test('shared groups can be listed without a WhatsApp connection and handles fetch standalone detail', async () => {
-  const { macro, requests } = fixture((request) =>
-    Response.json(
-      new URL(request.url).pathname.endsWith('/whatsapp-groups')
-        ? [summary]
-        : detail,
-    ),
+test('the chat list shows a chat someone else shared instead of adding it again', async () => {
+  const { macro } = fixture(() =>
+    Response.json({
+      chats: [
+        {
+          jid: remote.jid,
+          kind: 'group',
+          name: 'Remote support',
+          lastActivityAt: null,
+          archived: false,
+          pinned: false,
+          added: null,
+          shared: {
+            id: 'theirs',
+            name: 'Remote support',
+            ownerId: 'macro|ana@example.com',
+          },
+          canAdd: false,
+          cannotAddReason: null,
+          community: null,
+        },
+        {
+          jid: '12036399@g.us',
+          kind: 'group',
+          name: 'Neighbours',
+          lastActivityAt: null,
+          archived: false,
+          pinned: false,
+          added: null,
+          shared: null,
+          canAdd: false,
+          cannotAddReason: 'community',
+          community: null,
+        },
+      ],
+    }),
   );
-  const groups = await macro.whatsapp.groups();
-  expect(groups[0].entityType).toBe('whatsapp_group');
-  expect(await groups[0].name()).toBe('Support');
-  expect(await groups[0].canSend()).toBe(true);
-  expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
-    '/meta/linked/whatsapp-groups',
-    '/meta/linked/whatsapp-groups/group',
-  ]);
-  expect(JSON.stringify(groups[0])).not.toContain('owner-api-token');
+  const [shared, community] = await macro.whatsapp.chats();
+  expect(await shared.added()).toBeUndefined();
+  const theirs = await shared.shared();
+  expect(theirs).toBeInstanceOf(ExternalChat);
+  expect(theirs?.id).toBe('theirs');
+  expect(await community.cannotAddReason()).toBe('community');
 });
 
-test('the chat list lists groups and direct chats and adds a group by its handle', async () => {
+test('the chat list lists groups and direct chats and adds one as an external chat', async () => {
   const { macro, requests } = fixture((request) =>
     Response.json(
       request.method === 'POST'
-        ? { group_id: 'group' }
+        ? { chatId: 'chat' }
         : {
             chats: [
               {
@@ -132,10 +88,11 @@ test('the chat list lists groups and direct chats and adds a group by its handle
                 lastActivityAt: '2026-10-22T10:00:00Z',
                 archived: false,
                 pinned: true,
-                group: null,
+                added: null,
                 shared: null,
-                canAdd: false,
-                cannotAddReason: "direct chats can't be added to Macro yet",
+                canAdd: true,
+                cannotAddReason: null,
+                community: null,
               },
               {
                 jid: remote.jid,
@@ -144,10 +101,15 @@ test('the chat list lists groups and direct chats and adds a group by its handle
                 lastActivityAt: null,
                 archived: false,
                 pinned: false,
-                group: null,
+                added: null,
                 shared: null,
                 canAdd: true,
                 cannotAddReason: null,
+                community: {
+                  id: '12036399@g.us',
+                  name: 'Neighbours',
+                  announcements: false,
+                },
               },
             ],
           },
@@ -155,156 +117,58 @@ test('the chat list lists groups and direct chats and adds a group by its handle
   );
   const [direct, group] = await macro.whatsapp.chats();
   expect(await direct.kind()).toBe('direct');
-  expect(await direct.cannotAddReason()).toBe(
-    "direct chats can't be added to Macro yet",
-  );
+  expect(await direct.canAdd()).toBe(true);
   expect(await group.canAdd()).toBe(true);
-  const adopted = await group.adopt();
-  expect(adopted.id).toBe('group');
+  expect((await group.community())?.name).toBe('Neighbours');
+  expect((await group.community())?.chat.id).toBe('12036399@g.us');
+  expect(await direct.community()).toBeUndefined();
+  const added = await group.add();
+  expect(added).toBeInstanceOf(ExternalChat);
+  expect(added.id).toBe('chat');
   expect(requests.map((r) => new URL(r.url).pathname)).toEqual([
-    '/meta/linked/chats',
-    '/meta/linked/groups/adopt',
+    '/whatsapp/chats',
+    '/external-chats',
   ]);
-  expect(await requests[1].json()).toEqual({ group_jid: remote.jid });
+  expect(await requests[1].json()).toEqual({
+    provider: 'whatsapp',
+    remoteId: remote.jid,
+    kind: 'group',
+  });
 });
 
 test('account access stays owner-scoped and no account normalizes to undefined', async () => {
   let current: unknown = { account: null };
-  const { macro } = fixture(() => Response.json(current));
+  const { macro, requests } = fixture(() => Response.json(current));
   expect(await macro.whatsapp.account()).toBeUndefined();
   current = { account };
   expect((await macro.whatsapp.account())?.id).toBe('account');
+  expect(new URL(requests[0].url).pathname).toBe('/whatsapp/account');
 });
 
-test('timeline pagination is lazy and messages use their own group-scoped handles', async () => {
-  const { group, requests } = fixture((request) =>
-    Response.json(
-      new URL(request.url).searchParams.has('before')
-        ? { messages: [{ ...message, id: 'older' }], next_cursor: null }
-        : { messages: [message], next_cursor: 'message' },
-    ),
-  );
-  const iterator = group.messages({ limit: 1 });
-  expect(requests).toHaveLength(0);
-  const first = await iterator.next();
-  expect(first.value).toBeInstanceOf(WhatsAppMessage);
-  expect(first.value && (await first.value.body())).toBe('hello');
-  expect(requests).toHaveLength(1);
-  await iterator.return(undefined);
-  expect(requests).toHaveLength(1);
-  const all = [];
-  for await (const item of group.messages({ limit: 1 })) all.push(item.id);
-  expect(all).toEqual(['message', 'older']);
-  expect(new URL(requests[2].url).searchParams.get('before')).toBe('message');
-});
-
-test('read cursors and permission changes use standalone routes and reject cross-group messages', async () => {
-  const { macro, group, requests } = fixture(
-    () => new Response(null, { status: 204 }),
-  );
-  await group.markRead(WhatsAppMessage.byId(macro._client, group, 'message'));
-  expect(await requests[0].json()).toEqual({ message_id: 'message' });
-  await group.updatePermissions({ teamShareAccessLevel: 'view' });
-  expect(requests[1].method).toBe('PATCH');
-  expect(new URL(requests[1].url).pathname).toBe(
-    '/meta/linked/whatsapp-groups/group/permissions',
-  );
-  const other = macro.whatsapp.byId('other');
-  await expect(
-    group.markRead(WhatsAppMessage.byId(macro._client, other, 'message')),
-  ).rejects.toThrow('another group');
-  expect(requests).toHaveLength(2);
-});
-
-test('owner-token send preserves intent and unknown delivery is read without resending', async () => {
-  const { group, requests } = fixture((request) =>
-    Response.json(
-      request.method === 'POST' &&
-        new URL(request.url).pathname.endsWith('/sends')
-        ? progress
-        : [progress],
-    ),
-  );
-  const sent = await group.reply(
-    { type: 'text', text: 'hello' },
-    { idempotencyKey: 'stable' },
-  );
-  expect(sent).toBeInstanceOf(WhatsAppSend);
-  expect(sent.group.id).toBe('group');
-  expect(await sent.state()).toBe('unknown');
-  expect(await requests[0].json()).toEqual({
-    idempotency_key: 'stable',
-    message: { type: 'text', text: 'hello', mentions: [] },
-  });
-  await sent.refresh();
-  expect(await sent.state()).toBe('unknown');
-  expect(
-    requests.filter(
-      (request) =>
-        new URL(request.url).pathname.endsWith('/sends') &&
-        request.method === 'POST',
-    ),
-  ).toHaveLength(1);
-});
-
-test('staged uploads stay scoped to their adopted group and carry no credentials', async () => {
-  const { macro, group, requests } = fixture(() =>
+test('a chat handle reads its entry from the chat list', async () => {
+  const { macro, requests } = fixture(() =>
     Response.json({
-      upload_id: 'upload',
-      filename: 'note.txt',
-      kind: 'document',
+      chats: [
+        {
+          jid: remote.jid,
+          kind: 'group',
+          name: 'Remote support',
+          lastActivityAt: null,
+          archived: false,
+          pinned: false,
+          added: { id: 'chat', name: 'Remote support' },
+          shared: null,
+          canAdd: false,
+          cannotAddReason: null,
+          community: null,
+        },
+      ],
     }),
   );
-  const upload = await group.upload(
-    new File(['hello'], 'note.txt', { type: 'text/plain' }),
-  );
-  expect(upload).toBeInstanceOf(WhatsAppUpload);
-  expect(upload.groupId).toBe(group.id);
-  expect(JSON.stringify(upload)).not.toContain('owner-api-token');
-  const other = WhatsAppUpload.byId(
-    macro.whatsapp.byId('other'),
-    'other-upload',
-  );
+  const chat = WhatsAppChat.byId(macro._client, remote.jid);
+  expect((await chat.added())?.id).toBe('chat');
+  expect(new URL(requests[0].url).pathname).toBe('/whatsapp/chats');
   await expect(
-    group.reply({ type: 'media', upload: other }, { idempotencyKey: 'stable' }),
-  ).rejects.toThrow('another group');
-  expect(requests).toHaveLength(1);
-});
-
-test('mutations and replies accept only standalone WhatsApp messages', async () => {
-  const { macro, group, requests } = fixture(() => Response.json(progress));
-  const target = WhatsAppMessage.byId(macro._client, group, 'message');
-  await group.reply(
-    { type: 'mutation', message: target, operation: 'reaction', text: '👍' },
-    { idempotencyKey: 'reaction' },
-  );
-  expect(await requests[0].json()).toEqual({
-    idempotency_key: 'reaction',
-    message: {
-      type: 'mutation',
-      message_id: 'message',
-      operation: 'reaction',
-      text: '👍',
-    },
-  });
-});
-
-test('a text reply names the participants it mentions by their WhatsApp ids', async () => {
-  const { group, requests } = fixture(() => Response.json(progress));
-  await group.reply(
-    {
-      type: 'text',
-      text: 'hi @15550001111',
-      mentions: ['15550001111@s.whatsapp.net'],
-    },
-    { idempotencyKey: 'mention' },
-  );
-  expect(await requests[0].json()).toEqual({
-    idempotency_key: 'mention',
-    message: {
-      type: 'text',
-      text: 'hi @15550001111',
-      mentions: ['15550001111@s.whatsapp.net'],
-    },
-  });
+    WhatsAppChat.byId(macro._client, 'missing@g.us').name(),
+  ).rejects.toThrow('not available');
 });

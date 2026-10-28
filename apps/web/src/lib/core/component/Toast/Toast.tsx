@@ -305,7 +305,7 @@ function ToastContent(props: {
             class="macro-toast-corner-close shrink-0"
             onClick={() => props.onUserDismiss?.()}
           >
-            <XIcon class="size-3.5" />
+            <XIcon class="size-2.5" />
           </Toast.CloseButton>
         </div>
       </div>

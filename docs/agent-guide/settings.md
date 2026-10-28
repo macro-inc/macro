@@ -282,14 +282,18 @@ Left nav (feature and platform gates still apply):
 - **Developer**: Runtimes, MCP server, API Keys, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact version and build-date card in the
-desktop app. The date is when the running app bundle was built, not when it was
-installed on the computer. In the browser it links to the latest desktop release
+**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
+date card in the desktop app. Build date is when the running JavaScript was
+built, not when it was installed on the computer. Bundle date is when the active
+OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
+the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app** and offers a QR code
-to download **Macro** from the App Store.
+The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
+code to download **Macro** from the App Store; inside the iOS and Android apps
+it shows the same Version, Build date, and Bundle date card as the desktop app,
+and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -349,6 +353,22 @@ clipboard. Valid ThemeV3 (or legacy ThemeV2) JSON is imported as a custom theme
 and applied immediately. Copy a theme with the clipboard button beside any
 theme pill, then import it on another device or share it in a message for
 others to copy and import.
+
+Appearance ends with **Language**. On a team, **Team language** sets the default
+interface language for every member; only admins and owners can change it, and
+others see it disabled with an explanation. It starts at **Automatic (each
+person's browser language)**. **Your language** starts at **Use team language
+(…)**, or **Automatic (…)** naming the browser's language when the team has none
+or there is no team, and overrides the team language for the signed-in person
+only; without a team it is the only dropdown. A browser language the app isn't
+offered in falls back to English. Menus, navigation, the command and
+create menus, and settings navigation switch language as soon as the setting
+saves; page contents and user data stay as written. The choice is remembered on
+the device, so the next launch starts in the same language. Once that resolved
+language has loaded, PostHog stores it on the person as `interface_language`
+(a tag such as `en` or `zh-Hans`). A usage pie is a Trends insight on
+`$pageview`, unique users, broken down by the person property
+`interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Runtimes.
@@ -461,7 +481,9 @@ Reference captures from the isolated billing fixture: [returning customer](media
 and [subscription recovery](media/billing/subscription-recovery.png). These show
 phone-width layouts; payment-provider interactions are covered separately.
 
-`Get Max` keeps standard paid terms. Prices read `/ month` for solo users and
+`Get Max` keeps standard paid terms and never offers a trial. A Pro trial that
+upgrades to Max is charged today; the card says `Charged today. The Pro trial ends.`
+A paid Pro upgrade stays prorated for the rest of the period. Prices read `/ month` for solo users and
 `per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
 the price when narrow. Free lists 2 connected email accounts; Pro and Max list
 unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
@@ -500,7 +522,9 @@ Team members who cannot manage billing see the notice without its action.
 
 `Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, Pro downgrades start at renewal.
+menu; Max upgrades are immediate and prorated, except the first Max seat on a
+trialing team, which ends the trial and bills Max for a new cycle today.
+Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
 scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
@@ -516,8 +540,8 @@ connected) or `Specific apps`, which reveals a `Search connectors` box over the 
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
 that opens the Pipedream Connect flow inside the web page. Native apps open
-consent in the system browser; choose **Return to Macro** after authorization
-to save the connection in the waiting app. Unconnected picks never block
+consent in the system browser, which returns to the waiting app on its own after
+authorization (**Return to Macro** is the fallback link). Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
@@ -570,6 +594,13 @@ page automatically and preserves category groups. A failed next page keeps loade
 apps visible and offers Retry. Use the category picker below
 All apps to show one group; changing the search returns to all categories. Group
 counts reflect the currently loaded results.
+Overlaid catalog apps (the `mcp_overlays` table, served at
+`GET /pipedream/mcp/overlays`) look the same in the catalog but never open
+Pipedream: their plus action opens the vendor's own MCP OAuth consent in a new
+tab (system browser on native) and the card turns connected once that server is
+authorized, after which the app appears with the custom MCP servers under
+Installed. Verify with an overlaid app such as Sentry or Asana; completing a
+Pipedream connection for one answers 409.
 Featured and catalog cards use two columns on wide screens and one on narrow
 screens, with a plus action for available apps. Featured cards show app names
 without descriptions, and catalog descriptions
@@ -625,7 +656,10 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
-Under the runtime, `Answering a mention` chooses between `Coding agent` (a
+`Advanced` starts collapsed on desktop and mobile, showing only its heading,
+summary, and `Show` action, without an empty card beneath it. `Show` reveals the
+settings; `Hide` collapses them again and preserves the selected options.
+Under `Advanced`, `Answering a mention` chooses between `Coding agent` (a
 channel mention is answered with a magic chip that opens into the live session)
 and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
 agent's own setting and always saved: a new form starts from the selected runtime
@@ -642,7 +676,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents (Claude Code, Codex, OpenCode, OpenClaw), offers a workspace folder and a Full access checkbox, and `Start running agents here` configures, pairs, and starts the daemon — the pairing is approved automatically, no code is typed. While running the card shows the agent and workspace with a `Stop` action; a set-up-but-stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 

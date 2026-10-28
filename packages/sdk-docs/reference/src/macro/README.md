@@ -220,6 +220,42 @@ Re-exports [EntityReference](../entities/reference/type-aliases/EntityReference.
 
 ***
 
+### ExternalChat
+
+Re-exports [ExternalChat](../entities/external-chat/chat/classes/ExternalChat.md)
+
+***
+
+### ExternalChatContent
+
+Re-exports [ExternalChatContent](../entities/external-chat/chat/type-aliases/ExternalChatContent.md)
+
+***
+
+### ExternalChatMessage
+
+Re-exports [ExternalChatMessage](../entities/external-chat/message/classes/ExternalChatMessage.md)
+
+***
+
+### ExternalChatParticipant
+
+Re-exports [ExternalChatParticipant](../entities/external-chat/participant/classes/ExternalChatParticipant.md)
+
+***
+
+### ExternalChatSend
+
+Re-exports [ExternalChatSend](../entities/external-chat/send/classes/ExternalChatSend.md)
+
+***
+
+### ExternalChatUpload
+
+Re-exports [ExternalChatUpload](../entities/external-chat/upload/classes/ExternalChatUpload.md)
+
+***
+
 ### FoldedAgentSessionLog
 
 Re-exports [FoldedAgentSessionLog](../entities/agent-sessions/agent-session/type-aliases/FoldedAgentSessionLog.md)
@@ -628,33 +664,9 @@ Re-exports [WhatsAppChat](../entities/whatsapp/chat/classes/WhatsAppChat.md)
 
 ***
 
-### WhatsAppGroup
+### WhatsAppCommunity
 
-Re-exports [WhatsAppGroup](../entities/whatsapp/group/classes/WhatsAppGroup.md)
-
-***
-
-### WhatsAppMessage
-
-Re-exports [WhatsAppMessage](../entities/whatsapp/message/classes/WhatsAppMessage.md)
-
-***
-
-### WhatsAppReply
-
-Re-exports [WhatsAppReply](../entities/whatsapp/group/type-aliases/WhatsAppReply.md)
-
-***
-
-### WhatsAppSend
-
-Re-exports [WhatsAppSend](../entities/whatsapp/send/classes/WhatsAppSend.md)
-
-***
-
-### WhatsAppUpload
-
-Re-exports [WhatsAppUpload](../entities/whatsapp/upload/classes/WhatsAppUpload.md)
+Re-exports [WhatsAppCommunity](../entities/whatsapp/chat/type-aliases/WhatsAppCommunity.md)
 
 ***
 

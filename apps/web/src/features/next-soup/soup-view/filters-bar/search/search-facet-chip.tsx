@@ -1,5 +1,5 @@
 import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store/types';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import XIcon from '@icon/system/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { Button, Dropdown, Layer, SingleSelectCheck } from '@ui';
@@ -18,6 +18,7 @@ interface SearchFacetChipProps {
   facet: SearchFacetVM;
   open?: Accessor<boolean>;
   setOpen?: (v: boolean) => void;
+  onPickerClose?: () => void;
 }
 
 const ChipDivider = () => (
@@ -67,7 +68,7 @@ const SingleValueSegment = (props: {
       >
         <ValueDisplay values={props.facet.values()} />
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content portalScope="local">
         <Dropdown.Group>
           <For each={props.facet.options}>
             {(option) => (
@@ -108,7 +109,7 @@ const ModeSegment = (props: { mode: FacetModeVM }) => (
     >
       {MODE_OPTIONS.find((o) => o.id === props.mode.value())?.label}
     </Dropdown.Trigger>
-    <Dropdown.Content>
+    <Dropdown.Content portalScope="local">
       <Dropdown.Group>
         <For each={MODE_OPTIONS}>
           {(option) => (
@@ -127,13 +128,15 @@ const ModeSegment = (props: { mode: FacetModeVM }) => (
 );
 
 const MultiValueSegment = (props: {
+  onPickerClose?: () => void;
   facet: Extract<SearchFacetVM, { kind: 'multi' }>;
 }) => {
-  const panel = useSplitPanelOrThrow();
+  const panel = useSplitPanel();
   const [open, setOpen] = createSignal(false);
 
   return (
     <SearchableMultiSelect
+      portalScope="local"
       options={props.facet.options}
       activeIds={props.facet.activeIds}
       onChange={props.facet.onChange}
@@ -146,12 +149,17 @@ const MultiValueSegment = (props: {
         setOpen(v);
         if (!v) {
           queueMicrotask(() =>
-            panel.panelRef()?.focus({ preventScroll: true })
+            props.onPickerClose
+              ? props.onPickerClose()
+              : panel?.panelRef()?.focus({ preventScroll: true })
           );
         }
       }}
     >
-      <Combobox.Trigger class="inline-flex h-full items-center gap-1.5 px-2 hover:bg-hover active:bg-active">
+      <Combobox.Trigger
+        aria-label={`Change ${props.facet.label} filter`}
+        class="inline-flex h-full items-center gap-1.5 px-2 hover:bg-hover active:bg-active"
+      >
         <ValueDisplay values={props.facet.values()} />
       </Combobox.Trigger>
     </SearchableMultiSelect>
@@ -198,7 +206,12 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
           )}
         </Match>
         <Match when={props.facet.kind === 'multi' && props.facet}>
-          {(facet) => <MultiValueSegment facet={facet()} />}
+          {(facet) => (
+            <MultiValueSegment
+              facet={facet()}
+              onPickerClose={props.onPickerClose}
+            />
+          )}
         </Match>
       </Switch>
 
@@ -206,6 +219,7 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
         <ChipDivider />
         <Button
           class="rounded-none h-full not-disabled:hover:text-failure"
+          aria-label={`Clear ${props.facet.label} filter`}
           size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();

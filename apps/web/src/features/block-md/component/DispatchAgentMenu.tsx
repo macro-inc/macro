@@ -334,10 +334,10 @@ export function DispatchAgentButton(
       <ButtonGroup
         variant="outline"
         size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-        depth={2}
       >
         <Dynamic
           component={lastUsed().key === 'copy' ? CopyButton : Button}
+          variant="ghost"
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
           class="@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0"
@@ -354,7 +354,7 @@ export function DispatchAgentButton(
         </Dynamic>
         <ButtonGroup.Divider />
         <Dropdown.Trigger
-          variant="outline"
+          variant="ghost"
           size={props.showPrimaryLabel ? 'icon-md' : 'icon-sm'}
           label="Agent options"
         >

@@ -76,6 +76,7 @@ export function TopBar() {
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },
+          { op: 'copy' as const },
           { op: 'moveToProject' as const },
           { op: 'delete' as const },
         ]

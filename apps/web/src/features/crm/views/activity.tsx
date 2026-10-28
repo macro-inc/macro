@@ -1,8 +1,10 @@
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
-import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
+import { type JSX, Show } from 'solid-js';
+import { ActivityControls } from '../components/activity-controls';
 import { CrmListEmpty } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmActivityTab, CrmSoupActivityTab } from '../core/navigation';
@@ -11,13 +13,6 @@ import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
 const CONTENT = {
-  tasks: {
-    title: 'Tasks',
-    graphic: EmptyStateTasksGraphic,
-    action: 'New task',
-    description:
-      'Create a task and choose a company or person to keep your follow-ups here.',
-  },
   email: {
     title: 'Email',
     graphic: EmptyStateEmailGraphic,
@@ -41,11 +36,12 @@ const CONTENT = {
   },
 };
 
-/** Workspace activity shares the paged rows and states of record sections. */
+/** Workspace activity combines normal view controls with the fixed CRM scope. */
 export function CrmActivityView(props: {
   tab: CrmActivityTab;
   title?: JSX.Element;
 }) {
+  const crm = useCrmContext();
   const tab = () => (props.tab === 'databases' ? undefined : props.tab);
   return (
     <Show
@@ -53,18 +49,36 @@ export function CrmActivityView(props: {
       keyed
       fallback={<CrmDatabasesView title={props.title} />}
     >
-      {(current) => <ActivityList tab={current} title={props.title} />}
+      {(current) => (
+        <Show
+          when={current !== 'tasks' ? current : undefined}
+          keyed
+          fallback={<crm.ActivityTasks title={props.title} />}
+        >
+          {(activity) => (
+            <TagSetsQueryProvider>
+              <ActivityList tab={activity} title={props.title} />
+            </TagSetsQueryProvider>
+          )}
+        </Show>
+      )}
     </Show>
   );
 }
 
-function ActivityList(props: { tab: CrmSoupActivityTab; title?: JSX.Element }) {
+function ActivityList(props: {
+  tab: Exclude<CrmSoupActivityTab, 'tasks'>;
+  title?: JSX.Element;
+}) {
   const crm = useCrmContext();
-  const source = crm.createActivity(() => props.tab);
-  const [search, setSearch] = createSignal('');
+  const [state, setState] = crm.createActivityState(props.tab);
+  const filters = crm.createActivityFilters(props.tab, state, setState);
+  const source = crm.createActivity(
+    () => props.tab,
+    () => state
+  );
   const content = () => CONTENT[props.tab];
   const create = () => {
-    if (props.tab === 'tasks') return crm.openTaskComposer();
     if (props.tab === 'email') return crm.openEmailComposer();
     return crm.openCreateItem(props.tab);
   };
@@ -72,22 +86,49 @@ function ActivityList(props: { tab: CrmSoupActivityTab; title?: JSX.Element }) {
     <ActivitySection
       label={content().title}
       title={props.title}
-      search={search()}
-      onSearchChange={setSearch}
+      search={state.search}
+      onSearchChange={(search) => setState('search', search)}
       createLabel={content().action}
       onCreate={create}
+      controls={
+        <ActivityControls
+          label={props.tab}
+          state={state}
+          filters={filters}
+          setSort={(sort) => setState('sort', sort)}
+          setDirection={(direction) => setState('direction', direction)}
+          setGroupBy={(groupBy) => setState('groupBy', groupBy)}
+        />
+      }
     >
       <RecordItemList
         source={source}
-        search={search()}
-        onClearSearch={() => setSearch('')}
+        search={state.search}
+        onClearSearch={() => setState('search', '')}
+        groupByDate={state.groupBy === 'date'}
+        dateField={state.sort}
+        referencePropertyIds={[
+          SYSTEM_PROPERTY_IDS.COMPANIES,
+          SYSTEM_PROPERTY_IDS.CONTACTS,
+        ]}
         emptyContent={
-          <CrmListEmpty
-            graphic={content().graphic}
-            title={`No ${props.tab} linked yet`}
-            description={content().description}
-            action={{ label: content().action, onClick: create }}
-          />
+          <Show
+            when={filters.activeCount() === 0}
+            fallback={
+              <CrmListEmpty
+                title={`No ${props.tab} match these filters`}
+                description="Clear your filters to see all CRM-linked items."
+                action={{ label: 'Clear filters', onClick: filters.clear }}
+              />
+            }
+          >
+            <CrmListEmpty
+              graphic={content().graphic}
+              title={`No ${props.tab} linked yet`}
+              description={content().description}
+              action={{ label: content().action, onClick: create }}
+            />
+          </Show>
         }
       />
     </ActivitySection>

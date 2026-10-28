@@ -3,6 +3,7 @@ import {
   useViewControlHotkeys,
   useViewShell,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -580,9 +581,9 @@ export function CrmWorkspaceView(props: {
                     <ArrowLeftIcon class="size-4" />
                   </Button>
                 </Tooltip>
-                <h1 class="flex h-7 min-w-0 flex-1 items-center text-sm font-semibold tracking-[-0.03em]">
-                  <span class="truncate">CRM settings</span>
-                </h1>
+                <ViewSidebar.Title caret={false} class="h-7 flex-1">
+                  CRM settings
+                </ViewSidebar.Title>
               </div>
               {/* The header above already clears the status bar on touch. */}
               <div class="min-h-0 min-w-0 flex-1 [--mobile-content-inset-top:0px]">
@@ -699,12 +700,9 @@ export function CrmWorkspaceView(props: {
                       <NavigationToggle onExpand={() => setCollapsed(false)}>
                         <Suspense>{sidebar()}</Suspense>
                       </NavigationToggle>
-                      <h1
-                        class="min-w-0 truncate text-sm font-semibold"
-                        title={title()}
-                      >
+                      <ViewSidebar.Title caret={false} title={title()}>
                         {title()}
-                      </h1>
+                      </ViewSidebar.Title>
                     </div>
                   }
                 />
@@ -748,12 +746,9 @@ export function CrmWorkspaceView(props: {
                     <NavigationToggle onExpand={() => setCollapsed(false)}>
                       <Suspense>{sidebar()}</Suspense>
                     </NavigationToggle>
-                    <h1
-                      class="min-w-0 truncate text-sm font-semibold"
-                      title={title()}
-                    >
+                    <ViewSidebar.Title caret={false} title={title()}>
                       {title()}
-                    </h1>
+                    </ViewSidebar.Title>
                   </div>
                 }
               >

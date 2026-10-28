@@ -79,6 +79,15 @@ pub(crate) struct Group {
     pub(crate) admins: Vec<String>,
     /// The group description, if set.
     pub(crate) description: Option<String>,
+    /// Disappearing-messages timer in seconds; `Some(0)` once turned off,
+    /// which WhatsApp still lists as `<ephemeral expiration="0"/>`.
+    pub(crate) disappearing: Option<u32>,
+    /// This is a community (it has no chat of its own).
+    pub(crate) community_parent: bool,
+    /// The community this group belongs to, by group id.
+    pub(crate) community: Option<String>,
+    /// The community's announcement group.
+    pub(crate) announcements: bool,
 }
 
 /// A connection that is pairing a new device.
@@ -294,7 +303,37 @@ impl State {
                 children(vec![node("body", vec![], bytes(description.as_bytes()))]),
             )
         });
-        let group_children = participants.into_iter().chain(description).collect();
+        let mut settings = vec![];
+        if let Some(seconds) = group.disappearing {
+            settings.push(node(
+                "ephemeral",
+                vec![("expiration", text(seconds.to_string()))],
+                None,
+            ));
+        }
+        if group.community_parent {
+            settings.push(node(
+                "parent",
+                vec![("default_membership_approval_mode", text("request_required"))],
+                None,
+            ));
+        }
+        if let Some(community) = &group.community {
+            settings.push(node(
+                "linked_parent",
+                vec![("jid", jid(&group_jid(community)))],
+                None,
+            ));
+        }
+        if group.announcements {
+            settings.push(node("announcement", vec![], None));
+            settings.push(node("default_sub_group", vec![], None));
+        }
+        let group_children = participants
+            .into_iter()
+            .chain(description)
+            .chain(settings)
+            .collect();
         let creator_lid = self
             .users
             .get(&group.creator)

@@ -120,7 +120,14 @@ export function SettingsPage(props: {
  */
 export function SettingsSection(props: {
   title?: JSX.Element;
+  /**
+   * The settings search target, when the title is translated or not a plain
+   * string. Defaults to the title.
+   */
+  target?: string;
   description?: string;
+  /** Collapsible sections keep their heading visible when the body is closed. */
+  expanded?: boolean;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
   class?: string;
@@ -130,9 +137,11 @@ export function SettingsSection(props: {
   return (
     <section
       data-settings-target={
-        typeof props.title === 'string'
-          ? settingsTarget(props.title)
-          : undefined
+        props.target
+          ? settingsTarget(props.target)
+          : typeof props.title === 'string'
+            ? settingsTarget(props.title)
+            : undefined
       }
       tabIndex={-1}
       class={cn('scroll-mt-4 outline-none', props.class)}
@@ -154,9 +163,11 @@ export function SettingsSection(props: {
           </Show>
         </div>
       </Show>
-      <SettingsSurface class="flex flex-col gap-2 p-4">
-        {props.children}
-      </SettingsSurface>
+      <Show when={props.expanded ?? true}>
+        <SettingsSurface class="flex flex-col gap-2 p-4">
+          {props.children}
+        </SettingsSurface>
+      </Show>
     </section>
   );
 }

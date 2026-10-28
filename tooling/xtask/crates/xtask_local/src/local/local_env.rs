@@ -168,6 +168,9 @@ impl LocalEnv {
         // Calendar search ships dark too: off in deployed envs until each has
         // its calendar index created and backfilled.
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
+        // Deployed envs turn this on only after every email worker decodes
+        // batches; a local stack runs producers and workers from one build.
+        env.insert("GMAIL_LABEL_WRITE_BATCHES_ENABLED".into(), "true".into());
         env.insert(
             "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
             "http://agent-harness-service:8080/preview".into(),
@@ -245,12 +248,6 @@ impl InfraEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("DATABASE_URL".into(), self.database_url.clone());
         env.insert("DATABASE_URL_READONLY".into(), self.database_url.clone());
-        // The session service's advisory locks need a session that no pooler
-        // multiplexes. Locally nothing pools, so it is the same database.
-        env.insert(
-            "WHATSAPP_SESSION_LOCK_DATABASE_URL".into(),
-            self.database_url.clone(),
-        );
         env.insert("REDIS_URI".into(), self.redis_uri.clone());
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_REDIS_URI".into(),
@@ -389,10 +386,6 @@ impl InfraEnv {
         env.insert(
             "CODEX_OAUTH_KMS_KEY_ID".into(),
             resources::CODEX_OAUTH_KMS_ALIAS.into(),
-        );
-        env.insert(
-            "WHATSAPP_SESSION_KMS_KEY_ID".into(),
-            resources::WHATSAPP_SESSION_KMS_ALIAS.into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
@@ -698,9 +691,6 @@ impl BootStubEnv {
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
-        // whatsapp_session_service's per-replica account cap and drain step.
-        env.insert("WHATSAPP_SESSION_MAX_ACCOUNTS".into(), "500".into());
-        env.insert("WHATSAPP_SESSION_DRAIN_BATCH".into(), "20".into());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
@@ -709,8 +699,17 @@ impl BootStubEnv {
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
         );
-        // search_processing_service; the local cluster has the security plugin
-        // disabled so these are accepted but ignored (same as opensearch.rs).
+        // The harness requires Pipedream credentials even when integrations
+        // are unused. Real credentials can override these boot placeholders.
+        env.insert(
+            "PIPEDREAM_CLIENT_ID".into(),
+            "local-pipedream-client".into(),
+        );
+        env.insert(
+            "PIPEDREAM_CLIENT_SECRET".into(),
+            "local-pipedream-secret".into(),
+        );
+        env.insert("PIPEDREAM_PROJECT_ID".into(), "proj_local".into());
         // the harness cognition module mounts the Pipedream webhook when both
         // values are set. Nothing local can receive Pipedream's callbacks, so
         // these only need to be well-formed: the URI must carry the same
@@ -720,6 +719,8 @@ impl BootStubEnv {
             "http://localhost:8080/pipedream/mcp/webhook?secret=local".into(),
         );
         env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
+        // search_processing_service; the local cluster has the security plugin
+        // disabled so these are accepted but ignored (same as opensearch.rs).
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
         // Local document URLs use the instance endpoint supplied by InfraEnv;

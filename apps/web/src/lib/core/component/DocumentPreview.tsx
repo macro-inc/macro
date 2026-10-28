@@ -1,4 +1,3 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
@@ -39,6 +38,7 @@ import {
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';

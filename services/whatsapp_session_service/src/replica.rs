@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use whatsapp_linked::domain::session::SessionService;
-use whatsapp_linked::outbound::pg::PgLinkedRepository;
+use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsmeow::{Dialer, Signal};
 
@@ -152,7 +152,7 @@ pub async fn start<Kms: WhatsAppKms + 'static>(
         PgAccountLocks::connect(&deps.lock_options, timings.lock_keepalive, &tracker).await?;
     let lock_backend_pid = locks.backend_pid();
 
-    let sessions = SessionService::new(Arc::new(PgLinkedRepository::new(deps.pool.clone())));
+    let sessions = SessionService::new(Arc::new(PgWhatsAppRepository::new(deps.pool.clone())));
     let runner = AccountSessions::new(
         sessions.clone(),
         WhatsmeowConnector::new(
@@ -174,7 +174,7 @@ pub async fn start<Kms: WhatsAppKms + 'static>(
     );
     let supervisor = Supervisor::new(
         locks,
-        PgAccountDirectory::new(deps.pool, sessions),
+        PgAccountDirectory::new(sessions),
         Arc::new(runner),
         SupervisorConfig {
             max_accounts: deps.max_accounts,

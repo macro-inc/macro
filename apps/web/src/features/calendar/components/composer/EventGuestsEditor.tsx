@@ -118,6 +118,8 @@ export function AddOnlyGuestsEditor(props: {
   onClose: () => void;
   /** Controls shown on each added guest, before its remove button. */
   addedControls?: (guest: SelectedEventEditorGuest) => JSX.Element;
+  /** What the added people are, for assistive technology. */
+  addedLabel?: string;
 }) {
   return (
     <div class="flex min-h-0 flex-col">
@@ -130,7 +132,10 @@ export function AddOnlyGuestsEditor(props: {
       />
       <div class="flex min-h-0 flex-col overflow-y-auto p-1.5">
         <Show when={props.added.length > 0}>
-          <ul aria-label="New guests" class="flex flex-col">
+          <ul
+            aria-label={props.addedLabel ?? 'New guests'}
+            class="flex flex-col"
+          >
             <For each={props.added}>
               {(guest) => (
                 <li>

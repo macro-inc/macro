@@ -5,7 +5,8 @@
 End-to-end tests for WhatsApp linked devices. Real session-service replicas
 (supervisor, advisory locks, account runners, whatsmeow clients, the encrypted
 Postgres device store) run against `whatsapp_fake_server`. The DSS side runs
-through `whatsapp_linked::LinkedService`, and both share one `#[sqlx::test]`
+through `WhatsAppService` and `ExternalChatService<WhatsAppProvider>`, and
+both share one `#[sqlx::test]`
 database. Nothing talks to WhatsApp or AWS (the KMS is
 `whatsapp_store_pg`'s `FakeWhatsAppKms`).
 
@@ -29,11 +30,19 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
   is a system line without an actor).
 - Message types (`src/test/message_types.rs`): media dimensions, durations
   and presentation (sticker, GIF, voice note), a media reply keeping its
-  quote, view-once as a placeholder without an attachment; mentions and
+  quote, view-once media imported and downloaded like any media; mentions and
   forwards, polls with a vote and a changed vote, places, contact cards,
   events, pins and call logs as structured content; a mention sent from
   Macro; group changes made by a member (added, left, renamed) as system
   lines once with two observing accounts, never unread or notified.
+- Group kinds (`src/test/group_kinds.rs`): a disappearing group is added, an
+  ephemeral-wrapped phone message is kept, Macro's sends carry the timer
+  until it is turned off live; a community's group and announcement group
+  are added and used, the community itself is refused.
+- Direct chats (`src/test/direct_chats.rs`): a direct chat from the chat
+  list is added, its earlier messages imported from the phone, messages by
+  LID and by phone number and from the owner's phone land in it, Macro sends
+  to it, and a shared viewer reads but can't send.
 
 ## Checks
 
@@ -52,7 +61,7 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
 - The change triggers live in `src/watch_tables.sql`; add a table there when a
   test waits on it.
 - A failed ingest wait prints the `whatsapp_inbound_event` and
-  `whatsapp_group_message` rows; start debugging there.
+  `external_chat_message` rows; start debugging there.
 - Fake phones send each group message as a real phone does: a sender key
   distribution message in a per-device `pkmsg`, plus the `skmsg`, under one
   message ID. The service must ignore the key-only part.

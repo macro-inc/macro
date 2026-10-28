@@ -12,7 +12,9 @@ use databases::domain::{
     models::{ColumnDetail, ColumnId},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{CellValue, ColumnKind, EntityKind, EntityRef, OptionId, OptionRef};
+use models_databases::{
+    CellValue, ColumnKind, DateRange, EntityKind, EntityRef, OptionId, OptionRef,
+};
 use models_properties::{DataType, service::property_value::PropertyValue};
 
 use super::super::pipelines::{Pipeline, PipelineRecordType};
@@ -30,6 +32,8 @@ pub enum FieldKind {
     Checkbox,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// URLs.
     Link,
     /// Labels from the field's options, such as a stage.
@@ -80,6 +84,7 @@ impl PipelineField {
                 DataType::Number => FieldKind::Number,
                 DataType::Boolean => FieldKind::Checkbox,
                 DataType::Date => FieldKind::Date,
+                DataType::DateRange => FieldKind::DateRange,
                 DataType::Link => FieldKind::Link,
                 DataType::SelectString | DataType::SelectNumber => FieldKind::Select,
                 DataType::Tag => FieldKind::Tags,
@@ -173,6 +178,8 @@ pub enum FieldValue {
     Checkbox(bool),
     /// A date-time.
     Date(DateTime<Utc>),
+    /// A span from one date-time to another.
+    DateRange(DateRange),
     /// Option labels, in the cell's order.
     Labels(Vec<String>),
     /// URLs.
@@ -218,6 +225,7 @@ pub(crate) fn cell_value(
         FieldKind::Number => CellValue::Number(number(name, first)?),
         FieldKind::Checkbox => CellValue::Boolean(checkbox(name, first)?),
         FieldKind::Date => CellValue::Date(date(name, first)?),
+        FieldKind::DateRange => CellValue::DateRange(date_range(name, first)?),
         FieldKind::Link => CellValue::Link(values.iter().map(|v| v.trim().to_owned()).collect()),
         FieldKind::Select | FieldKind::Tags => CellValue::Options(
             values
@@ -258,6 +266,10 @@ pub(crate) fn field_value(field: &PipelineField, value: &PropertyValue) -> Optio
         PropertyValue::Num(number) => Some(FieldValue::Number(*number)),
         PropertyValue::Str(text) => Some(FieldValue::Text(text.clone())),
         PropertyValue::Date(date) => Some(FieldValue::Date(*date)),
+        PropertyValue::DateRange(range) => Some(FieldValue::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        })),
         PropertyValue::SelectOption(ids) if !ids.is_empty() => Some(FieldValue::Labels(
             ids.iter()
                 .map(|id| field.label(OptionId::from_uuid(*id)))
@@ -328,6 +340,11 @@ pub(crate) fn matches(
                 let wanted = date(name, candidate)?.date_naive();
                 matches!(value, Some(FieldValue::Date(d)) if d.date_naive() == wanted)
             }
+            FieldKind::DateRange => {
+                let wanted = date(name, candidate)?.date_naive();
+                matches!(value, Some(FieldValue::DateRange(range))
+                    if range.start.date_naive() <= wanted && wanted <= range.end.date_naive())
+            }
             FieldKind::Formula | FieldKind::Relation => unreachable!("refused above"),
         };
         if hit {
@@ -354,6 +371,9 @@ pub(crate) fn compare(
     let order = match (left, right) {
         (FieldValue::Number(left), FieldValue::Number(right)) => left.total_cmp(right),
         (FieldValue::Date(left), FieldValue::Date(right)) => left.cmp(right),
+        (FieldValue::DateRange(left), FieldValue::DateRange(right)) => {
+            (left.start, left.end).cmp(&(right.start, right.end))
+        }
         (FieldValue::Checkbox(left), FieldValue::Checkbox(right)) => left.cmp(right),
         (FieldValue::Labels(left), FieldValue::Labels(right)) => {
             let first =
@@ -372,6 +392,7 @@ pub(crate) fn text(value: &FieldValue) -> String {
         FieldValue::Number(number) => number.to_string(),
         FieldValue::Checkbox(checked) => checked.to_string(),
         FieldValue::Date(date) => date.to_rfc3339(),
+        FieldValue::DateRange(range) => range.iso(),
         FieldValue::Labels(values) | FieldValue::Links(values) | FieldValue::References(values) => {
             values.join(", ")
         }
@@ -480,6 +501,19 @@ fn date(field: &str, value: &str) -> Result<DateTime<Utc>, String> {
                 "\"{field}\" takes a date like 2026-10-12 or an ISO date-time, not \"{value}\"."
             )
         })
+}
+
+/// `start/end`, two dates as [`date`] reads them, ending no earlier than it
+/// starts.
+fn date_range(field: &str, value: &str) -> Result<DateRange, String> {
+    let refusal = || {
+        format!(
+            "\"{field}\" takes a date range like 2026-10-12/2026-10-16, ending no earlier than \
+             it starts, not \"{}\".",
+            value.trim()
+        )
+    };
+    DateRange::parse_interval(value.trim(), |end| date(field, end).ok()).ok_or_else(refusal)
 }
 
 /// A person's Macro user id: `me`, an email address, or the id itself.

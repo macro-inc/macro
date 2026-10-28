@@ -6,12 +6,12 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use external_chat::domain::models::ExternalChatError;
+use external_chat::domain::ports::ExternalChatResult;
 use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use whatsapp_linked::domain::events::{InboundEvent, InboundKind, SessionScope};
-use whatsapp_linked::domain::models::LinkedError;
-use whatsapp_linked::domain::ports::LinkedResult;
 use whatsapp_linked::domain::session::SessionService;
 
 use super::ports::InboundSink;
@@ -25,22 +25,26 @@ pub trait InboundStore: Send + Sync + 'static {
     fn observed_groups(
         &self,
         scope: SessionScope,
-    ) -> impl Future<Output = LinkedResult<Vec<String>>> + Send;
+    ) -> impl Future<Output = ExternalChatResult<Vec<String>>> + Send;
 
     /// Stores an event durably for later ingestion.
     fn enqueue_inbound(
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> impl Future<Output = LinkedResult<()>> + Send;
+    ) -> impl Future<Output = ExternalChatResult<()>> + Send;
 }
 
 impl InboundStore for SessionService {
-    async fn observed_groups(&self, scope: SessionScope) -> LinkedResult<Vec<String>> {
+    async fn observed_groups(&self, scope: SessionScope) -> ExternalChatResult<Vec<String>> {
         SessionService::observed_groups(self, scope).await
     }
 
-    async fn enqueue_inbound(&self, scope: SessionScope, event: &InboundEvent) -> LinkedResult<()> {
+    async fn enqueue_inbound(
+        &self,
+        scope: SessionScope,
+        event: &InboundEvent,
+    ) -> ExternalChatResult<()> {
         SessionService::enqueue_inbound(self, scope, event).await
     }
 }
@@ -107,7 +111,7 @@ impl<Store: InboundStore> InboundGate<Store> {
                 true
             }
             Err(report) => {
-                if matches!(report.current_context(), LinkedError::Fenced) {
+                if matches!(report.current_context(), ExternalChatError::Fenced) {
                     self.fenced.cancel();
                 } else {
                     tracing::warn!(
@@ -146,9 +150,25 @@ impl<Store: InboundStore> InboundSink for InboundGate<Store> {
             return false;
         }
         // Undecided (or fenced) leaves the node unacknowledged for redelivery.
-        let Some(observed) = self.observes(&event.group_jid).await else {
+        let Some(mut observed) = self.observes(&event.group_jid).await else {
             return false;
         };
+        // A direct chat added under the person's other address.
+        let mut readdressed = None;
+        if !observed && let Some(alternate) = &event.chat_alternate_jid {
+            let Some(alternate_observed) = self.observes(alternate).await else {
+                return false;
+            };
+            if alternate_observed {
+                observed = true;
+                readdressed = Some(InboundEvent {
+                    group_jid: alternate.clone(),
+                    chat_alternate_jid: Some(event.group_jid.clone()),
+                    ..event.clone()
+                });
+            }
+        }
+        let event = readdressed.as_ref().unwrap_or(event);
         let span = tracing::info_span!(
             "whatsapp.inbound.ingest",
             account_id = %self.scope.account_id,
@@ -188,10 +208,10 @@ impl<Store: InboundStore> InboundSink for InboundGate<Store> {
                 let error = report.current_context();
                 span.record("outcome", error.code());
                 match error {
-                    LinkedError::Fenced => self.fenced.cancel(),
+                    ExternalChatError::Fenced => self.fenced.cancel(),
                     // Invalid events are never storable; ack so they are not
                     // redelivered forever.
-                    LinkedError::Invalid(_) => {
+                    ExternalChatError::Invalid(_) => {
                         tracing::debug!(
                             name: "whatsapp.inbound.skipped",
                             parent: &span,

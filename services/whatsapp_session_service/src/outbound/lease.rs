@@ -10,18 +10,17 @@
 
 use std::time::Duration;
 
-use sqlx::postgres::{PgConnectOptions, PgPool};
+use sqlx::postgres::PgConnectOptions;
 use sqlx::{ConnectOptions, Connection, PgConnection};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use whatsapp_linked::domain::models::LinkedError;
+use external_chat::domain::models::ExternalChatError;
 use whatsapp_linked::domain::session::SessionService;
 
 use crate::domain::ports::{AccountDirectory, AccountLocks, FleetHealth, LeaseError};
-use whatsapp_linked::outbound::pg::signals::{ACCOUNT_RELEASED, Signal};
 
 #[cfg(test)]
 mod test;
@@ -205,22 +204,20 @@ impl AccountLocks for PgAccountLocks {
     }
 }
 
-/// Discovery through the linked-devices domain, and release announcements
-/// (the service's own `NOTIFY` channel) over the shared pool.
+/// Discovery and release announcements through the linked-devices domain.
 #[derive(Clone)]
 pub struct PgAccountDirectory {
-    pool: PgPool,
     sessions: SessionService,
 }
 
 impl PgAccountDirectory {
-    /// Wraps the shared pool and the domain service.
-    pub fn new(pool: PgPool, sessions: SessionService) -> Self {
-        PgAccountDirectory { pool, sessions }
+    /// Wraps the domain service.
+    pub fn new(sessions: SessionService) -> Self {
+        PgAccountDirectory { sessions }
     }
 }
 
-fn domain_error(report: rootcause::Report<LinkedError>) -> LeaseError {
+fn domain_error(report: rootcause::Report<ExternalChatError>) -> LeaseError {
     LeaseError::Internal(report.into_dynamic())
 }
 
@@ -242,15 +239,10 @@ impl AccountDirectory for PgAccountDirectory {
     }
 
     async fn announce_released(&self, account: Uuid) -> Result<(), LeaseError> {
-        let payload = serde_json::to_string(&Signal {
-            id: account,
-            traceparent: whatsapp_linked::outbound::trace_context::current(),
-        })
-        .map_err(|error| LeaseError::Internal(rootcause::Report::new(error).into_dynamic()))?;
-        sqlx::query!("SELECT pg_notify($1, $2)", ACCOUNT_RELEASED, payload)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        self.sessions
+            .announce_released(account)
+            .await
+            .map_err(domain_error)
     }
 
     async fn health(&self) -> Result<FleetHealth, LeaseError> {

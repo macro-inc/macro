@@ -69,6 +69,8 @@
 - [EntityAccessRequestedMetadata](type-aliases/EntityAccessRequestedMetadata.md)
 - [EntityType](type-aliases/EntityType.md)
 - [ErrorResponse](type-aliases/ErrorResponse.md)
+- [ExternalChatMessageMetadata](type-aliases/ExternalChatMessageMetadata.md)
+- [ExternalChatProvider](type-aliases/ExternalChatProvider.md)
 - [GetAllUserNotificationsResponse](type-aliases/GetAllUserNotificationsResponse.md)
 - [GetNotificationTypePreferencesData](type-aliases/GetNotificationTypePreferencesData.md)
 - [GetNotificationTypePreferencesError](type-aliases/GetNotificationTypePreferencesError.md)
@@ -161,4 +163,3 @@
 - [UnsubscribeItemResponse](type-aliases/UnsubscribeItemResponse.md)
 - [UnsubscribeItemResponses](type-aliases/UnsubscribeItemResponses.md)
 - [UserUnsubscribe](type-aliases/UserUnsubscribe.md)
-- [WhatsappGroupMessageMetadata](type-aliases/WhatsappGroupMessageMetadata.md)

@@ -1,0 +1,165 @@
+{
+  "reference_time": "2026-10-27T12:00:00Z",
+  "time_zone": "UTC",
+  "people": [
+    { "email": "julia@macro.com", "aliases": ["julia"] },
+    { "email": "teo@macro.com", "aliases": ["teo"] }
+  ],
+  "channels": ["Bug Reports"],
+  "search_types": {
+    "Channels": ["channel", "channels", "message", "messages", "channel message", "channel messages", "dm", "dms"],
+    "Tasks": ["task", "tasks"],
+    "Documents": ["document-or-file", "documents"]
+  },
+  "property_definitions": [
+    { "name": "Priority", "options": ["Urgent", "High", "Medium", "Low"] },
+    { "name": "Status", "options": ["Not Started", "In Progress", "In Review", "Completed", "Canceled"] }
+  ],
+  "groups": [
+    {
+      "id": "channel-message",
+      "expect": {
+        "intent": "message",
+        "recipients": ["julia@macro.com"],
+        "body": "I'm going to be late"
+      },
+      "inputs": [
+        "to julia: I'm going to be late",
+        "julia I'm going to be late",
+        "tell Julia\nI'm going to be late"
+      ]
+    },
+    {
+      "id": "named-channel-message",
+      "expect": {
+        "intent": "message",
+        "recipients": ["Bug Reports"],
+        "body": "cmd k menu not closing"
+      },
+      "inputs": ["message bug reports, cmd k menu not closing"]
+    },
+    {
+      "id": "email-body",
+      "expect": {
+        "intent": "email",
+        "recipients": ["julia@macro.com"],
+        "body": "Can we reschedule the thing tomorrow? Let the investors know."
+      },
+      "inputs": [
+        "email julia\nCan we reschedule the thing tomorrow? Let the investors know."
+      ]
+    },
+    {
+      "id": "email-cc-and-subject",
+      "expect": {
+        "intent": "email",
+        "recipients": ["julia@macro.com"],
+        "cc": ["teo@macro.com"],
+        "subject": "Investor Meeting",
+        "body": "Let's figure out a good time to get together with the investors. Can you schedule this?"
+      },
+      "inputs": [
+        "email julia, cc teo\nLet's figure out a good time to get together with the investors. Can you schedule this?\nsubject: Investor Meeting"
+      ]
+    },
+    {
+      "id": "monday-dinner",
+      "expect": { "intent": "calendar", "start": "2026-11-02T19:00" },
+      "inputs": [
+        "7pm monday dinner at cava",
+        "dinner at cava next monday 7",
+        "mon 7pm dinner at cava"
+      ]
+    },
+    {
+      "id": "meeting-invitees",
+      "expect": {
+        "intent": "calendar",
+        "start": "2026-10-28T08:00",
+        "guests": ["julia@macro.com", "teo@macro.com"]
+      },
+      "inputs": [
+        "investor meeting tomorrow 8am w/ julia and teo",
+        "8am tomorrow investor meeting invite julia, teo",
+        "tomorrow morning at 8 investor meeting with julia and teo"
+      ]
+    },
+    {
+      "id": "ai-question",
+      "expect": { "intent": "ai" },
+      "inputs": [
+        "what's the purpose of a blowhole?",
+        "when was Rome founded",
+        "when did we last deploy to prod?"
+      ]
+    },
+    {
+      "id": "task-priority-and-due-date",
+      "expect": {
+        "intent": "task",
+        "title": { "any_of": ["user reports push notifications don't go to target", "push notifications don't go to target"] },
+        "body": "they click push notifications and get taken to correct channel, but not correct location",
+        "priority": "high",
+        "due_date": "2026-11-03"
+      },
+      "inputs": [
+        "user reports push notifications don't go to target\nthey click push notifications and get taken to correct channel, but not correct location\nhigh\ndue in one week"
+      ]
+    },
+    {
+      "id": "task-sentences",
+      "expect": {
+        "intent": "task",
+        "title": { "any_of": ["gab reports unable to scroll to older messages", "unable to scroll to older messages"] },
+        "body": "can't get past first page of messages",
+        "priority": "urgent"
+      },
+      "inputs": [
+        "gab reports unable to scroll to older messages. can't get past first page of messages. urgent."
+      ]
+    },
+    {
+      "id": "note-prefix",
+      "expect": {
+        "intent": "note",
+        "body": "cava for lunch makes my stomach hurt.\n\nI ordered the lamb, and red pepper hummus. An hour later my stomach started hurting."
+      },
+      "inputs": [
+        "note: cava for lunch makes my stomach hurt.\n\nI ordered the lamb, and red pepper hummus. An hour later my stomach started hurting."
+      ]
+    },
+    {
+      "id": "search-sender-only",
+      "expect": {
+        "intent": "search",
+        "search_type": "Channels",
+        "search_from": ["julia@macro.com"],
+        "query": ""
+      },
+      "inputs": [
+        "search messages from julia",
+        "search channels from julia"
+      ]
+    },
+    {
+      "id": "search-task-filters",
+      "expect": { "intent": "search", "search_type": "Tasks", "status": ["In Progress"], "priority": ["High"], "assignees": ["julia@macro.com"], "created_by": ["teo@macro.com"], "query": "android" },
+      "inputs": ["search in progress high priority tasks assigned to julia created by teo about android"]
+    },
+    {
+      "id": "search-task-filters-only",
+      "expect": { "intent": "search", "search_type": "Tasks", "priority": ["High"], "assignees": ["julia@macro.com"], "query": "" },
+      "inputs": ["search high priority tasks assigned to julia"]
+    },
+    {
+      "id": "search-unsupported-document-filter",
+      "expect": { "intent": "search", "search_type": "Documents", "query": "from julia" },
+      "inputs": ["search documents from julia"]
+    },
+    {
+      "id": "search-task-keywords",
+      "expect": { "intent": "search", "search_type": "Tasks", "query": "android" },
+      "inputs": ["search tasks for android", "tasks related to android"]
+    }
+  ]
+}

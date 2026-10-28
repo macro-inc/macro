@@ -97,6 +97,7 @@ import { createGoalSeek } from '../primitives/create-goal-seek';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createRangeMove } from '../primitives/create-range-move';
 import { createSheetActions } from '../primitives/create-sheet-actions';
+import type { SpreadsheetDownloadFormat } from '../primitives/create-spreadsheet-download';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
 import { createTableActions } from '../primitives/create-table-actions';
 import { createWorkbookActions } from '../primitives/create-workbook-actions';
@@ -115,6 +116,13 @@ export function SpreadsheetEditor(props: {
   ownsClipboard?: (event: ClipboardEvent) => boolean;
   onExport: (content: string) => void;
   onExportXlsx: (bytes: Uint8Array) => void;
+  /**
+   * Hands the toolbar's downloads to actions outside it, such as the file
+   * menu. The function returns false while the sheet can't be exported yet.
+   */
+  onDownloadReady?: (
+    download: (format: SpreadsheetDownloadFormat) => boolean
+  ) => void;
 }) {
   let gridElement: HTMLDivElement | undefined;
   let editorElement!: HTMLElement;
@@ -538,6 +546,17 @@ export function SpreadsheetEditor(props: {
         editor.setSelectionRange(editor.value.length, editor.value.length);
     } else focusGrid();
   };
+  const canExport = () =>
+    props.store.ready() &&
+    !calculation.busy() &&
+    !calculation.error() &&
+    !grid.editing() &&
+    !workbookActions.busy();
+  props.onDownloadReady?.((format) => {
+    if (!canExport()) return false;
+    command(format === 'xlsx' ? 'export-xlsx' : 'export-csv');
+    return true;
+  });
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
     if (
@@ -1446,13 +1465,7 @@ export function SpreadsheetEditor(props: {
             readonly={
               !editable() || actions.pending() || !!workbookActions.busy()
             }
-            canExport={
-              props.store.ready() &&
-              !calculation.busy() &&
-              !calculation.error() &&
-              !grid.editing() &&
-              !workbookActions.busy()
-            }
+            canExport={canExport()}
             onCommand={menuCommand}
             onRestoreFocus={restoreEditorFocus}
           />

@@ -602,7 +602,7 @@ async fn fetch_and_insert_thread(
     provider_thread_id: &str,
 ) -> result::Result<(), ProcessingError> {
     let messages = match ctx.email_api.get_thread(link_id, provider_thread_id).await {
-        Ok(messages) => messages,
+        Ok(fetched) => fetched.into_iter().map(|fetched| fetched.message).collect(),
         Err(error) => {
             return Err(handle_operation_error(
                 ctx,

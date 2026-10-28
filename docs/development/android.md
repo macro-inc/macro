@@ -856,7 +856,11 @@ capable app re-registers. Deploy the device-capability migration before services
 deploy the notification ingress and call-producing services before enabling the
 new client registration. Native delivery suppresses ordinary alerts only for the
 platform and capable Android endpoints it handles, so another device can still
-receive its fallback alert.
+receive its fallback alert. The document storage service publishes call pushes
+itself, so the `cloud-storage-service` stack grants its task role `sns:Publish`
+on both the APNS VoIP and FCM platform applications; without the FCM grant every
+native Android call fails at SNS (`AuthorizationError`) and falls back to an
+ordinary alert.
 
 Call pushes are data-only, high priority, have a 60-second TTL, and include a recipient-specific
 LiveKit token and HTTPS ring-status URL. The receiver checks the registered

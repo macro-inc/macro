@@ -75,7 +75,7 @@ export type DocxEditorViewProps = {
   footer?: (comments: DocxComments) => JSX.Element;
   onDownload: (bytes: Uint8Array) => void;
   onError?: (error: unknown) => void;
-  /** Test hook: the mounted editor. */
+  /** The mounted editor, for actions outside its toolbar (file menu Download). */
   onReady?: (editor: DocxEditor) => void;
 };
 

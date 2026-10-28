@@ -1,13 +1,24 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ItemListSource } from '../context/crm-sources';
 import { RecordItemList } from './record-item-list';
 
-vi.mock('@entity', () => ({
-  ListEntity: (props: { entity: { name: string } }) => (
-    <div>{props.entity.name}</div>
+const mounted = vi.hoisted(() => vi.fn());
+
+vi.mock('@app/features/next-soup/soup-view/date-group-heading', () => ({
+  DateGroupHeading: (props: { label: string }) => (
+    <header>{props.label}</header>
   ),
+}));
+vi.mock('@entity', () => ({
+  ListEntity: (props: {
+    entity: { name: string };
+    referencePropertyIds?: readonly string[];
+  }) => {
+    mounted(props.referencePropertyIds);
+    return <div>{props.entity.name}</div>;
+  },
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
 }));
@@ -43,7 +54,10 @@ vi.mock('../context/crm-context', () => ({
   }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function source(overrides: Partial<ItemListSource>): ItemListSource {
   return {
@@ -143,4 +157,71 @@ it('keeps an empty first page pageable until more results arrive', () => {
   ));
   screen.getByRole('status', { name: 'Searching more items' });
   expect(screen.queryByText('Nothing')).toBeNull();
+});
+it('keeps the paging marker mounted when a local filter removes an entire page', () => {
+  const view = render(() => (
+    <RecordItemList
+      source={source({ data: { entities: [] }, hasNextPage: true })}
+      empty="Nothing"
+    />
+  ));
+  screen.getByRole('status', { name: 'Searching more items' });
+  expect(screen.queryByText('Nothing')).toBeNull();
+  expect(view.container.querySelector('.h-px')).not.toBeNull();
+});
+
+it('continues date groups across pages without remounting earlier rows', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 9, 27, 12));
+  mounted.mockClear();
+  const [entities, setEntities] = createSignal([
+    {
+      id: 'doc-1',
+      type: 'document',
+      name: 'First page',
+      updatedAt: new Date(2026, 9, 27, 10),
+    },
+  ]);
+  const list = source({ hasNextPage: true });
+  Object.defineProperty(list, 'data', {
+    get: () => ({ entities: entities() }),
+  });
+  const view = render(() => (
+    <RecordItemList
+      source={list}
+      empty="Nothing"
+      groupByDate
+      referencePropertyIds={['reference-id']}
+    />
+  ));
+  const first = screen.getByText('First page');
+  expect(screen.getAllByText('Today')).toHaveLength(1);
+  setEntities([
+    {
+      id: 'doc-1',
+      type: 'document',
+      name: 'First page updated',
+      updatedAt: new Date(2026, 9, 27, 10),
+    },
+    {
+      id: 'doc-2',
+      type: 'document',
+      name: 'Same date, next page',
+      updatedAt: new Date(2026, 9, 27, 9),
+    },
+    {
+      id: 'doc-3',
+      type: 'document',
+      name: 'Older page',
+      updatedAt: new Date(2026, 9, 26, 9),
+    },
+  ]);
+  expect(screen.getByText('First page updated')).toBe(first);
+  screen.getByText('Same date, next page');
+  screen.getByText('Older page');
+  expect(screen.getAllByText('Today')).toHaveLength(1);
+  expect(screen.getAllByText('Yesterday')).toHaveLength(1);
+  expect(mounted).toHaveBeenCalledTimes(3);
+  expect(mounted).toHaveBeenCalledWith(['reference-id']);
+  view.unmount();
 });

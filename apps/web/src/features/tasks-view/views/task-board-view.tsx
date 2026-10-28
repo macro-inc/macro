@@ -4,7 +4,14 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
-import { type Accessor, createSignal, For, Show, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { TaskBoard } from '../components/task-board';
 import {
   TaskBoardColumnIcon,
@@ -32,6 +39,11 @@ export function TaskBoardView(props: {
   data: TaskBoardData;
   onOpen(task: TaskBoardTask, event: MouseEvent): void;
   onCreate?: (columnId: string) => void;
+  /** Wraps a card's content, such as in the host's context menu. */
+  renderCard: (
+    task: Accessor<TaskBoardTask>,
+    content: JSX.Element
+  ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
   const { state, source, projectsEnabled, setFacets } = useTasksView();
@@ -140,7 +152,7 @@ export function TaskBoardView(props: {
     </Show>
   );
 
-  const renderCard = (
+  const renderCardContent = (
     task: Accessor<TaskBoardTask>,
     readOnly: Accessor<boolean>
   ) => (
@@ -305,7 +317,10 @@ export function TaskBoardView(props: {
                       pending={board.pending(task().id)}
                       onOpen={props.onOpen}
                     >
-                      {renderCard(task, readOnly)}
+                      {props.renderCard(
+                        task,
+                        renderCardContent(task, readOnly)
+                      )}
                     </TaskBoard.Card>
                   );
                 }}
