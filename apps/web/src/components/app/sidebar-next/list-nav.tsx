@@ -182,10 +182,9 @@ export const ListNav = (props: ListNavProps) => {
               horizontal padding absorbs the overhang. */}
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-success text-surface ring-2 ring-panel"
+            class="pointer-events-none absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center text-accent"
           >
-            <span class="absolute inset-0 rounded-full bg-success motion-safe:animate-ping" />
-            <PhoneCallIcon class="relative size-2.5" />
+            <PhoneCallIcon class="size-full" />
           </span>
         </Show>
         <Show when={!isGoToLeaderActive() && props.badge}>

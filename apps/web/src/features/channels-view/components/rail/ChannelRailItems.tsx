@@ -103,31 +103,26 @@ export function ChannelCallIndicator(props: {
   class?: string;
 }) {
   return (
-    <Switch>
-      <Match when={props.status === 'incoming'}>
+    <Show when={props.status}>
+      {(status) => (
         <span
-          aria-label="Incoming call"
+          aria-label={status() === 'incoming' ? 'Incoming call' : 'Active call'}
           class={cn(
             'flex size-4 shrink-0 items-center justify-center text-accent',
             props.class
           )}
         >
-          <PhoneIncomingIcon class="incoming-call-shake size-full" />
+          <Switch>
+            <Match when={status() === 'incoming'}>
+              <PhoneIncomingIcon class="incoming-call-shake size-full" />
+            </Match>
+            <Match when={true}>
+              <PhoneCallIcon class="size-full" />
+            </Match>
+          </Switch>
         </span>
-      </Match>
-      <Match when={props.status === 'active'}>
-        <span
-          aria-label="Active call"
-          class={cn(
-            'flex h-4 shrink-0 items-center gap-1 rounded-full bg-success px-1.5 text-xxs font-semibold leading-none text-surface',
-            props.class
-          )}
-        >
-          <PhoneCallIcon class="size-2.5 motion-safe:animate-pulse" />
-          Live
-        </span>
-      </Match>
-    </Switch>
+      )}
+    </Show>
   );
 }
 
@@ -319,6 +314,7 @@ export function ConversationCard(props: ConversationCardProps) {
             <ChannelMutedIndicator muted={props.muted} class="size-3.5" />
             <ChannelCallIndicator
               status={props.incomingCallId ? undefined : props.callStatus}
+              class="size-3.5"
             />
             <Show when={latestRootMessage()?.createdAt}>
               {(createdAt) => (

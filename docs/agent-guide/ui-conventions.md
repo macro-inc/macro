@@ -36,7 +36,7 @@ lists which control to use for each role.
 
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
-including an active call's filled green `Join call`. Button size does not change variant colors
+including an active call's green ink. Button size does not change variant colors
 or framing. Use `glass={false}` for an explicitly flat frame. Inline
 calendar-invitation text actions remove the transparent border to keep alignment.
 
