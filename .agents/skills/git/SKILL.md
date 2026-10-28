@@ -67,6 +67,9 @@ just pr-privacy                                   # commit messages on this bran
 PR_TITLE="fix(x): ..." just pr-privacy body.md    # plus the PR title and body you will post
 ```
 
+The workspace-link pattern reads code fences too, so write an illustrative app
+URL with a placeholder host (`<web origin>/app/md/<id>`), never a real one.
+
 To fix a hit, edit the PR title or body, or reword the commit on your branch.
 
 ## Before pushing
