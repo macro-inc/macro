@@ -1052,11 +1052,12 @@ Inbox retains its own thread-stack behavior.
 Each ordinary conversation click opens the bottom, including re-clicks,
 shift-clicks, mobile opens, reloads, and favorites. Explicit search hits and message
 links still open their target. Each accepted click marks top-level notifications
-from the full loaded edge seen; an abbreviated list edge is never sufficient.
+for the channel seen through the entity-scoped mutation; a bounded list edge is
+not the complete set of IDs to update.
 A rejected selection or unavailable split must not mark the conversation read.
 Non-participant rows retain their membership status and do not mark notifications.
 Shift-click a favorite whose channel is not loaded in the rail: its membership
-and full notification edge load before the split opens with the same top-level
+and bounded notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
