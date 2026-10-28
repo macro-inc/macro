@@ -790,8 +790,9 @@ uploading or moving anything.
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites. Documents, chats,
-agent sessions, projects, email threads, channels, calls, CRM companies, and CRM
-contacts support toggling. Individual channel messages are not favoritable. A
+agent sessions, projects, email threads, channels, calls, CRM companies, CRM contacts,
+databases, and forms support toggling; database and form favorites appear in Drive's
+sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
@@ -1357,6 +1358,36 @@ than creating duplicate panes. If pane-history navigation reaches content owned
 by another pane, it focuses that owner without advancing the requesting pane's
 history cursor. Restoring a saved layout preserves existing duplicate panes;
 search-only updates within those panes do not collapse them.
+
+## Entity menus
+
+List rows (Search, Home, Email, Drive, Tasks, Recent, folders, Agents, Calls)
+share one right-click menu, and the mobile long-press drawer shows the same
+items. It offers an item only where its action works for the row's type:
+Rename for documents, chats, folders, calls, agent sessions, and channels you
+take part in (not DMs); Duplicate for
+documents, chats, and folders (with GraphQL Soup); Move to folder for documents, chats, folders, and email you own (a folder is
+one location shared by everyone, and its sharing passes to what it holds, so
+only the owner moves an item; the server enforces the same);
+Delete for email and owned documents, chats, folders, calls, agent sessions, and
+routines. **Download** saves uploaded files (images, video, code, PowerPoint,
+Photoshop, Illustrator, Figma, other uploads) and Word documents as `.docx`;
+Markdown documents, canvases, native spreadsheets, and PDFs download from their
+open view instead, since their download needs the loaded editor (a PDF's
+includes its markup). Tasks add **Set status**, **Set priority**, and **Set assignee**,
+which open the property editor like their shortcuts. Agent sessions add
+**Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
+requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
+and **Copy Branch Name** when the head branch is stored. Rows inside a Drive
+folder offer **Remove from folder**, as in a folder's own view. Channel message
+rows have no **Copy ID**. Email rows and the email "…" menu offer **Sender →
+Signal** for a sender in Noise and **Sender → Noise** for one in Signal, read
+from the email itself (falling back to the view's tab); when neither says, as
+for some Search rows or an email opened directly, both are offered, with
+**Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
+Email tabs, and Search, where a marked row stays listed as done. On Home,
+right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
+**Snooze notifications…** beside Mute.
 
 ## Entity action dialogs
 

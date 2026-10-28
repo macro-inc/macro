@@ -18,6 +18,7 @@ import {
   type BlockName,
   useBlockAliasedName,
 } from '@core/block';
+import { canDuplicateItemType } from '@core/component/FileList/itemOperations';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
@@ -37,6 +38,7 @@ import BellSlash from '@icon/system/regular/bell-slash.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
@@ -429,6 +431,20 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     };
   };
 
+  const snoozeOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !muteAction.canExecute(entity)) return undefined;
+    return {
+      label: t('entityActions.snoozeNotifications'),
+      icon: Clock,
+      action: () => {
+        setOpen(false);
+        muteAction.snooze([entity]);
+      },
+      group: 'macro' as const,
+    };
+  };
+
   // Read reactively as well as through the action's imperative gate: `ops` below
   // is a memo, so without a reactive dependency the item would stay missing for
   // the life of this menu if PostHog answered after it was first computed. The
@@ -477,10 +493,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     // Some entities have no shareable link (a reminder resolves to no block, so
     // its URL is dead); skip the item rather than copy one that won't open.
     if (entity && !copyLinkAction.canExecute(entity)) return undefined;
-    // Foreign PRs link out via their entity URL (GitHub); the block-derived
-    // fallback would mint an internal /pr URL that doesn't resolve, so omit
-    // the item when the entity is unavailable.
-    if (!entity && blockName === 'pr') return undefined;
     return {
       label: t('entityActions.copyLink'),
       icon: Link,
@@ -579,15 +591,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               };
             })
             .with('copy', () => {
+              if (!canDuplicateItemType(props.itemType)) return null;
               return {
                 label: t('entityActions.duplicate'),
                 action: async () => {
-                  if (props.itemType === 'project') {
-                    console.warn(
-                      'Attempting to copy project!. This should not happen'
-                    );
-                    return;
-                  }
                   const res = await itemOperations.copyItem({
                     itemType: props.itemType,
                     id: props.id,
@@ -646,6 +653,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       .filter((op) => !!op);
     return [
       favoriteOp(),
+      snoozeOp(),
       muteOp(),
       reminderOp(),
       addTagOp(),

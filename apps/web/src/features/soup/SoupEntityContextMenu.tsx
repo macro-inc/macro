@@ -1,5 +1,6 @@
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
@@ -43,8 +44,17 @@ interface SoupEntityContextMenuProps {
    * them. Desktop only: the mobile long-press drawer shows the actions alone.
    */
   extraItems?: JSX.Element;
-  /** A list that completes its own rows, such as Home's work feed. Desktop only. */
+  /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Where the view moves after an action that removes the row (Mark Done). */
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
+  /**
+   * The folder the list shows, when the split's content doesn't say so
+   * itself (Drive hosts folders inside its own view).
+   */
+  viewedProjectId?: string;
 }
 
 export const SoupEntityContextMenu: FlowComponent<
@@ -76,6 +86,10 @@ export const SoupEntityContextMenu: FlowComponent<
                   entity: props.entity,
                   list: props.list,
                   viewContext: props.viewContext,
+                  markDoneDelegate: props.markDoneDelegate,
+                  createActionNavigationHandler:
+                    props.createActionNavigationHandler,
+                  viewedProjectId: props.viewedProjectId,
                 });
               },
             }));
@@ -106,6 +120,10 @@ export const SoupEntityContextMenu: FlowComponent<
                   onEditTags={pickers.openTagPicker()}
                   extraItems={props.extraItems}
                   markDoneDelegate={props.markDoneDelegate}
+                  createActionNavigationHandler={
+                    props.createActionNavigationHandler
+                  }
+                  viewedProjectId={props.viewedProjectId}
                 />
               </ContextMenuContent>
             </Show>

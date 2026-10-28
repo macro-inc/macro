@@ -29,12 +29,14 @@ import {
 } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { downloadFile } from '@filesystem/download';
+import { fireAndForget } from '@core/util/fireAndForget';
 import IconShared from '@icon/share.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import { Badge } from '@ui';
-import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import type { DocxBlockData } from './definition';
+import { createDocxDownload } from './primitives/create-docx-download';
 import {
   buildDocxSeed,
   connectDocxSync,
@@ -45,9 +47,6 @@ import {
 import { createDocxSession } from './queries/docx-session';
 import { DocxCommentMargin, DocxDetachedComments } from './views/DocxComments';
 import { DocxEditorView } from './views/DocxEditorView';
-
-const DOCX_MIME =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 function displayName(userId: string | undefined) {
   return getDisplayName(tryMacroId(userId ?? ''), {
@@ -97,6 +96,11 @@ export default function DocxBlock(props: { share?: string }) {
       error instanceof Error ? error.message : 'Something went wrong'
     );
   };
+  const docxDownload = createDocxDownload({
+    documentId,
+    fileName,
+    onError: reportError,
+  });
 
   return (
     <DocumentBlockContainer>
@@ -135,6 +139,13 @@ export default function DocxBlock(props: { share?: string }) {
             { op: 'rename' },
             { op: 'copy' },
             { op: 'moveToProject' },
+            {
+              group: 'file',
+              label: 'Download',
+              icon: DownloadSimple,
+              action: () =>
+                fireAndForget(docxDownload.download(), 'docx-download'),
+            },
             { op: 'delete' },
           ]}
           tools={[
@@ -198,58 +209,60 @@ export default function DocxBlock(props: { share?: string }) {
                   </div>
                 </Match>
                 <Match when={target()} keyed>
-                  {({ doc, original }) => (
-                    <DocxEditorView
-                      doc={doc}
-                      original={original}
-                      canEdit={!!doc && canEdit()}
-                      canComment={() => !!doc && canComment()}
-                      fileName={fileName()}
-                      peers={session.peers}
-                      displayName={displayName}
-                      author={displayName(userId())}
-                      documentId={documentId}
-                      onSelection={session.setSelection}
-                      commentRoots={doc ? rootThreads : undefined}
-                      margin={(context) => (
-                        <DocxCommentMargin
-                          documentId={documentId}
-                          comments={context.comments}
-                          geometry={context.geometry}
-                          selectionTop={context.selectionTop}
-                          canComment={() => !!doc && canComment()}
-                          isOwner={isOwner}
-                          userId={userId}
-                        />
-                      )}
-                      footer={(comments) => (
-                        <>
-                          <DocxDetachedComments
+                  {({ doc, original }) => {
+                    onCleanup(() => docxDownload.setEditor(undefined));
+                    return (
+                      <DocxEditorView
+                        doc={doc}
+                        original={original}
+                        canEdit={!!doc && canEdit()}
+                        canComment={() => !!doc && canComment()}
+                        fileName={fileName()}
+                        peers={session.peers}
+                        displayName={displayName}
+                        author={displayName(userId())}
+                        documentId={documentId}
+                        onSelection={session.setSelection}
+                        commentRoots={doc ? rootThreads : undefined}
+                        margin={(context) => (
+                          <DocxCommentMargin
                             documentId={documentId}
-                            threads={comments.detached()}
-                            canComment={canComment}
+                            comments={context.comments}
+                            geometry={context.geometry}
+                            selectionTop={context.selectionTop}
+                            canComment={() => !!doc && canComment()}
                             isOwner={isOwner}
+                            userId={userId}
                           />
-                          <EntityDiscussion
-                            parent={parent()}
-                            canWrite={canComment()}
-                            canModerate={isOwner()}
-                            link={{ type: 'write', id: documentId }}
-                            label="Discussion"
-                          />
-                        </>
-                      )}
-                      onDownload={(bytes) =>
-                        downloadFile(
-                          new Blob([bytes.slice().buffer], {
-                            type: DOCX_MIME,
-                          }),
-                          fileName()
-                        )
-                      }
-                      onError={reportError}
-                    />
-                  )}
+                        )}
+                        footer={(comments) => (
+                          <>
+                            <DocxDetachedComments
+                              documentId={documentId}
+                              threads={comments.detached()}
+                              canComment={canComment}
+                              isOwner={isOwner}
+                            />
+                            <EntityDiscussion
+                              parent={parent()}
+                              canWrite={canComment()}
+                              canModerate={isOwner()}
+                              link={{ type: 'write', id: documentId }}
+                              label="Discussion"
+                            />
+                          </>
+                        )}
+                        onDownload={(bytes) =>
+                          fireAndForget(
+                            docxDownload.save(bytes),
+                            'docx-download'
+                          )
+                        }
+                        onError={reportError}
+                        onReady={docxDownload.setEditor}
+                      />
+                    );
+                  }}
                 </Match>
               </Switch>
             );

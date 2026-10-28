@@ -653,6 +653,9 @@ export function HomeList(props: HomeListProps) {
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
                               markDoneDelegate={source.markDoneDelegate}
+                              createActionNavigationHandler={
+                                createActionNavigationHandler
+                              }
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

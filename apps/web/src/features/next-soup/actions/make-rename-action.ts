@@ -15,18 +15,16 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'agent_session' && entity.isArchived) return false;
+    if (entity.type === 'channel') return canEditChannelIdentity(entity);
+    // The types the rename mutation supports; it rejects any other.
     if (
-      entity.type === 'email' ||
-      entity.type === 'database' ||
-      entity.type === 'form'
+      entity.type !== 'agent_session' &&
+      entity.type !== 'document' &&
+      entity.type !== 'chat' &&
+      entity.type !== 'project' &&
+      entity.type !== 'call'
     )
       return false;
-    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
-      return false;
-    }
-    if (entity.type === 'foreign') return false;
-
-    if (entity.type === 'channel') return canEditChannelIdentity(entity);
 
     return entity.ownerId === userId();
   };

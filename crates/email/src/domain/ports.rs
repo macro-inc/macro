@@ -1118,6 +1118,41 @@ impl<T: EmailService> DraftSendService for T {
     }
 }
 
+/// Narrow port choosing the inbox a composed email is sent from, for use
+/// cases that need nothing else of the [`EmailService`].
+pub trait SendingInboxResolver: Send + Sync + 'static {
+    /// See [`EmailService::resolve_sending_inbox`].
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send;
+}
+
+impl<T: EmailService> SendingInboxResolver for T {
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send {
+        EmailService::resolve_sending_inbox(self, macro_id, request)
+    }
+}
+
+/// Use case: send a message carrying files the caller already holds, such
+/// as an event's iCalendar file.
+pub trait EmailFileSendService: Send + Sync + 'static {
+    /// Like [`EmailService::send_message`], with every file staged on the
+    /// message before delivery is queued. With no files it is exactly a send.
+    fn send_message_with_files(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+        files: Vec<SourcedAttachment>,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+}
+
 /// Use case: send a message carrying Macro documents as attachments.
 ///
 /// Object-safe (boxed future) so a tool context can hold any implementation

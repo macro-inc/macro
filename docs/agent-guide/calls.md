@@ -105,6 +105,11 @@ If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.
 
+Where a call shows the block header's "…" menu (Rename, Delete), that menu
+also offers **Download** when the call has a recording. It saves the recording
+under the call's name with the recording's extension (`<name>.mp4`), through the
+same download flow and confirmations as Drive files.
+
 ### Call links and guests — `/app/meet/join/:shareToken`
 
 These routes require `enable-quick-calls` for both signed-in users and guests.

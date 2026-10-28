@@ -67,6 +67,12 @@ pub(crate) type EmailSvc = EmailServiceImpl<
     EmailEventBroker,
 >;
 
+pub(crate) type EventForwardSender = email::domain::service::attachments::StagedAttachmentSender<
+    EmailSvc,
+    EmailPgRepo,
+    crate::outbound::draft_attachment_storage::DraftAttachmentS3,
+>;
+
 pub(crate) type DraftAttachmentSvc = email::domain::draft_attachments::DraftAttachmentService<
     EmailPgRepo,
     crate::outbound::draft_attachment_storage::DraftAttachmentS3,
@@ -124,6 +130,7 @@ pub(crate) struct ApiContext {
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,
+    pub event_forward_sender: Arc<EventForwardSender>,
     pub draft_transfers: Arc<
         email::domain::draft_transfer::DraftTransferService<
             EmailPgRepo,

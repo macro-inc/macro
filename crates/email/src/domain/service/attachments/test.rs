@@ -347,3 +347,56 @@ fn the_attachment_key_matches_the_draft_attachment_api_layout() {
         format!("draft/{draft}/{attachment}")
     );
 }
+
+#[tokio::test]
+async fn a_file_the_caller_holds_is_staged_on_the_draft_then_sent() {
+    let fake = fake_with(vec![]);
+    let sent = StagedAttachmentSender::new(fake.clone(), fake.clone(), fake.clone())
+        .send_message_with_files(
+            &link(),
+            &[link()],
+            input(),
+            vec![SourcedAttachment {
+                file_name: "Office tour.ics".to_owned(),
+                content_type: "text/calendar".to_owned(),
+                bytes: vec![1, 2],
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(sent.db_id, fake.draft_id);
+
+    let calls = fake.calls.take();
+    assert_eq!(calls[0], "create_draft");
+    assert!(calls[1].starts_with(&format!("put:draft/{}/", fake.draft_id)));
+    assert!(calls[1].ends_with(":text/calendar"));
+    assert_eq!(calls[2], "record:Office tour.ics:text/calendar:2");
+    assert_eq!(
+        calls[3],
+        format!("send:{}:{}", fake.draft_id, fake.thread_id)
+    );
+    assert_eq!(calls.len(), 4);
+}
+
+#[tokio::test]
+async fn oversized_files_are_refused_before_any_draft_exists() {
+    let fake = fake_with(vec![]);
+    let error = StagedAttachmentSender::new(fake.clone(), fake.clone(), fake.clone())
+        .send_message_with_files(
+            &link(),
+            &[link()],
+            input(),
+            vec![SourcedAttachment {
+                file_name: "big.ics".to_owned(),
+                content_type: "text/calendar".to_owned(),
+                bytes: vec![0; MAX_DRAFT_ATTACHMENTS_BYTES + 1],
+            }],
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, EmailErr::AttachmentsTooLarge { .. }),
+        "got {error:?}"
+    );
+    assert!(fake.calls.take().is_empty());
+}

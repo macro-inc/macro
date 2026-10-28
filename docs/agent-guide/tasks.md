@@ -311,7 +311,10 @@ outside project boards; project boards always retain the current project.
 Each pane or project scope and column keeps a separate composer draft. Project
 boards hide creation actions when the project is read-only.
 
-Click a card's body or title to open the task. Move at least 10 pixels with the
+Click a card's body or title to open the task. Right-click a card, or press
+Shift+F10 on its focused title, for the List row's task menu; it acts on that
+card alone, since the board has no selection. Right presses never start or
+redirect a drag. Move at least 10 pixels with the primary
 mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
@@ -508,7 +511,8 @@ none), **Checks failing**, **Conflicts** (GitHub reports the branch conflicting
 with its base; read live for the open PRs on the board), **Ready to merge**
 (every check passed), and **Merged**. Cards show the status icon, priority,
 title, checks, `owner/repo#N`, author, link pills, labels, and agent sessions;
-clicking a card opens the PR. Dragging asks GitHub for the change as you: drop
+clicking a card opens the PR. Right-clicking a card, or Shift+F10 on its focused
+title, opens the list row's context menu. Dragging asks GitHub for the change as you: drop
 on **Merged** (from In review or Ready to merge) to merge after the same
 confirmation as the PR's Merge button; drop on **Draft** to convert any open PR
 to a draft; drop a draft on **In review** to mark it ready for review. Checks
@@ -516,12 +520,12 @@ failing, Conflicts, and Ready to merge take no drops, and merged cards cannot be
 dragged. A refusal shows GitHub's message and the card returns. **Load more pull
 requests** fetches the next page.
 
-PR rows can be added to or removed from Favorites through their context menu or
-bulk entity actions. When at least one accessible PR is favorited, Reviews shows
-a collapsible Favorites section below the views; the section is hidden otherwise.
+Pull requests can no longer be favorited. PRs favorited earlier still appear in
+a collapsible Favorites section below the views (hidden when there are none).
 Favorite rows open the PR in Reviews (Shift-click opens another split), and their
 context menu can remove the favorite. PR favorites also open in Reviews from the
-global Favorites sidebar or command menu.
+global Favorites sidebar or command menu. A PR row's context menu offers **Open
+in new split**, **Copy Link**, and **Open on GitHub**.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Opening a PR refreshes it from GitHub in the background for viewers with a
