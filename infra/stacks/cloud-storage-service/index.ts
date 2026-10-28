@@ -46,12 +46,6 @@ const webhookEventQueue = new Queue('webhook-event', {
 export const webhookEventQueueArn = webhookEventQueue.queue.arn;
 export const webhookEventQueueName = webhookEventQueue.queue.name;
 
-const MACRO_CACHE = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_cache_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
 const DATABASE_URL_PROXY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
