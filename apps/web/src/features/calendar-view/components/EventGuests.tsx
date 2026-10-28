@@ -246,8 +246,14 @@ function GuestEditorAction(props: {
           onOpenChange={props.onOpenChange}
           placement="bottom-end"
           gutter={4}
-          flip
+          // Flip only to the other side, and let overlap slide it up over its
+          // button when neither side fits. Overlap also sizes the editor to
+          // the whole window rather than the room below: sized to that room,
+          // it never overflowed, so it never flipped, and suggestions that
+          // arrived after it opened squeezed the chosen people to nothing.
+          flip="top-end"
           slide
+          overlap
         >
           <Popover.Trigger
             as={Button}

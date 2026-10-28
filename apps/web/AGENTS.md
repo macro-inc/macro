@@ -41,10 +41,14 @@ phone screen and below one near the top, have a backend-free browser regression:
 
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
-slides into a short window; the phone drawer shows late requests:
+slides into a short window; the phone drawer shows late requests. The same
+suite covers the Add guests and Forward invitation editors (the real
+`EventGuests` over a stand-in contact picker) on desktop and phone:
 `bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts`.
 Keep the popover's `flip` limited to `left-start`: an end fallback re-places it
-above the event whenever a late section changes its height.
+above the event whenever a late section changes its height. Keep the guest
+editors' `overlap`: without it their height follows the room below the button,
+so they never overflow, never flip, and squeeze the chosen people to nothing.
 
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
