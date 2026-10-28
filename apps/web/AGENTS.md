@@ -79,6 +79,10 @@ Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
 
+A rightward swipe anywhere in a channel's message list (not the composer) goes
+back, while a leftward swipe on a message still replies:
+`bunx playwright test --config src/components/app/split-layout/mobile/browser-test/playwright.config.ts`.
+
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
 ```sh

@@ -5,6 +5,8 @@ import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
 
+export { SWIPE_DIRECTION_SLOP_PX } from './createMobileSwipeBackGesture';
+
 /** Px from the left edge where a touch starts the swipe-back gesture. */
 export const SWIPE_EDGE_THRESHOLD = 40;
 const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms - fast flick completes swipe

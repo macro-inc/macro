@@ -17,11 +17,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function touch(target: Element, type: string, x?: number) {
+function touch(target: Element, type: string, x?: number, y = 20) {
   const event = new Event(type, { bubbles: true, cancelable: true });
-  const touches = x === undefined ? [] : [{ clientX: x, clientY: 20 }];
+  const touches = x === undefined ? [] : [{ clientX: x, clientY: y }];
   Object.defineProperty(event, 'touches', { value: touches });
   target.dispatchEvent(event);
+  return event;
 }
 
 function swipe(from: number, to: number) {
@@ -83,12 +84,75 @@ it('still flies the row out for a left swipe', () => {
 });
 
 it('leaves right swipes from the left edge to back navigation', () => {
-  const { onSwipeRight } = renderRow();
+  const { onSwipeRight, content } = renderRow();
+  const row = screen.getByText('Row');
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+    frames.push(cb);
+    return frames.length;
+  });
 
-  swipe(10, 200);
+  touch(row, 'touchstart', 10);
+  const move = touch(row, 'touchmove', 80);
+  for (const frame of frames) frame(0);
+
+  expect(move.defaultPrevented).toBe(false);
+  expect(content().style.transform).toBe('');
+  touch(row, 'touchend');
   vi.runAllTimers();
 
   expect(onSwipeRight).not.toHaveBeenCalled();
+});
+
+it('does not nudge a reply row on a rightward drag', () => {
+  const onSwipeLeft = vi.fn();
+  render(() => {
+    const [container, setContainer] = createSignal<HTMLElement>();
+    return (
+      <SwipableRowProvider container={container} triggerBehavior="spring-back">
+        <div ref={setContainer}>
+          <SwipableRow id="message" onSwipeLeft={onSwipeLeft}>
+            <div>Row</div>
+          </SwipableRow>
+        </div>
+      </SwipableRowProvider>
+    );
+  });
+  const row = screen.getByText('Row');
+  const content = row.closest<HTMLElement>('[data-swipe-content]')!;
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+    frames.push(cb);
+    return frames.length;
+  });
+
+  touch(row, 'touchstart', 120);
+  const move = touch(row, 'touchmove', 200);
+  for (const frame of frames) frame(0);
+
+  expect(move.defaultPrevented).toBe(false);
+  expect(content.style.transform).toBe('');
+  expect(onSwipeLeft).not.toHaveBeenCalled();
+});
+
+it('still replies when that row is swiped left', () => {
+  const onSwipeLeft = vi.fn();
+  render(() => {
+    const [container, setContainer] = createSignal<HTMLElement>();
+    return (
+      <SwipableRowProvider container={container} triggerBehavior="spring-back">
+        <div ref={setContainer}>
+          <SwipableRow id="message" onSwipeLeft={onSwipeLeft}>
+            <div>Row</div>
+          </SwipableRow>
+        </div>
+      </SwipableRowProvider>
+    );
+  });
+
+  swipe(300, 150);
+
+  expect(onSwipeLeft).toHaveBeenCalledOnce();
 });
 
 it('asks whether a row can swipe once per gesture, not on every move', () => {
