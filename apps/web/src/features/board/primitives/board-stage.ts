@@ -61,6 +61,8 @@ export function createBoardStage<TNode extends { key: string }>(options: {
 
   const drag = createNodeDrag({
     scale: () => camera.camera().scale,
+    // Arranging by hand must not re-frame the board under the pointer.
+    onStart: camera.hold,
     onDrop: (key, point) => options.memory.moveTo(options.variant, key, point),
   });
 

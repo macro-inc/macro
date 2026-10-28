@@ -76,6 +76,11 @@ export function createBoardCamera(options: {
     set({ ...current, x: current.x + dx, y: current.y + dy });
   };
 
+  /** Stops following the layout, e.g. while the viewer arranges nodes. */
+  const hold = () => {
+    if (!manual()) set(camera());
+  };
+
   /** Back to framing everything; forgets the saved camera. */
   const fit = () => {
     save.clear();
@@ -203,6 +208,7 @@ export function createBoardCamera(options: {
     zoomOut: () => zoomBy(1 / ZOOM_STEP),
     zoomBy,
     panBy,
+    hold,
     fit,
     reveal,
   };

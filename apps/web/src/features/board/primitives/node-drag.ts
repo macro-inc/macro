@@ -15,6 +15,8 @@ const BIG_NUDGE = 96;
  */
 export function createNodeDrag(options: {
   scale: Accessor<number>;
+  /** A press has become a drag. */
+  onStart?: () => void;
   onDrop: (key: string, point: Point) => void;
 }) {
   const [active, setActive] = createSignal<{ key: string; point: Point }>();
@@ -43,6 +45,7 @@ export function createNodeDrag(options: {
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
         dragging = true;
         node.setPointerCapture(event.pointerId);
+        options.onStart?.();
       }
       moveEvent.preventDefault();
       const scale = options.scale();
