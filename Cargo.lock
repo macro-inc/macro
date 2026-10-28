@@ -18160,7 +18160,6 @@ dependencies = [
  "anyhow",
  "aws-sdk-s3",
  "chrono",
- "futures",
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",

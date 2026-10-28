@@ -1,10 +1,12 @@
 use crate::service;
-use futures::StreamExt;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
-enum ProcessOp {
-    Noop,
+enum Outcome {
+    /// Released again since the queue was read; the next run handles it.
+    Requeued,
+    /// Still referenced by a `"BomPart"` row, so the object stays.
+    Referenced,
     Deleted,
 }
 
@@ -22,51 +24,41 @@ pub async fn process(
 
     tracing::info!("potentially deleting {} shas", queued.len());
 
-    let shared_db_client = &db_client;
-    let shared_s3_client = &s3_client;
-    let delete_sha_results: Vec<
-        Result<(service::db::QueuedSha, ProcessOp), (String, anyhow::Error)>,
-    > = futures::stream::iter(queued.into_iter())
-        .then(|queued| async move {
-            let sha = queued.sha.as_str();
-            tracing::trace!("attempting to delete sha {sha}");
-            let count = shared_db_client
-                .get_sha_count(sha)
-                .await
-                .map_err(|e| (sha.to_string(), e))?;
-
-            if count != 0 {
-                return Ok((queued, ProcessOp::Noop));
-            }
-
-            shared_s3_client
-                .delete_sha(sha)
-                .await
-                .map_err(|e| (sha.to_string(), e))?;
-
-            Ok((queued, ProcessOp::Deleted))
-        })
-        .collect()
-        .await;
-
-    let mut done = Vec::new();
-    for result in delete_sha_results {
-        match result {
-            Ok((queued, ProcessOp::Noop)) => {
-                tracing::trace!("sha {} was noop", queued.sha);
-                done.push(queued);
-            }
-            Ok((queued, ProcessOp::Deleted)) => {
-                tracing::trace!("sha {} was deleted", queued.sha);
-                done.push(queued);
-            }
-            Err((sha, e)) => {
-                tracing::error!(error=?e, "unable to delete sha {sha}");
-            }
+    for queued in queued {
+        if let Err(e) = clean_up_sha(&db_client, &s3_client, &queued).await {
+            tracing::error!(error=?e, sha=%queued.sha, "unable to clean up sha");
         }
     }
 
-    db_client.dequeue_shas(done).await?;
+    Ok(())
+}
 
+/// Deletes the object for `queued` unless a `"BomPart"` row references it.
+/// The reference check and dequeue are one statement, and the dequeue commits
+/// only after the S3 delete succeeds.
+#[tracing::instrument(
+    name = "sha_cleanup.clean_up_sha",
+    skip_all,
+    fields(sha = %queued.sha, outcome = tracing::field::Empty),
+    err
+)]
+async fn clean_up_sha(
+    db_client: &service::db::DB,
+    s3_client: &service::s3::S3,
+    queued: &service::db::QueuedSha,
+) -> anyhow::Result<()> {
+    let outcome = match db_client.claim_sha(queued).await? {
+        None => Outcome::Requeued,
+        Some(claim) if claim.referenced => {
+            claim.commit().await?;
+            Outcome::Referenced
+        }
+        Some(claim) => {
+            s3_client.delete_sha(&queued.sha).await?;
+            claim.commit().await?;
+            Outcome::Deleted
+        }
+    };
+    tracing::Span::current().record("outcome", tracing::field::debug(outcome));
     Ok(())
 }

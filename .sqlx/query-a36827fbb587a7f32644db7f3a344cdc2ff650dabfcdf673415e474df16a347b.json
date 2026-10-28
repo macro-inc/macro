@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM sha_cleanup_queue AS queue\n        WHERE queue.sha = $1 AND queue.queued_at = $2\n        RETURNING EXISTS (SELECT 1 FROM \"BomPart\" WHERE sha = queue.sha) AS \"referenced!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "referenced!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a36827fbb587a7f32644db7f3a344cdc2ff650dabfcdf673415e474df16a347b"
+}

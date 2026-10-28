@@ -1,10 +1,9 @@
-mod get_sha_count;
 mod sha_cleanup_queue;
 
 #[allow(unused_imports)]
 use mockall::automock;
 
-pub use sha_cleanup_queue::QueuedSha;
+pub use sha_cleanup_queue::{QueuedSha, ShaClaim};
 
 #[cfg(not(test))]
 pub use DBClient as DB;
@@ -22,15 +21,11 @@ impl DBClient {
         Self { inner }
     }
 
-    pub async fn get_sha_count(&self, sha: &str) -> anyhow::Result<i64> {
-        get_sha_count::get_sha_count(self.inner.clone(), sha).await
-    }
-
     pub async fn queued_shas(&self) -> anyhow::Result<Vec<QueuedSha>> {
         sha_cleanup_queue::queued_shas(&self.inner).await
     }
 
-    pub async fn dequeue_shas(&self, shas: Vec<QueuedSha>) -> anyhow::Result<()> {
-        sha_cleanup_queue::dequeue_shas(&self.inner, shas).await
+    pub async fn claim_sha(&self, queued: &QueuedSha) -> anyhow::Result<Option<ShaClaim>> {
+        sha_cleanup_queue::claim_sha(&self.inner, queued).await
     }
 }
