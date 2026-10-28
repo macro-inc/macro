@@ -1,35 +1,31 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
-import { clearLocalAuthSession } from '@core/auth/logout';
+import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
+import {
+  getCurrentQueryString,
+  SessionExpiredRedirect,
+} from '@components/app/SessionExpiredRedirect';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
-import { confirmSessionExpired } from '@core/util/fetchWithToken';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { releaseNotificationCover } from '@macro/tauri/push-api';
 import {
-  authKeys,
-  invalidateUserInfo,
-  useUserInfoQuery,
-} from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
+  notificationLaunchPath,
+  pendingNotificationNavigation,
+} from '@notifications/notification-navigation-intent';
+import { useUserInfoQuery } from '@queries/auth/user-info';
 import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
 import {
   createEffect,
-  createResource,
   createSignal,
   Match,
   on,
-  Show,
+  onMount,
   Switch,
 } from 'solid-js';
-
-function getCurrentQueryString(routerSearch: string) {
-  const params = new URLSearchParams(
-    isNativeMobilePlatform() ? routerSearch : window.location.search
-  );
-  return params.toString().length > 0 ? `?${params.toString()}` : '';
-}
 
 function shouldShowNativeSessionVerificationFallback(
   userInfoQuery: ReturnType<typeof useUserInfoQuery>
@@ -46,6 +42,9 @@ function shouldShowNativeSessionVerificationFallback(
 function SessionVerificationFallback(props: {
   onRetry: () => Promise<unknown>;
 }) {
+  onMount(() =>
+    fireAndForget(releaseNotificationCover(), 'notification-launch')
+  );
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
@@ -64,7 +63,7 @@ function SessionVerificationFallback(props: {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="outline"
+        variant="secondary"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>
@@ -72,37 +71,23 @@ function SessionVerificationFallback(props: {
   );
 }
 
-function SessionExpiredRedirect() {
-  const location = useLocation();
-  // The UNAUTHORIZED that got us here can come from a latched refresh failure
-  // without the server ever being consulted, so confirm with a fresh refresh
-  // before destroying local session state. If the session turns out to be
-  // alive, refetch user-info instead and only treat a repeat 401 as real.
-  const [expired] = createResource(async () => {
-    if (!(await confirmSessionExpired())) {
-      await invalidateUserInfo();
-      const stillUnauthorized = thrownResultErrorHasCode(
-        queryClient.getQueryState(authKeys.userInfo.queryKey)?.error,
-        'UNAUTHORIZED'
-      );
-      if (!stillUnauthorized) return false;
-    }
-    await clearLocalAuthSession().catch((error) => {
-      console.error('Failed to clear local auth session', error);
-    });
-    return true;
-  });
-
-  return (
-    <Show when={expired()}>
-      <Navigate href={`/welcome${getCurrentQueryString(location.search)}`} />
-    </Show>
-  );
-}
-
-function AuthenticatedDestination(props: { fallback: string }) {
+function AuthenticatedDestination(props: {
+  fallback: string;
+  recipientId: string;
+}) {
   const pending = isNativeMobilePlatform() ? consumePostLoginRedirect() : null;
-  return <Navigate href={pending ?? props.fallback} />;
+  const notificationPath = notificationLaunchPath(props.recipientId);
+  const target = pendingNotificationNavigation()?.target;
+  if (notificationPath && target) {
+    fireAndForget(
+      prefetchChannelTarget(target.channelId, {
+        messageId: target.messageId,
+        threadId: target.threadId ?? target.messageId,
+      }),
+      'notification-navigation'
+    );
+  }
+  return <Navigate href={notificationPath ?? pending ?? props.fallback} />;
 }
 
 export function BasePathComponent() {
@@ -151,7 +136,10 @@ export function BasePathComponent() {
         <SessionExpiredRedirect />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
-        <AuthenticatedDestination fallback={redirectPath()} />
+        <AuthenticatedDestination
+          fallback={redirectPath()}
+          recipientId={userInfoQuery.data!.userId}
+        />
       </Match>
       {/* A failed remote check does not make an authenticated cached session
           unusable: the data branch above enters the local app first. Block only

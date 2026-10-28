@@ -17,8 +17,8 @@ export function PlanSelection(props: {
           Free Claude &amp; GPT for 30 days.
         </h1>
         <p class="mx-auto mt-6 max-w-[400px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
-          Every feature, every AI model and 1 TB of storage. Your first 30 days
-          on us then $40/user month.
+          Every feature, every AI model and 100 GB of storage. Your first 30
+          days on us then $40/user month.
         </p>
       </header>
 

@@ -2,7 +2,6 @@ import type { ListDataSource } from '@app/components/list';
 import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
-  buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
   createSoupRowStore,
@@ -16,22 +15,28 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
+import { matchesTokenSubsequences } from '@core/util/string';
 import {
   type EmailEntity,
   type EntityData,
   isEmailEntity,
   type WithNotification,
 } from '@entity';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+} from '@queries/email/local-draft-source';
 import { useFavoritesQuery } from '@queries/favorites/favorites';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { type Accessor, createMemo, indexArray } from 'solid-js';
+import { type Accessor, createMemo, createSignal, indexArray } from 'solid-js';
 import { match } from 'ts-pattern';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
+import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
-import { groupEmailEntitiesByDate } from './email-results';
+import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -45,7 +50,7 @@ export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
 
 export type EmailDataSourceInput = Pick<
   EmailViewState,
-  'tab' | 'search' | 'inboxIds' | 'facets'
+  'tab' | 'search' | 'inboxIds' | 'facets' | 'aliasFilter'
 >;
 
 export type UseEmailDataSourceOptions = {
@@ -65,24 +70,30 @@ export type UseEmailDataSourceOptions = {
 function emailMatchesTab(
   entity: EmailEntity,
   tab: EmailTab,
-  userId: string | undefined
+  userId: string | undefined,
+  /** A search hit, which the service matched across archived mail too. */
+  searchHit: boolean
 ): boolean {
-  return match(tab)
-    .with('drafts', () => entity.isDraft)
-    .with('archived', () => entity.done === true)
-    .with('shared', () => userId !== undefined && entity.ownerId !== userId)
-    .with(
-      'important',
-      'noise',
-      'favorites',
-      'sent',
-      'scheduled',
-      'reminders',
-      'calendar',
-      'all',
-      () => true
-    )
-    .exhaustive();
+  return (
+    match(tab)
+      .with('drafts', () => entity.isDraft)
+      .with('archived', () => entity.done === true)
+      .with('shared', () => userId !== undefined && entity.ownerId !== userId)
+      // The inbox views list only threads still in the inbox; a cached page can
+      // carry a row whose record was archived after the page was fetched.
+      // Searching them still finds archived mail, as it always has.
+      .with('important', 'noise', () => searchHit || entity.done !== true)
+      .with(
+        'favorites',
+        'sent',
+        'scheduled',
+        'reminders',
+        'calendar',
+        'all',
+        () => true
+      )
+      .exhaustive(() => true)
+  );
 }
 
 type AdmittedEmails = {
@@ -128,6 +139,7 @@ export function useEmailDataSource(
     (): EmailQueryContext => ({
       tab: state.tab,
       inboxIds: state.inboxIds === undefined ? undefined : [...state.inboxIds],
+      aliasFilter: state.aliasFilter,
       facets: state.facets,
       facetContext: facetContext(),
     })
@@ -151,15 +163,20 @@ export function useEmailDataSource(
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: sourceEnabled(),
   }));
+  const localDrafts = createLocalDraftSource(
+    () => query.transport === 'graphql'
+  );
   const isListPending = () =>
     !filtersReady() || query.isPending || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
+    // Rows and their lookups come from search hits while searching.
+    const searchHits = search.isSearching();
     const selected: EmailEntity[] = [];
     for (const entity of entities) {
       if (!isEmailEntity(entity)) continue;
-      if (!emailMatchesTab(entity, context.tab, userId())) continue;
+      if (!emailMatchesTab(entity, context.tab, userId(), searchHits)) continue;
       if (showsFavorites()) {
         if (entity.isFavorited === false) continue;
         // Search results have no Soup favorite field and use search's ID scope.
@@ -171,15 +188,52 @@ export function useEmailDataSource(
     return selected;
   };
 
-  // The quick-access pool behind local search holds no email threads, so
-  // every search result comes from the search service.
+  // Mail search retains server relevance; recoverable local drafts are merged below.
   const search = createSearchState({
+    surface: () => 'email',
     text: () => state.search,
     enabled: () => sourceEnabled() && searchFavoritesReady(),
     disableLocalSearch: () => true,
     buildRequest: (request) =>
       buildEmailSearchRequest(searchContext(), request),
   });
+
+  // Search retains its existing relevance service. Intersect its candidate
+  // IDs with the same GraphQL alias predicate used by normal mail discovery;
+  // never broaden an alias selection or depend on incomplete search previews.
+  const aliasSearchBatches = createMemo(() =>
+    state.aliasFilter &&
+    search.usesServiceSearch() &&
+    search.searchQuery.isSuccess &&
+    !search.searchQuery.isPlaceholderData
+      ? emailAdmissionBatches(selectEmails(search.data()))
+      : []
+  );
+  const aliasSearchQueries = indexArray(aliasSearchBatches, (ids) =>
+    useSoupAstItemsQuery(
+      () => buildEmailQuery(queryContext(), ids()),
+      () => ({
+        enabled: !!state.aliasFilter && search.usesServiceSearch(),
+        keepPreviousData: false,
+      })
+    )
+  );
+  const aliasSearchPending = () =>
+    aliasSearchQueries().some(
+      (query) => query.isPending || query.isPlaceholderData || query.isFetching
+    );
+  const aliasSearchError = () =>
+    aliasSearchQueries().find((query) => query.error)?.error;
+  const aliasSearchIds = createMemo(
+    () =>
+      new Set(
+        aliasSearchQueries().flatMap((query) =>
+          !query.isPending && !query.isPlaceholderData
+            ? (query.data?.entities.map((entity) => entity.id) ?? [])
+            : []
+        )
+      )
+  );
 
   const rawEntities = createMemo<EntityData[]>(() => {
     // Scheduled/Reminders disable native discovery. Reading its pending data
@@ -199,7 +253,9 @@ export function useEmailDataSource(
     // Never admit the previous text/filter query's placeholder results.
     if (!search.usesServiceSearch() || search.searchQuery.isPlaceholderData)
       return [];
-    return search.data();
+    return state.aliasFilter
+      ? search.data().filter((entity) => aliasSearchIds().has(entity.id))
+      : search.data();
   });
 
   const hasReadFilter = () => (state.facets.read?.length ?? 0) > 0;
@@ -259,7 +315,10 @@ export function useEmailDataSource(
   const retainedQueries = indexArray(admissionBatches, (ids) => {
     const list = useSoupAstItemsQuery(
       () => buildEmailQuery(queryContext(), ids()),
-      () => ({ enabled: filtersReady() && !search.isSearching() })
+      () => ({
+        enabled:
+          filtersReady() && (!search.isSearching() || !!state.aliasFilter),
+      })
     );
     const searchQuery = useSearchSoupQuery(
       () =>
@@ -275,18 +334,32 @@ export function useEmailDataSource(
     );
     return {
       ids,
-      data: () =>
-        search.isSearching()
-          ? searchQuery.isSuccess && !searchQuery.isPlaceholderData
-            ? searchQuery.data
-            : undefined
-          : !list.isLoading && !list.isPlaceholderData
+      data: () => {
+        if (!search.isSearching())
+          return !list.isPending && !list.isPlaceholderData
             ? list.data?.entities
-            : undefined,
-      error: () => (search.isSearching() ? searchQuery.error : list.error),
+            : undefined;
+        if (!searchQuery.isSuccess || searchQuery.isPlaceholderData)
+          return undefined;
+        if (!state.aliasFilter) return searchQuery.data;
+        if (list.isPending || list.isPlaceholderData) return undefined;
+        const members = list.data?.entities;
+        // A failed membership read is unknown, not proof every row disappeared.
+        if (!members) return undefined;
+        const memberIds = new Set(members.map((entity) => entity.id));
+        return searchQuery.data.filter((entity) => memberIds.has(entity.id));
+      },
+      error: () =>
+        search.isSearching()
+          ? (searchQuery.error ?? (state.aliasFilter ? list.error : undefined))
+          : list.error,
       refresh: async () => {
-        if (search.usesServiceSearch()) await searchQuery.refetch();
-        else if (!search.isSearching()) await list.refresh();
+        if (search.usesServiceSearch()) {
+          await Promise.all([
+            searchQuery.refetch(),
+            ...(state.aliasFilter ? [list.refresh()] : []),
+          ]);
+        } else if (!search.isSearching()) await list.refresh();
       },
     };
   });
@@ -337,7 +410,82 @@ export function useEmailDataSource(
     },
     { scope: '', items: [], resolved: new Map() }
   );
-  const entities = () => publication().items;
+  // Working copies can exist before sender metadata allows a GraphQL save.
+  // Keep them discoverable without waiting for the remote list/search.
+  const recoverable = () =>
+    state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim())
+      ? localDraftEntities(localDrafts.drafts()).filter(
+          (email) => email.ownerId === userId()
+        )
+      : [];
+  // Resolve recovery threads independently of the active filters. Otherwise an
+  // excluded thread could reappear with the synthetic first-use draft flags.
+  const recoveryBatches = createMemo(() =>
+    emailAdmissionBatches(recoverable())
+  );
+  const recoveryQueries = indexArray(recoveryBatches, (ids) =>
+    useSoupAstItemsQuery(
+      () => ({
+        ...buildEmailQuery(
+          {
+            tab: 'all',
+            inboxIds: undefined,
+            facets: {},
+            facetContext: facetContext(),
+          },
+          ids()
+        ),
+        transport: 'graphql',
+      }),
+      () => ({ enabled: sourceEnabled(), keepPreviousData: false })
+    )
+  );
+  const localRows = () => {
+    if (!filtersReady()) return [];
+    const remote = new Map(
+      [
+        ...recoveryQueries().flatMap((query) =>
+          !query.isPending && !query.isPlaceholderData
+            ? (query.data?.entities.filter(isEmailEntity) ?? [])
+            : []
+        ),
+        ...rawEntities().filter(isEmailEntity),
+        ...publication().items,
+      ].map((email) => [email.id, email])
+    );
+    return recoverable()
+      .map((email) => {
+        const confirmed = remote.get(email.id);
+        return confirmed
+          ? {
+              ...confirmed,
+              name: email.name,
+              snippet: email.snippet,
+              updatedAt: email.updatedAt,
+            }
+          : email;
+      })
+      .filter(
+        (email) =>
+          email.ownerId === userId() &&
+          (!state.inboxIds?.length ||
+            (!!email.linkId && state.inboxIds.includes(email.linkId))) &&
+          (!state.aliasFilter ||
+            (email.linkId === state.aliasFilter.inboxId &&
+              email.senderEmail?.toLowerCase() ===
+                state.aliasFilter.emailAddress.toLowerCase())) &&
+          testFacets(state.facets, EMAIL_FACETS, email, facetContext()) &&
+          matchesTokenSubsequences(email.name, state.search.trim())
+      );
+  };
+  const entities = () => {
+    const recovered = localRows();
+    const ids = new Set(recovered.map((email) => email.id));
+    return [
+      ...recovered,
+      ...publication().items.filter((email) => !ids.has(email.id)),
+    ];
+  };
 
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
     entities().map((email) =>
@@ -346,6 +494,25 @@ export function useEmailDataSource(
   );
 
   const usesServiceSearch = search.usesServiceSearch;
+  const [refreshing, setRefreshing] = createSignal(false);
+  const aliasAdvance = advanceEmptyAliasPages({
+    scope,
+    enabled: () =>
+      sourceEnabled() && !!state.aliasFilter && usesServiceSearch(),
+    ready: () =>
+      filtersReady() &&
+      search.searchQuery.isSuccess &&
+      !search.isFetching() &&
+      !refreshing() &&
+      !search.searchQuery.isPlaceholderData &&
+      !aliasSearchPending() &&
+      !search.error() &&
+      !aliasSearchError() &&
+      !retainedQueries().some((query) => query.error()),
+    hasItems: () => entities().length > 0,
+    hasNextPage: search.hasNextPage,
+    loadMore: search.fetchNextPage,
+  });
 
   const hasMore = () => {
     if (!filtersReady()) return false;
@@ -354,7 +521,12 @@ export function useEmailDataSource(
   };
 
   const isLoadingMore = () => {
-    if (usesServiceSearch()) return search.isFetchingNextPage();
+    if (usesServiceSearch())
+      return (
+        search.isFetchingNextPage() ||
+        aliasSearchPending() ||
+        aliasAdvance.isFetching()
+      );
     return query.isFetchingNextPage;
   };
 
@@ -363,7 +535,7 @@ export function useEmailDataSource(
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
       ? buildFlatSoupRows(listEntities())
-      : buildGroupedSoupRows(groupEmailEntitiesByDate(listEntities()));
+      : buildEmailDateRows(listEntities());
 
     if (hasMore()) {
       result.push(
@@ -379,6 +551,7 @@ export function useEmailDataSource(
   const items = createSoupRowStore(builtItems);
 
   const isLoading = () => {
+    if (localRows().length > 0) return false;
     if (search.isSearching() && showsFavorites() && favorites.isError)
       return false;
     if (!filtersReady()) return true;
@@ -387,7 +560,10 @@ export function useEmailDataSource(
       return isListPending();
     }
     if (entities().length > 0) return false;
-    if (usesServiceSearch()) return search.isLoading();
+    if (usesServiceSearch())
+      return (
+        search.isLoading() || aliasSearchPending() || aliasAdvance.isFetching()
+      );
     return query.isLoading;
   };
 
@@ -410,7 +586,11 @@ export function useEmailDataSource(
       if (showsReminders()) return reminders.isFetching();
       if (showsScheduled()) return scheduled.isFetching();
       if (search.isSettling()) return true;
-      return usesServiceSearch() ? search.isFetching() : query.isFetching;
+      return (
+        refreshing() ||
+        aliasAdvance.isFetching() ||
+        (usesServiceSearch() ? search.isFetching() : query.isFetching)
+      );
     },
     error: () => {
       if (showsReminders()) return reminders.error();
@@ -420,6 +600,8 @@ export function useEmailDataSource(
           ? favorites.error
           : undefined) ??
         (usesServiceSearch() ? search.error() : query.error) ??
+        aliasSearchError() ??
+        aliasAdvance.error() ??
         retainedQueries()
           .map((lookup) => lookup.error())
           .find((error) => error instanceof Error) ??
@@ -439,6 +621,7 @@ export function useEmailDataSource(
       }
       if (showsScheduled()) return;
       if (usesServiceSearch()) {
+        aliasAdvance.resetError();
         await search.fetchNextPage();
         return;
       }
@@ -453,11 +636,24 @@ export function useEmailDataSource(
         await scheduled.refresh();
         return;
       }
-      if (showsFavorites() && search.isSearching()) await favorites.refetch();
-      await Promise.all([
-        usesServiceSearch() ? search.refetch() : query.refresh(),
-        ...retainedQueries().map((lookup) => lookup.refresh()),
-      ]);
+      const requestScope = scope();
+      setRefreshing(true);
+      aliasAdvance.resetError();
+      try {
+        if (showsFavorites() && search.isSearching()) await favorites.refetch();
+        await (usesServiceSearch() ? search.refetch() : query.refresh());
+        if (scope() !== requestScope) return;
+        // Refresh admission after search publishes its candidates: a refetch
+        // can detach/recreate these readers even when their IDs stay the same.
+        await Promise.all([
+          ...(usesServiceSearch() && state.aliasFilter
+            ? aliasSearchQueries().map((lookup) => lookup.refresh())
+            : []),
+          ...retainedQueries().map((lookup) => lookup.refresh()),
+        ]);
+      } finally {
+        setRefreshing(false);
+      }
     },
   } satisfies EmailDataSource;
 }

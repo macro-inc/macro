@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id AS \"message_id!\",\n            mine.seq IS NOT NULL AS \"claimed!\",\n            EXISTS (\n                SELECT 1 FROM email_gmail_pending_label_writes newer\n                WHERE newer.message_id = m.id AND newer.provider_label_id = l.label\n                    AND newer.seq > mine.seq\n            ) AS \"has_newer!\",\n            EXISTS (\n                SELECT 1 FROM email_gmail_pending_label_writes newer\n                WHERE newer.message_id = m.id AND newer.provider_label_id = l.label\n                    AND newer.seq > mine.seq AND newer.expires_at > now()\n            ) AS \"waits!\"\n        FROM unnest($1::uuid[]) AS m(id)\n        CROSS JOIN unnest($3::text[]) AS l(label)\n        LEFT JOIN email_gmail_pending_label_writes mine\n            ON mine.message_id = m.id AND mine.provider_label_id = l.label AND mine.write_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "claimed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "has_newer!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "waits!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "92676e78cf8fde3c016d40a70ac3ad92ac7d1ece7bd94e4a1dc9f39833324a2c"
+}

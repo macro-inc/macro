@@ -59,6 +59,7 @@ fn serializes_a_new_top_level_mention() {
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
             message: channel_message(),
+            context: None,
         },
     ));
 
@@ -77,6 +78,7 @@ fn serializes_an_existing_channel_event() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: channel_message(),
+            context: None,
         },
     ));
 
@@ -102,6 +104,7 @@ fn channel_events_keep_the_first_schema_versions_shape() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: channel_message(),
+            context: None,
         },
     ));
     let value = serde_json::to_value(&event).expect("serialize event");
@@ -126,6 +129,7 @@ fn parent_aware_events_name_their_parent_and_are_new_variants() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: posted(document(), None),
+            context: None,
         }));
     let value = serde_json::to_value(&event).expect("serialize event");
     assert_eq!(value["metadata"]["source"], "thread");
@@ -135,6 +139,7 @@ fn parent_aware_events_name_their_parent_and_are_new_variants() {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
             bot_id: BotId::TEST_A,
             message: posted(document(), None),
+            context: None,
         }));
     let value = serde_json::to_value(&opened).expect("serialize event");
     assert_eq!(value["metadata"]["source"], "mentioned");
@@ -152,6 +157,7 @@ fn task_assignment_round_trips_and_opens_on_its_discussion() {
         discussion_id: message.message_id,
         actor: message.sender.as_user().unwrap().clone(),
         prompt: message.content.clone(),
+        context: None,
     });
     let published = AgentSessionMacroEvent::new_session(assigned.clone());
     assert_eq!(published.key(), BotId::TEST_A.to_string());
@@ -175,6 +181,7 @@ fn accessors_present_both_shapes_as_parent_aware_messages() {
     let from_channel = NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
         bot_id: BotId::TEST_A,
         message: channel_message(),
+        context: None,
     })
     .mention()
     .expect("a recognised shape");
@@ -194,6 +201,7 @@ fn accessors_present_both_shapes_as_parent_aware_messages() {
         session_id: AgentSessionId::TEST_B,
         kind: ThreadMessageKind::Inferred,
         message: posted(document(), Some(Uuid::from_u128(7))),
+        context: None,
     })
     .session_message()
     .expect("a recognised shape");
@@ -207,6 +215,7 @@ fn accessors_present_both_shapes_as_parent_aware_messages() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::ExplicitReply,
             message: channel_message(),
+            context: None,
         },
     ));
     assert_eq!(topic.bot_id(), Some(BotId::TEST_A));
@@ -223,6 +232,7 @@ fn decisions_take_the_wire_shape_their_parent_needs() {
             message: posted(channel.clone(), None),
         },
         Some(ChannelType::Team),
+        None,
     )
     .expect("a channel type was supplied");
     assert_eq!(opened.key(), BotId::TEST_A.to_string());
@@ -243,6 +253,7 @@ fn decisions_take_the_wire_shape_their_parent_needs() {
             message: posted(channel.clone(), Some(Uuid::from_u128(7))),
         },
         Some(ChannelType::Public),
+        None,
     )
     .expect("a channel type was supplied");
     let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
@@ -259,6 +270,7 @@ fn decisions_take_the_wire_shape_their_parent_needs() {
             message: posted(document(), None),
         },
         None,
+        None,
     )
     .expect("documents need no channel type");
     assert!(matches!(
@@ -274,6 +286,7 @@ fn decisions_take_the_wire_shape_their_parent_needs() {
             message: posted(document(), Some(Uuid::from_u128(7))),
         },
         Some(ChannelType::Public),
+        None,
     )
     .expect("a stray channel type is ignored for documents");
     assert!(matches!(
@@ -288,6 +301,7 @@ fn decisions_take_the_wire_shape_their_parent_needs() {
                 bot_id: BotId::TEST_A,
                 message: posted(channel, None),
             },
+            None,
             None,
         )
         .unwrap_err(),
@@ -317,6 +331,7 @@ fn event_names_match_the_wire() {
             AgentBotMentionedEvent {
                 bot_id: BotId::TEST_A,
                 message: channel_message(),
+                context: None,
             },
         )),
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
@@ -325,6 +340,7 @@ fn event_names_match_the_wire() {
                 session_id: AgentSessionId::TEST_A,
                 kind: ThreadMessageKind::MentionThread,
                 message: channel_message(),
+                context: None,
             },
         )),
     ]
@@ -350,4 +366,67 @@ fn channel_kinds_round_trip_in_snake_case() {
         let parsed: ThreadMessageKind = serde_json::from_value(value).expect("deserialize kind");
         assert_eq!(parsed, kind);
     }
+}
+
+/// A turn of an agent's private conversation travels with why it was called,
+/// and the conversation's own history stands in for the channel around it.
+#[test]
+fn a_conversation_turn_carries_its_trigger_without_the_channel() {
+    let person = trigger_context::ContextPerson {
+        id: "macro|agent-trigger@macro.com".to_owned(),
+        name: "agent-trigger@macro.com".to_owned(),
+        email: None,
+    };
+    let discussion = trigger_context::DiscussionContext {
+        surface: trigger_context::DiscussionSurface::Channel {
+            id: Uuid::from_u128(1),
+            name: None,
+            channel_type: trigger_context::ChannelType::DirectMessage,
+        },
+        prompt_message_id: Uuid::from_u128(2),
+        sender: person.clone(),
+        reply_target: trigger_context::ReplyTarget::None,
+        thread: None,
+        channel: vec![trigger_context::ContextThread {
+            root_id: Uuid::from_u128(3),
+            messages: vec![trigger_context::ContextMessage {
+                id: Uuid::from_u128(3),
+                author: person,
+                content: "an earlier turn".to_owned(),
+                posted_at: Utc::now(),
+            }],
+            messages_omitted: false,
+        }],
+    };
+    let decision = TriggerDecision::ConversationMessage {
+        bot_id: BotId::TEST_A,
+        session_id: AgentSessionId::TEST_A,
+        message: posted(MessageParent::Channel(Uuid::from_u128(1)), None),
+    };
+
+    let context = crate::domain::context::discussion_trigger(&decision, discussion.clone());
+    assert_eq!(
+        context,
+        TriggerContext::Conversation(trigger_context::DiscussionContext {
+            channel: Vec::new(),
+            ..discussion
+        })
+    );
+
+    let event = AgentSessionMacroEvent::from_decision(
+        decision,
+        Some(ChannelType::DirectMessage),
+        Some(context.clone()),
+    )
+    .expect("a channel type was supplied");
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(turn)) =
+        &event.event().event
+    else {
+        panic!("a conversation turn keeps its own shape: {event:?}");
+    };
+    assert_eq!(turn.context, Some(context));
+    let wire = serde_json::to_value(&event.event().event).expect("serialize event");
+    assert_eq!(wire["metadata"]["source"], "conversation_message");
+    assert_eq!(wire["metadata"]["context"]["kind"], "conversation");
+    assert!(wire["metadata"]["context"].get("channel").is_none());
 }

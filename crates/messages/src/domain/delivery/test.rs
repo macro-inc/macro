@@ -77,6 +77,7 @@ fn event() -> MessageEvent {
         sender_id: actor.clone().try_into().unwrap(),
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         triggered_by: None,
         content: "A private discussion".into(),

@@ -12,6 +12,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 mod explain;
+mod hidden_sessions;
 mod latest;
 
 const USER_1: &str = "macro|user-1@test.com";
@@ -25,7 +26,6 @@ const EVENT_E1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const EVENT_E3: &str = "66666666-cccc-cccc-cccc-cccccccccccc";
 const PR_F1: &str = "77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PR_F3: &str = "77777777-cccc-cccc-cccc-cccccccccccc";
-const REMINDER_R1: &str = "88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const TEAM_T: &str = "eeeeeeee-1111-1111-1111-111111111111";
 const CHANNEL_X_INVITE: &str = "0190a000-0000-7000-8000-000000000000";
@@ -37,7 +37,6 @@ const EVERYTHING: NotifiedHydratableTypes = NotifiedHydratableTypes {
     channel_threads: true,
     email_threads: true,
     foreign_entities: true,
-    reminders: true,
 };
 
 fn sources() -> Vec<SourceId> {
@@ -105,11 +104,10 @@ async fn feed_orders_by_latest_notification(pool: Pool<Postgres>) -> anyhow::Res
             (EntityType::CalendarEvent, EVENT_E1.to_string()),
             (EntityType::EmailThread, THREAD_Z.to_string()),
             (EntityType::ForeignEntity, PR_F1.to_string()),
-            (EntityType::Reminder, REMINDER_R1.to_string()),
             (EntityType::Channel, CHANNEL_X.to_string()),
         ]
     );
-    assert_eq!(minutes(&page), vec![20, 19, 9, 8, 7, 6, 5, 4, 3, 2, 0]);
+    assert_eq!(minutes(&page), vec![20, 19, 9, 8, 7, 6, 5, 4, 3, 0]);
 
     Ok(())
 }
@@ -144,7 +142,7 @@ async fn keyset_paginates_without_overlap_or_gaps(pool: Pool<Postgres>) -> anyho
     // Walking in pages of 3 yields the same feed as one big page.
     let one_page = notified_soup_page(&pool, req(None, &link_ids, &sources, EVERYTHING)).await?;
     assert_eq!(keys(&all), keys(&one_page));
-    assert_eq!(all.len(), 11);
+    assert_eq!(all.len(), 10);
 
     Ok(())
 }
@@ -219,7 +217,7 @@ async fn done_filters_exclude_without_moving_the_sort_key(
     assert_eq!(keys[2], (EntityType::Document, DOC_A.to_string()));
     assert_eq!(minutes(&page)[2], 9);
     assert!(!keys.contains(&(EntityType::Chat, CHAT_A.to_string())));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -243,7 +241,7 @@ async fn calendar_filter_folds_notification_state(pool: Pool<Postgres>) -> anyho
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E1.to_string())));
     assert!(!keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E3.to_string())));
-    assert_eq!(page.len(), 9);
+    assert_eq!(page.len(), 8);
 
     // Naming an event keeps it and drops the other.
     let filter = EntityFilterAst {
@@ -256,7 +254,7 @@ async fn calendar_filter_folds_notification_state(pool: Pool<Postgres>) -> anyho
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E1.to_string())));
     assert!(!keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E3.to_string())));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -324,7 +322,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&thread));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     // Done-only channels: channel-X's channel-level notification is live, so
     // the channel row drops; the thread row is gated by the thread tree, so
@@ -339,7 +337,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&channel));
     assert!(keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     // A fully supported OR is safe to pre-filter as a whole.
     let filter = EntityFilterAst {
@@ -354,7 +352,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&thread));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     // Never push only one side of an OR when another branch belongs to hydration.
     let filter = EntityFilterAst {
@@ -369,7 +367,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(keys(&page).contains(&thread));
-    assert_eq!(page.len(), 11);
+    assert_eq!(page.len(), 10);
 
     Ok(())
 }
@@ -412,7 +410,7 @@ async fn channel_conjuncts_ignore_thread_scoped_notifications(
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&(EntityType::Channel, CHANNEL_X.to_string())));
     assert!(keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -473,7 +471,7 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
     assert!(!keys(&page).contains(&pr_f1));
     assert!(keys(&page).contains(&pr_f3));
     assert!(keys(&page).contains(&(EntityType::Channel, CHANNEL_X.to_string())));
-    assert_eq!(page.len(), 9);
+    assert_eq!(page.len(), 8);
 
     // Done trees keep them and drop the live pull request instead.
     let filter = EntityFilterAst {
@@ -490,7 +488,7 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
     assert!(keys(&page).contains(&thread));
     assert!(keys(&page).contains(&pr_f1));
     assert!(!keys(&page).contains(&pr_f3));
-    assert_eq!(page.len(), 10);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -511,7 +509,6 @@ fn every_type_with_every_leg_active() {
             "email_thread",
             "calendar_event",
             "foreign_entity",
-            "reminder",
         ]
     );
 }
@@ -615,7 +612,7 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
     let mine = Uuid::from_u128(0xa5e5_0001);
     let theirs = Uuid::from_u128(0xa5e5_0002);
     for (id, owner) in [(mine, USER_1), (theirs, USER_2)] {
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO agent_session (
                 id, owner_id, bot_id, model, harness, repo_url, workspace, name,
@@ -624,20 +621,20 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
             VALUES ($1, $2, $3, 'model', 'harness', NULL, '/workspace', 'Fix the flaky test',
                     'event', 'acp_ready', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00')
             "#,
+            id,
+            owner,
+            Uuid::from_u128(0xa9e7),
         )
-        .bind(id)
-        .bind(owner)
-        .bind(Uuid::from_u128(0xa9e7))
         .execute(pool)
         .await?;
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
             VALUES ($1, 'agent_session', $2, 'user', 'owner')
             "#,
+            id,
+            owner,
         )
-        .bind(id)
-        .bind(owner)
         .execute(pool)
         .await?;
     }
@@ -645,24 +642,24 @@ async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uui
     // about a session they have no access to must never surface.
     for (index, session) in [(0x51u128, mine), (0x52u128, theirs)] {
         let notification_id = Uuid::from_u128(index);
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO notification ("id", "notification_event_type", "event_item_id", "event_item_type", "service_sender", "created_at", "metadata")
             VALUES ($1, 'agent_session_settled', $2, 'agent_session', 'test', '2024-06-01 10:21:00', '{}')
             "#,
+            notification_id,
+            session.to_string(),
         )
-        .bind(notification_id)
-        .bind(session.to_string())
         .execute(pool)
         .await?;
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO user_notification ("user_id", "notification_id", "created_at", "sent", "state")
             VALUES ($1, $2, '2024-06-01 10:21:00', TRUE, 'unseen')
             "#,
+            USER_1,
+            notification_id,
         )
-        .bind(USER_1)
-        .bind(notification_id)
         .execute(pool)
         .await?;
     }

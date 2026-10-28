@@ -1,4 +1,6 @@
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
+import { soupOptimisticResolvers } from '@queries/optimistic-resolvers';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityData } from '../../../features/entity/types/entity';
@@ -144,17 +146,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
         },
       },
       {
-        normalizedCacheOptimistic: {
-          uuid: expect.any(String),
-          optimisticResponse: {
-            updateNotifications: [
-              {
-                __typename: 'GraphqlNotification',
-                id: 'notification-1',
-              },
-            ],
-          },
-          linkPatches: [],
+        optimisticMutation: {
           revalidations: [],
         },
       }
@@ -163,19 +155,29 @@ describe('channel activity and notification GraphQL cache separation', () => {
   });
 
   it('does not optimistically reopen done or overwrite a historic view on seen', async () => {
-    mutationMock.mockImplementation((_document, _variables, context) => ({
+    mutationMock.mockImplementation((document, variables, context) => ({
       toPromise: async () => {
-        const patch =
-          context.normalizedCacheOptimistic.optimisticResponse
-            .updateNotifications[0];
-        expect(patch).toEqual({
-          __typename: 'GraphqlNotification',
-          id: 'done-notification',
+        expect(
+          predictOptimisticMutation(
+            soupOptimisticResolvers,
+            document,
+            variables
+          )?.response
+        ).toEqual({
+          updateNotifications: [
+            { __typename: 'GraphqlNotification', id: 'done-notification' },
+          ],
         });
+        expect(context.normalizedCacheOptimistic).toBeUndefined();
         return {
           data: {
             updateNotifications: [
-              { ...patch, state: 'DONE', viewedAt: '2020-01-01T00:00:00Z' },
+              {
+                __typename: 'GraphqlNotification',
+                id: 'done-notification',
+                state: 'DONE',
+                viewedAt: '2020-01-01T00:00:00Z',
+              },
             ],
           },
         };

@@ -1,6 +1,8 @@
 //! Project collection and task read contracts.
 
 use chrono::{DateTime, Utc};
+#[cfg(feature = "ports")]
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -96,6 +98,57 @@ pub struct InitiativePageRow {
     pub task_count: u32,
     /// Number of visible tasks whose status is completed.
     pub completed_task_count: u32,
+}
+
+/// An authorized project with the tasks its viewer may see, checked once.
+///
+/// Progress is summarized from the retained task receipts, so detail and
+/// counts share one task-access walk.
+#[cfg(feature = "ports")]
+#[derive(Debug, Clone)]
+pub struct InitiativeRead {
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+    detail: InitiativeDetail,
+    task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+}
+
+#[cfg(feature = "ports")]
+impl InitiativeRead {
+    /// Pair a project receipt with its detail and the viewer's task receipts.
+    /// The detail's `task_ids` are replaced by the receipts' entity ids.
+    pub fn new(
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        mut detail: InitiativeDetail,
+        task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Self {
+        detail.task_ids = task_receipts
+            .iter()
+            .map(|task| task.entity().entity_id.clone())
+            .collect();
+        Self {
+            receipt,
+            detail,
+            task_receipts,
+        }
+    }
+
+    /// Project detail with only the viewer's visible task ids.
+    pub fn detail(&self) -> &InitiativeDetail {
+        &self.detail
+    }
+
+    /// Take the project detail.
+    pub fn into_detail(self) -> InitiativeDetail {
+        self.detail
+    }
+
+    pub(crate) fn receipt(&self) -> &EntityAccessReceipt<ViewAccessLevel> {
+        &self.receipt
+    }
+
+    pub(crate) fn task_receipts(&self) -> &[EntityAccessReceipt<ViewAccessLevel>] {
+        &self.task_receipts
+    }
 }
 
 /// One authorized project collection page.

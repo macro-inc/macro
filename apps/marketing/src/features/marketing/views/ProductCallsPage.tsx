@@ -1,202 +1,167 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
-  CallDefaultDemo,
   CallFollowupDemo,
   CallHeroDemo,
   CallStartDemo,
-  CallTranscriptDemo,
 } from '../components/calls/CallStories';
+import { CallsComparison } from '../components/calls/CallsComparison';
+import { CallTeamMemoryDemo } from '../components/calls/CallTeamMemoryDemo';
+import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
   CallGraphic,
   ContextGraphic,
   LinkedWorkGraphic,
-  ThreadGraphic,
 } from '../components/product/ProductGraphics';
-import {
-  ProductHero,
-  ProductPage,
-  ProductProse,
-} from '../components/product/ProductPage';
-import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
+import { ProductHero, ProductPage } from '../components/product/ProductPage';
+import './calls-page.css';
 
 const callsFaq = [
   {
-    q: 'Are all calls recorded?',
-    a: 'Yes. Calls in Macro are recorded and transcribed for the organizer and Macro participants, and the recording, transcript, and summary are saved with the call.',
-  },
-  {
-    q: 'Who can see a recording?',
-    a: 'Members of the channel it started in. Use Share to give anyone else access.',
-  },
-  {
-    q: 'Do I need to install anything?',
-    a: 'No. Calls run in the browser on desktop and mobile.',
-  },
-  {
-    q: 'Can agents read my calls?',
+    q: 'How do I start a call?',
     a: (
       <>
-        Yes, the ones you have access to. Agents read the summary first and the
-        full transcript when they need detail. More on{' '}
-        <a href="/agents">agents in Macro</a>.
+        Start from Calls, a channel, or a direct message. You can also create a
+        meeting link for an instant or scheduled call. See the{' '}
+        <a href="https://docs.macro.com/product/calls">calls guide</a>.
       </>
     ),
   },
   {
-    q: 'Can I share a call with my team?',
-    a: 'Yes. Turn on Share with team and your team can see the chat, transcript, and AI summary once the call ends.',
+    q: 'Can someone join without a Macro account?',
+    a: 'Yes. Guests can join standalone meeting links in their browser without an account. Channel-linked calls require sign-in.',
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Are calls recorded and transcribed?',
+    a: 'Yes. Participants see a recording and transcription notice. After the call, open its recording, transcript, and summary in Calls.',
+  },
+  {
+    q: 'Can an agent turn a call into next steps?',
     a: (
       <>
-        Yes, for email, chat, docs, and agents. Calls, recording, and
-        transcription are on the paid plan. See <a href="/pricing">pricing</a>{' '}
-        for what each plan includes.
+        Yes. Ask an agent to use an accessible transcript to draft a follow-up,
+        create tasks, or update customer records. See{' '}
+        <a href="/agents">Macro Agents</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Who can read the recording and transcript?',
+    a: 'Channel calls share with the creator’s team by default; turn off Share with team to prevent that. Standalone meetings are not shared to the wider team automatically. Signed-in participants retain access to their recordings.',
+  },
+  {
+    q: 'Can I use transcripts from another meeting app?',
+    a: 'You can bring a transcript into Macro as a document and use it as agent context. This is separate from recording a call in Macro.',
+  },
+  {
+    q: 'Which plan includes calls?',
+    a: (
+      <>
+        Calls, recording, and transcription are included in paid plans. See{' '}
+        <a href="/pricing">current pricing</a> for details.
       </>
     ),
   },
 ];
 
 export function RouteCalls() {
+  // Repeated clicks on the same hash still need to revisit the section.
+  const revisitSection = (
+    event: MouseEvent & { currentTarget: HTMLAnchorElement }
+  ) => {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
+      return;
+    const hash = event.currentTarget.hash;
+    if (hash !== window.location.hash) return;
+    event.preventDefault();
+    document.getElementById(hash.slice(1))?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    });
+  };
   setPageSeo({
-    title: 'Macro Calls — Recordings, Transcripts, and Agent Tools',
+    title: 'Macro Calls — Turn Conversations into Tasks and Updates',
     description:
-      'Start a call from any channel. Macro records, transcribes, and summarizes it by default, so your team and your agents know what was decided.',
+      'Macro records and transcribes your calls so your agents can update tasks and docs from the conversation.',
     path: '/calls',
   });
   return (
     <ProductPage>
-      <ProductHero
-        product="Calls"
-        title={['Every call, recorded', 'and searchable.']}
-        description={[
-          'Start a call from any channel. It’s transcribed and summarized automatically,',
-          'so your team and your agents know what was decided.',
-        ]}
-        cta="calls_hero_get_started"
-      />
-      <WorkspaceDesktopDemo
-        view="messages"
-        label="Explore Macro Calls"
-        caption="A sample call. Click a transcript line to jump to that moment."
-      >
-        <CallHeroDemo />
-      </WorkspaceDesktopDemo>
-      <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#call-default">
-          <ContextGraphic />
-          <span>On by default</span>
-        </a>
-        <a href="#call-transcript">
-          <ThreadGraphic />
-          <span>Who said what</span>
-        </a>
-        <a href="#call-followup">
-          <LinkedWorkGraphic />
-          <span>Summaries for agents</span>
-        </a>
-        <a href="#call-start">
-          <CallGraphic />
-          <span>Calls in channels</span>
-        </a>
-      </nav>
-      <FeaturePageSection
-        id="call-default"
-        title="Recorded by default."
-        description={
-          'No bot to invite and no record button to forget.\nEvery call gets a recording, a transcript, and a summary.'
-        }
-      >
-        <div class="feature-page-visual">
-          <CallDefaultDemo />
-        </div>
-        <ProductProse>
-          <p>
-            Granola, meeting bots, and the record button in Zoom all have the
-            same problem: someone has to remember to use them, and then remember
-            to share the notes. Usually nobody does, and the decision lives in
-            three people’s heads. Macro flips it. Calls are recorded and
-            transcribed by default and saved to the channel they started in. It
-            feels a little strange at first. Then you stop losing decisions.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="call-transcript"
-        title="Knows who said what."
-        description={
-          'Each person’s audio is transcribed on its own, so every line has the right name on it.\nClick a line to jump to that moment in the recording.'
-        }
-      >
-        <div class="feature-page-visual">
-          <CallTranscriptDemo />
-        </div>
-        <ProductProse>
-          <p>
-            When we first rolled out calls to our own team, the transcripts kept
-            attributing things to the wrong person, and that’s worse than no
-            transcript at all: your agents end up thinking Eric agreed to
-            something Seamus said. So Macro transcribes each participant’s audio
-            separately and keeps different voices apart. The transcript is lined
-            up with the recording, so you can click any line and hear it.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="call-followup"
-        title="Summaries your agents can use."
-        description={
-          'Every call gets a short summary of what was decided.\nAgents read it first, so they can act on the meeting without rereading an hour of transcript.'
-        }
-      >
-        <div class="feature-page-visual">
-          <CallFollowupDemo />
-        </div>
-        <ProductProse>
-          <p>
-            A transcript is a lot of words. The summary is what you and your
-            agents actually want: what got decided, who owns what, and how it
-            fits with everything else going on. Ask @Macro to update the task
-            from this morning’s call and it reads the summary, pulls details
-            from the transcript when it needs them, and makes the change.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="call-start"
-        title="Start one from any channel."
-        description={
-          'Click Call in a channel or DM, like a Slack huddle.\nIt runs in the browser, so there’s nothing to install.'
-        }
-      >
-        <div class="feature-page-visual">
-          <CallStartDemo />
-        </div>
-        <ProductProse>
-          <p>
-            We wanted the ease of a Slack huddle with the reliability of Google
-            Meet. Click Call in any channel and everyone in it gets a
-            notification. It works in the browser on any device, so nobody has
-            to install anything five minutes before the meeting. Afterward, the
-            recording, transcript, and summary live in the channel’s Calls tab.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageFaq
-        id="calls-faq-title"
-        title="Questions about Macro Calls"
-        introduction={
-          <p>
-            Calls are the one place we made a strong default choice. Here’s how
-            it works.
-          </p>
-        }
-        items={callsFaq}
-      />
-      <HomepageClosing />
+      <div class="calls-page">
+        <ProductHero
+          cta="calls_hero_get_started"
+          product="Calls"
+          title={['Call from anywhere in Macro', 'with every call recorded.']}
+          description={[
+            'Macro records and transcribes your calls',
+            'so your agent can handle what comes next.',
+          ]}
+        />
+        <DemoInteractionBoundary render={() => <CallHeroDemo />} />
+        <nav class="feature-page-jump-links" aria-label="On this page">
+          <a href="#call-start" onClick={revisitSection}>
+            <CallGraphic />
+            <span>Meet in a click</span>
+          </a>
+          <a href="#call-followup" onClick={revisitSection}>
+            <LinkedWorkGraphic />
+            <span>Act on decisions</span>
+          </a>
+          <a href="#call-default" onClick={revisitSection}>
+            <ContextGraphic />
+            <span>Catch up afterward</span>
+          </a>
+        </nav>
+        <FeaturePageSection
+          id="call-start"
+          title={[
+            'Start a call in channels, DMs,',
+            'or through meeting links.',
+          ]}
+          description="You can start calls from channels, DMs, or through meeting links. People outside of Macro can join your meeting links. Create your own booking links so people can set up times with you."
+        >
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallStartDemo />}
+          />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="call-followup"
+          title={['Turn what was said on', 'your calls into next steps.']}
+          description="Tell your agent to turn what was said on a call into tasks, follow-up emails, and CRM updates. Your agent can read the transcript and determine who said what."
+        >
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallFollowupDemo />}
+          />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="call-default"
+          title={['View call recordings', 'after they finish.']}
+          description="After calls finish, you can go back and watch the recording, review the transcript, or get a summary of what was said. Call recordings are shareable across your team."
+        >
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <CallTeamMemoryDemo />}
+          />
+        </FeaturePageSection>
+        <CallsComparison />
+        <FeaturePageFaq
+          id="calls-faq-title"
+          title="Questions about Macro Calls"
+          items={callsFaq}
+        />
+        <HomepageClosing />
+      </div>
     </ProductPage>
   );
 }

@@ -12,9 +12,9 @@ use models_databases::views::{
 };
 use models_databases::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, ColumnResult, DatabaseId, DatabaseOp,
-    EntityKind, EntityRef, NewColumn, NewOption, OpResult, OptionId, OptionRef, PropertyId,
-    RowChange, RowChanges, RowId, RowsChange, RowsResult, TableChange, TableId, TableResult,
-    TableVersion, VersionedTable, ViewChange, ViewId, ViewResult,
+    EntityKind, EntityRef, Formula, NewColumn, NewOption, OpResult, Operator, OptionId, OptionRef,
+    PropertyId, RowChange, RowChanges, RowId, RowsChange, RowsResult, TableChange, TableId,
+    TableResult, TableVersion, VersionedTable, ViewChange, ViewId, ViewResult,
 };
 use serde_json::{Map, Value};
 use utoipa::OpenApi;
@@ -207,6 +207,16 @@ fn ops() -> Vec<DatabaseOp> {
         column(ColumnChange::Create {
             definition: NewColumn::Existing { property: PROPERTY },
             after: None,
+        }),
+        column(ColumnChange::Create {
+            definition: NewColumn::Derived {
+                name: "Total".into(),
+                formula: every_formula(),
+            },
+            after: Some(NAME),
+        }),
+        column(ColumnChange::SetFormula {
+            formula: every_formula(),
         }),
         column(ColumnChange::Rename {
             name: "Title".into(),
@@ -411,6 +421,7 @@ fn results() -> Vec<OpResult> {
         column(ColumnResult::OptionsAdded { added: vec![] }),
         column(ColumnResult::OptionUpdated),
         column(ColumnResult::OptionDeleted),
+        column(ColumnResult::FormulaSet),
         rows(RowsResult::Inserted { rows: vec![ROW] }),
         rows(RowsResult::Updated { affected: 1 }),
         rows(RowsResult::Deleted { affected: 2 }),
@@ -575,6 +586,21 @@ fn assert_every_kind_sampled(component: &str, samples: &[Value]) {
             kinds(&components[change]),
             "{component} {kind}: {change}"
         );
+    }
+}
+
+/// `-(Name + 2) * Name`: every kind of formula node.
+fn every_formula() -> Formula {
+    Formula::Binary {
+        operator: Operator::Multiply,
+        left: Box::new(Formula::Negate {
+            operand: Box::new(Formula::Binary {
+                operator: Operator::Add,
+                left: Box::new(Formula::Column { column: NAME }),
+                right: Box::new(Formula::Number { value: 2.0 }),
+            }),
+        }),
+        right: Box::new(Formula::Column { column: NAME }),
     }
 }
 

@@ -46,12 +46,12 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
 vi.mock('@ui', () => ({
   Surface: (props: { children?: JSX.Element }) => props.children,
   Button: (props: {
-    label?: string;
+    'aria-label'?: string;
     disabled?: boolean;
     onClick?: () => void;
   }) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       disabled={props.disabled}
       onClick={props.onClick}
     />

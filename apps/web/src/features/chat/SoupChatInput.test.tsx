@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   rename: vi.fn(),
   storeModel: vi.fn(),
   sendBackground: vi.fn(),
+  setMarkdown: vi.fn(),
+  setAttached: vi.fn(),
+  failureToast: vi.fn(),
   background: false,
   agentsEnabled: false,
   agentsLoading: (): boolean => false,
@@ -38,7 +41,7 @@ vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
   buildChatEditor: () => {
     const builder = {
       withAppLinkResolver: () => builder,
-      withMentions: () => ({}),
+      withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
     };
     return builder;
   },
@@ -69,7 +72,7 @@ vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: { children: unknown }) => props.children,
   useChatInputContext: () => ({
     model: () => Model.gpt56,
-    attachments: {},
+    attachments: { setAttached: mocks.setAttached },
   }),
 }));
 vi.mock('@core/component/AI/signal/attachment', () => ({
@@ -108,10 +111,15 @@ vi.mock('@service-cognition/client', () => ({
   },
 }));
 
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failureToast },
+}));
+
 import { SoupChatInput } from './SoupChatInput';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.sendBackground.mockResolvedValue({ isErr: () => false });
   mocks.background = false;
   mocks.agentsEnabled = false;
   mocks.agentsLoading = () => false;
@@ -204,4 +212,23 @@ describe('SoupChatInput', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.storeModel).not.toHaveBeenCalled();
   });
+});
+
+it('restores a rejected background draft and reports the failure', async () => {
+  mocks.background = true;
+  mocks.createChat.mockResolvedValue({
+    isErr: () => false,
+    value: { id: 'new-chat' },
+  });
+  mocks.sendBackground.mockResolvedValue({ isErr: () => true });
+  render(() => <SoupChatInput />);
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() =>
+    expect(mocks.setMarkdown).toHaveBeenCalledWith('Summarize this document')
+  );
+  expect(mocks.setAttached).toHaveBeenCalledWith([
+    { entity_id: 'document-id', entity_type: 'document' },
+  ]);
+  expect(mocks.failureToast).toHaveBeenCalledOnce();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });

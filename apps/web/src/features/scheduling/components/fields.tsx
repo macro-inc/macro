@@ -1,50 +1,99 @@
-import { TimezoneSelect } from '@app/features/reminders/TimezoneSelect';
-import { Checkbox, cn, Select } from '@ui';
-import { type JSX, Show, splitProps } from 'solid-js';
+import {
+  Checkbox,
+  cn,
+  Input,
+  type InputProps,
+  Select,
+  TextField,
+  type TextFieldTextAreaProps,
+} from '@ui';
+import {
+  createContext,
+  createUniqueId,
+  type JSX,
+  Show,
+  splitProps,
+  useContext,
+} from 'solid-js';
+import { TimezoneSelect } from './TimezoneSelect';
 
+const FieldErrorContext = createContext<{
+  readonly error?: string;
+  errorId: string;
+}>();
+
+export function FieldError(props: { id: string; message?: string }) {
+  return (
+    <Show when={props.message}>
+      <p
+        id={props.id}
+        role="alert"
+        class="text-xs leading-relaxed text-failure"
+      >
+        {props.message}
+      </p>
+    </Show>
+  );
+}
 export function Field(props: {
   label: string;
   hint?: string;
+  error?: string;
   children: JSX.Element;
   class?: string;
+  labelClass?: string;
 }) {
+  const errorId = createUniqueId();
   return (
-    <label
-      class={cn('flex min-w-0 flex-col gap-2 text-sm text-ink', props.class)}
+    <FieldErrorContext.Provider
+      value={{
+        get error() {
+          return props.error;
+        },
+        errorId,
+      }}
     >
-      <span class="font-medium">{props.label}</span>
-      {props.children}
-      <Show when={props.hint}>
-        <span class="text-xs leading-relaxed text-ink-muted">{props.hint}</span>
-      </Show>
-    </label>
+      <div
+        class={cn('flex min-w-0 flex-col gap-2 text-sm text-ink', props.class)}
+      >
+        <label class="flex min-w-0 flex-col gap-2">
+          <span class={cn('font-medium', props.labelClass)}>{props.label}</span>
+          {props.children}
+        </label>
+        <FieldError id={errorId} message={props.error} />
+        <Show when={props.hint}>
+          <span class="text-xs leading-relaxed text-ink-muted">
+            {props.hint}
+          </span>
+        </Show>
+      </div>
+    </FieldErrorContext.Provider>
   );
 }
-export function TextInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
-  const [local, rest] = splitProps(props, ['class']);
+export function TextInput(props: InputProps) {
+  const field = useContext(FieldErrorContext);
   return (
-    <input
-      {...rest}
-      class={cn(
-        'h-10 w-full min-w-0 rounded-lg border border-edge bg-surface-2 px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus-visible:ring-2 focus-visible:ring-ink/20 disabled:opacity-50',
-        local.class
-      )}
+    <Input
+      {...props}
+      aria-invalid={props['aria-invalid'] ?? (field?.error ? true : undefined)}
+      aria-describedby={
+        [props['aria-describedby'], field?.error ? field.errorId : undefined]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
     />
   );
 }
-export function TextArea(
-  props: JSX.TextareaHTMLAttributes<HTMLTextAreaElement>
-) {
-  const [local, rest] = splitProps(props, ['class']);
+export function TextArea(props: TextFieldTextAreaProps<'textarea'>) {
+  const [local, rest] = splitProps(props, ['value', 'disabled', 'required']);
   return (
-    <textarea
-      {...rest}
-      class={cn(
-        'h-10 w-full min-w-0 rounded-lg border border-edge bg-surface-2 px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus-visible:ring-2 focus-visible:ring-ink/20 disabled:opacity-50',
-        'h-auto min-h-24 resize-y py-3',
-        local.class
-      )}
-    />
+    <TextField
+      value={local.value == null ? undefined : String(local.value)}
+      disabled={local.disabled}
+      required={local.required}
+    >
+      <TextField.TextArea<'textarea'> {...rest} />
+    </TextField>
   );
 }
 export function SelectInput(props: {
@@ -53,32 +102,49 @@ export function SelectInput(props: {
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  error?: string;
+  required?: boolean;
+  class?: string;
+  contentClass?: string;
 }) {
+  const field = useContext(FieldErrorContext);
+  const errorId = createUniqueId();
+  const message = () => props.error ?? field?.error;
+  const descriptionId = () =>
+    props.error ? errorId : field?.error ? field.errorId : undefined;
   return (
-    <Select<{ value: string; label: string }>
-      options={props.options}
-      optionValue="value"
-      optionTextValue="label"
-      value={props.options.find((o) => o.value === props.value)}
-      onChange={(option) => option && props.onChange(option.value)}
-      disabled={props.disabled}
-      modal={false}
-    >
-      <Select.Trigger
-        aria-label={props.label}
-        class={
-          'h-10 w-full min-w-0 rounded-lg border border-edge bg-surface-2 px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus-visible:ring-2 focus-visible:ring-ink/20 disabled:opacity-50'
-        }
+    <div class="flex min-w-0 flex-col gap-2">
+      <Select<{ value: string; label: string }>
+        options={props.options}
+        optionValue="value"
+        optionTextValue="label"
+        value={props.options.find((o) => o.value === props.value)}
+        onChange={(option) => option && props.onChange(option.value)}
+        disabled={props.disabled}
+        required={props.required}
+        modal={false}
       >
-        <Select.Value<{ value: string; label: string }>>
-          {(state) => state.selectedOption()?.label}
-        </Select.Value>
-        <Select.Icon />
-      </Select.Trigger>
-      <Select.Content>
-        <Select.Listbox />
-      </Select.Content>
-    </Select>
+        <Select.Label class="sr-only">{props.label}</Select.Label>
+        <Select.Trigger
+          aria-label={props.label}
+          aria-invalid={message() ? true : undefined}
+          aria-describedby={descriptionId()}
+          class={cn(
+            'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',
+            props.class
+          )}
+        >
+          <Select.Value<{ value: string; label: string }>>
+            {(state) => state.selectedOption()?.label}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+        <Select.Content portalScope="local" class={props.contentClass}>
+          <Select.Listbox />
+        </Select.Content>
+      </Select>
+      <FieldError id={errorId} message={props.error} />
+    </div>
   );
 }
 export function TimeZoneInput(props: {
@@ -104,14 +170,18 @@ export function CheckField(props: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
+  disabled?: boolean;
+  class?: string;
+  controlClass?: string;
 }) {
   return (
     <Checkbox
       checked={props.checked}
       onChange={props.onChange}
-      class="gap-3 text-sm"
+      disabled={props.disabled}
+      class={cn('gap-3 text-sm', props.class)}
     >
-      <Checkbox.Control class="data-checked:bg-ink data-checked:border-ink text-panel" />
+      <Checkbox.Control class={props.controlClass} />
       <Checkbox.Label>{props.label}</Checkbox.Label>
     </Checkbox>
   );

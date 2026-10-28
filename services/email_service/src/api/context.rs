@@ -1,3 +1,6 @@
+use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use crate::calendar_request_gate::RedisCalendarRequestGate;
+use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use axum::extract::FromRef;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
@@ -12,13 +15,11 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
-use email_service::calendar_request_gate::RedisCalendarRequestGate;
-use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 
-use email_service::config::Config;
-use email_service::outbound::email_api::GmailApi;
-use email_service::util::redis::RedisClient;
+use crate::config::Config;
+use crate::outbound::email_api::GmailApi;
+use crate::outbound::mailbox_init::{MicrosoftGrantSource, PgMailboxInitialization};
+use crate::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -37,7 +38,10 @@ pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJw
 pub(crate) type CalendarGrantService = CalendarService<PgCalendarRepository>;
 pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
-    GoogleCalendarClient<RedisCalendarRequestGate>,
+    calendar_events::domain::providers::CalendarProviders<
+        GoogleCalendarClient<RedisCalendarRequestGate>,
+        email_api_client::OutlookApiClientRepository,
+    >,
     CalendarTokenProviderAdapter,
     EmailEventBroker,
     ConnectionGatewayCalendarRefresh,
@@ -46,6 +50,11 @@ pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepos
 pub(crate) type EmailEntityAccessManagementService =
     EntityAccessManagementServiceImpl<entity_access_management::outbound::PgRepository>;
 pub(crate) type EmailEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+pub(crate) type MailboxInitializer =
+    email::domain::mailbox::initialization::MailboxInitializationService<
+        PgMailboxInitialization,
+        MicrosoftGrantSource,
+    >;
 pub(crate) type EmailSvc = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -58,8 +67,77 @@ pub(crate) type EmailSvc = EmailServiceImpl<
     EmailEventBroker,
 >;
 
+pub(crate) type EventForwardSender = email::domain::service::attachments::StagedAttachmentSender<
+    EmailSvc,
+    EmailPgRepo,
+    crate::outbound::draft_attachment_storage::DraftAttachmentS3,
+>;
+
+pub(crate) type DraftAttachmentSvc = email::domain::draft_attachments::DraftAttachmentService<
+    EmailPgRepo,
+    crate::outbound::draft_attachment_storage::DraftAttachmentS3,
+    EmailEntityAccessService,
+>;
+
+pub(crate) type MicrosoftTokens = email::domain::mailbox::credentials::MailboxCredentials<
+    email::outbound::mailbox_pg::PgMailboxSync,
+    crate::outbound::email_api::MicrosoftCredentialsClient,
+>;
+
+pub(crate) type OutlookApi = email_api_client::domain::service::mailbox::MailboxApiService<
+    email_api_client::OutlookApiClientRepository,
+    MicrosoftTokens,
+    email_api_client::domain::ports::AlwaysAllowRateLimiter,
+>;
+pub(crate) type AttachmentReadSvc = email::domain::attachment_access::AttachmentReadService<
+    EmailPgRepo,
+    crate::outbound::attachment_access::ProviderAttachmentBytes<
+        crate::outbound::email_api::ProviderMailboxGateway<
+            email_api_client::OutlookApiClientRepository,
+            MicrosoftTokens,
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        >,
+    >,
+    crate::outbound::attachment_access::MailAttachmentFiles,
+    EmailEntityAccessService,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub mailbox_notifications: Arc<
+        email::domain::mailbox::watches::MailboxWatchNotifications<
+            email::outbound::mailbox_pg::PgMailboxSync,
+        >,
+    >,
+
+    pub mailbox_settings: Arc<
+        email::domain::mailbox::settings::MailboxSettingsService<
+            email::outbound::mailbox_pg::PgMailboxSync,
+            crate::outbound::mailbox_settings::ProviderMailboxSettings<
+                email_api_client::OutlookApiClientRepository,
+                MicrosoftTokens,
+                email_api_client::domain::ports::AlwaysAllowRateLimiter,
+            >,
+        >,
+    >,
+
+    pub inbox_lifecycle: Arc<crate::composition::InboxLifecycle>,
+    pub inbox_catalog: Arc<
+        email::domain::mailbox::catalog::InboxCatalogService<
+            crate::outbound::inbox_catalog::PgInboxCatalog,
+        >,
+    >,
+    pub inbox_health: Arc<crate::composition::InboxHealth>,
+    pub attachment_reads: Arc<AttachmentReadSvc>,
+    pub draft_attachments: Arc<DraftAttachmentSvc>,
+    pub event_forward_sender: Arc<EventForwardSender>,
+    pub draft_transfers: Arc<
+        email::domain::draft_transfer::DraftTransferService<
+            EmailPgRepo,
+            crate::outbound::draft_attachment_storage::DraftAttachmentS3,
+        >,
+    >,
+    pub mailbox_initializer: Arc<MailboxInitializer>,
     pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
     pub invitation_resolver: Arc<
         calendar_events::domain::invitations::CalendarInvitationResolver<

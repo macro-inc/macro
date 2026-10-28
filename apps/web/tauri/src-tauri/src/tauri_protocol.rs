@@ -75,6 +75,11 @@ fn rewrite_uri(uri: &str) -> String {
         "tauri://localhost/app",
         "https://tauri.localhost/app/",
         "https://tauri.localhost/app",
+        // The Chromium runtime serves custom schemes over plain http.
+        #[cfg(feature = "cef")]
+        "http://tauri.localhost/app/",
+        #[cfg(feature = "cef")]
+        "http://tauri.localhost/app",
     ] {
         if let Some(rest) = uri.strip_prefix(prefix) {
             // Only match bare "/app" when rest is empty or starts with a

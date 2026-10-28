@@ -1,5 +1,12 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createEffect, For, type JSX, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  For,
+  type JSX,
+  lazy,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createMemoryHistory, type MemoryHistory } from '../history/memory';
@@ -29,7 +36,7 @@ import { Router } from '../solid/router';
 import { useBeforeLeave } from '../solid/use-before-leave';
 import { createTestPolicy } from './fixtures';
 
-const counts = { drive: 0, document: 0 };
+const counts = { drive: 0, document: 0, workspace: 0 };
 const documentTypeReads = vi.fn();
 let allowLeave = true;
 
@@ -55,6 +62,17 @@ function DocumentView() {
   );
 }
 
+function WorkspaceView() {
+  const pane = usePane();
+  const router = useSplitRouter();
+  onMount(() => {
+    counts.workspace += 1;
+  });
+  const item = () =>
+    router.entry(pane())?.location.route.matches.at(-1)?.params.itemId;
+  return <p data-testid="workspace">{`item:${item() ?? 'none'}`}</p>;
+}
+
 function DriveView() {
   const navigate = useNavigate();
   onMount(() => {
@@ -73,6 +91,11 @@ function DriveView() {
 function GuardedView() {
   useBeforeLeave(() => allowLeave);
   return <p data-testid="guarded">guarded</p>;
+}
+
+function SearchGuardedView() {
+  useBeforeLeave(() => allowLeave, { search: ['list'] });
+  return <ListView />;
 }
 
 function ListView() {
@@ -148,8 +171,27 @@ const paneRoutes = [
     search: ['probe', 'other'],
     component: ProbeView,
   }),
+  defineRoute({
+    id: 'workspace',
+    path: 'workspace',
+    mountKey: 'workspace',
+    component: WorkspaceView,
+  }),
+  defineRoute({
+    id: 'workspace-item',
+    path: 'workspace/:itemId',
+    params: z.object({ itemId: z.string().min(1) }),
+    mountKey: 'workspace',
+    component: WorkspaceView,
+  }),
   defineRoute({ id: 'home', path: 'home', component: () => <p>home</p> }),
   defineRoute({ id: 'guarded', path: 'guarded', component: GuardedView }),
+  defineRoute({
+    id: 'watched-list',
+    path: 'watched-list',
+    search: ['list'],
+    component: SearchGuardedView,
+  }),
   defineRoute({
     id: 'list',
     path: 'list',
@@ -235,6 +277,7 @@ function renderPanes(
 beforeEach(() => {
   counts.drive = 0;
   counts.document = 0;
+  counts.workspace = 0;
   documentTypeReads.mockClear();
   allowLeave = true;
 
@@ -248,22 +291,46 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('opts a mounted view into leave guards for its search namespace', () => {
+  renderPanes('/watched-list');
+  allowLeave = false;
+  fireEvent.click(screen.getByRole('button', { name: 'sort:name' }));
+  expect(screen.getByRole('button', { name: 'sort:name' })).toBeTruthy();
+  allowLeave = true;
+  fireEvent.click(screen.getByRole('button', { name: 'sort:name' }));
+  expect(screen.getByRole('button', { name: 'sort:date' })).toBeTruthy();
+});
 describe('split router Solid bindings', () => {
-  it('keeps a view mounted while its remount key holds and updates params in place', () => {
+  it('keeps a view mounted while its remount key holds and updates params in place', async () => {
     const { router } = renderPanes('/drive/md/d1');
     const pane = router.panes()[0]!;
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigatePane(pane, '/drive/md/d2');
+    await router.navigatePane(pane, '/drive/md/d2');
     expect(screen.getByTestId('document').textContent).toBe('md:d2');
-    expect(counts).toEqual({ drive: 1, document: 1 });
+    expect(counts).toMatchObject({ drive: 1, document: 1 });
     expect(documentTypeReads).toHaveBeenCalledTimes(1);
 
-    router.navigatePane(pane, '/drive/pdf/d2');
-    expect(counts).toEqual({ drive: 1, document: 2 });
+    await router.navigatePane(pane, '/drive/pdf/d2');
+    expect(counts).toMatchObject({ drive: 1, document: 2 });
   });
 
-  it('lets panel chrome around a prop-less outlet use the hooks', () => {
+  it('keeps one view mounted across routes that share a mount key', async () => {
+    const { router } = renderPanes('/workspace');
+    const pane = router.panes()[0]!;
+
+    await router.navigatePane(pane, '/workspace/a');
+    await router.navigatePane(pane, '/workspace/b');
+    expect(screen.getByTestId('workspace').textContent).toBe('item:b');
+    await router.navigatePane(pane, '/workspace');
+    expect(counts.workspace).toBe(1);
+
+    await router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/workspace/a');
+    expect(counts.workspace).toBe(2);
+  });
+
+  it('lets panel chrome around a prop-less outlet use the hooks', async () => {
     const { router } = renderPanes('/drive/md/d1', (pane) => (
       <Panel pane={pane} />
     ));
@@ -273,7 +340,7 @@ describe('split router Solid bindings', () => {
     );
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.getByTestId('header').textContent).toBe('app/home back:true');
     expect(screen.getByText('home')).toBeTruthy();
   });
@@ -369,16 +436,16 @@ describe('split router Solid bindings', () => {
     expect(screen.getByTestId('document').textContent).toBe('md:d3');
   });
 
-  it('runs leave guards before unmounting a view but not for search changes', () => {
+  it('runs leave guards before unmounting a view but not for search changes', async () => {
     const { router, history } = renderPanes('/guarded');
     const pane = router.panes()[0]!;
     allowLeave = false;
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.getByTestId('guarded')).toBeTruthy();
-    router.updateSearch(pane, 'anything', { x: ['1'] });
+    await router.updateSearch(pane, 'anything', { x: ['1'] });
     expect(history.read().search).toBe('?s0.anything.x=1');
     allowLeave = true;
-    router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/home');
     expect(screen.queryByTestId('guarded')).toBeNull();
   });
 
@@ -449,6 +516,38 @@ describe('<SplitRouter.Router>', () => {
     expect(history.read().path).toBe('/login');
   });
 
+  it('shows a route’s loading view while its lazy component loads', async () => {
+    let resolveInbox!: () => void;
+    const InboxView = lazy(
+      () =>
+        new Promise<{ default: () => JSX.Element }>((resolve) => {
+          resolveInbox = () => resolve({ default: () => <p>inbox</p> });
+        })
+    );
+    render(() => (
+      <Router
+        history={createMemoryHistory('/inbox')}
+        paneStore={createMemoryPaneStore()}
+        policy={createTestPolicy().policy}
+        defaultRoute={defaultRoute}
+      >
+        <Route definition={app} component={AppLayout}>
+          <Route definition={home} component={() => <p>home</p>} />
+          <Route
+            definition={inbox}
+            component={InboxView}
+            loading={() => <p>inbox skeleton</p>}
+          />
+        </Route>
+      </Router>
+    ));
+
+    expect(screen.getByText('inbox skeleton')).toBeTruthy();
+    resolveInbox();
+    expect(await screen.findByText('inbox')).toBeTruthy();
+    expect(screen.queryByText('inbox skeleton')).toBeNull();
+  });
+
   it('reads routes from arrays and drops false children', () => {
     const extra = [inbox].map((definition) => (
       <Route definition={definition} component={() => <p>inbox</p>} />
@@ -511,7 +610,7 @@ describe('<SplitRouter.Router>', () => {
           <Route definition={withComponent} />
         </Router>
       ))
-    ).toThrow(/must not set children or component/);
+    ).toThrow(/must not set children, component, or loading/);
     expect(() =>
       render(() => (
         <Router {...options}>

@@ -5,7 +5,9 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -17,10 +19,11 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
+import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
@@ -133,6 +136,25 @@ export function fetchEntityProperties(
   });
 }
 
+// Cached callbacks outlive the caller; only plain values enter here.
+function entityPropertiesQueryOptions(
+  entityType: EntityType,
+  entityId: string,
+  enabled: boolean,
+  includeMetadata: boolean
+) {
+  return queryOptions({
+    queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
+    enabled,
+    queryFn: () => fetchRestEntityProperties(entityType, entityId),
+    select: (properties: Property[]) =>
+      includeMetadata
+        ? properties
+        : properties.filter((property) => property.isMetadata !== true),
+    staleTime: 0,
+  });
+}
+
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
   entityId: Accessor<string>,
@@ -155,21 +177,13 @@ export function useEntityPropertiesQuery(
 
   const restQuery = useQuery(
     () => {
-      const type = entityType();
       const id = entityId();
-      return {
-        queryKey: propertiesKeys.entity({
-          entityType: type,
-          entityId: id,
-        }).queryKey,
-        enabled: !usesGraphql() && id.length > 0,
-        queryFn: () => fetchRestEntityProperties(type, id),
-        select: (properties: Property[]) =>
-          includeMetadata
-            ? properties
-            : properties.filter((property) => property.isMetadata !== true),
-        staleTime: 0,
-      };
+      return entityPropertiesQueryOptions(
+        entityType(),
+        id,
+        !usesGraphql() && id.length > 0,
+        includeMetadata
+      );
     },
     () => queryClient
   );
@@ -389,14 +403,22 @@ export function useDeleteEntityPropertyMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: DeleteEntityPropertyParams) => {
-      if (vars.entityType === 'INITIATIVE') {
+      if (
+        vars.entityType === 'INITIATIVE' ||
+        (isFeatureEnabled(enableGraphqlSoup) &&
+          vars.entityType !== 'USER' &&
+          vars.entityType !== 'CALENDAR_EVENT')
+      ) {
         const result = await getGraphqlSoupClient()
           .mutation(DeleteEntityPropertyDocument, {
-            entityType: 'INITIATIVE',
+            entityType: toPropertyTargetEntityType(vars.entityType),
             entityId: vars.entityId,
             entityPropertyId: vars.entityPropertyId,
           })
           .toPromise();
+        const disposition = optimisticMutationDispositionOf(result);
+        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'permanently-failed') throw disposition.error;
         if (result.error) throw result.error;
         if (!result.data) throw new Error('Property removal returned no data');
         return;
@@ -410,11 +432,14 @@ export function useDeleteEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
-        onSuccess: (_data, variables) =>
-          invalidatePropertiesForEntity(
+        onSuccess: (_data, variables) => {
+          // The removed row may have been a Companies or Contacts value.
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
-          ),
+          );
+        },
         onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
@@ -909,11 +934,28 @@ class BulkSaveEntityPropertiesError extends Error {
   }
 }
 
+/** Properties whose values decide which items a CRM record lists. */
+const CRM_ASSOCIATION_PROPERTY_IDS: readonly string[] = [
+  SYSTEM_PROPERTY_IDS.COMPANIES,
+  SYSTEM_PROPERTY_IDS.CONTACTS,
+];
+
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  void invalidatePropertiesForEntity(item.entityType, item.entityId);
+  fireAndForget(
+    invalidatePropertiesForEntity(item.entityType, item.entityId),
+    'entity-properties'
+  );
   invalidateSoupEntity(item.entityId);
+  // CRM record lists resolve membership on the server, not from these rows.
+  if (
+    CRM_ASSOCIATION_PROPERTY_IDS.includes(
+      getPropertyDefinitionId(item.property)
+    )
+  ) {
+    fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+  }
 }
 
 function handleCommittedPropertySave(

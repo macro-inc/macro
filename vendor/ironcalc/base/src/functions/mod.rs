@@ -27,6 +27,7 @@ pub use math_and_trigonometry::set_random_seed;
 mod spill_functions;
 mod statistical;
 mod subtotal;
+pub use subtotal::FilteredRange; // MACRO
 mod text;
 pub(crate) mod util;
 mod xlookup;

@@ -47,6 +47,7 @@ fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message 
         parent,
         thread_id: Some(ROOT),
         sender_id: SENDER.to_owned().try_into().unwrap(),
+        guest_name: None,
         imported_author: None,
         bot_profile: None,
         mentions: vec![],
@@ -209,6 +210,7 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
         MessageChange::Typing {
             thread_id: Some(ROOT),
             active: true,
+            agent: None,
         },
         MessageChange::ThreadUpdated {
             state: crate::domain::models::ThreadState {

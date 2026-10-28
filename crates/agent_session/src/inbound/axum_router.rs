@@ -39,7 +39,7 @@ use entity_registry::{NonUserOwners, resolve_creation_principal};
 use macro_authorization::{
     ActingUser, InternalOnly, MacroAuthorization, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, UserBotOrHarness,
-    UserBotOrHarnessAuthorization,
+    UserBotOrHarnessAuthorization, UserOnly,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -47,10 +47,11 @@ use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionStatus, StoredAgentSessionLog,
+    SessionBot, SessionSource, SessionStatus, SessionVisibility, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -68,6 +69,8 @@ pub mod sharing;
 
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
+
+mod owned_purge;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -195,6 +198,10 @@ where
             get(get_agent_session_log_handler::<T, Access, Auth>),
         )
         .route(
+            "/{session_id}/log/folded",
+            get(get_agent_session_folded_log_handler::<T, Access, Auth>),
+        )
+        .route(
             "/{session_id}/name",
             put(rename_agent_session_handler::<T, Access, Auth>),
         )
@@ -227,6 +234,10 @@ where
         .route(
             "/user/{user_id}",
             delete(delete_user_sessions_handler::<R, Access, Auth>),
+        )
+        .route(
+            "/internal/{session_id}",
+            delete(owned_purge::purge_owned_session_handler::<R, Access, Auth>),
         )
         .route(
             "/{session_id}/control",
@@ -282,6 +293,25 @@ where
             "/agent-sandbox-size",
             get(get_agent_sandbox_size_handler::<T, Access, Auth>)
                 .put(put_agent_sandbox_size_handler::<T, Access, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Build the caller's coding preferences router. Mount at `/agent-coding-preferences`.
+pub fn agent_coding_preferences_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
+where
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/agent-coding-preferences",
+            get(get_agent_coding_preferences_handler::<T, Access, Auth>)
+                .put(put_agent_coding_preferences_handler::<T, Access, Auth>),
         )
         .with_state(state)
 }
@@ -385,11 +415,13 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(
                 error @ (AgentSessionError::TooManyPreviewIds(_)
+                | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
-            Self::Domain(error @ AgentSessionError::Archived(_)) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
-            }
+            Self::Domain(
+                error
+                @ (AgentSessionError::Archived(_) | AgentSessionError::AnswersConversation(_)),
+            ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.
             Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
@@ -481,6 +513,11 @@ pub struct ControlRequest {
     /// fields, which are tagged under `type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action_id: Option<AgentActionId>,
+    /// Why the agent is being asked. Only a runtime forwarding a triggered
+    /// prompt may send it; a user's request carrying it is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub context: Option<trigger_context::TriggerContext>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -588,6 +625,8 @@ pub struct AgentSessionResponse {
     pub repo_url: Option<String>,
     /// The session's linked pull request.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was linked to.
+    pub task_id: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier of the managed sandbox.
@@ -626,11 +665,10 @@ pub struct ExternalSessionResponse {
 
 impl From<ExternalSession> for ExternalSessionResponse {
     fn from(external: ExternalSession) -> Self {
-        let url = external.web_url();
         Self {
             provider: external.provider,
             name: external.external_name,
-            url,
+            url: external.external_url,
         }
     }
 }
@@ -664,6 +702,7 @@ impl AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             pull_request_url: session.pull_request_url,
+            task_id: session.task_id,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             instructions: session.instructions,
@@ -684,12 +723,22 @@ impl AgentSessionResponse {
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
     responses(
         (status = 200, body = AgentSessionResponse),
-        (status = 401, body = String),
+        (status = 401, body = String, description = "the session exists but is not this caller's"),
         (status = 403, body = String),
+        (
+            status = 404,
+            body = String,
+            description = "no session with this id: not created yet, or deleted since"
+        ),
         (status = 500, body = String),
     )
 )]
 /// Get an agent session by id.
+///
+/// A caller holding no grant is answered 401; an id with no session behind it
+/// at all is answered 404. They used to be the same answer, which left a
+/// client that read a session before its create had landed unable to tell a
+/// race it should retry from a refusal it should not.
 #[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
 pub async fn get_agent_session_handler<
     T: AgentSessionService,
@@ -903,6 +952,7 @@ pub async fn rename_agent_session_handler<
         (status = 204),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The session answers an agent conversation"),
         (status = 500, body = String),
     )
 )]
@@ -1025,6 +1075,7 @@ pub async fn control_agent_session_handler<
             ControlEvent::authorized(
                 req.action,
                 req.action_id,
+                req.context,
                 principal,
                 access.entity_access_receipt,
             )?,
@@ -1371,6 +1422,100 @@ pub async fn put_agent_sandbox_size_handler<
     Ok(Json(req))
 }
 
+/// Request or response body for the caller's coding preferences.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodingPreferencesBody {
+    /// Whether new coding sessions research prior work and link a Macro task.
+    pub create_tasks: bool,
+    /// Whether new coding sessions deliver their work as a pull request.
+    pub open_pull_requests: bool,
+}
+
+impl From<CodingPreferences> for CodingPreferencesBody {
+    fn from(preferences: CodingPreferences) -> Self {
+        Self {
+            create_tasks: preferences.create_tasks,
+            open_pull_requests: preferences.open_pull_requests,
+        }
+    }
+}
+
+impl From<CodingPreferencesBody> for CodingPreferences {
+    fn from(body: CodingPreferencesBody) -> Self {
+        Self {
+            create_tasks: body.create_tasks,
+            open_pull_requests: body.open_pull_requests,
+        }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-coding-preferences",
+    tag = "agent-sessions",
+    operation_id = "get_agent_coding_preferences",
+    responses(
+        (status = 200, body = CodingPreferencesBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Read what the caller's new coding sessions are told to do beyond their assignment.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn get_agent_coding_preferences_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
+    let preferences = state
+        .service
+        .user_coding_preferences(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(preferences.into()))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-coding-preferences",
+    tag = "agent-sessions",
+    operation_id = "put_agent_coding_preferences",
+    request_body = CodingPreferencesBody,
+    responses(
+        (status = 200, body = CodingPreferencesBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Replace the caller's coding preferences.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        actor = %caller.acting_entity(),
+        create_tasks = req.create_tasks,
+        open_pull_requests = req.open_pull_requests,
+    ),
+    err(Debug)
+)]
+pub async fn put_agent_coding_preferences_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(req): Json<CodingPreferencesBody>,
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
+    state
+        .service
+        .set_user_coding_preferences(&caller.authorization.user.macro_user_id, req.into())
+        .await?;
+    Ok(Json(req))
+}
+
 /// One entry of a session's protocol log.
 ///
 /// Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
@@ -1433,6 +1578,8 @@ pub struct LogFrameDto {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LogDirectionDto {
+    /// Trusted system-event invocation, separate from user prompts.
+    Notification,
     /// Runtime → server.
     ToServer,
     /// Server → runtime.
@@ -1526,6 +1673,70 @@ pub async fn get_agent_session_log_handler<
     }))
 }
 
+/// Response body for one session's folded log.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionFoldedLogResponse {
+    /// The agent whose messages these are; it sent every agent message.
+    pub bot: SessionBot,
+    /// The conversation, oldest first: prompts, replies, tool calls and their
+    /// results, plans, permission requests and how each turn ended. Each
+    /// element is a `FoldedMessage` from the fold's TypeScript contract,
+    /// which the SDK exports; the schema is opaque here because those types
+    /// are described with specta rather than utoipa.
+    #[schema(value_type = Vec<Object>)]
+    pub messages: Vec<agent_fold::inbound::wire::FoldedMessage>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/log/folded",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_folded_log",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionFoldedLogResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// One agent session's history folded into renderable messages: the same
+/// fold the web client runs over [`get_agent_session_log_handler`]'s frames.
+///
+/// For readers that do not run the fold themselves, such as SDK programs and
+/// agents reading another session's history.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        session_id = %session_id,
+        agent.session.folded_log.messages = tracing::field::Empty,
+    ),
+    err(Debug)
+)]
+pub async fn get_agent_session_folded_log_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionFoldedLogResponse>, AgentSessionApiError> {
+    let session = AgentSessionId::new_from_uuid(session_id);
+    let log = state.service.folded_session_log(session).await?;
+    tracing::Span::current().record("agent.session.folded_log.messages", log.messages.len());
+
+    Ok(Json(AgentSessionFoldedLogResponse {
+        bot: log.bot,
+        messages: log
+            .messages
+            .into_iter()
+            .map(|message| agent_fold::inbound::wire::FoldedMessage::new(session, message))
+            .collect(),
+    }))
+}
+
 /// Shared state for the create route: the opener that owns session-opening
 /// semantics, the bot directory that gates it, and the authorization state the
 /// extractor runs against.
@@ -1597,6 +1808,10 @@ where
         .route(
             "/",
             post(create_agent_session_handler::<Opener, Bots, Requests, Auth>),
+        )
+        .route(
+            "/warm",
+            post(warm_agent_session_handler::<Opener, Bots, Requests, Auth>),
         )
         .with_state(state)
 }
@@ -2075,6 +2290,8 @@ pub async fn create_agent_session_handler<
                             repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
+                            source: SessionSource::User,
+                            visibility: SessionVisibility::Listed,
                         })
                         .await?;
                     return Ok((
@@ -2107,6 +2324,8 @@ pub async fn create_agent_session_handler<
                 profile,
                 instructions,
                 model: request.model.filter(|model| !model.trim().is_empty()),
+                source: SessionSource::User,
+                visibility: SessionVisibility::Listed,
             })
             .await?;
         return Ok((
@@ -2218,3 +2437,45 @@ pub async fn create_agent_session_handler<
         }),
     ))
 }
+
+/// A client-minted id deduplicates warm calls without creating a conversation.
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmAgentSessionRequest {
+    /// Id reserved by this browser for its next in-memory conversation.
+    pub id: Uuid,
+}
+
+/// A bounded best-effort warm attempt; absence means normal creation should proceed.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmAgentSessionResponse {
+    /// Prepared session, hidden until explicitly claimed through create.
+    pub session: Option<AgentSessionResponse>,
+}
+
+/// Prepare MCP connections without sending a prompt or creating a visible list row.
+#[utoipa::path(post, path = "/agent-sessions/warm", request_body = WarmAgentSessionRequest,
+    responses((status = 200, body = WarmAgentSessionResponse)), tag = "agent-sessions")]
+pub async fn warm_agent_session_handler<
+    Opener: SessionOpener,
+    Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Json(request): Json<WarmAgentSessionRequest>,
+) -> Result<Json<WarmAgentSessionResponse>, CreateSessionApiError> {
+    let owner = Owner::User(caller.authorization.macro_user_id.clone());
+    let session = state
+        .opener
+        .warm_session(owner, AgentSessionId::new_from_uuid(request.id))
+        .await?;
+    Ok(Json(WarmAgentSessionResponse {
+        session: session.map(|session| AgentSessionResponse::new(session, true)),
+    }))
+}
+
+/// Internal service controls used by AI tools.
+pub mod tool_actions;

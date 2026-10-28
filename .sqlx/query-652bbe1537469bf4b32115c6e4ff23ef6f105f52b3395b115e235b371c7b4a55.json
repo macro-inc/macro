@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.team_id, p.record_type, p.database_id, p.table_id,\n                      p.name, p.user_id, p.created_at, p.trashed_at, p.primary_column_id,\n                      EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = p.id\n                        AND ea.entity_type = 'crm_pipeline' AND ea.source_type = 'team'\n                        AND ea.source_id = p.team_id::text) AS \"team_shared!\"\n               FROM crm_pipeline_entities p\n               WHERE p.id = ANY($1) ORDER BY p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "primary_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "team_shared!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "652bbe1537469bf4b32115c6e4ff23ef6f105f52b3395b115e235b371c7b4a55"
+}

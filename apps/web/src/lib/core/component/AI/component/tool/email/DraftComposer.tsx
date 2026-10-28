@@ -10,44 +10,74 @@
 
 import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
 import { ComposeProvider } from '@app/features/email-compose/context/compose-context';
+import { attachmentLimitBytes } from '@app/features/email-compose/core/constants';
 import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import { fromInboxOptions } from '@app/features/email-compose/core/email-sender';
 import { convertContactInfoToEmailRecipient } from '@app/features/email-compose/core/recipient-conversion';
 import { createComposeBodyActions } from '@app/features/email-compose/editor-adapter';
+import { makeAttachmentPublic } from '@app/features/email-compose/make-attachment-public';
+import { partitionByAttachmentLimit } from '@app/features/email-compose/primitives/attachment-limit';
+import { createAttachmentLinkOffer } from '@app/features/email-compose/primitives/attachment-links';
 import type {
   ComposeContextValue,
   ComposeValidationError,
 } from '@app/features/email-compose/primitives/compose-view-state';
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
 import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
+import { uploadAttachmentDocuments } from '@app/features/email-compose/upload-documents';
 import { ComposeLayout } from '@app/features/email-compose/views/compose-layout';
 import { EmailComposeToolbar } from '@app/features/email-compose/views/compose-toolbar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
-import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
+import { forceDssRuleset, uploadFile } from '@core/util/upload';
+import {
+  findPrimaryEmailLinkId,
+  useEmailLinksQuery,
+  useEmailSignature,
+  useMessageInboxQuery,
+} from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
+import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
+import { entityKeys } from '@queries/storage/keys';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { debounce } from '@solid-primitives/scheduled';
-import { ComposerSurface, cn } from '@ui';
+import { useQueryClient } from '@tanstack/solid-query';
+import { Button, ComposerSurface, cn, confirmDialog } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   type ComponentProps,
   createMemo,
   createSignal,
+  getOwner,
   type JSX,
   onCleanup,
   Show,
 } from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
+import {
+  createDraftAttachments,
+  type DocumentDescription,
+  documentAttachmentFileName,
+} from './draft-attachments';
+import { resolveSendingInbox } from './sending-inbox';
 
 export type EmailDraftComposerProps = {
   /** The draft as the agent wrote it, or as the user last saved it. */
   initialData: SendEmail;
   /** Where edits, the send and the rejection go. */
   sink: UserToolReviewSink<SendEmail>;
+  /** Allow a surrounding stack to capture the latest edit before navigation or sending all. */
+  registerDraftReader?: (reader: () => SendEmail | undefined) => void;
+  /** Prepare the current editor for a batch, waiting for uploads and validation. */
+  registerSubmitReader?: (reader: () => Promise<SendEmail | undefined>) => void;
   /** Extra recipients to offer in the pickers. */
   recipientOptions?: EmailRecipient[];
   /** Shown above the form; the sink's locked notice takes precedence. */
@@ -81,16 +111,82 @@ function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
   return <ComposerSurface {...props} as="div" />;
 }
 
+/** Uploads a user-added file as a Macro document, the form the send attaches. */
+async function uploadAttachmentDocument(
+  file: File
+): Promise<{ documentId: string } | undefined> {
+  const result = await uploadFile(file, forceDssRuleset, {
+    hideProgressIndicator: true,
+  });
+  if (
+    result.failed ||
+    result.destination !== 'dss' ||
+    result.type !== 'document'
+  ) {
+    toast.failure(`Failed to attach ${file.name}`);
+    return undefined;
+  }
+  return { documentId: result.documentId };
+}
+
 export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const uiDisabled = () => !props.sink.canAct() || props.readOnly === true;
+  const userId = useUserId();
   const emailLinksQuery = useEmailLinksQuery();
-  // The inbox this card sends from — always the first linked inbox (shown as
-  // "from"); the backend resolves the same default at send time.
+  const inboxes = createMemo(() =>
+    queryReadyGate(emailLinksQuery) ? (emailLinksQuery.data.links ?? []) : []
+  );
+  // Keep the selected address even if its inbox is later disconnected, so
+  // edits cannot silently replace an explicit sender.
+  const [chosenInbox, setChosenInbox] = createSignal<{
+    id: string;
+    address: string;
+  }>();
+  const explicitFrom = () =>
+    chosenInbox()?.address || props.initialData.from?.trim() || undefined;
+  const replyInboxQuery = useMessageInboxQuery(() =>
+    explicitFrom() ? undefined : (props.initialData.replyingToId ?? undefined)
+  );
   const sendingLink = createMemo(() => {
-    if (!emailLinksQuery.isSuccess && !emailLinksQuery.isError) return;
-    return emailLinksQuery.data?.links?.[0];
+    const list = inboxes();
+    return resolveSendingInbox(list, {
+      chosenInboxId: chosenInbox()?.id,
+      draftFrom: props.initialData.from,
+      isReply: Boolean(props.initialData.replyingToId),
+      replyTargetInboxId: queryReadyGate(replyInboxQuery)
+        ? (replyInboxQuery.data ?? undefined)
+        : undefined,
+      primaryInboxId:
+        findPrimaryEmailLinkId(list, userId()) ??
+        list.find((link) => link.macro_id === userId())?.id,
+    });
   });
-  const fromAddress = () => sendingLink()?.email_address;
+  const fromAddress = () => explicitFrom() ?? sendingLink()?.email_address;
+  const senderNotice = () => {
+    if (sendingLink()) return undefined;
+    if (emailLinksQuery.isPending) return 'Resolving sender...';
+    if (!queryReadyGate(emailLinksQuery)) {
+      return 'Could not load your inboxes. Try again.';
+    }
+    if (explicitFrom()) {
+      return `${explicitFrom()} is unavailable. Choose a connected sending inbox.`;
+    }
+    if (props.initialData.replyingToId) {
+      if (replyInboxQuery.isPending || replyInboxQuery.isFetching) {
+        return 'Resolving sender...';
+      }
+      return 'Could not resolve the reply sender. Try again or choose a sending inbox.';
+    }
+    return 'Connect an inbox to send email.';
+  };
+  const canRetrySender = () =>
+    !sendingLink() &&
+    (emailLinksQuery.isError || (!explicitFrom() && replyInboxQuery.isError));
+  const retrySender = async () => {
+    if (emailLinksQuery.isError) await emailLinksQuery.refetch();
+    if (!explicitFrom() && replyInboxQuery.isError)
+      await replyInboxQuery.refetch();
+  };
   const signature = useEmailSignature(() => sendingLink()?.id);
   const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   // Whether this email includes the signature. Defaults on; the preview's ✕
@@ -136,10 +232,49 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
   const [isSending, setIsSending] = createSignal(false);
   const [editor, setEditor] = createSignal<LexicalEditor>();
+  const [bodyInitialized, setBodyInitialized] = createSignal(false);
   const [validationErrors, setValidationErrors] = createSignal<
     ComposeValidationError[]
   >([]);
   let finalized = false;
+
+  const queryClient = useQueryClient();
+  const describeDocument = async (
+    documentId: string
+  ): Promise<DocumentDescription> => {
+    const metadata = await queryClient.fetchQuery({
+      queryKey: entityKeys.documentMetadata(documentId).queryKey,
+      queryFn: () => fetchDocumentMetadata(documentId),
+      staleTime: 60 * 1000,
+    });
+    const fileType = metadata.fileType ?? undefined;
+    return {
+      fileName: documentAttachmentFileName(metadata.documentName, fileType),
+      mimeType: fileType
+        ? FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime
+        : undefined,
+    };
+  };
+  const attachments = createDraftAttachments({
+    initial: props.initialData.attachments,
+    describe: describeDocument,
+    upload: uploadAttachmentDocument,
+    onChange: () => scheduleUpdate(),
+  });
+  // Attach handlers run as event handlers without a Solid owner; the dialog needs this one.
+  const dialogOwner = getOwner();
+  const attachmentLinks = createAttachmentLinkOffer({
+    editor,
+    canEdit: () => !isSending() && !uiDisabled() && !finalized,
+    version: () => `${sendingLink()?.id ?? ''}:${fromAddress() ?? ''}`,
+    notices: {
+      confirm: (input) => confirmDialog(input, { owner: dialogOwner }),
+    },
+    editorFiles: {
+      uploadDocuments: uploadAttachmentDocuments,
+      makePublic: makeAttachmentPublic,
+    },
+  });
 
   function collectArgs(): SendEmail {
     return {
@@ -147,12 +282,31 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      body: prepareEmailBody(editor())?.bodyHtml ?? '',
+      body: bodyInitialized()
+        ? (prepareEmailBody(editor())?.bodyHtml ?? props.initialData.body)
+        : props.initialData.body,
       replyingToId: props.initialData.replyingToId,
+      // Preserve explicit choices; the backend resolves implicit senders.
+      from: explicitFrom(),
       // Omit to use the backend default policy; false only when dismissed.
       includeSignature: includeSignature() ? undefined : false,
+      attachments: attachments.toToolArgs(),
     };
   }
+
+  props.registerDraftReader?.(() =>
+    !bodyInitialized() || attachments.uploading() || attachmentLinks.uploading()
+      ? undefined
+      : collectArgs()
+  );
+  props.registerSubmitReader?.(async () => {
+    if (!bodyInitialized()) return;
+    await attachmentLinks.settled();
+    if (!(await attachments.waitForUploads()) || !sendingLink() || !validate())
+      return;
+    debouncedEdit.clear();
+    return collectArgs();
+  });
 
   function validate(): boolean {
     const errors: ComposeValidationError[] = [];
@@ -184,17 +338,29 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   }
   onCleanup(() => {
     debouncedEdit.clear();
+    attachmentLinks.detach();
     props.sink.onDispose?.();
   });
 
   async function handleSend() {
-    if (finalized || uiDisabled() || isSending()) return;
+    if (
+      finalized ||
+      uiDisabled() ||
+      isSending() ||
+      attachments.uploading() ||
+      attachmentLinks.uploading() ||
+      !sendingLink()
+    )
+      return;
     if (!validate()) return;
     debouncedEdit.clear();
     setIsSending(true);
     const done = await props.sink.onExecute(collectArgs());
     setIsSending(false);
-    if (done) finalized = true;
+    if (done) {
+      finalized = true;
+      attachmentLinks.detach();
+    }
   }
 
   // `body` is markdown while the AI is drafting, but every persist path
@@ -214,9 +380,8 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     isMobile,
     // The AI tool has its own execute contract and does not expose scheduled send.
     scheduleEnabled: false,
-    attachmentFailure: toast.failure,
     subject,
-    attachments: () => [],
+    attachments: attachments.list,
     schedule: {
       state: () => ({ type: 'editing', intent: { type: 'immediate' } }),
       selectedTime: () => undefined,
@@ -240,22 +405,42 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     onContentChange: () => {
       scheduleUpdate();
     },
-    onAddAttachments: (_: DraftFormAttachment[]) => {},
-    onRemoveAttachment: (_: DraftFormAttachment) => {},
+    onAddAttachments: (files: File[]) => {
+      if (uiDisabled()) return;
+      const limit = attachmentLimitBytes(sendingLink()?.provider);
+      const { attachable, oversized } = partitionByAttachmentLimit(
+        files,
+        attachments.list(),
+        limit
+      );
+      attachments.add(attachable.map((file) => ({ type: 'local', file })));
+      fireAndForget(attachmentLinks.share(oversized, limit), 'ai-email-draft');
+    },
+    onRemoveAttachment: (attachment: DraftFormAttachment) => {
+      if (uiDisabled()) return;
+      attachments.remove(attachment);
+    },
     captureEditor: setEditor,
     onEditorInitialized: (editor) => {
+      setBodyInitialized(true);
       props.onBodyInitialized?.(prepareEmailBody(editor)?.bodyHtml ?? '');
     },
     onSend: handleSend,
     disabled: () => isSending() || uiDisabled(),
-    primaryActionDisabled: () => isSending() || uiDisabled(),
+    // Send waits for files the user just added to finish becoming documents.
+    primaryActionDisabled: () =>
+      isSending() ||
+      uiDisabled() ||
+      attachments.uploading() ||
+      attachmentLinks.uploading() ||
+      !sendingLink(),
     isSending,
     isSavingDraft: () => false,
     hasDraft: () => false,
     hasPaidAccess: () => true,
     focusRecipientsOnMount: false,
     includeSelf: true,
-    hideAttachments: true,
+    hideAttachments: props.readOnly === true,
     recipientOptions: () => [
       ...recipients().to,
       ...recipients().cc,
@@ -264,6 +449,15 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     ],
     validationError: (type) => validationErrors().find((e) => e.type === type),
     fromAddress,
+    fromInboxes: () => fromInboxOptions(inboxes()),
+    selectedInboxId: () => sendingLink()?.id,
+    onSelectInbox: (inboxId) => {
+      if (uiDisabled() || isSending()) return;
+      const inbox = inboxes().find((link) => link.id === inboxId);
+      if (!inbox) return;
+      setChosenInbox({ id: inbox.id, address: inbox.email_address });
+      scheduleUpdate();
+    },
     recipients,
     // Read-only preview of the signature the backend appends on send, with a ✕
     // to drop it for this one email (persisted through the sink's edit).
@@ -300,15 +494,37 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
           as={DraftComposerSurface}
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
-            'relative flex flex-col w-full text-xs p-4',
+            'relative flex flex-col w-full text-xs p-4 touch:pt-4',
             isTouchDevice() && 'rounded-lg bg-surface',
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}
           header={header()}
+          notice={
+            <Show when={!props.readOnly && senderNotice()}>
+              {(notice) => (
+                <div
+                  role="status"
+                  class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
+                >
+                  <span>{notice()}</span>
+                  <Show when={canRetrySender()}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={uiDisabled()}
+                      onClick={retrySender}
+                    >
+                      Retry
+                    </Button>
+                  </Show>
+                </div>
+              )}
+            </Show>
+          }
           toolbar={
             props.readOnly === true ? undefined : (
-              <EmailComposeToolbar editor={editor} />
+              <EmailComposeToolbar editor={editor} inline />
             )
           }
         />

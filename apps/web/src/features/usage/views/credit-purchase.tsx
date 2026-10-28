@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { createSignal } from 'solid-js';
 import { CreditPurchaseDialog } from '../components/credit-purchase-dialog';
@@ -44,6 +45,7 @@ export function CreditPurchaseView(props: {
     try {
       const url = await props.context.checkout.start(amount);
       props.context.navigateToPayment(url);
+      props.onClose();
     } catch (error) {
       const needsPlan = thrownResultErrorHasCode(error, 'PAID_PLAN_REQUIRED');
       setSubscriptionRequired(needsPlan);
@@ -56,6 +58,7 @@ export function CreditPurchaseView(props: {
   };
   return (
     <CreditPurchaseDialog
+      sharedWithTeam={props.context.summary()?.creditScope === 'team'}
       selection={selection()}
       customAmount={customAmount()}
       amountCents={amountCents()}
@@ -66,7 +69,7 @@ export function CreditPurchaseView(props: {
       onCustomAmount={setCustomAmount}
       onClose={props.onClose}
       onRestoreFocus={props.onRestoreFocus}
-      onCheckout={() => void checkout()}
+      onCheckout={() => fireAndForget(checkout(), 'usage')}
       onViewPlans={
         (props.context.summary()?.billingAccess === 'free' && !previewing()) ||
         subscriptionRequired()

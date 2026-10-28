@@ -1,0 +1,1 @@
+Explicit inbox addresses to search within, such as in the user@example.com inbox. Return supplied inbox addresses, never IDs. These are connected inboxes, not senders or recipients. Use [] when absent; unsupported sender wording remains query text.

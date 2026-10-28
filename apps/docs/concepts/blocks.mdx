@@ -4,7 +4,7 @@ icon: "cubes"
 description: "Blocks are at the core of Macro's philosophy. They are designed to work together like legos."
 ---
 
-Everything in Macro is a **block**. The current first-party block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (crm), `company` (crm), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
+Everything in Macro is a **block**. The current first-party block types are `md` (documents), `email`, `channel`, `chat` and `agent` (agents), `routine`, `skill`, `snippet`, `task`, `initiative` (projects), `project` (folders), `spreadsheet`, `contact` (customers), `company` (customers), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
 
 ## Splits
 
@@ -12,9 +12,9 @@ On desktop (not on mobile), Macro has its own window manager that lets you multi
 
 In general, you can use <kbd>shift</kbd>\+click to open an @mention or list item in a new split.
 
-Each split maintains its own history. Use <kbd>opt</kbd> <kbd>\[</kbd> or <kbd>opt</kbd> <kbd>\]</kbd> to move back and forward, or just press the chevron icons in the top bar of the split.
+Each split maintains its own history. Use <kbd>opt</kbd> <kbd>\[</kbd> or <kbd>opt</kbd> <kbd>\]</kbd> to move back and forward. Press <kbd>shift</kbd>\+<kbd>escape</kbd> to focus a split: it floats above the others until you press the shortcut again.
 
-Create a split with <kbd>cmd</kbd>\+<kbd>\\</kbd>, focus left/right with <kbd>shift</kbd>\+<kbd>h</kbd> / <kbd>shift</kbd>\+<kbd>l</kbd>, maximize with <kbd>shift</kbd>\+<kbd>escape</kbd>, close with <kbd>cmd</kbd>\+<kbd>escape</kbd>.
+Create a split with <kbd>\\</kbd> or the split icon in the top right, focus left/right with <kbd>shift</kbd>\+<kbd>h</kbd> / <kbd>shift</kbd>\+<kbd>l</kbd>, maximize with <kbd>shift</kbd>\+<kbd>escape</kbd>, close with <kbd>cmd</kbd>\+<kbd>escape</kbd>.
 
 <Frame>
   ![Multiple splits open side by side in a single Macro tab](/images/Screenshot-2026-06-09-at-4.49.29-PM.png)
@@ -60,4 +60,4 @@ To create an embed, first create an @mention by hitting `@` or dragging and drop
 
 - **References, sharing & permissions**: every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
 - **Real-time collaboration**: collaborative blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
-- **Search & Inbox**: one unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.
+- **Search & Home**: one unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. [Home](/product/home) pulls open notifications from across blocks into a single recency-sorted feed.

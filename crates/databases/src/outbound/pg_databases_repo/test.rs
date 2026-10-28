@@ -23,12 +23,15 @@ mod journal;
 mod rename_column;
 #[cfg(feature = "gateway")]
 mod reorder_tables;
+mod required;
 mod saved_queries;
 #[cfg(feature = "gateway")]
 mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
 mod tables;
+#[cfg(feature = "gateway")]
+mod team_share;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
@@ -166,6 +169,8 @@ async fn commit(
 fn bind(table_id: TableId, definition_id: Uuid, position: &str) -> Write {
     Write::CreateColumn {
         column: Column {
+            protections: vec![],
+            nullable: true,
             id: ColumnId::new(),
             table_id,
             property_definition_id: definition_id,

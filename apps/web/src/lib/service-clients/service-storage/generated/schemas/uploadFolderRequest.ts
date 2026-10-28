@@ -10,6 +10,10 @@ import type { UploadFolderRequestParentId } from './uploadFolderRequestParentId'
 export interface UploadFolderRequest {
   /** The content of the folder */
   content: FolderItem[];
+  /** Relative paths of folders to create even when they hold no files.
+
+Uses the same shape as [FolderItem::relative_path], root folder included. */
+  folders?: string[];
   /** Optional parent project id to upload the folder into */
   parentId?: UploadFolderRequestParentId;
   /** The name of the folder you are uploading.

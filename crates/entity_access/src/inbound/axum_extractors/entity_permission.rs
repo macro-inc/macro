@@ -14,6 +14,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
     OptionalMacroAuthorizationExtractor,
 };
+use tracing::Level;
 
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -52,7 +53,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(parts, state))]
+    #[tracing::instrument(err(level = Level::INFO), skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 

@@ -19,8 +19,6 @@ pub enum ModelHarness {
     InMemory,
     /// The caller's Cursor account.
     Cursor,
-    /// The caller's allowlisted Claude subscription demo.
-    ClaudeCloud,
     /// A paired macrod runtime.
     Macrod,
 }
@@ -91,7 +89,7 @@ pub enum RawModelProbe {
 /// A provider probe failure.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelProbeError {
-    /// A required live runtime is not connected.
+    /// A required live runtime, or the caller's Cursor account, is not connected.
     #[error("the requested harness is disconnected")]
     Disconnected,
     /// Provider-specific probing failed.
@@ -132,7 +130,10 @@ pub trait HarnessModelAccess: Send + Sync + 'static {
 /// Fresh in-memory model probe.
 pub trait InMemoryModelProbe: Send + Sync + 'static {
     /// Probe the running in-memory implementation.
-    fn probe(&self) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
+    fn probe(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
 }
 
 /// Fresh Cursor model probe.
@@ -142,15 +143,6 @@ pub trait CursorModelProbe: Send + Sync + 'static {
         &self,
         caller: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
-}
-
-/// Optional demo provider; disabled deployments advertise no Claude models.
-pub trait ClaudeModelProbe: Send + Sync + 'static {
-    /// Discover availability for this caller, never another user's subscription.
-    fn probe<'a>(
-        &'a self,
-        caller: &'a MacroUserIdStr<'static>,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<RawModelProbe, ModelProbeError>> + Send + 'a>>;
 }
 
 /// Fresh paired-macrod model probe.
@@ -179,7 +171,6 @@ pub struct AgentModelsServiceImpl<Access, InMemory, Cursor, Macrod> {
     cursor: Cursor,
     macrod: Macrod,
     timeout: Duration,
-    claude: Option<std::sync::Arc<dyn ClaudeModelProbe>>,
 }
 
 impl<Access, InMemory, Cursor, Macrod> AgentModelsServiceImpl<Access, InMemory, Cursor, Macrod> {
@@ -197,14 +188,7 @@ impl<Access, InMemory, Cursor, Macrod> AgentModelsServiceImpl<Access, InMemory, 
             cursor,
             macrod,
             timeout,
-            claude: None,
         }
-    }
-
-    /// Enable owner-scoped discovery for the demo cloud provider.
-    pub fn with_claude(mut self, probe: std::sync::Arc<dyn ClaudeModelProbe>) -> Self {
-        self.claude = Some(probe);
-        self
     }
 }
 
@@ -222,14 +206,8 @@ where
         request: LoadAgentModels,
     ) -> Result<AgentModels, LoadAgentModelsError> {
         let probe = match (request.harness, request.harness_id) {
-            (ModelHarness::ClaudeCloud, None) => match &self.claude {
-                Some(probe) => tokio::time::timeout(self.timeout, probe.probe(&caller))
-                    .await
-                    .map_err(|_| LoadAgentModelsError::Timeout)?,
-                None => Ok(RawModelProbe::Unsupported),
-            },
             (ModelHarness::InMemory, None) => {
-                tokio::time::timeout(self.timeout, self.in_memory.probe())
+                tokio::time::timeout(self.timeout, self.in_memory.probe(&caller))
                     .await
                     .map_err(|_| LoadAgentModelsError::Timeout)?
             }

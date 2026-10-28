@@ -1,0 +1,13 @@
+# Type Alias: ListSlackImportsData
+
+> **ListSlackImportsData** = \{ `body?`: `never`; `path?`: `never`; `query?`: \{ `before?`: [`JobId`](JobId.md); \}; `url`: `"/slack/imports"`; \}
+
+## Properties
+
+| Property | Type |
+| ------ | ------ |
+| <a id="property-body"></a> `body?` | `never` |
+| <a id="property-path"></a> `path?` | `never` |
+| <a id="property-query"></a> `query?` | \{ `before?`: [`JobId`](JobId.md); \} |
+| `query.before?` | [`JobId`](JobId.md) |
+| <a id="property-url"></a> `url` | `"/slack/imports"` |

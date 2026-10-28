@@ -1,8 +1,9 @@
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
+import { useIsAuthenticated } from '@core/context/user';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import type { HistoryItem } from '@queries/history/history';
 import { useHistoryQuery } from '@queries/history/history';
-import { createEffect, createMemo, createSignal, Suspense } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
 // ---- Global signals ----
 
@@ -12,13 +13,17 @@ const [globalAttachableHistory, setGlobalAttachableHistory] = createSignal<
 
 export { globalAttachableHistory };
 
-// ---- Init component (mount once at app root) ----
-
-function GlobalAttachmentsInner() {
+/** Keeps `globalAttachableHistory` current; call once where the app's state lives. */
+export function useGlobalAttachableHistory(): void {
+  const authenticated = useIsAuthenticated();
   const historyQuery = useHistoryQuery();
 
   const attachableHistory = createMemo(() => {
-    return (historyQuery.data ?? []).filter((item) => {
+    const history =
+      authenticated() === true && historyQuery.isSuccess
+        ? historyQuery.data
+        : [];
+    return history.filter((item) => {
       const blockName = getItemBlockName(item, true);
       return SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(blockName);
     });
@@ -27,14 +32,4 @@ function GlobalAttachmentsInner() {
   createEffect(() => {
     setGlobalAttachableHistory(attachableHistory());
   });
-
-  return null;
-}
-
-export function ChatAttachmentsInit() {
-  return (
-    <Suspense>
-      <GlobalAttachmentsInner />
-    </Suspense>
-  );
 }

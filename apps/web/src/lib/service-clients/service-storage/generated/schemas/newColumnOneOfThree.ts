@@ -4,14 +4,18 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { Formula } from './formula';
 import type { NewColumnOneOfThreeSource } from './newColumnOneOfThreeSource';
 
 /**
- * An existing property, a person's, a team's or a system one, bound
-into the table under its own name.
+ * A derived column: its cells are what `formula` computes from the
+row's other cells, and nothing writes them.
  */
 export type NewColumnOneOfThree = {
-  /** The property's definition. */
-  property: string;
+  /** How its cells are computed: arithmetic over the table's number,
+date and other derived columns. */
+  formula: Formula;
+  /** The column's name, unique within the table ignoring case. */
+  name: string;
   source: NewColumnOneOfThreeSource;
 };

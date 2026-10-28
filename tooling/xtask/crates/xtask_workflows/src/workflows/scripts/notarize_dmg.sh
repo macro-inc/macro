@@ -22,15 +22,69 @@ jq -er '.APPLE_API_PRIVATE_KEY | strings | select(length > 0)' \
 key_id=$(jq -er '.APPLE_API_KEY_ID | strings | select(length > 0)' "$credentials_dir/secrets.json")
 issuer=$(jq -er '.APPLE_API_ISSUER | strings | select(length > 0)' "$credentials_dir/secrets.json")
 
+probe_https() {
+  local label="$1" url="$2" family="${3:-}" status=0
+  local -a curl_args=(--silent --show-error --output /dev/null --connect-timeout 5 --max-time 10)
+  if [ -n "$family" ]; then
+    curl_args+=("$family")
+  fi
+  echo "$label HTTPS probe (an HTTP error still confirms connectivity):"
+  curl "${curl_args[@]}" \
+    --write-out 'remote_ip=%{remote_ip} http=%{http_code} dns_s=%{time_namelookup} tcp_s=%{time_connect} tls_s=%{time_appconnect} total_s=%{time_total}\n' \
+    "$url" || status=$?
+  echo "$label curl_exit=$status"
+}
+
+cloudkit_diagnostics() {
+  echo '::group::CloudKit connection diagnostics'
+  date -u '+time_utc=%Y-%m-%dT%H:%M:%SZ'
+  sw_vers -productVersion | sed 's/^/macos_version=/' || true
+  xcodebuild -version || true
+  curl --version | head -n 1 || true
+  echo 'System proxy flags:'
+  scutil --proxy | awk '$1 ~ /^(HTTPEnable|HTTPSEnable|ProxyAutoConfigEnable|SOCKSEnable)$/ { print $1 "=" $3 }' || true
+  echo 'CloudKit DNS addresses:'
+  dscacheutil -q host -a name api.apple-cloudkit.com | awk '/^(name|ip_address):/ { print }' || true
+  probe_https CloudKit-default 'https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup'
+  probe_https CloudKit-IPv4 'https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup' --ipv4
+  probe_https CloudKit-IPv6 'https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup' --ipv6
+  probe_https Apple-control 'https://www.apple.com/'
+  echo '::endgroup::'
+}
+
+run_stapler_pair() {
+  local target="$1" status=0
+  bash "$RUNNER_TEMP/macro-cloudkit-tcp.sh" "$target" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "stapler failed for $target with exit code $status" >&2
+    cloudkit_diagnostics
+  fi
+  return "$status"
+}
+
 # Submission failure, rejection, or timeout must prevent publishing this build.
 xcrun notarytool submit "$dmg" \
   --key "$credentials_dir/AuthKey.p8" --key-id "$key_id" --issuer "$issuer" \
   --wait --timeout 30m --output-format json > "$credentials_dir/submission.json"
 cat "$credentials_dir/submission.json"
 jq -e '.status == "Accepted"' "$credentials_dir/submission.json" > /dev/null
-xcrun stapler staple "$dmg"
-xcrun stapler validate "$dmg"
+cloudkit_diagnostics
+run_stapler_pair "$dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+
+# The updater ships the app rather than the DMG. Notarize and staple that exact
+# final app too; stapling only the disk image does not staple the updater app.
+ditto -c -k --keepParent updater-app/Macro.app "$credentials_dir/updater-app.zip"
+xcrun notarytool submit "$credentials_dir/updater-app.zip" \
+  --key "$credentials_dir/AuthKey.p8" --key-id "$key_id" --issuer "$issuer" \
+  --wait --timeout 30m --output-format json > "$credentials_dir/app-submission.json"
+jq -e '.status == "Accepted"' "$credentials_dir/app-submission.json" > /dev/null
+cloudkit_diagnostics
+run_stapler_pair updater-app/Macro.app
+codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
+spctl --assess --type execute --verbose=2 updater-app/Macro.app
+version=$(jq -er '.version' apps/web/tauri/desktop-release.json)
+COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-aarch64-darwin.app.tar.gz" -C updater-app Macro.app
 
 # Stapling changes the DMG bytes, so checksum the final distributable.
 (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)

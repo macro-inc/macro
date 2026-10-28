@@ -60,3 +60,47 @@ for (const failure of ['slow-download', 'failed-download'] as const) {
     });
   });
 }
+
+test('a fresh host recovers exhausted downloads on the same page and preserves stored data', async ({
+  context,
+  page,
+}, testInfo) => {
+  const path = testInfo.project.name.includes('production')
+    ? '/app/cache-lifecycle.html'
+    : '/cache-lifecycle.html';
+  const url = `${path}?treatment=true&scope=cache-retry-${crypto.randomUUID()}`;
+  await page.goto(url);
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+  await page.evaluate(() => window.cacheLifecycleHarness.startSingle());
+  await page.evaluate(() =>
+    window.cacheLifecycleHarness.write('preserved-after-exhaustion')
+  );
+  await page.goto('about:blank');
+  let downloads = 0;
+  const pattern = /\/cache_wasm_bg[^/]*\.wasm(?:\?.*)?$/;
+  await context.route(pattern, async (route) => {
+    downloads += 1;
+    await route.abort('failed');
+  });
+  await page.goto(url);
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+  const failed = await page.evaluate(async () => {
+    try {
+      await window.cacheLifecycleHarness.startSingle();
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(failed).toBe(true);
+  expect(downloads).toBe(6);
+  await context.unroute(pattern);
+  await page.evaluate(() => window.cacheLifecycleHarness.dispose());
+  await page.evaluate(() => window.cacheLifecycleHarness.startSingle());
+  expect(
+    await page.evaluate(() => window.cacheLifecycleHarness.read())
+  ).toMatchObject({
+    kind: 'hit',
+    data: { user: { soup: { items: [{ id: 'preserved-after-exhaustion' }] } } },
+  });
+});

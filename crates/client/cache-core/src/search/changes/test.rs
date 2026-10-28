@@ -57,6 +57,25 @@ fn unrelated_fields_do_not_refresh_search_and_are_not_snapshotted() {
 }
 
 #[test]
+fn email_sender_changes_refresh_email_search_rows() {
+    let typename = "GraphqlSoupEmailThread";
+    let before = record(typename);
+    let mut after = before.clone();
+    after.fields.insert(
+        "senders".into(),
+        CacheValue::List(vec![CacheValue::Object(
+            [("name".into(), CacheValue::String("cursor[bot]".into()))].into(),
+        )]),
+    );
+    assert_eq!(
+        changes(typename, Some(&before), Some(&after)),
+        BTreeSet::from(["email".to_owned()])
+    );
+    let snapshot = snapshot_search_fields(&EntityKey::entity(typename, &["one"]), &after).unwrap();
+    assert_eq!(snapshot.fields.get("senders"), after.fields.get("senders"));
+}
+
+#[test]
 fn materialized_fields_and_newly_available_fields_trigger_refreshes() {
     for typename in [
         "GraphqlSoupDocument",
@@ -111,4 +130,35 @@ fn bucket_moves_and_hidden_rows_invalidate_the_old_bucket_too() {
         changes(typename, Some(&visible), Some(&after)),
         BTreeSet::from(["note".into()])
     );
+}
+
+#[test]
+fn email_subject_sender_and_visibility_refresh_but_bodies_do_not() {
+    let typename = "GraphqlSoupEmailThread";
+    let before = record(typename);
+    for field in ["name", "senderName", "senderEmail", "deletedAt", "linkId"] {
+        let mut after = before.clone();
+        after
+            .fields
+            .insert(field.into(), CacheValue::String("changed".into()));
+        assert_eq!(
+            changes(typename, Some(&before), Some(&after)),
+            BTreeSet::from(["email".to_owned()])
+        );
+    }
+    for field in ["hidden", "isRead", "isDraft", "isImportant", "inboxVisible"] {
+        let mut after = before.clone();
+        after.fields.insert(field.into(), CacheValue::Bool(true));
+        assert_eq!(
+            changes(typename, Some(&before), Some(&after)),
+            BTreeSet::from(["email".to_owned()])
+        );
+    }
+    for field in ["snippet", "bodyText", "bodyHtmlSanitized"] {
+        let mut after = before.clone();
+        after
+            .fields
+            .insert(field.into(), CacheValue::String("teo".into()));
+        assert!(changes(typename, Some(&before), Some(&after)).is_empty());
+    }
 }

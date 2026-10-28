@@ -49,8 +49,8 @@ pub struct ArchivedCall {
     pub duration_ms: i64,
     /// Whether a recording egress was started before the call was archived.
     pub has_recording: bool,
-    /// Number of distinct participants over the call's lifetime.
-    pub participant_count: usize,
+    /// Macro accounts that joined the call over its lifetime, once each.
+    pub participants: Vec<String>,
 }
 
 /// The people known to have been on, or invited to, an archived call.
@@ -128,6 +128,8 @@ pub enum RingStatus {
     Ringing,
     /// This user joined the call on some device — stop ringing (answered elsewhere).
     Answered,
+    /// This user declined the call on some device — stop ringing (declined elsewhere).
+    Declined,
     /// The call is over (or was replaced by a newer call) — stop ringing (remote ended).
     Ended,
 }
@@ -148,6 +150,15 @@ pub struct VerifiedRingToken {
     pub identity: String,
     /// The room the token grants access to, if any.
     pub room: Option<String>,
+}
+
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Response for the leave/end call operation.
@@ -469,8 +480,8 @@ pub struct CallRecord {
     pub call_id: Uuid,
     /// The channel this call belongs to.
     pub channel_id: Option<Uuid>,
-    /// The RTC room name.
-    pub room_name: String,
+    /// The RTC room name. `None` for imported calls, which never had a room.
+    pub room_name: Option<String>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started (created_at for active, started_at for archived).
@@ -522,6 +533,11 @@ pub struct CallRecord {
     /// single-record read; `None` in list contexts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_access_level: Option<AccessLevel>,
+    /// Whether the authenticated viewer has declined this call on any device.
+    /// Set on the single-record read so clients that missed `call_declined`
+    /// can still stop ringing via reconciliation; `false` in list contexts.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub viewer_has_declined: bool,
     /// Macro-account participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Non-account guests (both active and historic). Guests only ever exist
@@ -529,6 +545,20 @@ pub struct CallRecord {
     pub guests: Vec<CallRecordGuest>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+    /// External provenance for calls imported from another provider; `None`
+    /// for calls recorded in Macro.
+    pub source: Option<CallRecordSource>,
+}
+
+/// Where an imported call came from.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordSource {
+    /// Provider that supplied the call.
+    pub provider: crate::domain::records::CallProvider,
+    /// Link to the call in the provider's app, if it has one.
+    pub external_url: Option<String>,
 }
 
 /// Storage object keys associated with a deleted archived call record.
@@ -624,6 +654,28 @@ pub struct GetCallRecordsRequest {
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
+/// The order and keyset position of one page of a user's call records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallRecordPage {
+    /// Order by start time; otherwise by last activity (end time, or start
+    /// time for a call that has not ended), the way Soup sorts calls.
+    pub by_start: bool,
+    /// Resume strictly after this sort timestamp and call id.
+    pub after: Option<(DateTime<Utc>, Uuid)>,
+}
+
+impl CallRecordPage {
+    /// The page a Soup query asks for.
+    pub fn from_query<F>(query: &Query<Uuid, SimpleSortMethod, F>) -> Self {
+        let by_start = matches!(query.sort_method(), SimpleSortMethod::CreatedAt);
+        let after = match query {
+            Query::Sort(..) => None,
+            Query::Cursor(cursor) => Some((cursor.val.last_val, cursor.id)),
+        };
+        Self { by_start, after }
+    }
+}
+
 /// Errors that can occur when adding a participant to a call at the
 /// repository boundary. Splitting the "already-active-elsewhere" case into
 /// a typed variant lets the service handle it without looking at the
@@ -689,6 +741,7 @@ impl From<TeamSharePolicyError> for CallError {
 
 /// Team memory may only include calls associated with a channel.
 /// Standalone invitations and their records always keep team sharing disabled.
+#[cfg(feature = "ports")]
 pub(crate) fn permitted_team_memory_intent(channel_id: Option<Uuid>, enabled: bool) -> bool {
     channel_id.is_some() && enabled
 }

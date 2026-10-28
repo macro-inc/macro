@@ -27,32 +27,32 @@ const LAUNCH_CALLS: AgentToolCall[] = [
       },
       {
         kind: 'document',
-        title: 'Q3 launch plan',
+        title: 'Website launch plan',
         snippet: 'Send the customer email. Publish the changelog.',
         time: 'Sep 28',
       },
       {
         kind: 'email',
         title: 'Ready for Thursday',
-        sender: 'Teo Nys',
+        sender: 'Teo',
         snippet: 'The invite flow is ready. Let’s run through the checklist.',
         time: '9:18 AM',
       },
       {
         kind: 'channel',
         title: 'launch',
-        sender: 'Julia Westphal',
+        sender: 'Julia',
         snippet: 'Last pass before Thursday.',
         time: '9:20 AM',
       },
     ],
   },
-  { kind: 'read-document', title: 'Q3 launch plan' },
+  { kind: 'read-document', title: 'Website launch plan' },
   { kind: 'read-channel', channel: 'launch', count: 20 },
 ];
 
 const LAUNCH_ANSWER =
-  'Five launch tasks are still open:\n\n- @[Fix the team invite handoff](agent:invite) is urgent, and Teo is on it.\n- @[Write the launch announcement](agent:announcement) is in review. Julia’s first draft is ready.\n- @[Fix the deploy pipeline](agent:deploy) has a pull request up for Teo to review.\n- @[Prepare the launch checklist](agent:checklist) hasn’t started. It’s yours.\n- @[Send Dana the rollout plan](agent:follow-up) is yours too.\n\nThe @[Q3 launch plan](agent:plan) also still lists the customer email and the changelog.';
+  'Five launch tasks are still open:\n\n- @[Fix the team invite handoff](agent:invite) is urgent, and Teo is on it.\n- @[Write the launch announcement](agent:announcement) is in review. Julia’s first draft is ready.\n- @[Fix the deploy pipeline](agent:deploy) has a pull request up for Teo to review.\n- @[Prepare the launch checklist](agent:checklist) hasn’t started. It’s yours.\n- @[Send Valentina the rollout plan](agent:follow-up) is yours too.\n\nThe @[Website launch plan](agent:plan) also still lists the customer email and the changelog.';
 
 export const LAUNCH_PROMPT = 'What’s left before Thursday’s launch?';
 

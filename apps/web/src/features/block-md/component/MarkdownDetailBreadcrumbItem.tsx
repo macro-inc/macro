@@ -9,6 +9,7 @@ import {
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { buildEntityData } from '@entity';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import type { MarkdownDocumentKind } from '../types';
@@ -39,9 +40,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
   const documentName = () =>
-    displayName() ??
-    props.fallbackName ??
-    (props.kind === 'task' ? 'New Task' : 'Untitled');
+    displayName() || props.fallbackName || blockNameToDefaultFile(blockName());
   useSplitDisplayName(documentName);
   const focusDocument = () => state.editor.md.editor?.focus();
 

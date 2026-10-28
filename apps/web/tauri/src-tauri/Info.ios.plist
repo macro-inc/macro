@@ -18,6 +18,13 @@
 			</array>
 		</dict>
 	</dict>
+	<!-- The app only uses exempt encryption (HTTPS / OS-provided crypto), so
+	     App Store Connect's questionnaire resolves to "no documentation
+	     required". Declaring that here answers it for every uploaded build
+	     instead of by hand per build. Keep gen/apple/project.yml and
+	     gen/apple/app_iOS/Info.plist in sync. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

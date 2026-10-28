@@ -1,7 +1,11 @@
 import Envelope from '@phosphor/envelope-open.svg';
 import { Badge } from '@ui/components/Badge';
 import { For, Show } from 'solid-js';
-import { type EmailTagId, emailTags } from '../../../core/demo-email';
+import {
+  demoMailAccounts,
+  type EmailTagId,
+  emailTags,
+} from '../../../core/demo-email';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import type { DemoEmail } from '../email-fixtures';
 
@@ -15,9 +19,7 @@ export function InboxChip(props: { account: DemoEmail['account'] }) {
       src={homepagePeople.jacob.photo}
       alt=""
       title={
-        props.account === 'work'
-          ? 'jacob@macro.com'
-          : 'jacob.beckerman@gmail.com'
+        demoMailAccounts.find((account) => account.id === props.account)?.label
       }
     />
   );

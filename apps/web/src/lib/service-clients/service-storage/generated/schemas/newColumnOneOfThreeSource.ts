@@ -10,5 +10,5 @@ export type NewColumnOneOfThreeSource =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NewColumnOneOfThreeSource = {
-  existing: 'existing',
+  derived: 'derived',
 } as const;

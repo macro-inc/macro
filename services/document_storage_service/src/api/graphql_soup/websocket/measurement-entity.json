@@ -1,0 +1,17 @@
+{
+  "__typename": "Document",
+  "id": "018c8d80-0000-7000-8000-000000000000",
+  "name": "Synthetic planning document",
+  "fileType": "md",
+  "createdAt": "2026-10-01T09:00:00Z",
+  "updatedAt": "2026-10-13T12:00:00Z",
+  "projectId": "018c8d80-0000-7000-8000-000000000100",
+  "ownerId": "macro|compression-fixture@example.test",
+  "isDeleted": false,
+  "isUnread": true,
+  "preview": "Review the planned work, record the next steps, and share the updated document with the team.",
+  "properties": [
+    { "name": "Status", "value": "In progress" },
+    { "name": "Priority", "value": "Medium" }
+  ]
+}

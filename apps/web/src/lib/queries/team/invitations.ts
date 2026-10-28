@@ -1,20 +1,22 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamInvitesResponse } from '@service-auth/generated/schemas/teamInvitesResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { teamKeys } from './keys';
 import { invalidateUserTeams } from './teams';
+
+function fetchUserInvites() {
+  return throwOnErr(() => authServiceClient.getUserInvites());
+}
 
 export function useUserInvitesQuery() {
   return useQuery(() => ({
     queryKey: teamKeys.userInvites.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getUserInvites()),
+    queryFn: fetchUserInvites,
   }));
 }
 
@@ -44,7 +46,7 @@ export function useJoinTeamMutation(callbacks?: JoinTeamCallbacks) {
       {
         onSuccess: () => {
           invalidateUserTeams();
-          invalidateUserInvites();
+          fireAndForget(invalidateUserInvites(), 'team-invitations');
           toast.success('Joined team');
         },
 
@@ -93,7 +95,7 @@ export function useRejectInvitationMutation(
     >(
       {
         onSuccess: () => {
-          invalidateUserInvites();
+          fireAndForget(invalidateUserInvites(), 'team-invitations');
           toast.success('Invitation declined');
         },
 

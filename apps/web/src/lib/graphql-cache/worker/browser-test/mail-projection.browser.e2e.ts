@@ -1,6 +1,35 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
+test('delivered reminders immediately lead cached Signal, including sent-only threads', async ({
+  page,
+}) => {
+  await page.goto('/mail-projection.html');
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    {
+      timeout: 60_000,
+    }
+  );
+  await page
+    .getByRole('combobox', { name: 'View', exact: true })
+    .selectOption('INBOX');
+  await page
+    .getByRole('combobox', { name: 'Signal', exact: true })
+    .selectOption('true');
+  await expect(page.locator('#rows li').first()).not.toHaveText(
+    'Email 4 — Not Done'
+  );
+  await page.getByRole('button', { name: 'Deliver reminders' }).click();
+  await expect(page.locator('#rows li').nth(0)).toHaveText(
+    'Email 4 — Not Done'
+  );
+  await expect(page.locator('#rows li').nth(1)).toHaveText(
+    'Email 2 — Not Done'
+  );
+});
+
 test('invalid identity binding preserves the server response and completes the mutation', async ({
   page,
 }) => {

@@ -43,6 +43,7 @@ describe('formula help using the actual IronCalc parser', () => {
       kind: 'list',
       names: ['NORM.DIST'],
     });
+    expect(complete('=')).toBeUndefined();
     expect(formulaFunctions.TODAY).toBeDefined();
     expect(formulaFunctions.HYPERLINK).toBeUndefined();
   });

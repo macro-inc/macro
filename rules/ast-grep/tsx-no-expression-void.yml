@@ -1,0 +1,20 @@
+id: tsx-no-expression-void
+language: tsx
+severity: error
+message: Use `void` only as a statement.
+note: |-
+  Rule FE-13 in .agents/rules/web/solid.md. `() => void p()` hides a promise
+  from typescript/no-floating-promises, because the arrow returns the voided
+  value. Start the promise with fireAndForget from @core/util/fireAndForget,
+  handle its rejection where the work starts, or use a block body for a
+  non-promise.
+files:
+  - apps/web/**
+rule:
+  kind: unary_expression
+  regex: '^void\s'
+  not:
+    any:
+      - inside:
+          kind: expression_statement
+      - regex: '^void 0$'

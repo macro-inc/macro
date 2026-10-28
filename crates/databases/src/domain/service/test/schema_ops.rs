@@ -2,6 +2,44 @@
 //! client-minted ids, base versions, and the rule a type change keeps.
 
 use super::*;
+use crate::domain::models::ColumnProtection;
+
+#[tokio::test]
+async fn protected_columns_refuse_deletion_and_type_changes() {
+    let seeded = seeded().await;
+    {
+        let mut world = seeded.world.lock().unwrap();
+        let column = world
+            .columns
+            .iter_mut()
+            .find(|column| column.id == seeded.name_column.id)
+            .unwrap();
+        column.protections = vec![ColumnProtection::Delete, ColumnProtection::ChangeType];
+    }
+    for change in [
+        ColumnChange::Delete,
+        ColumnChange::ChangeType {
+            to: ColumnKind::Number,
+        },
+    ] {
+        let result = seeded
+            .service
+            .apply_ops(
+                edit(seeded.database_id),
+                viewer(OWNER),
+                OpBatch::from(vec![DatabaseOp::Column {
+                    table: seeded.table_id,
+                    column: seeded.name_column.id,
+                    change,
+                }]),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(DatabaseError::InvalidOp(ref refusal)) if refusal.reason.contains("protected")),
+            "{result:?}"
+        );
+    }
+}
 
 #[tokio::test]
 async fn one_batch_creates_a_table_a_select_column_and_rows_filling_it_by_option_id() {

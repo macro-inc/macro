@@ -1,8 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createAIProjection } from '@queries/ai/projection';
 import type { Expiry } from '@service-cognition/generated/schemas/expiry';
 import type { RefreshCadence } from '@service-cognition/generated/schemas/refreshCadence';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { Button, InlineCheckbox, SegmentedControl } from '@ui';
+import { Button, InlineCheckbox, Tabs } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { z } from 'zod';
 
@@ -135,8 +136,10 @@ export default function ProjectionPlayground() {
 
           <section class="space-y-2">
             <div class="text-sm font-medium">Output</div>
-            <SegmentedControl
-              class="w-full"
+            <Tabs
+              aria-label="Output mode"
+              touch="segmented"
+              fullWidth
               size="sm"
               value={outputMode()}
               options={[
@@ -154,8 +157,10 @@ export default function ProjectionPlayground() {
 
           <section class="space-y-2">
             <div class="text-sm font-medium">Model</div>
-            <SegmentedControl
-              class="w-full"
+            <Tabs
+              aria-label="Model"
+              touch="segmented"
+              fullWidth
               size="sm"
               value={modelChoice()}
               options={[
@@ -227,7 +232,7 @@ export default function ProjectionPlayground() {
 
           <section class="flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={projection.query.isFetching}
               onClick={() => projection.query.refetch()}
@@ -235,10 +240,10 @@ export default function ProjectionPlayground() {
               Send request
             </Button>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               disabled={busy()}
-              onClick={() => void regenerate()}
+              onClick={() => fireAndForget(regenerate(), 'devtools')}
             >
               Force regenerate
             </Button>

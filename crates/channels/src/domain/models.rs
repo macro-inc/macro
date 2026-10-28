@@ -292,6 +292,28 @@ pub struct AttachmentChannelReference {
     pub attachment_created_at: DateTime<Utc>,
 }
 
+/// A reference to an attachment entity from a comment: a message on a
+/// document, initiative, CRM record, or call rather than on a channel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentCommentReference {
+    /// Stored type of the entity the comment belongs to.
+    pub parent_entity_type: String,
+    /// Id of the entity the comment belongs to.
+    pub parent_entity_id: String,
+    /// Message that contains the reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the mention or attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
 /// A reference to an attachment entity from any non-message source entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttachmentGenericReference {
@@ -314,6 +336,8 @@ pub struct AttachmentGenericReference {
 pub enum AttachmentEntityReference {
     /// Referenced from a channel message.
     Channel(AttachmentChannelReference),
+    /// Referenced from a comment on a non-channel entity.
+    Comment(AttachmentCommentReference),
     /// Referenced from any non-message source entity.
     Generic(AttachmentGenericReference),
 }
@@ -374,7 +398,9 @@ pub struct ThreadReplyRow {
 }
 
 /// Type of channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -382,6 +408,7 @@ pub struct ThreadReplyRow {
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.
     Public,
@@ -391,17 +418,6 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
-}
-
-impl std::fmt::Display for ChannelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChannelType::Public => f.write_str("public"),
-            ChannelType::Private => f.write_str("private"),
-            ChannelType::DirectMessage => f.write_str("direct_message"),
-            ChannelType::Team => f.write_str("team"),
-        }
-    }
 }
 
 /// Request to add a user to all organization channels.
@@ -609,9 +625,9 @@ pub struct CreateChannelResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct GetOrCreateDmRequest {
-    /// Recipient user id.
+    /// Recipient user id (`macro|...`) or agent persona id (`bot|...`).
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub recipient_id: MacroUserIdStr<'static>,
+    pub recipient_id: Sender,
 }
 
 /// Request to get or create a private channel.
@@ -667,6 +683,10 @@ pub enum ReferencedShareItemType {
     Call,
     /// Calendar event entity: one owner's projection of a meeting.
     CalendarEvent,
+    /// Form entity: posting one lets the channel respond to it.
+    Form,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -681,6 +701,8 @@ impl ReferencedShareItemType {
             "thread" | "email" | "email_thread" => Some(Self::EmailThread),
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
+            "form" => Some(Self::Form),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -696,6 +718,8 @@ impl ReferencedShareItemType {
             Self::EmailThread => "thread",
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
+            Self::Form => "form",
+            Self::ExternalChat => "external_chat",
         }
     }
 
@@ -748,6 +772,26 @@ impl ReferencedShareItem {
     pub fn entity_type(&self) -> ReferencedShareItemType {
         self.entity_type
     }
+}
+
+/// Whether a referenced item was granted to a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceShareOutcome {
+    /// A channel grant exists. An existing direct grant is left as it was.
+    Shared,
+    /// The actor's access is below what sharing this kind of item requires.
+    NotPermitted,
+}
+
+/// One referenced item and whether it was shared with the channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceShareResult {
+    /// Referenced entity id.
+    pub entity_id: String,
+    /// Referenced entity type.
+    pub entity_type: ReferencedShareItemType,
+    /// Grant outcome.
+    pub outcome: ReferenceShareOutcome,
 }
 
 /// Request to add participants.
@@ -941,6 +985,83 @@ pub struct GetChannelsParams {
     query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }
 
+/// An entity whose references are looked up, as stored on reference edges
+/// (for example `crm_company` and the company id).
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceTarget {
+    /// Stored entity type of the referenced entity.
+    pub entity_type: String,
+    /// Referenced entity id.
+    pub entity_id: String,
+}
+
+/// What a live reference to a target belongs to.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ReferenceSource {
+    /// A document or task whose content references the target.
+    Document(String),
+    /// An undeleted message that references the target.
+    Message(ReferencingMessage),
+}
+
+/// An undeleted message that mentions or attaches a reference target.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferencingMessage {
+    /// The message id.
+    pub message_id: Uuid,
+    /// The root of the message's thread, or `None` for a top-level message.
+    pub thread_id: Option<Uuid>,
+    /// The channel or discussion the message belongs to.
+    pub parent: MessageParent,
+}
+
+#[cfg(feature = "list")]
+impl ReferencingMessage {
+    /// The top-level message the reference appears under: the thread root
+    /// for a reply, otherwise the message itself.
+    pub fn root_id(&self) -> Uuid {
+        self.thread_id.unwrap_or(self.message_id)
+    }
+}
+
+/// The channel or discussion a message belongs to.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MessageParent {
+    /// A channel message.
+    Channel(Uuid),
+    /// A discussion message on a document.
+    Document(String),
+    /// A discussion message on an initiative.
+    Initiative(Uuid),
+    /// A discussion message on a CRM company.
+    CrmCompany(Uuid),
+    /// A discussion message on a CRM contact.
+    CrmContact(Uuid),
+    /// A message in a call's thread.
+    Call(Uuid),
+}
+
+#[cfg(feature = "list")]
+impl MessageParent {
+    /// Parse a stored parent, or `None` for an unknown parent type or id.
+    pub fn from_stored(parent_type: &str, parent_id: &str) -> Option<Self> {
+        let uuid = || Uuid::parse_str(parent_id).ok();
+        Some(match parent_type {
+            "channel" => Self::Channel(uuid()?),
+            "document" => Self::Document(parent_id.to_owned()),
+            "initiative" => Self::Initiative(uuid()?),
+            "crm_company" => Self::CrmCompany(uuid()?),
+            "crm_contact" => Self::CrmContact(uuid()?),
+            "call" => Self::Call(uuid()?),
+            _ => return None,
+        })
+    }
+}
+
 /// Channel thread reply rows request.
 #[cfg(feature = "list")]
 #[derive(Debug)]
@@ -1062,6 +1183,8 @@ pub struct LatestMessage {
 #[cfg(feature = "list")]
 #[derive(Debug, Clone)]
 pub struct ChannelWithLatest {
+    /// Persona identity for the viewer's private agent conversation.
+    pub agent_dm: Option<super::agent_dm::AgentDmProfile>,
     /// Channel plus participants.
     pub channel: ChannelWithParticipants,
     /// Latest message data.

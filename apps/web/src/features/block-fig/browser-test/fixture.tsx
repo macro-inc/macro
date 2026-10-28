@@ -12,6 +12,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { FigEngine } from '@core/fig-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { FigOpening } from '../components/fig-opening';
@@ -196,7 +197,7 @@ function Fixture() {
                   class="rounded border border-edge-muted px-2 text-ink-muted hover:text-ink"
                   data-testid={`fig-fixture-open-${d.id}`}
                   disabled={current() === d.id}
-                  onClick={() => void openDesign(d.id)}
+                  onClick={() => fireAndForget(openDesign(d.id), 'fig-viewer')}
                 >
                   {d.name}
                 </button>

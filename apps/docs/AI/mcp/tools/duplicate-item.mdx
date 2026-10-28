@@ -1,0 +1,18 @@
+---
+title: DuplicateItem
+description: >-
+  Make a copy of a document (including a task), owned by the user, as the
+  Duplicate action in the app does.
+---
+
+# DuplicateItem
+
+Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` | Yes | The kind of item to duplicate. |
+| `entityId` | string | Yes | The id of the item to duplicate. |
+| `name` | string | No | Name for the copy of a document. Omit to use "\<original name> copy". |

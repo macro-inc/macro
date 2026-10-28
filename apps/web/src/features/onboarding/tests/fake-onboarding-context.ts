@@ -1,4 +1,6 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
+import type { ServerResponse } from '@service-cognition/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -12,6 +14,12 @@ import type {
   ViewerState,
 } from '../context/onboarding-context';
 import type { EmailAccount } from '../core/email-accounts';
+import {
+  nativeToolSlug,
+  onboardingConnectedTools,
+  onboardingToolState,
+} from '../queries/connected-tools';
+import { fixtureConnectorIcon } from './connector-icons';
 
 /** Everything the fake backend knows. Plain JSON, so a harness can persist it. */
 export type FakeOnboardingWorld = {
@@ -30,8 +38,14 @@ export type FakeOnboardingWorld = {
   contacts: string[];
   catalog: Tool[];
   connectedTools: string[];
+  githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
+  nativeTools: ServerResponse[];
+  connectionFailures: ('pipedream' | 'native' | 'github')[];
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
+  trialEligible: boolean;
+  existingSubscription: boolean;
+  planCatalog: AiPlanCatalog;
   /** License refreshes left before the Stripe webhook lands; undefined when none is pending. */
   webhookPollsRemaining: number | undefined;
   /** How many refreshes a checkout's webhook takes to land. */
@@ -45,6 +59,8 @@ export type FakeOnboardingWorld = {
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
+      | 'planCatalog'
+      | 'trialEligibility'
       | 'checkout'
       | 'completion',
       string
@@ -71,11 +87,45 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     invites: [],
     contacts: ['grace@acme.com', 'alan@acme.com', 'friend@gmail.com'],
     catalog: ['Linear', 'Notion', 'GitHub', 'Slack', 'Figma', 'HubSpot'].map(
-      (name) => ({ slug: name.toLowerCase(), name, iconUrl: null })
+      (name) => ({
+        slug: name.toLowerCase(),
+        name,
+        iconUrl: fixtureConnectorIcon(name.toLowerCase()),
+      })
     ),
     connectedTools: [],
+    githubLinkStatus: 'unlinked',
+    nativeTools: [],
+    connectionFailures: [],
     githubStars: 12_345,
     inviteOffer: null,
+    trialEligible: true,
+    existingSubscription: false,
+    planCatalog: {
+      plans: [
+        {
+          tier: 'free',
+          monthly_price_cents: 0,
+          included_ai_cents_per_seat: 100,
+          purchasable: false,
+        },
+        {
+          tier: 'premium',
+          monthly_price_cents: 4000,
+          included_ai_cents_per_seat: 2000,
+          purchasable: true,
+        },
+        {
+          tier: 'max',
+          monthly_price_cents: 20000,
+          included_ai_cents_per_seat: 10000,
+          purchasable: true,
+        },
+      ],
+      credit_packs_cents: [],
+      overage_limit_min_cents: 0,
+      overage_limit_max_cents: 0,
+    },
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
@@ -194,9 +244,56 @@ export function createFakeOnboarding(
         retry: () => call('retryCatalog'),
       };
     },
-    createConnectedTools: () => () => new Set(world.connectedTools),
-    // Pipedream's hosted connect runs in an iframe, so no page round-trip.
+    createConnectedTools: () => ({
+      connected: () =>
+        onboardingConnectedTools(
+          new Set(world.connectedTools),
+          world.nativeTools,
+          world.githubLinkStatus === 'linked'
+        ),
+      state: (slug) =>
+        onboardingToolState(
+          slug,
+          world.connectionFailures.includes('pipedream')
+            ? { t: 'error' }
+            : {
+                t: 'ready',
+                value: world.connectedTools.map((app_slug) => ({
+                  app_slug,
+                  enabled: true,
+                })),
+              },
+          world.connectionFailures.includes('native')
+            ? { t: 'error' }
+            : { t: 'ready', value: world.nativeTools },
+          world.connectionFailures.includes('github')
+            ? { t: 'error' }
+            : { t: 'ready', value: world.githubLinkStatus }
+        ),
+      retry: () => call('retryConnections'),
+    }),
+    configureGithubRepositories: () => call('configureGithubRepositories'),
+    // Native GitHub OAuth returns to the current step; Pipedream stays in an iframe.
     connectTool: async (tool) => {
+      if (tool.slug === 'github') {
+        if (world.githubLinkStatus === 'linked') return;
+        call('connectNativeGithub');
+        return roundTrip(() =>
+          update((draft) => {
+            draft.githubLinkStatus = 'linked';
+          })
+        );
+      }
+      const native = world.nativeTools.find(
+        (server) => server.authenticated && nativeToolSlug(server) === tool.slug
+      );
+      if (native) {
+        update((draft) => {
+          const server = draft.nativeTools.find((s) => s.url === native.url);
+          if (server) server.enabled = true;
+        });
+        return;
+      }
       call(`connectTool:${tool.slug}`);
       update((draft) => {
         draft.connectedTools.push(tool.slug);
@@ -225,6 +322,20 @@ export function createFakeOnboarding(
       });
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
+    createTrialEligibility: () => ({
+      eligibility: () =>
+        loadable('trialEligibility', () => world.trialEligible),
+      existingSubscription: () => world.existingSubscription,
+      managing: () => false,
+      manage: async () => {
+        call('manageSubscription');
+      },
+      retry: () => call('retryTrialEligibility'),
+    }),
+    createPlanCatalog: () => ({
+      catalog: () => loadable('planCatalog', () => world.planCatalog),
+      retry: () => call('retryPlanCatalog'),
+    }),
     startCheckout: async (tier, terms) => {
       call(`startCheckout:${tier}:${terms}`);
       fail('checkout');

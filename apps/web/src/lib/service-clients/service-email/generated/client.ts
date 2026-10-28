@@ -5,20 +5,33 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AddDraftAttachmentParams,
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
+  AddForwardedAttachmentParams,
   AddForwardedAttachmentRequest,
   AddForwardedAttachmentResponse,
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
+  ArchiveThreadsRequest,
+  ArchiveThreadsResponse,
   BlockSenderRequest,
+  CalendarEvent,
+  CalendarMutationApiError,
   CancelBackfillParams,
+  CompleteDraftAttachmentParams,
+  CopyCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   CreateLabelRequest,
   CreateLabelResponse,
+  DeleteDraftParams,
+  DeleteScheduledDraftParams,
   EmptyResponse,
   ErrorResponse,
+  ForwardCalendarEventError,
+  ForwardCalendarEventRequest,
+  ForwardCalendarEventResponse,
   GetActiveBackfillJobResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
@@ -38,14 +51,23 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  MailboxOperation,
+  MailboxSettingsOperation,
+  MessageOperationResponse,
   ParsedMessage,
   PatchSettingsRequest,
   PatchSettingsResponse,
   PreviewsInboxCursorParams,
+  RemoveDraftAttachmentParams,
+  RemoveForwardedAttachmentParams,
+  ResolveMessageOperationRequest,
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  TransferDraftRequest,
+  TransferDraftResponse,
+  TransferRecoveryResponse,
   UnblockSenderRequest,
   UnresolvedSignatureImagesError,
   UpdateLabelBatchRequest,
@@ -54,8 +76,10 @@ import type {
   UpdateThreadLabelsResponse,
   UpdateThreadProjectRequest,
   UpdateThreadProjectResponse,
+  UpdateThreadStateRequest,
   UpsertEmailFilterRequest,
   UpsertEmailFilterResponse,
+  UpsertScheduledMessageParams,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -463,6 +487,90 @@ export const getBackfillGmail = async (
 };
 
 /**
+ * @summary Email one of the viewer's events to people the organizer's guest list
+does not name: the event's iCalendar file (`METHOD:PUBLISH`, no
+attendees, no join link), sent from the inbox that holds the viewer's
+copy, with the usual undo delay. Recipients can add the event to their
+own calendar; they are not added to the guest list and the organizer is
+not told.
+ */
+export type forwardCalendarEventResponse202 = {
+  data: ForwardCalendarEventResponse;
+  status: 202;
+};
+
+export type forwardCalendarEventResponse400 = {
+  data: ForwardCalendarEventError;
+  status: 400;
+};
+
+export type forwardCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type forwardCalendarEventResponse403 = {
+  data: ForwardCalendarEventError;
+  status: 403;
+};
+
+export type forwardCalendarEventResponse404 = {
+  data: ForwardCalendarEventError;
+  status: 404;
+};
+
+export type forwardCalendarEventResponse502 = {
+  data: ForwardCalendarEventError;
+  status: 502;
+};
+
+export type forwardCalendarEventResponseSuccess =
+  forwardCalendarEventResponse202 & {
+    headers: Headers;
+  };
+export type forwardCalendarEventResponseError = (
+  | forwardCalendarEventResponse400
+  | forwardCalendarEventResponse401
+  | forwardCalendarEventResponse403
+  | forwardCalendarEventResponse404
+  | forwardCalendarEventResponse502
+) & {
+  headers: Headers;
+};
+
+export type forwardCalendarEventResponse =
+  | forwardCalendarEventResponseSuccess
+  | forwardCalendarEventResponseError;
+
+export const getForwardCalendarEventUrl = (eventId: string) => {
+  return `/email/calendar-events/${eventId}/forward`;
+};
+
+export const forwardCalendarEvent = async (
+  eventId: string,
+  forwardCalendarEventRequest: ForwardCalendarEventRequest,
+  options?: RequestInit
+): Promise<forwardCalendarEventResponse> => {
+  const res = await fetch(getForwardCalendarEventUrl(eventId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(forwardCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: forwardCalendarEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as forwardCalendarEventResponse;
+};
+
+/**
  * @summary List all contacts belonging to the user, grouped by link.
  */
 export type listContactsResponse200 = {
@@ -517,8 +625,7 @@ export const listContacts = async (
 };
 
 /**
- * @summary Block a sender by creating a Gmail filter that sends their emails to trash.
-The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+ * @summary Durably block a sender in the selected inbox.
  */
 export type blockSenderResponse200 = {
   data: void;
@@ -660,8 +767,7 @@ export const listBlockedSenders = async (
 };
 
 /**
- * @summary Unblock a sender by removing their block filter from Gmail.
-The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+ * @summary Durably remove Macro-managed sender blocking in the selected inbox.
  */
 export type unblockSenderResponse204 = {
   data: void;
@@ -721,6 +827,61 @@ export const unblockSender = async (
     status: res.status,
     headers: res.headers,
   } as unblockSenderResponse;
+};
+
+export type recoverDraftTransferResponse200 = {
+  data: TransferRecoveryResponse;
+  status: 200;
+};
+
+export type recoverDraftTransferResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type recoverDraftTransferResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type recoverDraftTransferResponseSuccess =
+  recoverDraftTransferResponse200 & {
+    headers: Headers;
+  };
+export type recoverDraftTransferResponseError = (
+  | recoverDraftTransferResponse403
+  | recoverDraftTransferResponse500
+) & {
+  headers: Headers;
+};
+
+export type recoverDraftTransferResponse =
+  | recoverDraftTransferResponseSuccess
+  | recoverDraftTransferResponseError;
+
+export const getRecoverDraftTransferUrl = (id: string) => {
+  return `/email/draft-transfers/${id}/recover`;
+};
+
+export const recoverDraftTransfer = async (
+  id: string,
+  options?: RequestInit
+): Promise<recoverDraftTransferResponse> => {
+  const res = await fetch(getRecoverDraftTransferUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recoverDraftTransferResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recoverDraftTransferResponse;
 };
 
 /**
@@ -915,16 +1076,32 @@ export type upsertScheduledMessageResponse =
   | upsertScheduledMessageResponseSuccess
   | upsertScheduledMessageResponseError;
 
-export const getUpsertScheduledMessageUrl = (id: string) => {
-  return `/email/drafts/scheduled/${id}`;
+export const getUpsertScheduledMessageUrl = (
+  id: string,
+  params?: UpsertScheduledMessageParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/scheduled/${id}?${stringifiedParams}`
+    : `/email/drafts/scheduled/${id}`;
 };
 
 export const upsertScheduledMessage = async (
   id: string,
   upsertScheduledRequest: UpsertScheduledRequest,
+  params?: UpsertScheduledMessageParams,
   options?: RequestInit
 ): Promise<upsertScheduledMessageResponse> => {
-  const res = await fetch(getUpsertScheduledMessageUrl(id), {
+  const res = await fetch(getUpsertScheduledMessageUrl(id, params), {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -994,15 +1171,31 @@ export type deleteScheduledDraftResponse =
   | deleteScheduledDraftResponseSuccess
   | deleteScheduledDraftResponseError;
 
-export const getDeleteScheduledDraftUrl = (messageId: string) => {
-  return `/email/drafts/scheduled/${messageId}`;
+export const getDeleteScheduledDraftUrl = (
+  messageId: string,
+  params?: DeleteScheduledDraftParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/scheduled/${messageId}?${stringifiedParams}`
+    : `/email/drafts/scheduled/${messageId}`;
 };
 
 export const deleteScheduledDraft = async (
   messageId: string,
+  params?: DeleteScheduledDraftParams,
   options?: RequestInit
 ): Promise<deleteScheduledDraftResponse> => {
-  const res = await fetch(getDeleteScheduledDraftUrl(messageId), {
+  const res = await fetch(getDeleteScheduledDraftUrl(messageId, params), {
     ...options,
     method: 'DELETE',
   });
@@ -1063,15 +1256,28 @@ export type deleteDraftResponse =
   | deleteDraftResponseSuccess
   | deleteDraftResponseError;
 
-export const getDeleteDraftUrl = (id: string) => {
-  return `/email/drafts/${id}`;
+export const getDeleteDraftUrl = (id: string, params?: DeleteDraftParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}?${stringifiedParams}`
+    : `/email/drafts/${id}`;
 };
 
 export const deleteDraft = async (
   id: string,
+  params?: DeleteDraftParams,
   options?: RequestInit
 ): Promise<deleteDraftResponse> => {
-  const res = await fetch(getDeleteDraftUrl(id), {
+  const res = await fetch(getDeleteDraftUrl(id, params), {
     ...options,
     method: 'DELETE',
   });
@@ -1131,16 +1337,32 @@ export type addDraftAttachmentResponse =
   | addDraftAttachmentResponseSuccess
   | addDraftAttachmentResponseError;
 
-export const getAddDraftAttachmentUrl = (id: string) => {
-  return `/email/drafts/${id}/attachments`;
+export const getAddDraftAttachmentUrl = (
+  id: string,
+  params?: AddDraftAttachmentParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments`;
 };
 
 export const addDraftAttachment = async (
   id: string,
   addDraftAttachmentRequest: AddDraftAttachmentRequest,
+  params?: AddDraftAttachmentParams,
   options?: RequestInit
 ): Promise<addDraftAttachmentResponse> => {
-  const res = await fetch(getAddDraftAttachmentUrl(id), {
+  const res = await fetch(getAddDraftAttachmentUrl(id, params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1204,20 +1426,37 @@ export type removeDraftAttachmentResponse =
 
 export const getRemoveDraftAttachmentUrl = (
   id: string,
-  attachmentId: string
+  attachmentId: string,
+  params?: RemoveDraftAttachmentParams
 ) => {
-  return `/email/drafts/${id}/attachments/${attachmentId}`;
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments/${attachmentId}?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments/${attachmentId}`;
 };
 
 export const removeDraftAttachment = async (
   id: string,
   attachmentId: string,
+  params?: RemoveDraftAttachmentParams,
   options?: RequestInit
 ): Promise<removeDraftAttachmentResponse> => {
-  const res = await fetch(getRemoveDraftAttachmentUrl(id, attachmentId), {
-    ...options,
-    method: 'DELETE',
-  });
+  const res = await fetch(
+    getRemoveDraftAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
@@ -1229,6 +1468,103 @@ export const removeDraftAttachment = async (
     status: res.status,
     headers: res.headers,
   } as removeDraftAttachmentResponse;
+};
+
+/**
+ * @summary Confirm an uploaded attachment before it becomes part of a sendable draft.
+ */
+export type completeDraftAttachmentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type completeDraftAttachmentResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type completeDraftAttachmentResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type completeDraftAttachmentResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type completeDraftAttachmentResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type completeDraftAttachmentResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type completeDraftAttachmentResponseSuccess =
+  completeDraftAttachmentResponse204 & {
+    headers: Headers;
+  };
+export type completeDraftAttachmentResponseError = (
+  | completeDraftAttachmentResponse400
+  | completeDraftAttachmentResponse403
+  | completeDraftAttachmentResponse404
+  | completeDraftAttachmentResponse409
+  | completeDraftAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type completeDraftAttachmentResponse =
+  | completeDraftAttachmentResponseSuccess
+  | completeDraftAttachmentResponseError;
+
+export const getCompleteDraftAttachmentUrl = (
+  id: string,
+  attachmentId: string,
+  params?: CompleteDraftAttachmentParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/attachments/${attachmentId}/complete?${stringifiedParams}`
+    : `/email/drafts/${id}/attachments/${attachmentId}/complete`;
+};
+
+export const completeDraftAttachment = async (
+  id: string,
+  attachmentId: string,
+  params?: CompleteDraftAttachmentParams,
+  options?: RequestInit
+): Promise<completeDraftAttachmentResponse> => {
+  const res = await fetch(
+    getCompleteDraftAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeDraftAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeDraftAttachmentResponse;
 };
 
 /**
@@ -1264,16 +1600,32 @@ export type addForwardedAttachmentResponse =
   | addForwardedAttachmentResponseSuccess
   | addForwardedAttachmentResponseError;
 
-export const getAddForwardedAttachmentUrl = (id: string) => {
-  return `/email/drafts/${id}/forwarded-attachments`;
+export const getAddForwardedAttachmentUrl = (
+  id: string,
+  params?: AddForwardedAttachmentParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/forwarded-attachments?${stringifiedParams}`
+    : `/email/drafts/${id}/forwarded-attachments`;
 };
 
 export const addForwardedAttachment = async (
   id: string,
   addForwardedAttachmentRequest: AddForwardedAttachmentRequest,
+  params?: AddForwardedAttachmentParams,
   options?: RequestInit
 ): Promise<addForwardedAttachmentResponse> => {
-  const res = await fetch(getAddForwardedAttachmentUrl(id), {
+  const res = await fetch(getAddForwardedAttachmentUrl(id, params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1327,20 +1679,37 @@ export type removeForwardedAttachmentResponse =
 
 export const getRemoveForwardedAttachmentUrl = (
   id: string,
-  attachmentId: string
+  attachmentId: string,
+  params?: RemoveForwardedAttachmentParams
 ) => {
-  return `/email/drafts/${id}/forwarded-attachments/${attachmentId}`;
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/${id}/forwarded-attachments/${attachmentId}?${stringifiedParams}`
+    : `/email/drafts/${id}/forwarded-attachments/${attachmentId}`;
 };
 
 export const removeForwardedAttachment = async (
   id: string,
   attachmentId: string,
+  params?: RemoveForwardedAttachmentParams,
   options?: RequestInit
 ): Promise<removeForwardedAttachmentResponse> => {
-  const res = await fetch(getRemoveForwardedAttachmentUrl(id, attachmentId), {
-    ...options,
-    method: 'DELETE',
-  });
+  const res = await fetch(
+    getRemoveForwardedAttachmentUrl(id, attachmentId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
@@ -1352,6 +1721,204 @@ export const removeForwardedAttachment = async (
     status: res.status,
     headers: res.headers,
   } as removeForwardedAttachmentResponse;
+};
+
+/**
+ * @summary The same provider-neutral state returned on fully hydrated email messages.
+ */
+export type messageOperationStatusResponse200 = {
+  data: MessageOperationResponse;
+  status: 200;
+};
+
+export type messageOperationStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type messageOperationStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type messageOperationStatusResponseSuccess =
+  messageOperationStatusResponse200 & {
+    headers: Headers;
+  };
+export type messageOperationStatusResponseError = (
+  | messageOperationStatusResponse403
+  | messageOperationStatusResponse404
+) & {
+  headers: Headers;
+};
+
+export type messageOperationStatusResponse =
+  | messageOperationStatusResponseSuccess
+  | messageOperationStatusResponseError;
+
+export const getMessageOperationStatusUrl = (id: string) => {
+  return `/email/drafts/${id}/operation`;
+};
+
+export const messageOperationStatus = async (
+  id: string,
+  options?: RequestInit
+): Promise<messageOperationStatusResponse> => {
+  const res = await fetch(getMessageOperationStatusUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: messageOperationStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as messageOperationStatusResponse;
+};
+
+/**
+ * @summary Resolve an observed draft conflict or uncertain provider operation.
+ */
+export type resolveMessageOperationResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type resolveMessageOperationResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type resolveMessageOperationResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type resolveMessageOperationResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type resolveMessageOperationResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type resolveMessageOperationResponseSuccess =
+  resolveMessageOperationResponse204 & {
+    headers: Headers;
+  };
+export type resolveMessageOperationResponseError = (
+  | resolveMessageOperationResponse400
+  | resolveMessageOperationResponse403
+  | resolveMessageOperationResponse404
+  | resolveMessageOperationResponse409
+) & {
+  headers: Headers;
+};
+
+export type resolveMessageOperationResponse =
+  | resolveMessageOperationResponseSuccess
+  | resolveMessageOperationResponseError;
+
+export const getResolveMessageOperationUrl = (id: string) => {
+  return `/email/drafts/${id}/resolve`;
+};
+
+export const resolveMessageOperation = async (
+  id: string,
+  resolveMessageOperationRequest: ResolveMessageOperationRequest,
+  options?: RequestInit
+): Promise<resolveMessageOperationResponse> => {
+  const res = await fetch(getResolveMessageOperationUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resolveMessageOperationRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveMessageOperationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resolveMessageOperationResponse;
+};
+
+export type transferDraftResponse200 = {
+  data: TransferDraftResponse;
+  status: 200;
+};
+
+export type transferDraftResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type transferDraftResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type transferDraftResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type transferDraftResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type transferDraftResponseSuccess = transferDraftResponse200 & {
+  headers: Headers;
+};
+export type transferDraftResponseError = (
+  | transferDraftResponse403
+  | transferDraftResponse404
+  | transferDraftResponse409
+  | transferDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type transferDraftResponse =
+  | transferDraftResponseSuccess
+  | transferDraftResponseError;
+
+export const getTransferDraftUrl = (id: string) => {
+  return `/email/drafts/${id}/transfer`;
+};
+
+export const transferDraft = async (
+  id: string,
+  transferDraftRequest: TransferDraftRequest,
+  options?: RequestInit
+): Promise<transferDraftResponse> => {
+  const res = await fetch(getTransferDraftUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(transferDraftRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: transferDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as transferDraftResponse;
 };
 
 /**
@@ -1550,6 +2117,11 @@ export type initUserResponse401 = {
   status: 401;
 };
 
+export type initUserResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
 export type initUserResponse409 = {
   data: SharedInboxConflictResponse;
   status: 409;
@@ -1571,6 +2143,7 @@ export type initUserResponseSuccess = initUserResponse200 & {
 export type initUserResponseError = (
   | initUserResponse400
   | initUserResponse401
+  | initUserResponse402
   | initUserResponse409
   | initUserResponse429
   | initUserResponse500
@@ -1880,7 +2453,7 @@ export const listLinks = async (
 };
 
 /**
- * Probes run in the background and the response returns immediately to stay off the
+ * Probes are durably queued and the response returns immediately to stay off the
 load path; each persisted flag is picked up by the next links read. Probes are
 throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
 collapse to one refresh per window.
@@ -2489,7 +3062,52 @@ export const patchSettings = async (
 };
 
 /**
- * @summary Disables inbox syncing for user.
+ * @summary Accepted label and sender-policy changes awaiting provider confirmation.
+ */
+export type mailboxSettingsOperationsResponse200 = {
+  data: MailboxSettingsOperation[];
+  status: 200;
+};
+
+export type mailboxSettingsOperationsResponseSuccess =
+  mailboxSettingsOperationsResponse200 & {
+    headers: Headers;
+  };
+
+export type mailboxSettingsOperationsResponse =
+  mailboxSettingsOperationsResponseSuccess;
+
+export const getMailboxSettingsOperationsUrl = () => {
+  return `/email/settings/operations`;
+};
+
+export const mailboxSettingsOperations = async (
+  options?: RequestInit
+): Promise<mailboxSettingsOperationsResponse> => {
+  const res = await fetch(getMailboxSettingsOperationsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mailboxSettingsOperationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mailboxSettingsOperationsResponse;
+};
+
+/**
+ * The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,
+which may be an inbox the caller only reaches through delegation. Removal
+therefore follows the same policy as `DELETE /email/links/{link_id}`: an
+owner's inbox is torn down, while a delegate only loses their
+`macro_user_links` edge and the owner's data stays intact.
+ * @summary Disables inbox syncing for the selected inbox.
  */
 export type disableSyncResponse204 = {
   data: EmptyResponse;
@@ -2506,6 +3124,21 @@ export type disableSyncResponse401 = {
   status: 401;
 };
 
+export type disableSyncResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type disableSyncResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type disableSyncResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type disableSyncResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -2517,6 +3150,9 @@ export type disableSyncResponseSuccess = disableSyncResponse204 & {
 export type disableSyncResponseError = (
   | disableSyncResponse400
   | disableSyncResponse401
+  | disableSyncResponse403
+  | disableSyncResponse404
+  | disableSyncResponse409
   | disableSyncResponse500
 ) & {
   headers: Headers;
@@ -2546,6 +3182,70 @@ export const disableSync = async (
     status: res.status,
     headers: res.headers,
   } as disableSyncResponse;
+};
+
+/**
+ * @summary Change the archived status of up to 100 threads, sending one provider
+write per inbox. A thread that can't change is reported, not fatal.
+ */
+export type archiveThreadsResponse200 = {
+  data: ArchiveThreadsResponse;
+  status: 200;
+};
+
+export type archiveThreadsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type archiveThreadsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type archiveThreadsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type archiveThreadsResponseSuccess = archiveThreadsResponse200 & {
+  headers: Headers;
+};
+export type archiveThreadsResponseError = (
+  | archiveThreadsResponse400
+  | archiveThreadsResponse401
+  | archiveThreadsResponse500
+) & {
+  headers: Headers;
+};
+
+export type archiveThreadsResponse =
+  | archiveThreadsResponseSuccess
+  | archiveThreadsResponseError;
+
+export const getArchiveThreadsUrl = () => {
+  return `/email/threads/archived`;
+};
+
+export const archiveThreads = async (
+  archiveThreadsRequest: ArchiveThreadsRequest,
+  options?: RequestInit
+): Promise<archiveThreadsResponse> => {
+  const res = await fetch(getArchiveThreadsUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(archiveThreadsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: archiveThreadsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as archiveThreadsResponse;
 };
 
 /**
@@ -2849,6 +3549,53 @@ export const getThreadMessagesHandler = async (
 };
 
 /**
+ * @summary Fetch the latest organization action outcomes without provider-specific status strings.
+ */
+export type threadOperationsResponse200 = {
+  data: MailboxOperation[];
+  status: 200;
+};
+
+export type threadOperationsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type threadOperationsResponseSuccess = threadOperationsResponse200 & {
+  headers: Headers;
+};
+export type threadOperationsResponseError = threadOperationsResponse404 & {
+  headers: Headers;
+};
+
+export type threadOperationsResponse =
+  | threadOperationsResponseSuccess
+  | threadOperationsResponseError;
+
+export const getThreadOperationsUrl = (id: string) => {
+  return `/email/threads/${id}/operations`;
+};
+
+export const threadOperations = async (
+  id: string,
+  options?: RequestInit
+): Promise<threadOperationsResponse> => {
+  const res = await fetch(getThreadOperationsUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: threadOperationsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as threadOperationsResponse;
+};
+
+/**
  * @summary Called by FE when the user has seen a thread.
  */
 export type threadSeenResponse200 = {
@@ -2907,6 +3654,76 @@ export const threadSeen = async (
     status: res.status,
     headers: res.headers,
   } as threadSeenResponse;
+};
+
+/**
+ * @summary Set mailbox state without client-side provider label lookup.
+ */
+export type updateThreadStateResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type updateThreadStateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type updateThreadStateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type updateThreadStateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateThreadStateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type updateThreadStateResponseSuccess = updateThreadStateResponse204 & {
+  headers: Headers;
+};
+export type updateThreadStateResponseError = (
+  | updateThreadStateResponse400
+  | updateThreadStateResponse401
+  | updateThreadStateResponse404
+  | updateThreadStateResponse409
+) & {
+  headers: Headers;
+};
+
+export type updateThreadStateResponse =
+  | updateThreadStateResponseSuccess
+  | updateThreadStateResponseError;
+
+export const getUpdateThreadStateUrl = (id: string) => {
+  return `/email/threads/${id}/state`;
+};
+
+export const updateThreadState = async (
+  id: string,
+  updateThreadStateRequest: UpdateThreadStateRequest,
+  options?: RequestInit
+): Promise<updateThreadStateResponse> => {
+  const res = await fetch(getUpdateThreadStateUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadStateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateThreadStateResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateThreadStateResponse;
 };
 
 /**
@@ -3042,6 +3859,105 @@ export const getThreadCalendarInvitations = async (
     status: res.status,
     headers: res.headers,
   } as getThreadCalendarInvitationsResponse;
+};
+
+/**
+ * @summary Add a shared event saved from one of the thread's messages to one of the
+viewer's Google calendars, the way Add to calendar adds a channel-shared
+event: a snapshot under the meeting's iCalendar UID and organizer, with the
+viewer as its only guest and no join link. Nobody is notified. Only a
+published event file (`METHOD:PUBLISH`) can be added; an invitation is
+answered from the calendar it reached.
+ */
+export type copyThreadCalendarInvitationResponse201 = {
+  data: CalendarEvent;
+  status: 201;
+};
+
+export type copyThreadCalendarInvitationResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type copyThreadCalendarInvitationResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type copyThreadCalendarInvitationResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type copyThreadCalendarInvitationResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type copyThreadCalendarInvitationResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type copyThreadCalendarInvitationResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type copyThreadCalendarInvitationResponseSuccess =
+  copyThreadCalendarInvitationResponse201 & {
+    headers: Headers;
+  };
+export type copyThreadCalendarInvitationResponseError = (
+  | copyThreadCalendarInvitationResponse400
+  | copyThreadCalendarInvitationResponse401
+  | copyThreadCalendarInvitationResponse403
+  | copyThreadCalendarInvitationResponse404
+  | copyThreadCalendarInvitationResponse409
+  | copyThreadCalendarInvitationResponse503
+) & {
+  headers: Headers;
+};
+
+export type copyThreadCalendarInvitationResponse =
+  | copyThreadCalendarInvitationResponseSuccess
+  | copyThreadCalendarInvitationResponseError;
+
+export const getCopyThreadCalendarInvitationUrl = (
+  threadId: string,
+  messageId: string,
+  invitationId: string
+) => {
+  return `/email/threads/${threadId}/messages/${messageId}/calendar-invitations/${invitationId}/copy`;
+};
+
+export const copyThreadCalendarInvitation = async (
+  threadId: string,
+  messageId: string,
+  invitationId: string,
+  copyCalendarEventRequest: CopyCalendarEventRequest,
+  options?: RequestInit
+): Promise<copyThreadCalendarInvitationResponse> => {
+  const res = await fetch(
+    getCopyThreadCalendarInvitationUrl(threadId, messageId, invitationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(copyCalendarEventRequest),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyThreadCalendarInvitationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as copyThreadCalendarInvitationResponse;
 };
 
 /**

@@ -22,6 +22,8 @@ pub enum DataType {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// A URL.
     Link,
     /// Text options.
@@ -81,6 +83,7 @@ pub fn stored_cast_kind(
         DataType::Number => CastKind::Number,
         DataType::Boolean => CastKind::Boolean,
         DataType::Date => CastKind::Date,
+        DataType::DateRange => CastKind::DateRange,
         DataType::Link => CastKind::Link,
         DataType::SelectString | DataType::SelectNumber => CastKind::Select { multi },
         DataType::Tag => CastKind::Select { multi: true },

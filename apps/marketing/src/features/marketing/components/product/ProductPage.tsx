@@ -1,5 +1,6 @@
 import MacroLogo from '@icon/macro-logo.svg';
-import type { JSX, ParentProps } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
+import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { FeaturePage, FeaturePageCta } from '../FeaturePage';
 import '../email/email-hero.css';
 import './product-page.css';
@@ -8,33 +9,55 @@ import './product-demo-stage.css';
 /** Email's approved geometry, scoped to the product-page rollout. */
 export function ProductPage(props: ParentProps) {
   return (
-    <FeaturePage>
+    <FeaturePage productSpacing>
       <div class="product-page">{props.children}</div>
     </FeaturePage>
+  );
+}
+
+/** A home link distinct from the current product name. */
+export function ProductBrand(props: { product: string }) {
+  return (
+    <p class="email-page-hero-label">
+      <a
+        href="/"
+        target="_self"
+        class="product-home-link"
+        aria-label="Macro home"
+      >
+        <MacroLogo width="20" height="20" aria-hidden="true" />
+        <span>Macro</span>
+      </a>
+      <span aria-hidden="true">/</span>
+      <span>{props.product}</span>
+    </p>
   );
 }
 
 export function ProductHero(props: {
   product: string;
   title: readonly [string, string];
-  description: readonly [string, string];
-  cta: string;
+  description: string | readonly [string, string];
+  cta?: string;
 }) {
   return (
     <header class="feature-page-hero email-page-hero">
-      <p class="email-page-hero-label">
-        <MacroLogo aria-hidden="true" />
-        <span>Macro {props.product}</span>
-      </p>
+      <ProductBrand product={props.product} />
       <h1>
         <span>{props.title[0]}</span>
         <span>{props.title[1]}</span>
       </h1>
       <p class="email-page-hero-description">
-        {props.description[0]}
-        <br class="email-page-hero-break" /> {props.description[1]}
+        {typeof props.description === 'string' ? (
+          props.description
+        ) : (
+          <>
+            {props.description[0]}
+            <br class="email-page-hero-break" /> {props.description[1]}
+          </>
+        )}
       </p>
-      <FeaturePageCta name={props.cta} />
+      <Show when={props.cta}>{(cta) => <FeaturePageCta name={cta()} />}</Show>
     </header>
   );
 }
@@ -55,7 +78,8 @@ export function ProductDemo(props: {
   mobileHeight?: number;
 }) {
   return (
-    <div
+    <DemoInteractionBoundary
+      label={props.label}
       ref={props.ref}
       class="product-demo-stage"
       role="group"
@@ -76,6 +100,6 @@ export function ProductDemo(props: {
       >
         <div class="dummy-main">{props.children}</div>
       </div>
-    </div>
+    </DemoInteractionBoundary>
   );
 }

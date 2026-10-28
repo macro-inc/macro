@@ -7,7 +7,7 @@ import { useDatabasesQuery } from '@queries/storage/databases';
 import { databasesKeys } from '@queries/storage/keys';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery, useQueryClient } from '@tanstack/solid-query';
-import type { DatabaseViewSelection } from '../core/view-selection';
+import type { DatabaseViewSelection } from '../../database/core/view-selection';
 
 /** Mounted inside authenticated app chrome. Provisioning never suspends the app. */
 export function useStarterDatabase() {

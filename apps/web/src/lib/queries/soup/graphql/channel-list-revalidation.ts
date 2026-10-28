@@ -1,6 +1,7 @@
 import {
   ChannelListSoupDocument,
   ChannelUnreadPresenceDocument,
+  HomeUnreadPresenceDocument,
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
 import { delegateChannelNotificationRefresh } from '../../channel/notification-refresh';
@@ -11,7 +12,8 @@ export function getChannelListRevalidations(client?: Pick<Client, 'query'>) {
   return getActiveGraphqlSoupRevalidations(client).filter(
     (query) =>
       query.document === ChannelListSoupDocument ||
-      query.document === ChannelUnreadPresenceDocument
+      query.document === ChannelUnreadPresenceDocument ||
+      query.document === HomeUnreadPresenceDocument
   );
 }
 

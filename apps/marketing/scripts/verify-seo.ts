@@ -22,6 +22,17 @@ const htmlFor = (route: string) =>
 const typesIn = (html: string) =>
   [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
 
+// Intentional copy updates; retain the captured migration baseline unchanged.
+const updatedTitles: Record<string, string> = {
+  '/github': 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
+  '/agents': 'Macro Agents | Agents That Know What Your Team Is Doing',
+  '/calls': 'Macro Calls — Turn Conversations into Tasks and Updates',
+  '/channels': 'Macro Chat: Bring the Work into the Conversation',
+  '/documents': 'Macro Docs | Write With Your Team and Your Agents',
+  '/migrate': 'Switch your company to Macro | Migration guide',
+  '/tasks': 'Macro Tasks — Task management that keeps up with your team',
+};
+
 const linksByRoute = new Map<string, string[]>();
 const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
 const indexedRoutes = baseline.routes.filter(
@@ -80,13 +91,8 @@ for (const previous of indexedRoutes) {
     (doc.getElementById('root')?.textContent?.length ?? 0) > 200,
     `${previous.path}: empty HTML shell`
   );
-  // The copy audit replaces the absolute ‘perfect memory’ claim. Keep the
-  // captured baseline intact and require the intentional replacement exactly.
   if (previous.path !== '/') {
-    const expectedTitle =
-      previous.path === '/calls'
-        ? 'Macro Calls — Recordings, Transcripts, and Agent Tools'
-        : previous.title;
+    const expectedTitle = updatedTitles[previous.path] ?? previous.title;
     assert.equal(doc.title, expectedTitle, `${previous.path}: title changed`);
   }
   for (const type of previous.schemaTypes)
@@ -102,6 +108,33 @@ for (const previous of indexedRoutes) {
     .querySelector('meta[property="og:image"]')
     ?.getAttribute('content');
   assert(og, `${previous.path}: missing social card`);
+  assert.equal(
+    doc.querySelector('meta[name="twitter:card"]')?.getAttribute('content'),
+    'summary_large_image',
+    `${previous.path}: preserve X image card`
+  );
+  assert.equal(
+    doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
+    og,
+    `${previous.path}: X image matches Open Graph image`
+  );
+  const video = doc
+    .querySelector('meta[property="og:video"]')
+    ?.getAttribute('content');
+  if (previous.path === '/') {
+    assert(video, 'Homepage: missing Open Graph video');
+    const videoUrl = new URL(video);
+    assert.equal(videoUrl.origin, origin);
+    const videoFile = path.join(directory, videoUrl.pathname);
+    assert(fs.existsSync(videoFile), 'Homepage: missing Open Graph MP4');
+    assert(
+      fs.statSync(videoFile).size < 2_000_000,
+      'Homepage: keep preview video small'
+    );
+  } else {
+    assert(!video, `${previous.path}: video must remain homepage-only`);
+  }
+
   if (new URL(og).origin === origin)
     assert(
       fs.existsSync(path.join(directory, new URL(og).pathname)),

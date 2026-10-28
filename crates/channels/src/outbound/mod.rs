@@ -4,6 +4,8 @@ pub mod channel_name;
 pub mod connection_gateway_realtime;
 /// Contacts adapter for channel side effects.
 pub mod contacts_dispatcher;
+/// Entity-access adapter authorizing comment references by their parent.
+pub mod entity_access_comment_parents;
 /// Notification adapter for channel notification side effects.
 pub mod notification_sender;
 /// Postgres adapter for channel reference share-permission side effects.
@@ -12,5 +14,7 @@ pub mod pg_channel_reference_share_permissions;
 pub mod pg_channels_repo;
 /// Postgres context adapter for channel side-effect policy.
 pub mod pg_side_effect_context;
+/// Static-file adapter that reserves channel media uploads.
+pub mod static_file_media_uploads;
 /// Static-file metadata adapter for channel pictures.
 pub mod static_file_pictures;

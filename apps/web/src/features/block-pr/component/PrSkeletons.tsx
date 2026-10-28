@@ -13,7 +13,7 @@ export function SkeletonBar(props: { class?: string }) {
 function MessageSkeleton() {
   return (
     <div class="flex gap-2 py-3">
-      <div class="animate-pulse size-6 rounded-full bg-skeleton shrink-0" />
+      <div class="skeleton-shimmer size-6 shrink-0 rounded-full bg-skeleton" />
       <div class="flex flex-col gap-2 grow min-w-0 pt-1">
         <SkeletonBar class="h-2.5 w-32" />
         <SkeletonBar class="h-2 w-full max-w-md" />

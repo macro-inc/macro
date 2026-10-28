@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn inline_style_url_quotes_remain_escaped_after_html_round_trip() {
+    let html = r#"<div style='background-image:url("cid:\"")'>content</div>"#;
+
+    for sanitize in [
+        sanitize_email_html,
+        sanitize_html_fragment,
+        sanitize_authored_html,
+    ] {
+        let sanitized = sanitize(html);
+        let fragment = Html::parse_fragment(&sanitized);
+        let element = fragment.select(&STYLE_ATTRIBUTE_SELECTOR).next().unwrap();
+        assert_eq!(
+            element.value().attr("style"),
+            Some(r#"background-image:url("cid:\"")"#),
+            "CSS quotes must remain escaped after decoding HTML entities"
+        );
+    }
+}
+
+#[test]
+fn inline_style_filtering_and_stylesheet_filtering_both_apply() {
+    let html = r#"<style>.a{color:blue;position:fixed}</style>
+        <div style="color:red;position:fixed;background-image:url(javascript:alert)">content</div>"#;
+
+    for sanitize in [
+        sanitize_email_html,
+        sanitize_html_fragment,
+        sanitize_authored_html,
+    ] {
+        let sanitized = sanitize(html);
+        assert!(sanitized.contains("color:blue;"));
+        assert!(sanitized.contains("color:red"));
+        assert!(!sanitized.contains("position"));
+        assert!(!sanitized.contains("javascript"));
+    }
+}
+
+#[test]
 fn strips_script_svg_math_and_foreign_object_vectors() {
     let html = r#"<html><body>
         <p>hello</p>

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE email_mailbox_drafts SET revision = revision + 1,base_version = $2,checkpoint = NULL,\n                            state = 'pending',error_code = NULL,delete_requested = false,actor_id = $3,available_at = now(),updated_at = now()\n                        WHERE message_id = $1\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2185fe4a97c4728d725d5cbb2f37a54b79ae613bfc9e8f8f5e04a8f0f213c08a"
+}

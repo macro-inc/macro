@@ -1,8 +1,12 @@
 use super::models::*;
+use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Message use-case failure.
 #[derive(Debug, thiserror::Error)]
@@ -28,9 +32,9 @@ pub enum MessageError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageCursor {
-    /// Last root creation time.
+    /// Last message creation time or activity occurrence time.
     pub created_at: DateTime<Utc>,
-    /// Last root UUID, used to break timestamp ties.
+    /// Last entry UUID, used to break timestamp ties across both sources.
     pub id: Uuid,
 }
 
@@ -87,6 +91,68 @@ pub struct MessagePage {
     pub previous_cursor: Option<MessageCursor>,
 }
 
+/// One chronological entry in a parent's timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageTimelineEntry {
+    /// A root message with its bounded thread preview.
+    Message {
+        /// The message and thread state.
+        message: Box<MessageListItem>,
+    },
+    /// A recorded fact about the parent, such as a rename or a finished call.
+    Activity {
+        /// The recorded activity.
+        activity: activity::domain::timeline::TimelineActivity,
+    },
+}
+
+impl MessageTimelineEntry {
+    /// Position on the `(timestamp, id)` keyset shared by both kinds.
+    pub fn position(&self) -> (DateTime<Utc>, Uuid) {
+        match self {
+            Self::Message { message } => (message.message.created_at, message.message.id),
+            Self::Activity { activity } => (activity.occurred_at, activity.id),
+        }
+    }
+
+    /// Continue reading on either side of this entry.
+    pub fn cursor(&self) -> MessageCursor {
+        let (created_at, id) = self.position();
+        MessageCursor { created_at, id }
+    }
+}
+
+/// A bounded, newest-first window of a parent's messages and activity, ordered
+/// by the server on one `(timestamp, id)` keyset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageTimelinePage {
+    /// Messages and activity, newest first.
+    pub entries: Vec<MessageTimelineEntry>,
+    /// Continue to older entries.
+    pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer entries.
+    pub previous_cursor: Option<MessageCursor>,
+}
+
+impl From<MessagePage> for MessageTimelinePage {
+    fn from(page: MessagePage) -> Self {
+        Self {
+            entries: page
+                .items
+                .into_iter()
+                .map(|message| MessageTimelineEntry::Message {
+                    message: Box::new(message),
+                })
+                .collect(),
+            next_cursor: page.next_cursor,
+            previous_cursor: page.previous_cursor,
+        }
+    }
+}
+
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
@@ -97,6 +163,8 @@ pub struct CreateMessage {
     pub parent: MessageParent,
     /// Verified actor.
     pub actor: ChannelSender<'static>,
+    /// Server-verified guest display name; absent for account authors.
+    pub guest_name: Option<String>,
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
     /// Parsed message input.
@@ -223,7 +291,39 @@ pub enum MessageChange {
         thread_id: Option<Uuid>,
         /// Whether the user is currently typing.
         active: bool,
+        /// Present when an agent session is typing through the bot that
+        /// speaks for it. Names the session, so a viewer who can read it can
+        /// show the turn live in place of the bare indicator.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<AgentTyping>,
     },
+}
+
+/// An agent session typing through its bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct AgentTyping {
+    /// The session whose turn the bot is speaking for.
+    pub session_id: Uuid,
+    /// What the agent is doing. Deliberately coarse: a typing event reaches
+    /// everyone in the conversation, and which tool runs on what is for
+    /// viewers who can read the session itself.
+    pub phase: AgentTypingPhase,
+}
+
+/// What a typing agent is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTypingPhase {
+    /// Working out what to do, or between steps.
+    Thinking,
+    /// Writing a reply.
+    Writing,
+    /// Using a tool.
+    Working,
+    /// Waiting on someone to answer a question or approve an action.
+    Waiting,
 }
 
 /// Persisted reaction state and whether this operation changed membership.
@@ -454,6 +554,55 @@ impl MessageGroupRecipients for NoMessageGroups {
             "channel group mentions are unavailable",
         ))
     }
+}
+
+/// Channel facts displayed inline; message/view actions would duplicate content.
+pub const CHANNEL_TIMELINE: TimelineSelection = TimelineSelection::new(
+    &[
+        ActionTag::Renamed,
+        ActionTag::PictureChanged,
+        ActionTag::ParticipantAdded,
+        ActionTag::ParticipantRemoved,
+        ActionTag::CallEnded,
+    ],
+    &[],
+);
+
+/// The activity a parent's timeline shows next to its messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimelineActivitySource {
+    /// Activity entity type that records facts about the parent.
+    pub entity_type: activity::EntityType,
+    /// What is shown inline; anything else stays in the activity feed.
+    pub selection: TimelineSelection,
+}
+
+/// Which activity, if any, belongs in a parent's timeline. Parents without a
+/// source read message-only timelines; adding one is a deliberate choice here.
+pub fn timeline_activity(parent: &MessageParent) -> Option<TimelineActivitySource> {
+    match parent {
+        MessageParent::Channel(_) => Some(TimelineActivitySource {
+            entity_type: activity::EntityType::Channel,
+            selection: CHANNEL_TIMELINE,
+        }),
+        MessageParent::Document(_)
+        | MessageParent::Initiative(_)
+        | MessageParent::CrmCompany(_)
+        | MessageParent::CrmContact(_)
+        | MessageParent::Call(_) => None,
+    }
+}
+
+/// The timeline, if any, that shows this activity: the same declaration as
+/// [`timeline_activity`], so live delivery and reads never disagree.
+pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
+    let parent = match activity.entity_type {
+        activity::EntityType::Channel => MessageParent::Channel(activity.entity_id.parse().ok()?),
+        _ => return None,
+    };
+    let source = timeline_activity(&parent)?;
+    (source.entity_type == activity.entity_type && source.selection.includes(&activity.action))
+        .then_some(parent)
 }
 
 /// Identity of a CRM company or contact that hosts a discussion.

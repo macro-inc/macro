@@ -79,6 +79,21 @@ pub trait ActivityRealtimePublisher: Send + Sync {
     fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
 }
 
+/// Announce through both publishers, in order; each remains best-effort.
+impl<A: ActivityRealtimePublisher, B: ActivityRealtimePublisher> ActivityRealtimePublisher
+    for (A, B)
+{
+    async fn publish_recorded(&self, activities: &[Activity]) {
+        self.0.publish_recorded(activities).await;
+        self.1.publish_recorded(activities).await;
+    }
+
+    async fn publish_invalidated(&self) {
+        self.0.publish_invalidated().await;
+        self.1.publish_invalidated().await;
+    }
+}
+
 /// Resolves who may currently see an entity's activity.
 ///
 /// Used at publish time to widen realtime delivery beyond the acting
@@ -162,6 +177,23 @@ pub trait ActivityReads {
     fn subject_feed(
         &self,
         subject_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
+
+    /// One page of the activity of everyone who shares a team with
+    /// `viewer_id`, the viewer excluded, newest first, on entities shared
+    /// with the viewer: the same audience `get_users_by_entity` resolves
+    /// (grants to the viewer, their teams, or their channels; channel
+    /// participation; owned inboxes), so a link share alone does not count.
+    /// Form rows are never included: they name respondents.
+    ///
+    /// Each page reads a bounded number of rows, so it may hold fewer than
+    /// `limit` rows, or none, while `next` is set; callers keep paging
+    /// until `next` is `None`. No visible row is skipped between pages.
+    fn teammate_feed(
+        &self,
+        viewer_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;

@@ -15,12 +15,10 @@ vi.mock('../notification-stacking', () => ({
 }));
 
 const flags = vi.hoisted(() => ({ reminders: true }));
-const openReminderDetail = vi.hoisted(() => vi.fn());
 const getNotificationById = vi.hoisted(() => vi.fn());
+const track = vi.hoisted(() => vi.fn());
 
-vi.mock('@app/features/reminders/reminder-navigation', () => ({
-  openReminderDetail,
-}));
+vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 vi.mock('@app/features/calendar-view/calendar-range', () => ({
   createCalendarRange: vi.fn(),
@@ -61,7 +59,8 @@ import type { UnifiedNotification } from '../types';
 
 function reminderNotification(): UnifiedNotification {
   return {
-    entity_id: 'reminder-1',
+    entity_id: 'thread-1',
+    entity_type: 'email_thread',
     notification_event_type: 'reminder',
     notification_metadata: {
       tag: 'reminder',
@@ -74,46 +73,75 @@ function reminderNotification(): UnifiedNotification {
 }
 
 describe('reminder notification navigation', () => {
+  const openWithSplit = vi.fn();
+  const layout = {
+    getSplitByContent: vi.fn(() => undefined),
+    openWithSplit,
+  } as unknown as SplitManager;
   beforeEach(() => {
     flags.reminders = true;
-    openReminderDetail.mockClear();
+    openWithSplit.mockReset();
     getNotificationById.mockReset();
+    track.mockReset();
   });
 
-  it('opens source-less reminders through their claimed detail route', async () => {
-    const getOrchestrator = vi.fn();
-    const layout = {
-      getOrchestrator,
-    } as unknown as SplitManager;
-
-    const result = await openNotification(reminderNotification(), layout);
-
-    expect(result.isOk()).toBe(true);
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
-    });
-    expect(getOrchestrator).not.toHaveBeenCalled();
-  });
-
-  it('defers feature enforcement to the reactive destination route', async () => {
-    flags.reminders = false;
-    const layout = {} as SplitManager;
-
+  it('reports an in-app open with the notification type', async () => {
     await openNotification(reminderNotification(), layout);
-
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'in_app',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
     });
   });
 
-  it('forwards acceptance so startup intent clears only after route apply', async () => {
-    const layout = {} as SplitManager;
-    const onApplied = vi.fn();
+  it('reports a native notification tap as a push open', async () => {
+    const source = {
+      notifications: () => [{ ...reminderNotification(), id: 'n-1' }],
+    } as unknown as NotificationSource;
+    await openNotificationFromId('n-1', layout, source);
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'native_push',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
+    });
+  });
 
+  it('counts a retried native tap once, when its navigation applies', async () => {
+    const source = {
+      notifications: () => [{ ...reminderNotification(), id: 'n-1' }],
+    } as unknown as NotificationSource;
+    const onApplied = vi.fn();
+    await openNotificationFromId('n-1', layout, source, { onApplied });
+    await openNotificationFromId('n-1', layout, source, { onApplied });
+    expect(track).not.toHaveBeenCalled();
+
+    openWithSplit.mock.calls[1][1].onApplied();
+
+    expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
+      source: 'native_push',
+      notificationType: 'reminder',
+      entityType: 'email_thread',
+    });
+    expect(onApplied).toHaveBeenCalledOnce();
+  });
+
+  it('opens the original email thread', async () => {
+    const result = await openNotification(reminderNotification(), layout);
+    expect(result.isOk()).toBe(true);
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'email', id: 'thread-1' },
+      expect.objectContaining({ activate: true })
+    );
+  });
+
+  it('keeps delivered email reminders navigable after disabling creation', async () => {
+    flags.reminders = false;
+    await openNotification(reminderNotification(), layout);
+    expect(openWithSplit).toHaveBeenCalledOnce();
+  });
+
+  it('reports acceptance only after the email route is applied', async () => {
+    const onApplied = vi.fn();
     await openNotification(
       reminderNotification(),
       layout,
@@ -122,34 +150,38 @@ describe('reminder notification navigation', () => {
       undefined,
       { onApplied }
     );
-
-    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
-      manager: layout,
-      handle: undefined,
-      openInNewSplit: false,
-      onApplied,
-    });
     expect(onApplied).not.toHaveBeenCalled();
+    openWithSplit.mock.calls[0][1].onApplied();
+    expect(onApplied).toHaveBeenCalledOnce();
+  });
+
+  it('does not reopen a removed generic reminder surface', async () => {
+    const notification = {
+      ...reminderNotification(),
+      entity_type: 'reminder',
+    } as UnifiedNotification;
+    await openNotification(notification, layout);
+    expect(openWithSplit).not.toHaveBeenCalled();
   });
 
   it('does not open a fetched reminder after its route host becomes stale', async () => {
-    const notification = reminderNotification();
-    getNotificationById.mockResolvedValue(notification);
-    const layout = {} as SplitManager;
+    getNotificationById.mockResolvedValue(reminderNotification());
     const source = { notifications: () => [] } as unknown as NotificationSource;
-
     const result = await openNotificationFromId(
       'notification-1',
       layout,
       source,
       { canOpen: () => false }
     );
-
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({
       tag: 'NavigationDeferredError',
       notificationId: 'notification-1',
     });
-    expect(openReminderDetail).not.toHaveBeenCalled();
+    expect(openWithSplit).not.toHaveBeenCalled();
+    expect(track).not.toHaveBeenCalled();
   });
 });
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));

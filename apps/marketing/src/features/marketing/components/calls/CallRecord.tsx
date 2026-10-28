@@ -72,6 +72,7 @@ export function createCallPlayback(duration: number) {
     seconds,
     playing,
     seekGeneration,
+    pause: stop,
     toggle: () => (playing() ? stop() : play()),
     seek: (value: number) => {
       setSeconds(Math.max(0, Math.min(duration, value)));
@@ -103,6 +104,8 @@ export function ShareIcon(props: { class?: string }) {
 export function CallRecordTopBar(props: {
   title: string;
   onBack?: () => void;
+  onCallAgain?: () => void;
+  onAsk?: () => void;
 }) {
   return (
     <ViewShell.TopBar class="call-bar">
@@ -119,12 +122,21 @@ export function CallRecordTopBar(props: {
       <PhoneCall class="size-4 shrink-0 text-ink-muted" />
       <span class="truncate text-sm font-medium">{props.title}</span>
       <div class="ml-auto flex shrink-0 items-center gap-1">
-        <Button variant="plain" size="icon-md" label="Call Again">
+        <Button
+          variant="plain"
+          size="icon-md"
+          label="Call Again"
+          onClick={props.onCallAgain}
+          disabled={!props.onCallAgain}
+        >
           <PhoneCall class="size-4" />
         </Button>
         <Button
           variant="plain"
           size="md"
+          aria-label="Ask Macro"
+          onClick={props.onAsk}
+          disabled={!props.onAsk}
           tooltip="Ask Macro"
           class="call-bar-action"
         >
@@ -134,6 +146,8 @@ export function CallRecordTopBar(props: {
         <Button
           variant="plain"
           size="md"
+          aria-label="Share"
+          disabled
           tooltip="Share call"
           class="call-bar-action"
         >
@@ -144,6 +158,7 @@ export function CallRecordTopBar(props: {
           variant="plain"
           size="icon-md"
           label="Copy Share Link"
+          disabled
           class="call-bar-copy"
         >
           <LinkIcon class="size-3.5" />
@@ -490,7 +505,10 @@ export function CallRecordBody(props: {
                       src={homepagePeople[person].photo}
                       alt=""
                     />
-                    <span class="max-w-48 truncate">{callEmail(person)}</span>
+                    <span class="max-w-48 truncate">
+                      {props.call.participantEmails?.[person] ??
+                        callEmail(person)}
+                    </span>
                   </span>
                 )}
               </For>
@@ -531,7 +549,7 @@ export function CallRecordBody(props: {
                         <Show when={message.documentId}>
                           <span class="dummy-entity-link">
                             <FileIcon class="size-4 text-note" />
-                            Q3 launch plan
+                            Website launch plan
                           </span>
                         </Show>
                       </MessageRow>

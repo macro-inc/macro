@@ -3,8 +3,9 @@
 use agent_runtime_protocol::domain::action::{AgentAction, PromptAttachment};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use trigger_context::TriggerContext;
 
-use super::AnnounceOrigin;
+use super::{AnnounceOrigin, ReplyPlacement};
 
 #[cfg(test)]
 mod test;
@@ -12,6 +13,9 @@ mod test;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
+    /// Whether the reply belongs in a thread or the channel's timeline.
+    #[serde(default, skip_serializing_if = "ReplyPlacement::is_thread")]
+    pub reply_placement: ReplyPlacement,
     /// Channel or document the mentioning message was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into: the mention's thread root.
@@ -25,6 +29,9 @@ pub struct MentionOrigin {
     /// Files attached to the message, as the prompt will refer to them.
     #[serde(default)]
     pub attachments: Vec<PromptAttachment>,
+    /// Why the agent was called, as the trigger read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// A task assignment that starts a session without a user-authored mention.
@@ -38,6 +45,9 @@ pub struct TaskAssignmentOrigin {
     pub actor: MacroUserIdStr<'static>,
     /// Task instructions supplied privately to the session.
     pub prompt: String,
+    /// The task, who assigned it, and how, as the trigger read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// The event that opens a managed session.
@@ -76,6 +86,13 @@ impl SessionOrigin {
         }
     }
 
+    pub(crate) fn context(&self) -> Option<&TriggerContext> {
+        match self {
+            Self::Mention(origin) => origin.context.as_ref(),
+            Self::TaskAssignment(origin) => origin.context.as_ref(),
+        }
+    }
+
     pub(crate) fn kind(&self) -> &'static str {
         match self {
             Self::Mention(_) => "mention",
@@ -86,12 +103,14 @@ impl SessionOrigin {
     pub(crate) fn announcement(&self) -> AnnounceOrigin {
         match self {
             Self::Mention(origin) => AnnounceOrigin {
+                reply_placement: origin.reply_placement,
                 reuse_origin_message: false,
                 parent: origin.parent.clone(),
                 thread_id: origin.thread_id,
                 message_id: origin.message_id,
             },
             Self::TaskAssignment(origin) => AnnounceOrigin {
+                reply_placement: ReplyPlacement::Thread,
                 reuse_origin_message: true,
                 parent: origin.parent.clone(),
                 thread_id: origin.discussion_id,

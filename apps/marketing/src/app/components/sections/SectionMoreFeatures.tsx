@@ -30,6 +30,7 @@ const secondaryLinks: {
   { title: 'Partners', href: '/partners' },
   { title: 'Terms', href: '/terms' },
   { title: 'Privacy', href: '/privacy' },
+  { title: 'Delete account', href: '/delete-account' },
   { title: 'DPA', href: '/dpa' },
 ];
 

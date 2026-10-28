@@ -337,3 +337,64 @@ async fn purge_invalidation_needs_no_deleted_entity_audience() {
         )]
     );
 }
+
+#[tokio::test]
+async fn form_activity_reaches_only_its_subject_never_the_forms_other_grantees() {
+    struct Responded;
+    impl crate::DomainActivity for Responded {
+        const ENTITY_TYPE: EntityType = EntityType::Form;
+        fn entity_id(&self) -> &str {
+            "form-1"
+        }
+        fn into_action(self) -> crate::Action {
+            crate::Action::Responded
+        }
+    }
+    let respondent = user("respondent");
+    let other_respondent = user("other-respondent");
+    let editor = user("editor");
+    let broker = RecordingPublisher::default();
+    // A form's grantees include every respondent it was shared with at View,
+    // a channel's members among them.
+    let announcements = ActivityAnnouncements::new(
+        broker.clone(),
+        FakeAudience {
+            by_entity: HashMap::from([(
+                "form-1".to_string(),
+                vec![other_respondent.clone(), editor.clone(), respondent.clone()],
+            )]),
+        },
+    );
+    let response = Activity::from_domain(
+        Uuid::from_u128(5),
+        0,
+        Actor::new_from_user(respondent.clone()),
+        None,
+        Responded,
+        Utc::now(),
+    );
+    let renamed = Activity::common(
+        Uuid::from_u128(6),
+        0,
+        Actor::new_from_user(editor.clone()),
+        None,
+        EntityType::Form,
+        "form-1",
+        CommonAction::Edited,
+        Utc::now(),
+    );
+
+    announcements.publish_recorded(&[response, renamed]).await;
+
+    let events = broker.recorded_events();
+    let recipients: Vec<&str> = events.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(recipients.len(), 2, "{recipients:?}");
+    assert!(recipients.contains(&respondent.as_ref()));
+    assert!(recipients.contains(&editor.as_ref()));
+    assert_eq!(rows_for(&events, respondent.as_ref()).len(), 1);
+    assert_eq!(rows_for(&events, editor.as_ref()).len(), 1);
+    assert_eq!(
+        rows_for(&events, editor.as_ref())[0].subject_id,
+        editor.as_ref()
+    );
+}

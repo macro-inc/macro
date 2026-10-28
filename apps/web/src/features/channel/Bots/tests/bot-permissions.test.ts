@@ -39,6 +39,26 @@ describe('canDeleteBot', () => {
     expect(canDeleteBot(bot, CURRENT_USER, TEAM_ID, false)).toBe(false);
     expect(canDeleteBot(bot, CURRENT_USER, 'team-2', true)).toBe(false);
   });
+
+  it('allows team admins to delete agents but not other bots', () => {
+    const bot = {
+      owner: { type: 'team' as const, team_id: TEAM_ID },
+      created_by: CREATOR,
+      has_agent: true,
+    };
+
+    expect(canDeleteBot(bot, CURRENT_USER, TEAM_ID, false, true)).toBe(true);
+    expect(canDeleteBot(bot, CURRENT_USER, 'team-2', false, true)).toBe(false);
+    expect(
+      canDeleteBot(
+        { ...bot, has_agent: false },
+        CURRENT_USER,
+        TEAM_ID,
+        false,
+        true
+      )
+    ).toBe(false);
+  });
 });
 
 describe('canManageAgent', () => {

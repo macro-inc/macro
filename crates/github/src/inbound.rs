@@ -22,6 +22,10 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 StatusCode::PRECONDITION_REQUIRED,
                 "ReauthenticationRequired".into(),
             ),
+            crate::domain::models::GithubError::AccountMismatch => (
+                StatusCode::CONFLICT,
+                "Disconnect the current GitHub account before linking a different account.".into(),
+            ),
             crate::domain::models::GithubError::NoRefreshTokenProvided => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "no refresh token was provided".into(),
@@ -50,6 +54,14 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 rejection,
                 message,
             } => (merge_rejection_status(rejection), message.into()),
+            crate::domain::models::GithubError::PullRequestUpdateRejected {
+                rejection,
+                message,
+            } => (update_rejection_status(rejection), message.into()),
+            crate::domain::models::GithubError::TooManyPullRequests => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "too many pull requests requested".into(),
+            ),
         };
 
         (
@@ -76,5 +88,19 @@ pub fn merge_rejection_status(
         GithubMergeRejection::NotFound => StatusCode::NOT_FOUND,
         GithubMergeRejection::Forbidden => StatusCode::FORBIDDEN,
         GithubMergeRejection::Invalid => StatusCode::UNPROCESSABLE_ENTITY,
+    }
+}
+
+/// The status a declined pull request change is reported with.
+#[cfg(feature = "axum")]
+pub fn update_rejection_status(
+    rejection: crate::domain::models::GithubPullRequestUpdateRejection,
+) -> axum::http::StatusCode {
+    use crate::domain::models::GithubPullRequestUpdateRejection;
+    use axum::http::StatusCode;
+    match rejection {
+        GithubPullRequestUpdateRejection::NotFound => StatusCode::NOT_FOUND,
+        GithubPullRequestUpdateRejection::Forbidden => StatusCode::FORBIDDEN,
+        GithubPullRequestUpdateRejection::Invalid => StatusCode::UNPROCESSABLE_ENTITY,
     }
 }

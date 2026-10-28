@@ -9,6 +9,7 @@
  */
 
 import type { CellRef, TextLayoutInfo } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -240,7 +241,10 @@ export function createSpellCheck(options: SpellCheckOptions) {
       setSquiggles([]);
     }
     clearTimeout(timer);
-    timer = setTimeout(() => void check(), RECHECK_MS);
+    timer = setTimeout(
+      () => fireAndForget(check(), 'pptx-spelling'),
+      RECHECK_MS
+    );
   };
   onCleanup(() => clearTimeout(timer));
   // Asking the engine for text layouts syncs with an external system.

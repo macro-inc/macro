@@ -1,27 +1,54 @@
-import { Tabs } from '@ui/components/Tabs';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { getIconConfig } from '@core/component/EntityIcon';
+import { enableDatabases } from '@core/constant/featureFlags';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import { Tabs } from '@ui';
+import type { Component, JSX } from 'solid-js';
 import {
   CRM_RECORD_SECTION_LABELS,
   type CrmRecordSection,
 } from '../core/record';
 
-/** Content navigation below the company or contact header. */
+const SECTION_ICONS: Record<
+  CrmRecordSection,
+  Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+> = {
+  overview: SquaresFourIcon,
+  team: UsersIcon,
+  emails: getIconConfig('email').icon,
+  files: getIconConfig('files').icon,
+  tasks: getIconConfig('task').icon,
+  calls: getIconConfig('call').icon,
+  databases: getIconConfig('database').icon,
+};
+
+/**
+ * A CRM record's section tabs for its top bar, like a project's Overview /
+ * Tasks tabs. `compact` swaps labels for icons when the bar runs out of room.
+ */
 export function RecordTabs<S extends CrmRecordSection>(props: {
   sections: readonly S[];
   value: S;
   onChange: (section: S) => void;
+  compact?: boolean;
 }) {
+  const databasesFlag = useFeatureFlag(enableDatabases);
   return (
-    <div class="min-w-0 shrink-0 overflow-x-auto scrollbar-hidden px-4 py-2">
-      <Tabs
-        list={props.sections.map((section) => ({
+    <Tabs
+      aria-label="Record sections"
+      touch="inset"
+      class="shrink-0"
+      options={props.sections
+        .filter((section) => section !== 'databases' || databasesFlag().enabled)
+        .map((section) => ({
           value: section,
           label: CRM_RECORD_SECTION_LABELS[section],
+          icon: props.compact ? SECTION_ICONS[section] : undefined,
         }))}
-        value={props.value}
-        onChange={(value) => props.onChange(value as S)}
-        aria-label="Record sections"
-        class="w-max whitespace-nowrap"
-      />
-    </div>
+      iconOnly={props.compact}
+      value={props.value}
+      onChange={props.onChange}
+    />
   );
 }

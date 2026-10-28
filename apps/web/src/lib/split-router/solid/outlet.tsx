@@ -1,8 +1,13 @@
+import { perfMark } from '@app/observability/perf-marks';
 import {
   type Component,
+  createEffect,
   createMemo,
   type JSX,
+  on,
+  onMount,
   Show,
+  Suspense,
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -42,6 +47,16 @@ function RouteOutlet(props: { fallback?: OutletFallback }) {
     { equals: (left, right) => left?.key === right?.key }
   );
 
+  createEffect(
+    on(match, (resolved) => {
+      if (resolved)
+        perfMark('route.matched', {
+          route: resolved.key,
+          depth: resolved.depth,
+        });
+    })
+  );
+
   const context: PaneContextValue = {
     pane: parent.pane,
     entry: parent.entry,
@@ -52,18 +67,36 @@ function RouteOutlet(props: { fallback?: OutletFallback }) {
     <Show keyed when={match()} fallback={fallback()}>
       {(resolved) => (
         <PaneContext.Provider value={context}>
-          <Dynamic component={resolved.component as Component} />
+          {/* Only routes with their own loading view get a boundary, so the
+              rest suspend to their enclosing boundary as before. */}
+          <Show
+            when={resolved.loading as Component | undefined}
+            fallback={<Dynamic component={resolved.component as Component} />}
+          >
+            {(loading) => (
+              <Suspense fallback={<Dynamic component={loading()} />}>
+                <Dynamic component={resolved.component as Component} />
+              </Suspense>
+            )}
+          </Show>
+          <RouteMounted route={resolved.key} />
         </PaneContext.Provider>
       )}
     </Show>
   );
 }
 
+/** Marks when a matched route's component tree has been created and attached. */
+function RouteMounted(props: { route: string }) {
+  onMount(() => perfMark('route.mounted', { route: props.route }));
+  return null;
+}
+
 /**
  * Renders the next route component in the enclosing pane's branch. Its view
- * stays mounted while its route id and `remountKey` are unchanged; params
- * update in place. Outside any pane it renders the first pane's top-level
- * route, whose component decides how the other panes render.
+ * stays mounted while its route id (or shared `mountKey`) and `remountKey` are
+ * unchanged; params update in place. Outside any pane it renders the first
+ * pane's top-level route, whose component decides how the other panes render.
  */
 export function Outlet(props: OutletProps) {
   const router = useSplitRouter();

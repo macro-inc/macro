@@ -32,6 +32,8 @@ function setup(
   options: {
     world?: Partial<FakeOnboardingWorld>;
     resume?: OnboardingStep;
+    /** Raw `?step` value, including unknown names. */
+    step?: string;
     next?: string;
     checkoutReturn?: CheckoutReturn;
   } = {}
@@ -44,6 +46,7 @@ function setup(
     () => (
       <OnboardingFlowView
         next={options.next}
+        step={options.step}
         checkoutReturn={options.checkoutReturn}
         onNavigate={navigate}
         onRedirect={redirect}
@@ -62,7 +65,7 @@ const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
 describe('onboarding flow', () => {
-  it('walks every step and finishes as a Guest', async () => {
+  it('walks every step and finishes with Free', async () => {
     const { fake, navigate } = setup({ next: '/channel/launch' });
 
     await heading('Create your workspace');
@@ -99,9 +102,9 @@ describe('onboarding flow', () => {
     );
 
     await heading('Free Claude & GPT for 30 days.');
-    // The scroll cue and the comparison share a label; the comparison's CTA finishes.
-    const guest = screen.getAllByRole('button', { name: 'Continue as Guest' });
-    fireEvent.click(guest[guest.length - 1]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
 
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith('/channel/launch')
@@ -134,12 +137,108 @@ describe('onboarding flow', () => {
     await heading('Connect your tools.');
   });
 
+  it('opens a step link on that step and records it as the entry', async () => {
+    const { fake } = setup({
+      step: 'plan',
+      world: {
+        emailAccounts: [
+          {
+            address: 'ada@acme.com',
+            isPrimary: true,
+            ownerId: FAKE_VIEWER_ID,
+          },
+        ],
+      },
+    });
+    await heading('Free Claude & GPT for 30 days.');
+    expect(
+      screen.getByRole('button', { name: 'Start 30 day trial' })
+    ).toBeTruthy();
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_started',
+      data: { signup_method: 'google', entry_step: 'plan' },
+    });
+  });
+
+  it('shows a connected work inbox when the link opens that step', async () => {
+    setup({
+      step: 'work',
+      world: {
+        emailAccounts: [
+          {
+            address: 'ada@acme.com',
+            isPrimary: true,
+            ownerId: FAKE_VIEWER_ID,
+          },
+        ],
+      },
+    });
+    await heading(/Connect your work/);
+    expect(screen.getByText('Work email connected')).toBeTruthy();
+    expect(screen.getByText('ada@acme.com')).toBeTruthy();
+  });
+
+  it('ignores an unknown step link and starts at welcome', async () => {
+    setup({ step: 'not-a-step' });
+    await heading('Create your workspace');
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('welcome');
+  });
+
+  it('prefers saved progress over the step link', async () => {
+    setup({ resume: 'team', step: 'plan' });
+    await heading('Built for teams.');
+  });
+
+  it('lets a checkout return beat saved progress and the step link', async () => {
+    const { navigate } = setup({
+      resume: 'work',
+      step: 'team',
+      checkoutReturn: { t: 'success', tier: 'premium' },
+      world: { webhookPollsRemaining: 1 },
+    });
+    await heading('Your workspace is ready.');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
+      timeout: 3_000,
+    });
+  });
+
+  it('keeps a deep-linked step after the link is gone and the session is new', async () => {
+    setup({ step: 'tools' });
+    await heading('Connect your tools.');
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('tools');
+    cleanup();
+    sessionStorage.clear();
+    setup();
+    await heading('Connect your tools.');
+    expect(localStorage.getItem('onboarding-flow-step')).toContain(
+      '"step":"tools"'
+    );
+    expect(sessionStorage.getItem('onboarding-flow-step')).toBeNull();
+  });
+
+  it('resumes a step that was saved in sessionStorage before the move', async () => {
+    sessionStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: FAKE_VIEWER_ID, step: 'personal' })
+    );
+    setup();
+    await heading(/Add your personal/);
+    expect(localStorage.getItem('onboarding-flow-step')).toContain('personal');
+    expect(sessionStorage.getItem('onboarding-flow-step')).toBeNull();
+  });
+
   it('resumes the saved step, and Back returns to the previous one', async () => {
     setup({ resume: 'team' });
     await heading('Built for teams.');
     click('Back to previous step');
     await heading('Connect your tools.');
     expect(readSavedStep(FAKE_VIEWER_ID)).toBe('tools');
+  });
+
+  it('resumes Google sign-up at work ahead of saved progress and a step link', async () => {
+    saveSignupDraft({ step: 'work', accent: '#f77d67', authenticating: true });
+    setup({ resume: 'team', step: 'plan' });
+    await heading(/Connect your work/);
   });
 
   it('resumes at the work step after Google sign-up and applies the chosen accent', async () => {
@@ -172,6 +271,27 @@ describe('onboarding flow', () => {
     );
   });
 
+  it('preserves team inputs and focus when onboarding suggestions refresh', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    const name = screen.getByDisplayValue('Acme');
+    const email = screen.getByLabelText('Teammate 1 email');
+    fireEvent.input(name, { target: { value: 'My workspace' } });
+    fireEvent.input(email, { target: { value: 'chosen@example.com' } });
+    email.focus();
+
+    fake.update((world) => {
+      world.record.suggestedTeamDomain = 'updated.example.com';
+      world.contacts.push('new@updated.example.com');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('My workspace')).toBe(name);
+      expect(screen.getByDisplayValue('chosen@example.com')).toBe(email);
+      expect(document.activeElement).toBe(email);
+    });
+  });
+
   it('joins a pending team invite instead of creating a team', async () => {
     const { fake } = setup({
       resume: 'team',
@@ -198,7 +318,7 @@ describe('onboarding flow', () => {
     });
   });
 
-  it('finishes for a licensed team member without showing trial or Guest offers', async () => {
+  it('finishes for a licensed team member without showing trial or Free offers', async () => {
     const { navigate, redirect } = setup({
       resume: 'plan',
       world: {
@@ -217,7 +337,7 @@ describe('onboarding flow', () => {
     ).toBeNull();
     expect(screen.queryByRole('table')).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'Continue as Guest' })
+      screen.queryByRole('button', { name: 'Continue with Free' })
     ).toBeNull();
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')

@@ -1,9 +1,12 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import type { MessageEvent } from '@service-storage/generated/schemas/messageEvent';
 import type {
   Message,
   MessageListItem,
   MessageParent,
   MessageThread,
+  TimelineActivity,
 } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
@@ -23,10 +26,77 @@ import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
+  insertActivitiesIntoMessageTimeline,
   type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
+
+/**
+ * A refetch can have read before this committed event, including on a page that
+ * has already resolved while older pages are still loading. Restart the whole
+ * fetch after updating the visible cache so its eventual commit cannot undo the
+ * event. Idle timelines still apply live updates without making a request.
+ */
+async function restartPendingChannelTimeline(parent: MessageParent) {
+  if (parent.type !== 'channel') return;
+  const pending = queryClient.getQueryCache().findAll({
+    queryKey: getMessageTimelineQueryKeyPrefix(parent),
+    type: 'active',
+    predicate: (query) =>
+      query.state.data !== undefined && query.state.fetchStatus === 'fetching',
+  });
+  if (pending.length === 0) return;
+  await Telemetry.span('channel.timeline_restart', async (span) => {
+    span.setAttr('channel.id', parent.id);
+    span.setAttr('query.count', pending.length);
+    span.setAttr(
+      'query.fetch_more_directions',
+      pending.map(
+        (query) => query.state.fetchMeta?.fetchMore?.direction ?? 'refetch'
+      )
+    );
+    // Keep fetchMore direction: replacing pagination with an ordinary refetch
+    // would silently discard the user's request for an older/newer page.
+    const results = await Promise.allSettled(
+      pending.map((query) =>
+        query.fetch(undefined, {
+          cancelRefetch: true,
+          meta: query.state.fetchMeta ?? undefined,
+        })
+      )
+    );
+    const rejected = results.filter(
+      (result) => result.status === 'rejected'
+    ).length;
+    span.setAttr(
+      'query.outcomes',
+      results.map((result) => result.status)
+    );
+    span.setAttr('query.fulfilled_count', results.length - rejected);
+    span.setAttr('query.rejected_count', rejected);
+    if (rejected > 0) {
+      // Request errors can contain URLs or message data; record only a category.
+      span.error('Channel timeline restart failed');
+    }
+  });
+}
+
+/** Committed timeline activity, delivered whole so loaded history needs no re-read. */
+export function handleTimelineActivity(event: {
+  parent: MessageParent;
+  activities: TimelineActivity[];
+}) {
+  // A fact committed before the bottom page's first fetch resolved may be
+  // missing from a response the server already computed. Loaded windows still
+  // take it below.
+  refetchTimelineAwaitingFirstPage(event.parent);
+  queryClient.setQueriesData<MessageTimelineData>(
+    { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
+    (data) => insertActivitiesIntoMessageTimeline(data, event.activities)
+  );
+  fireAndForget(restartPendingChannelTimeline(event.parent), 'messages-sync');
+}
 
 type ThreadStateListener = (
   parent: MessageParent,
@@ -63,10 +133,10 @@ export function applyMessage(
     if (target.kind === 'thread_reply' && !existing) {
       // A deletion outside the preview (or one already applied) needs the
       // authoritative count, not another guessed decrement.
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: getMessageTimelineQueryKeyPrefix(parent),
       });
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: [...messageKeys.messagesByIds._def, parent],
       });
     } else if (
@@ -99,6 +169,7 @@ export function applyMessage(
     patchTargetMessage(parent, target, normalized);
   }
   softInvalidateTargetCaches(parent, target);
+  fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');
   // Calls have one thread and no mounted timeline to seed its first fetch.
   // A view may still be showing the empty response when the first post arrives.
   if (
@@ -106,7 +177,7 @@ export function applyMessage(
     change === 'posted' &&
     !queryClient.getQueryData(getThreadRepliesQueryKey(parent, parent.id))
   ) {
-    void refreshUnloadedCallThread(parent);
+    fireAndForget(refreshUnloadedCallThread(parent), 'messages-sync');
   }
 }
 
@@ -142,7 +213,7 @@ export function applyRootDeletion(
     return;
   const state = cached ?? getCachedThreadState(parent, message.id);
   if (!state) {
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: getMessageTimelineQueryKeyPrefix(parent),
     });
     return;
@@ -168,6 +239,7 @@ export function handleMessageEvent(
         user_id: event.actor,
         thread_id: change.thread_id,
         action: change.active ? 'start' : 'stop',
+        agent: change.agent,
       },
       currentUserId ?? ''
     );
@@ -191,7 +263,10 @@ export function handleMessageEvent(
   if (isOwnEcho) return;
   applyMessage(change.message, change.type);
   if (isRootPost && parent.type !== 'channel') {
-    void loadDiscussionRootState(parent, change.message.id);
+    fireAndForget(
+      loadDiscussionRootState(parent, change.message.id),
+      'messages-sync'
+    );
   }
 }
 
@@ -210,8 +285,9 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   const refetch = () =>
     queryClient.invalidateQueries({ queryKey, exact: true });
   const inFlight = query.promise;
-  if (inFlight) void refetchAfterPendingPage(inFlight, refetch);
-  else void refetch();
+  if (inFlight)
+    fireAndForget(refetchAfterPendingPage(inFlight, refetch), 'messages-sync');
+  else fireAndForget(refetch(), 'messages-sync');
   return true;
 }
 
@@ -240,7 +316,7 @@ async function loadDiscussionRootState(parent: MessageParent, rootId: string) {
     );
     applyThreadState(parent, thread.state);
   } catch {
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: getMessageTimelineQueryKeyPrefix(parent),
     });
   }
@@ -259,14 +335,19 @@ export function applyThreadState(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items
+          entries: page.entries
             .filter(
               (item) =>
+                item.type !== 'message' ||
                 parent.type === 'document' ||
                 !state.deleted_at ||
-                item.id !== state.root_id
+                item.message.id !== state.root_id
             )
-            .map(update),
+            .map((entry) =>
+              entry.type === 'message'
+                ? { ...entry, message: update(entry.message) }
+                : entry
+            ),
         })),
       }
   );
@@ -278,10 +359,12 @@ export function applyThreadState(
         : undefined
   );
   for (const listener of threadStateListeners) listener(parent, state);
+  if (!state.deleted_at)
+    fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');
   if (state.deleted_at) {
     // Annotation layout also reads tombstones, including roots outside loaded
     // pages. Fetch the committed state so it survives late document mounting.
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: getMessageTimelineQueryKeyPrefix(parent),
     });
   }

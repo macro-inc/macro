@@ -25,6 +25,22 @@ const report = (
   } satisfies BrowserHarnessEnvelope);
 };
 
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+const failCommand =
+  (commandId: string) =>
+  (error: unknown): void => {
+    report({
+      kind: 'command-result',
+      commandId,
+      ok: false,
+      error: errorText(error),
+    });
+  };
+const reportProtocolError = (error: unknown): void => {
+  report({ kind: 'protocol-error', error: errorText(error) });
+};
+
 let releaseLivenessLock!: () => void;
 const releaseLivenessSignal = new Promise<void>((resolve) => {
   releaseLivenessLock = resolve;
@@ -134,33 +150,36 @@ const sendRequest = async (
 const handleCommand = (command: BrowserHarnessCommand): void => {
   match(command)
     .with({ kind: 'write' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'write',
         query: 'query Value { value }',
         data: { value: value.value },
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'read' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'read',
         query: 'query Value { value }',
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'slow-read' }, (value) => {
-      void sendRequest(value.commandId, {
+      sendRequest(value.commandId, {
         kind: 'read',
         query: 'query Slow { value }',
-      });
+      }).catch(failCommand(value.commandId));
     })
     .with({ kind: 'graceful-close' }, (value) => {
-      void adapter.dispose({ graceful: true }).then(() => {
-        report({
-          kind: 'command-result',
-          commandId: value.commandId,
-          ok: true,
-        });
-        setTimeout(() => window.close());
-      });
+      adapter
+        .dispose({ graceful: true })
+        .then(() => {
+          report({
+            kind: 'command-result',
+            commandId: value.commandId,
+            ok: true,
+          });
+          setTimeout(() => window.close());
+        })
+        .catch(failCommand(value.commandId));
     })
     .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
@@ -212,4 +231,7 @@ channel.onmessage = (event: MessageEvent<BrowserHarnessEnvelope>) => {
 // First cache use starts liveness registration. Every page deliberately uses
 // request id 1, proving the coordinator must rewrite ids before engine routing.
 adapter.postMessage({ id: nextRequestId++, kind: 'init', scope });
-void adapter.start().then(() => report({ kind: 'registered' }));
+adapter
+  .start()
+  .then(() => report({ kind: 'registered' }))
+  .catch(reportProtocolError);

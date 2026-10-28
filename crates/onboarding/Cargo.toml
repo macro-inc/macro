@@ -10,13 +10,11 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 generic_email_domains = { path = "../generic_email_domains" }
-import = { path = "../import" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
-mcp_select = { path = "../mcp_select" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -27,3 +25,6 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

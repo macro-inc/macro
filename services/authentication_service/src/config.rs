@@ -1,7 +1,8 @@
 use std::sync::LazyLock;
 
+use crate::account_link_state::AccountLinkStateKey;
+use crate::service::signup_policy::SignupPolicy;
 use anyhow::Context;
-use authentication_service::service::signup_policy::SignupPolicy;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use gtm_invite::domain::models::{GtmInviteConfig, PromoCode};
 use macro_auth::InternalApiKey;
@@ -30,6 +31,9 @@ env_vars! {
     pub struct GithubClientId;
     pub struct GithubClientSecret;
     pub struct GithubIdpId;
+    /// HMAC-SHA256 key for the signed `state` on account-link OAuth requests:
+    /// at least 32 bytes of random data. See `account_link_state`.
+    pub struct AccountLinkStateSecret;
     pub struct StripePriceId;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
@@ -87,6 +91,9 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Admit new Outlook accounts only after the deployment is ready. Reconnect is separate.
+    #[macro_config_default(false)]
+    pub outlook_connections_enabled: bool,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_billing::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_billing::AiUsageEnforcement,
@@ -159,6 +166,9 @@ pub struct Config {
     pub github_client_secret: GithubClientSecret,
     /// The github idp id
     pub github_idp_id: GithubIdpId,
+    /// Signs the `state` carried through account-link OAuth flows. Checked
+    /// for length by [`Config::account_link_state_key`] at startup.
+    pub account_link_state_secret: AccountLinkStateSecret,
     /// GA4 Measurement ID (optional, e.g., "G-XXXXXXXXXX")
     pub ga_measurement_id: GaMeasurementId,
     /// GA4 Measurement Protocol API secret (optional)
@@ -272,6 +282,20 @@ impl Config {
             .map(str::to_owned)
     }
 
+    /// The key that signs and verifies account-link OAuth state.
+    ///
+    /// # Errors
+    /// If the configured secret is blank or shorter than 32 bytes.
+    pub(crate) fn account_link_state_key(&self) -> anyhow::Result<AccountLinkStateKey> {
+        AccountLinkStateKey::new(self.account_link_state_secret.as_ref())
+    }
+
+    /// Checks the account-link signing secret without exposing it. Public for
+    /// the Doppler config check binary.
+    pub fn validate_account_link_state_secret(&self) -> anyhow::Result<()> {
+        self.account_link_state_key().map(drop)
+    }
+
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
     pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
         resolve_microsoft_credentials(
@@ -287,8 +311,9 @@ impl Config {
         self.signup_policy_for_environment(self.environment)
     }
 
-    /// Resolves the signup policy for an explicit environment.
-    pub(crate) fn signup_policy_for_environment(
+    /// Resolves the signup policy for an explicit environment. Public for the
+    /// Doppler config check binary, which validates both environments.
+    pub fn signup_policy_for_environment(
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {

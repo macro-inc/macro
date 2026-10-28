@@ -141,23 +141,30 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
       node.remove();
     });
   };
+  const liveAnswer = () => (
+    <Suspense fallback={placeholder()}>
+      <LiveQuestion
+        source={source}
+        onSave={canEdit() ? save : undefined}
+        onDiscard={canEdit() ? discard : undefined}
+      />
+    </Suspense>
+  );
   const answer = () => (
-    <LazyDecorator
-      placeholder={placeholder()}
-      render={() => (
-        <Suspense fallback={placeholder()}>
-          <LiveQuestion
-            source={source}
-            onSave={canEdit() ? save : undefined}
-            onDiscard={canEdit() ? discard : undefined}
-          />
-        </Suspense>
-      )}
-    />
+    <Show
+      when={!props.queryId}
+      fallback={
+        <LazyDecorator placeholder={placeholder()} render={liveAnswer} />
+      }
+    >
+      {liveAnswer()}
+    </Show>
   );
   const placeholder = () => (
     <span class="mx-0.5 rounded border border-edge-muted bg-hover px-1.5 py-0.5 text-sm text-ink">
-      {props.title || props.chart?.title || 'Database answer'}
+      {props.title ||
+        props.chart?.title ||
+        (!props.queryId ? 'Opening database…' : 'Database answer')}
     </span>
   );
   return (

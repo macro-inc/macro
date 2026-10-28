@@ -6,6 +6,15 @@ function documentMention(id: string, blockName: string): string {
 }
 
 describe('extractChannelMentionsFromMarkdown', () => {
+  it('keeps an expanded database referenced and deduplicates its compact mention', () => {
+    const card =
+      '<m-document-card>{"documentId":"db-1","documentName":"Tasks","blockName":"database"}</m-document-card>';
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${card}\n\n${documentMention('db-1', 'database')}`
+      )
+    ).toEqual([{ entityType: 'database', entityId: 'db-1' }]);
+  });
   it('returns no mentions for plain text', () => {
     expect(extractChannelMentionsFromMarkdown('just some text')).toEqual([]);
   });
@@ -46,6 +55,14 @@ describe('extractChannelMentionsFromMarkdown', () => {
     expect(
       extractChannelMentionsFromMarkdown(
         `${documentMention('project-1', 'initiative')} ${documentMention('doc-1', 'md')}`
+      )
+    ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
+  });
+
+  it('never sends a pipeline mention as a channel reference', () => {
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('pipeline-1', 'pipeline')} ${documentMention('doc-1', 'md')}`
       )
     ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
   });

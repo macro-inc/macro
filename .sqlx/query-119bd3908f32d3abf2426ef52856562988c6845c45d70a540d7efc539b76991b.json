@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM in_progress_user_link WHERE id = $1 AND email_provider = 'OUTLOOK'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "119bd3908f32d3abf2426ef52856562988c6845c45d70a540d7efc539b76991b"
+}

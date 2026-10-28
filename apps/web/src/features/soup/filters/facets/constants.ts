@@ -97,6 +97,22 @@ export const FILTER_TARGETS = {
       backend: 'Sender',
       formatValue: (value) => ({ Partial: value }),
     },
+    emailSenderAddress: {
+      backend: 'Sender',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailRecipientAddress: {
+      backend: 'Recipient',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailCcAddress: {
+      backend: 'Cc',
+      formatValue: (value) => ({ Complete: value }),
+    },
+    emailBccAddress: {
+      backend: 'Bcc',
+      formatValue: (value) => ({ Complete: value }),
+    },
     emailSeen: { backend: 'Read', domain: [true, false] },
     emailDone: {
       backend: 'InboxVisible',
@@ -225,15 +241,9 @@ export const FILTER_TARGETS = {
   asf: {
     agentSessionId: { backend: 'id' },
     agentSessionOwnerId: { backend: 'o' },
+    agentSessionSource: { backend: 'src' },
+    agentSessionVisibility: { backend: 'vis' },
     includeAgentSessions: { backend: 'inc', compile: 'unit' },
-  },
-
-  // remf — reminders
-  remf: {
-    reminderId: { backend: 'id' },
-    reminderCompleted: { backend: 'comp', domain: [true, false] },
-    reminderFired: { backend: 'fired', domain: [true, false] },
-    includeReminders: { backend: 'inc', compile: 'unit' },
   },
 
   // propf — properties
@@ -272,6 +282,10 @@ type FilterTargetsMeta = {
     emailLinkId: string[];
     emailProjectId: string[];
     emailSender: string[];
+    emailSenderAddress: string[];
+    emailRecipientAddress: string[];
+    emailCcAddress: string[];
+    emailBccAddress: string[];
     emailSeen: boolean;
     emailDone: boolean;
     emailImportance: boolean;
@@ -377,15 +391,9 @@ type FilterTargetsMeta = {
   asf: {
     agentSessionId: string[];
     agentSessionOwnerId: string[];
+    agentSessionSource: ('user' | 'agent' | 'routine')[];
+    agentSessionVisibility: ('listed' | 'unlisted' | 'hidden')[];
     includeAgentSessions: boolean;
-  };
-
-  // remf — reminders
-  remf: {
-    reminderId: string[];
-    reminderCompleted: boolean;
-    reminderFired: boolean;
-    includeReminders: boolean;
   };
 
   // propf — properties
@@ -421,7 +429,6 @@ export const TARGETS: Target[] = [
   'ghprf',
   'ccf',
   'asf',
-  'remf',
   'propf',
 ];
 
@@ -445,7 +452,6 @@ export const ENTITY_TARGETS: EntityTarget[] = [
   'fef',
   'ccf',
   'asf',
-  'remf',
 ];
 
 export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
@@ -460,7 +466,6 @@ export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
   fef: 'id',
   ccf: 'id',
   asf: 'id',
-  remf: 'id',
 };
 
 export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
@@ -475,7 +480,6 @@ export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
   fef: 'foreignEntityRecordId',
   ccf: 'crmCompanyId',
   asf: 'agentSessionId',
-  remf: 'reminderId',
 };
 
 export const NIL_ID = '00000000-0000-0000-0000-000000000000';

@@ -8,6 +8,7 @@
  * memory never shrinks while a worker lives).
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { compiledFigModule } from './compiled-module';
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type {
@@ -564,10 +565,18 @@ export class FigEngine {
     try {
       r = await request(this.primary);
     } catch (error) {
-      for (const { h, done } of fanned) void done.then((ok) => ok && drop(h));
+      for (const { h, done } of fanned)
+        fireAndForget(
+          done.then((ok) => ok && drop(h)),
+          'fig-engine'
+        );
       throw error;
     }
-    for (const { h, done } of fanned) void done.then((ok) => !ok && drop(h));
+    for (const { h, done } of fanned)
+      fireAndForget(
+        done.then((ok) => !ok && drop(h)),
+        'fig-engine'
+      );
     if (r.kind !== 'edit') throw new Error('unexpected response');
     return JSON.parse(r.json) as EditResult;
   }
@@ -740,7 +749,16 @@ export class FigEngine {
    */
   retain(work: Promise<unknown>) {
     this.holds.add(work);
-    void work.finally(() => this.holds.delete(work));
+    const release = async () => {
+      try {
+        await work;
+      } catch {
+        // Its own caller reports failures.
+      } finally {
+        this.holds.delete(work);
+      }
+    };
+    fireAndForget(release(), 'fig-engine');
   }
 
   close() {
@@ -748,7 +766,10 @@ export class FigEngine {
     const primary = this.primary;
     if (this.holds.size === 0) primary.terminate();
     else
-      void Promise.allSettled([...this.holds]).then(() => primary.terminate());
+      fireAndForget(
+        Promise.allSettled([...this.holds]).then(() => primary.terminate()),
+        'fig-engine'
+      );
     for (const h of this.helpers) h.terminate();
     for (const h of this.starting) h.terminate();
     this.helpers.length = 0;

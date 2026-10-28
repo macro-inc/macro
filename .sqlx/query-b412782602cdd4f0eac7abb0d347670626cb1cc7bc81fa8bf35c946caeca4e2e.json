@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_mailbox_lifecycle_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b412782602cdd4f0eac7abb0d347670626cb1cc7bc81fa8bf35c946caeca4e2e"
+}

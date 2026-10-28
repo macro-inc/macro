@@ -38,6 +38,14 @@ const documentStorageBucket = createBucket({
         days: 30,
       },
     },
+    // Only the automatic tiers: CloudFront and GetObject can't read objects in
+    // the opt-in archive tiers
+    {
+      id: `intelligent-tiering-${stack}`,
+      enabled: true,
+      transitions: [{ days: 0, storageClass: 'INTELLIGENT_TIERING' }],
+      abortIncompleteMultipartUploadDays: 7,
+    },
   ],
   exposeHeaders: ['Content-Length', 'Content-Range'],
 });
@@ -65,7 +73,7 @@ new aws.s3.BucketReplicationConfig(
         },
         destination: {
           bucket: replication.bucket.arn,
-          storageClass: 'STANDARD',
+          storageClass: 'INTELLIGENT_TIERING',
         },
       },
     ],

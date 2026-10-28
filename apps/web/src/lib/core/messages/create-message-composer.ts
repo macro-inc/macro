@@ -54,7 +54,7 @@ export function createMessageComposer(options: ComposerOptions) {
         : undefined,
       onClose: (snapshot) => {
         typingTracker.stop();
-        options.callbacks.onClose?.(snapshot);
+        return options.callbacks.onClose?.(snapshot);
       },
     },
   });

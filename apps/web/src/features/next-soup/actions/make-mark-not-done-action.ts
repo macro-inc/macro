@@ -3,6 +3,7 @@ import {
   executeMarkEntitiesUndone,
   resolveMarkEntitiesDoneVariables,
 } from '@app/features/next-soup/utils';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
@@ -18,37 +19,6 @@ import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;
-};
-
-/**
- * Return completed reminders to Active or Scheduled. Kept off the email path:
- * none of its preconditions apply, and a reminder's not-done state is its own
- * `completed` column rather than a notification override.
- */
-const uncompleteReminders = async (reminders: EntityData[]) => {
-  const reminderIds = reminders.map((r) => r.id);
-  const optimistic = applyEntitiesNotDoneOptimistic({
-    emailIds: [],
-    notificationIds: [],
-    reminderIds,
-  });
-  try {
-    await executeMarkEntitiesUndone({
-      emailIds: [],
-      notificationIds: [],
-      reminderIds,
-    });
-    optimistic.settle();
-    toast.success(
-      reminderIds.length > 1
-        ? `Marked ${reminderIds.length} reminders as not done`
-        : 'Marked as not done',
-      { duration: 3_000, stack: true, hideOnMobile: true }
-    );
-  } catch {
-    optimistic.rollback();
-    toast.failure('Failed to mark as not done');
-  }
 };
 
 /** Preserve the legacy REST batch, notification ordering and reconciliation. */
@@ -75,8 +45,8 @@ async function unarchiveRestTargets(
     });
     toast.success(
       targets.length > 1
-        ? `Marked ${targets.length} items as not done`
-        : 'Marked as not done',
+        ? t('entityActions.toastMarkedNotDoneCount', { count: targets.length })
+        : t('entityActions.toastMarkedNotDone'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
     if (disposition !== 'queued') {
@@ -88,7 +58,7 @@ async function unarchiveRestTargets(
     return disposition;
   } catch (err) {
     optimistic.rollback();
-    toast.failure('Failed to mark as not done');
+    toast.failure(t('entityActions.toastMarkNotDoneFailed'));
     throw err;
   }
 }
@@ -168,25 +138,15 @@ async function restoreEmailNotifications(
 
 /**
  * Reverses a mark-done: unarchives email threads and restores their
- * notifications, and un-completes reminders. GraphQL validates unarchive
+ * notifications. GraphQL validates unarchive
  * eligibility on the server. Each thread settles independently, including
  * queued writes; only a completely failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
-  // Email workflow mirrors reject generic reopening: Remind me owns rescheduling.
-  const isCompletedReminder = (entity: EntityData): boolean =>
-    entity.type === 'reminder' &&
-    entity.completedAt != null &&
-    !entity.emailFollowup;
-
   const canExecute = (entity: EntityData): boolean =>
-    (entity.type === 'email' && entity.done === true) ||
-    isCompletedReminder(entity);
+    entity.type === 'email' && entity.done === true;
 
   const execute = async (entities: EntityData[]) => {
-    const reminders = entities.filter(isCompletedReminder);
-    if (reminders.length > 0) await uncompleteReminders(reminders);
-
     const graphql = isFeatureEnabled(enableGraphqlSoup);
     const doneEmails = entities.filter(
       (e) => e.type === 'email' && e.done === true
@@ -212,8 +172,8 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (targets.length === 0) {
       toast.alert(
         candidates.length > 1
-          ? 'These threads have no received messages, so they stay done'
-          : 'This thread has no received messages, so it stays done',
+          ? t('entityActions.toastThreadsStayDone')
+          : t('entityActions.toastThreadStaysDone'),
         { duration: 4_000 }
       );
       return;
@@ -223,32 +183,46 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (!graphql) return unarchiveRestTargets(targets, source);
     const { accepted, disposition, error } = await unarchiveTargets(targets);
     if (accepted.length === 0) {
-      toast.failure('Failed to mark as not done');
+      toast.failure(t('entityActions.toastMarkNotDoneFailed'));
       // Single-thread wrappers still need rejection to restore their own cache.
       throw error ?? new Error('Failed to mark as not done');
     }
 
     const warnings: string[] = [];
     const failedCount = targets.length - accepted.length;
-    if (failedCount > 0) warnings.push(`${failedCount} could not be restored.`);
+    if (failedCount > 0)
+      warnings.push(
+        t('entityActions.toastCountNotRestored', { count: failedCount })
+      );
     if (!(await restoreEmailNotifications(accepted, source))) {
-      warnings.push('Some notifications could not be restored.');
+      warnings.push(t('entityActions.toastNotificationsNotRestored'));
     }
     // The GraphQL mutation/queue owns revalidation. A follow-up REST Soup read
     // can return replica-stale archive state after accepted rows have settled,
     // including when a sibling failed. Do not feed it over those accepted rows.
     const message =
       failedCount > 0
-        ? `Marked ${accepted.length} of ${targets.length} items as not done`
+        ? t('entityActions.toastMarkedNotDonePartial', {
+            accepted: accepted.length,
+            count: targets.length,
+          })
         : accepted.length > 1
-          ? `Marked ${accepted.length} items as not done`
-          : 'Marked as not done';
+          ? t('entityActions.toastMarkedNotDoneCount', {
+              count: accepted.length,
+            })
+          : t('entityActions.toastMarkedNotDone');
     const feedback = { duration: 3_000, stack: true, hideOnMobile: true };
     if (warnings.length > 0)
-      toast.alert(`${message}. ${warnings.join(' ')}`, {
-        ...feedback,
-        hideOnMobile: false,
-      });
+      toast.alert(
+        t('entityActions.toastWithWarnings', {
+          message,
+          warnings: warnings.join(' '),
+        }),
+        {
+          ...feedback,
+          hideOnMobile: false,
+        }
+      );
     else toast.success(message, feedback);
     return disposition;
   };

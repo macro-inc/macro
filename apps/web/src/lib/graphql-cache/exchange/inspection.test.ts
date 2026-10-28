@@ -107,7 +107,7 @@ describe('typed generated query inspection', () => {
         variableFilters: [{ input: { initial: { limit: 20 } } }],
       });
       // @ts-expect-error Filters are typed from the generated operation variables.
-      inspect(host, selected, { variableFilters: [{ missing: true }] });
+      await inspect(host, selected, { variableFilters: [{ missing: true }] });
       expectTypeOf(
         variants[0]!.variables
       ).toEqualTypeOf<GroupSoupMembershipQueryVariables>();

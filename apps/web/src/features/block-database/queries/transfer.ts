@@ -10,14 +10,8 @@ import type { ImportTable } from '@service-storage/generated/schemas/importTable
 import type { Table } from '@service-storage/generated/schemas/table';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { err, ok, type ResultAsync } from 'neverthrow';
-import { encodeDatabaseCsv } from '../core/csv';
-import { relatedRowIds } from '../core/database-relations';
-import type {
-  DatabaseCellValue,
-  DatabaseViewColumn,
-} from '../core/database-view';
-import { gridRows } from '../core/grid-cells';
-import { formatCellValue } from '../core/table';
+import { encodeDatabaseCsv, exportedValue } from '../../database/core/csv';
+import { gridRows } from '../../database/core/grid-cells';
 import { tableRowsStatement } from '../sql';
 import { toViewColumn } from './table-rows';
 
@@ -36,20 +30,6 @@ export function importDatabaseTable(
 
 /** The table's rows could not be read, or not all of them. */
 type DatabaseExportFailure = DatabaseSqlFailure | { kind: 'too-large' };
-
-/**
- * A cell as the grid shows it. Relation cells have no row names loaded
- * here, so they keep the related rows' ids rather than claiming those rows
- * are unavailable.
- */
-function exportedValue(
-  column: DatabaseViewColumn,
-  value: DatabaseCellValue
-): string {
-  return column.relation
-    ? relatedRowIds(value).join(', ')
-    : formatCellValue(column, value);
-}
 
 /** Never silently export a partial read. */
 export function exportDatabaseTableCsv(

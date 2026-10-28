@@ -47,5 +47,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

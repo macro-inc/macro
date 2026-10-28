@@ -1,9 +1,10 @@
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { ColumnDetail } from '@service-storage/generated/schemas/columnDetail';
 import { Button } from '@ui/components/Button';
 import { createSignal, Show } from 'solid-js';
-import { columnSchemaMessage } from '../core/column-schema';
-import { defaultDatabaseColumnName } from '../core/property-creation';
+import { columnSchemaMessage } from '../../database/core/column-schema';
+import { defaultDatabaseColumnName } from '../../database/core/property-creation';
 import { createDatabaseColumn } from '../queries/columns';
 
 /**
@@ -58,7 +59,7 @@ export function AddColumnMenu(props: {
         size="sm"
         disabled={pending()}
         aria-label={props.label ?? 'Add column'}
-        onClick={() => void add()}
+        onClick={() => fireAndForget(add(), 'database-view')}
       >
         <PlusIcon class="size-3.5" />
         {props.label ?? 'Add column'}

@@ -29,7 +29,8 @@ describe('modelsForPlan / defaultModelForPlan', () => {
   it('gives free users only the free model, defaulted to it', () => {
     const free = modelsForPlan(false);
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
-    expect(FREE_DEFAULT_MODEL).toBe(Model.haiku45);
+    expect(FREE_DEFAULT_MODEL).toBe(Model.gemini38Flash);
+    expect(free).not.toContain(Model.haiku45);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.sonnet55);
@@ -78,6 +79,14 @@ describe('parseModel', () => {
 });
 
 describe('alternateProviderModel', () => {
+  it('does not offer a paid fallback when the free provider fails', () => {
+    expect(
+      alternateProviderModel(Model.gemini38Flash, {
+        candidates: modelsForPlan(false),
+      })
+    ).toBeUndefined();
+  });
+
   it('always suggests a model from a different provider than the current one', () => {
     for (const current of Object.values(Model)) {
       const alt = alternateProviderModel(current);

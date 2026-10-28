@@ -22,3 +22,7 @@ pub mod stage_definitions;
 /// Unfurl-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;
+
+/// Atomic pipeline storage over the databases domain writer.
+#[cfg(feature = "outbound")]
+pub mod pipelines;

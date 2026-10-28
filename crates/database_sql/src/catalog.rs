@@ -8,7 +8,7 @@ mod schema;
 
 use models_databases::EntityKind as OpEntityKind;
 use models_databases::cast::CastKind;
-use models_databases::{ColumnId, DatabaseId, OptionId, TableId};
+use models_databases::{ColumnId, DatabaseId, Formula, OptionId, TableId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
@@ -19,7 +19,7 @@ pub use schema::{
 };
 
 /// Every table a statement may name.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Catalog {
     /// The visible tables.
@@ -30,7 +30,7 @@ pub struct Catalog {
 }
 
 /// One table and its columns, in display order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Table {
     /// The table id.
@@ -92,18 +92,21 @@ pub fn people_table() -> Table {
                     multi: false,
                     target: EntityKind::User,
                 },
+                formula: None,
             },
             Column {
                 id: PEOPLE_NAME,
                 placement: ColumnId::from_uuid(PEOPLE_NAME),
                 name: "name".into(),
                 kind: ColumnKind::Text,
+                formula: None,
             },
             Column {
                 id: PEOPLE_EMAIL,
                 placement: ColumnId::from_uuid(PEOPLE_EMAIL),
                 name: "email".into(),
                 kind: ColumnKind::Text,
+                formula: None,
             },
         ],
         source: TableSource::People,
@@ -111,7 +114,7 @@ pub fn people_table() -> Table {
 }
 
 /// One column: a property definition bound to the table.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Column {
     /// The property definition id: what reads key cells by.
@@ -120,8 +123,13 @@ pub struct Column {
     pub placement: ColumnId,
     /// The column's display name.
     pub name: String,
-    /// What the column holds.
+    /// What the column holds; for a derived column, what its formula
+    /// yields.
     pub kind: ColumnKind,
+    /// For a derived column, how its cells are computed: it stores none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional)]
+    pub formula: Option<Formula>,
 }
 
 /// The value type of a column, mirroring the property data types a query can
@@ -140,6 +148,9 @@ pub enum ColumnKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    #[strum(serialize = "date range")]
+    DateRange,
     /// A URL.
     Link,
     /// One or more of a fixed set of options.
@@ -164,6 +175,8 @@ pub enum ColumnKind {
 /// Spelled as the properties system spells entity types (`USER`,
 /// `DATABASE_ROW`), on the wire and in SQL, where it parses
 /// case-insensitively.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlEntityKind))]
 #[derive(
     Debug,
     Clone,
@@ -247,6 +260,8 @@ impl TryFrom<EntityKind> for OpEntityKind {
 }
 
 /// One option of a select column.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", schema(as = SqlSelectOption))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -285,6 +300,7 @@ impl ColumnKind {
             CastKind::Number => ColumnKind::Number,
             CastKind::Boolean => ColumnKind::Boolean,
             CastKind::Date => ColumnKind::Date,
+            CastKind::DateRange => ColumnKind::DateRange,
             CastKind::Link => ColumnKind::Link,
             CastKind::Select { multi } => ColumnKind::Select { multi, options },
             CastKind::Entity { target, multi } => ColumnKind::Entity {
@@ -305,6 +321,7 @@ impl ColumnKind {
             ColumnKind::Number => CastKind::Number,
             ColumnKind::Boolean => CastKind::Boolean,
             ColumnKind::Date => CastKind::Date,
+            ColumnKind::DateRange => CastKind::DateRange,
             ColumnKind::Link => CastKind::Link,
             ColumnKind::Select { multi, .. } => CastKind::Select { multi: *multi },
             ColumnKind::Entity { multi, target } => match OpEntityKind::try_from(*target) {

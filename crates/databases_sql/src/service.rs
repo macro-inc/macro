@@ -225,11 +225,6 @@ where
     ) -> Result<SavedQuery, SqlError> {
         let sql = definition.sql();
         let catalog = self.catalog(&viewer, database_id).await?;
-        if let Some(database_id) = database_id
-            && !catalog.has_database(database_id)
-        {
-            return Err(SqlError::NotFound);
-        }
         let Query::Select(select) = database_sql::compile(catalog.catalog(), sql)? else {
             return Err(SqlError::SavedQueryNotSelect);
         };
@@ -308,6 +303,7 @@ where
             databases: self.databases.as_ref(),
             receipt: write_receipt,
             viewer: &viewer,
+            base_versions: &request.base_versions,
             versions: Mutex::new(HashMap::new()),
         };
         let outcome = database_sql::run(catalog.catalog(), &request.sql, &source, &sink)
@@ -343,7 +339,13 @@ where
                     SqlError::Infrastructure(rootcause::Report::new(other).into_dynamic())
                 }
             })?;
-        Ok(ViewerCatalog::new(databases, scope))
+        let catalog = ViewerCatalog::new(databases, scope);
+        if let Some(database_id) = scope
+            && !catalog.has_database(database_id)
+        {
+            return Err(SqlError::NotFound);
+        }
+        Ok(catalog)
     }
 }
 

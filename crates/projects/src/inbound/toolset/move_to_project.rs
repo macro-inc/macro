@@ -14,8 +14,7 @@ use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::ProjectToolContext;
-use crate::domain::ports::ProjectService;
+use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of entity to move.
 #[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq, Default)]
@@ -24,8 +23,6 @@ pub enum MoveableEntityType {
     /// A document (includes tasks).
     #[default]
     Document,
-    /// An AI chat conversation.
-    Chat,
     /// An email thread.
     Email,
     /// A project (folder) nested into another project.
@@ -36,7 +33,6 @@ impl MoveableEntityType {
     fn entity_type(self) -> EntityType {
         match self {
             Self::Document => EntityType::Document,
-            Self::Chat => EntityType::Chat,
             Self::Email => EntityType::EmailThread,
             Self::Project => EntityType::Project,
         }
@@ -63,7 +59,7 @@ fn project_access_failed(error: AccessError) -> ToolCallError {
 fn move_failed(code: EntityMutationErrorCode) -> ToolCallError {
     let description = match code {
         EntityMutationErrorCode::Forbidden(_) => {
-            "you lack the required access: moving an AI chat or project requires owning it, moving a document or email thread requires edit access, and the destination project requires edit access"
+            "you lack the required access: moving a project requires owning it, moving a document or email thread requires edit access, and the destination project requires edit access"
         }
         EntityMutationErrorCode::NotFound(_) => "the entity or destination project was not found",
         EntityMutationErrorCode::Conflict(_) => {
@@ -197,7 +193,7 @@ pub struct MoveToProjectResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "MoveToProject",
-    description = "Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it."
+    description = "Move a document, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving a project requires owning it."
 )]
 pub struct MoveToProject {
     /// The kind of entity to move.
@@ -221,13 +217,12 @@ impl ToolAnnotated for MoveToProject {
 }
 
 #[async_trait]
-impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
+impl<PSvc, ESvc, DSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>
     for MoveToProject
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = MoveToProjectResponse;
@@ -235,7 +230,7 @@ where
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_type=?self.entity_type, entity_id=?self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>,
+        service_context: ServiceContext<ProjectToolContext<PSvc, ESvc, DSvc, EmSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Move to project");
@@ -253,17 +248,6 @@ where
             MoveableEntityType::Document => {
                 move_with(
                     &*service_context.document_move_service,
-                    entity_access_service,
-                    actor,
-                    &user_id,
-                    entity,
-                    project_id,
-                )
-                .await?
-            }
-            MoveableEntityType::Chat => {
-                move_with(
-                    &*service_context.chat_move_service,
                     entity_access_service,
                     actor,
                     &user_id,

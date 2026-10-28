@@ -69,6 +69,11 @@ fn project_option(
         id: option.value.to_string(),
         name: option.name.clone(),
         description: option.description.clone(),
+        supports_images: option
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("macro.supportsImages"))
+            .and_then(serde_json::Value::as_bool),
         group: group.map(str::to_owned),
     }
 }

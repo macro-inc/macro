@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewColumnOneOf } from './newColumnOneOf';
+import type { NewColumnOneOfFive } from './newColumnOneOfFive';
 import type { NewColumnOneOfThree } from './newColumnOneOfThree';
 
 /**
  * What a new column holds.
  */
-export type NewColumn = NewColumnOneOf | NewColumnOneOfThree;
+export type NewColumn =
+  | NewColumnOneOf
+  | NewColumnOneOfThree
+  | NewColumnOneOfFive;

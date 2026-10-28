@@ -3,7 +3,7 @@ import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
 import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
@@ -15,6 +15,8 @@ export type PrForeignEntityData = {
   id: string;
   prRef: PrRef;
   pullRequest: GithubPullRequestWithDetails;
+  /** The branch carrying the pull request's changes, when stored. */
+  headBranch?: string;
 };
 
 export function prForeignEntityQueryKey(id: string): string[] {
@@ -23,7 +25,7 @@ export function prForeignEntityQueryKey(id: string): string[] {
 
 /** Refetch one PR detail after it was merged. */
 export function invalidatePrForeignEntity(id: string): void {
-  void queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) });
+  queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) });
 }
 
 function prForeignEntityDataFromStored(
@@ -38,12 +40,14 @@ function prForeignEntityDataFromStored(
   return {
     id: pullRequest.id,
     prRef,
+    headBranch: pullRequest.head?.name ?? undefined,
     pullRequest: {
       additions: pullRequest.additions,
       authorLogin: pullRequest.authorLogin,
       description: pullRequest.description,
       checks: pullRequest.checks,
       comments: pullRequest.comments,
+      draft: pullRequest.draft,
       deletions: pullRequest.deletions,
       displayName: prDisplayName(prRef),
       foreignEntityId: pullRequest.id,
@@ -60,7 +64,7 @@ function prForeignEntityDataFromStored(
 }
 
 export function prForeignEntityQueryOptions(id: string) {
-  return {
+  return queryOptions({
     queryKey: prForeignEntityQueryKey(id),
     queryFn: async (): Promise<PrForeignEntityData> =>
       prForeignEntityDataFromStored(
@@ -70,7 +74,7 @@ export function prForeignEntityQueryOptions(id: string) {
       ),
     staleTime: PR_STALE_TIME,
     retry: 1,
-  };
+  });
 }
 
 export function usePrForeignEntityQuery(id: Accessor<string>) {

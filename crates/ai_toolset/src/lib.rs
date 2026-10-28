@@ -154,6 +154,7 @@
 
 #![deny(missing_docs)]
 
+pub mod actor;
 mod annotations;
 mod context;
 pub mod schema;

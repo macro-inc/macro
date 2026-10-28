@@ -19,6 +19,8 @@ use super::super::EmailServiceImpl;
 use super::draft_sender_is_signal;
 use crate::domain::models::EmailFilter;
 
+mod senders;
+
 #[derive(Clone, Default)]
 struct FakeUserRepo {
     inboxes: Vec<Link>,
@@ -69,6 +71,7 @@ fn service(repo: FakeUserRepo) -> EmailServiceImpl<FakeUserRepo, (), (), (), (),
         entity_access_management_service: (),
         macro_event_broker: (),
         sent_undo_delay_secs: 0,
+        sender_provider: Arc::new(crate::domain::senders::UnavailableEmailSenderProvider),
     }
 }
 
@@ -158,6 +161,9 @@ async fn links_are_scoped_to_the_user_and_enriched_by_domain_policy() {
             },
             is_primary: true,
             latest_backfill_status: Some(EmailBackfillStatus::InProgress),
+            needs_calendar_permission: true,
+            calendar_disabled: true,
+            has_calendar_data: true,
             created_at: now,
             updated_at: now,
         }],

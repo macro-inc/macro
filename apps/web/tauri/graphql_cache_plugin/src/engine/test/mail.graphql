@@ -16,6 +16,7 @@ query NativeMailBackfill {
           inboxVisible
           isSignal
           latestInboundMessageTs
+          reminderReturnedAt
           updatedAt
           properties { id }
           mailAllPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }

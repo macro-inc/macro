@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use models_databases::cast::{Cast, Contents, cast};
 use models_databases::position::{key_between, keys_between};
-use models_databases::{ColumnKind, NewColumn, NewOption, TakenId};
+use models_databases::{ColumnKind, Formula, FormulaType, NewColumn, NewOption, TakenId};
 use models_properties::api::is_valid_hex_color;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -20,18 +20,18 @@ use super::super::{
     MAX_CONVERTED_ROWS, same_name, takes_options, validate_name, validate_option_labels,
 };
 use super::{ColumnCells, Place, Planner, refuse, refuse_taken, schema_refusal};
-use crate::domain::catalog::{self, ColumnEntry, PropertyType, TableEntry};
+use crate::domain::catalog::{self, ColumnEntry, PropertyType, StorageTable};
 use crate::domain::models::{
-    Column, ColumnConfig, ColumnId, ColumnReplacement, DatabaseError, DatabaseId, DatabaseView,
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId, Write,
-    grant_writes,
+    Column, ColumnConfig, ColumnId, ColumnProtection, ColumnReplacement, DatabaseError, DatabaseId,
+    DatabaseView, NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId,
+    Write, grant_writes,
 };
 
 impl Planner {
     pub(super) fn create_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         definition: &NewColumn,
         after: Option<ColumnId>,
     ) -> Result<Write, DatabaseError> {
@@ -47,14 +47,7 @@ impl Planner {
                 options,
                 infer_type,
             } => {
-                let name = validate_name(name).map_err(|error| schema_refusal(place, error))?;
-                if entry
-                    .columns
-                    .iter()
-                    .any(|column| same_name(column.name(), &name))
-                {
-                    return Err(place.refuse(SchemaError::ColumnNameTaken { name }.to_string()));
-                }
+                let name = fresh_name(place, entry, name)?;
                 let target = PropertyType::from_column_kind(*kind);
                 let config = match kind {
                     ColumnKind::Relation { database, table } => {
@@ -82,10 +75,23 @@ impl Planner {
                     options,
                 };
                 (
-                    stored_definition(self.database.id, &created),
+                    stored_definition(self.database_id, &created),
                     Some(created),
                     config,
                     *infer_type,
+                )
+            }
+            NewColumn::Derived { name, formula } => {
+                let name = fresh_name(place, entry, name)?;
+                let result = check_formula(place, entry, None, formula)?;
+                let created = derived_definition(name, result);
+                (
+                    stored_definition(self.database_id, &created),
+                    Some(created),
+                    Some(ColumnConfig::Derived {
+                        formula: formula.clone(),
+                    }),
+                    false,
                 )
             }
             NewColumn::Existing { property } => {
@@ -104,8 +110,10 @@ impl Planner {
                     return Err(place.refuse(SchemaError::DefinitionAlreadyBound.to_string()));
                 }
                 let restored = self.restoration.columns.get(&id);
-                let config = match restored.and_then(|column| column.kind) {
-                    Some(ColumnKind::Relation { database, table }) => {
+                let formula = restored.and_then(|column| column.formula.clone());
+                let config = match (formula, restored.and_then(|column| column.kind)) {
+                    (Some(formula), _) => Some(ColumnConfig::Derived { formula }),
+                    (None, Some(ColumnKind::Relation { database, table })) => {
                         self.link_target(place, database, table)?;
                         Some(ColumnConfig::Link {
                             database_id: database,
@@ -119,6 +127,12 @@ impl Planner {
             }
         };
         let column = Column {
+            protections: vec![],
+            nullable: self
+                .restoration
+                .columns
+                .get(&id)
+                .is_none_or(|column| column.nullable),
             id,
             table_id: entry.table.id,
             property_definition_id: definition.definition.id,
@@ -147,7 +161,7 @@ impl Planner {
     pub(super) fn rename_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         name: &str,
         previous_name: Option<&str>,
@@ -186,10 +200,35 @@ impl Planner {
     pub(super) fn delete_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
     ) -> Result<Write, DatabaseError> {
         let column_id = place.column;
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::Delete)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::Delete,
+                }
+                .to_string(),
+            ));
+        }
+        if let Some(reader) = entry.columns.iter().find(|other| {
+            other.column.id != column_id
+                && other
+                    .column
+                    .formula()
+                    .is_some_and(|formula| formula.columns().contains(&column_id))
+        }) {
+            return Err(place.refuse(format!(
+                "{}'s formula uses {}; change that formula first",
+                reader.name(),
+                column.name()
+            )));
+        }
         let now = self.now;
         let next_title = entry
             .columns
@@ -223,7 +262,7 @@ impl Planner {
     pub(super) fn order_columns(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         order: &[ColumnId],
     ) -> Result<Write, DatabaseError> {
         let current: HashSet<ColumnId> = entry
@@ -264,7 +303,7 @@ impl Planner {
     pub(super) fn add_options(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         options: &[NewOption],
     ) -> Result<Write, DatabaseError> {
@@ -300,11 +339,16 @@ impl Planner {
     pub(super) fn change_type(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         to: ColumnKind,
     ) -> Result<Write, DatabaseError> {
         let column_id = place.column;
+        if column.column.formula().is_some() {
+            return Err(place.refuse(
+                "a derived column's type follows its formula; change the formula instead",
+            ));
+        }
         let source = column.definition.definition.id;
         if self.written_tables.contains(&entry.table.id) || self.changed_options.contains(&source) {
             return Err(place.refuse(SchemaError::RetypeAfterWrites.to_string()));
@@ -320,6 +364,18 @@ impl Planner {
         let views = views_without_tests_of(self.views_of(entry), column_id, now)
             .map_err(|reason| place.refuse(reason.to_string()))?;
         if let Some(previous) = self.restoration.rebinds.get(&place.op).copied() {
+            if column
+                .column
+                .protections
+                .contains(&ColumnProtection::ChangeType)
+            {
+                return Err(place.refuse(
+                    SchemaError::ColumnProtected {
+                        capability: ColumnProtection::ChangeType,
+                    }
+                    .to_string(),
+                ));
+            }
             return self.rebind(place, entry, column, previous, relation, views);
         }
         let current = PropertyType::of(&column.column, &column.definition);
@@ -335,6 +391,19 @@ impl Planner {
             return Ok(Write::Unchanged {
                 table_id: entry.table.id,
             });
+        }
+
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::ChangeType)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::ChangeType,
+                }
+                .to_string(),
+            ));
         }
 
         let stored = self
@@ -423,7 +492,7 @@ impl Planner {
             (!self.created_tables.contains(&entry.table.id)).then_some(entry.table.version);
 
         self.store_views(entry.table.id, &views);
-        let stored_definition = stored_definition(self.database.id, &definition);
+        let stored_definition = stored_definition(self.database_id, &definition);
         if let Some(column) = self.column_mut(entry.table.id, column_id) {
             column.column.property_definition_id = definition.id;
             column.column.config = config;
@@ -452,7 +521,7 @@ impl Planner {
     fn rebind(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         previous: PropertyDefinitionId,
         relation: Option<(DatabaseId, TableId)>,
@@ -491,10 +560,72 @@ impl Planner {
         })
     }
 
+    pub(super) fn set_formula(
+        &mut self,
+        place: Place,
+        entry: &StorageTable,
+        column: &ColumnEntry,
+        formula: &Formula,
+    ) -> Result<Write, DatabaseError> {
+        let Some(current) = column.column.formula() else {
+            return Err(
+                place.refuse("only a derived column has a formula; create one to compute values")
+            );
+        };
+        if current == formula {
+            return Ok(Write::Unchanged {
+                table_id: entry.table.id,
+            });
+        }
+        let result = check_formula(place, entry, Some(place.column), formula)?;
+        let config = Some(ColumnConfig::Derived {
+            formula: formula.clone(),
+        });
+        let read_version =
+            (!self.created_tables.contains(&entry.table.id)).then_some(entry.table.version);
+        let retyped = derived_data_type(result) != column.definition.definition.data_type;
+        let (definition, definition_id, views) = if retyped {
+            // Filters comparing the old type's values no longer fit.
+            let now = self.now;
+            let views = views_without_tests_of(self.views_of(entry), place.column, now)
+                .map_err(|reason| place.refuse(reason.to_string()))?;
+            let created =
+                derived_definition(column.definition.definition.display_name.clone(), result);
+            let id = created.id;
+            (Some(created), id, views)
+        } else {
+            (None, column.definition.definition.id, Vec::new())
+        };
+        let replacement = ColumnReplacement {
+            column: column.column.clone(),
+            definition_id,
+            config: config.clone(),
+            values: Vec::new(),
+        };
+        self.store_views(entry.table.id, &views);
+        let stored = definition
+            .as_ref()
+            .map(|definition| stored_definition(self.database_id, definition));
+        if let Some(planned) = self.column_mut(entry.table.id, place.column) {
+            planned.column.property_definition_id = definition_id;
+            planned.column.config = config;
+            if let Some(stored) = stored {
+                planned.definition = stored;
+            }
+        }
+        Ok(Write::ReplaceColumn {
+            table_id: entry.table.id,
+            read_version,
+            definition,
+            replacement,
+            views,
+        })
+    }
+
     pub(super) fn update_option(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         option: OptionId,
         label: Option<&str>,
@@ -532,7 +663,7 @@ impl Planner {
     pub(super) fn delete_option(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         option: OptionId,
     ) -> Result<Write, DatabaseError> {
@@ -627,7 +758,7 @@ impl Planner {
         database: DatabaseId,
         table: TableId,
     ) -> Result<(), DatabaseError> {
-        if database == self.database.id {
+        if database == self.database_id {
             return if self.entries.iter().any(|entry| entry.table.id == table) {
                 Ok(())
             } else {
@@ -676,7 +807,7 @@ impl Planner {
 
 /// Where a new column goes: right after `after`, or after the table's last.
 fn column_position(
-    entry: &TableEntry,
+    entry: &StorageTable,
     place: Place,
     after: Option<ColumnId>,
 ) -> Result<models_databases::position::Position, DatabaseError> {
@@ -707,6 +838,51 @@ fn column_position(
 }
 
 /// The definition a write creates, as the catalog holds it once stored.
+/// A name for a new column of `entry`: valid, and no other column's.
+fn fresh_name(place: Place, entry: &StorageTable, name: &str) -> Result<String, DatabaseError> {
+    let name = validate_name(name).map_err(|error| schema_refusal(place, error))?;
+    if entry
+        .columns
+        .iter()
+        .any(|column| same_name(column.name(), &name))
+    {
+        return Err(place.refuse(SchemaError::ColumnNameTaken { name }.to_string()));
+    }
+    Ok(name)
+}
+
+/// What `formula` yields over `entry`'s columns, as the ops so far leave
+/// them, for the derived column `own` when it exists.
+fn check_formula(
+    place: Place,
+    entry: &StorageTable,
+    own: Option<ColumnId>,
+    formula: &Formula,
+) -> Result<FormulaType, DatabaseError> {
+    database_sql::formula::check(&catalog::engine_table(entry, ""), own, formula)
+        .map_err(|reason| place.refuse(reason))
+}
+
+/// The definition behind a derived column: owned by the database, of the
+/// type its formula yields, never holding a value.
+fn derived_definition(name: String, result: FormulaType) -> NewDefinition {
+    NewDefinition {
+        id: macro_uuid::generate_uuid_v7(),
+        name,
+        data_type: derived_data_type(result),
+        is_multi_select: false,
+        specific_entity_type: None,
+        options: Vec::new(),
+    }
+}
+
+fn derived_data_type(result: FormulaType) -> DataType {
+    match result {
+        FormulaType::Number => DataType::Number,
+        FormulaType::Date => DataType::Date,
+    }
+}
+
 fn stored_definition(
     database: DatabaseId,
     definition: &NewDefinition,

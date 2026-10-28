@@ -3,6 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineRow } from '../core/types';
 import { RoutinesList } from './routines-list';
 
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+
 afterEach(cleanup);
 const rows: RoutineRow[] = [
   {
@@ -10,7 +21,8 @@ const rows: RoutineRow[] = [
     name: 'Morning briefing',
     creator: 'You',
     createdAt: '',
-    target: 'Macro',
+    target: 'Sonnet 5.5',
+    targetModel: 'anthropic/claude-sonnet-5-5',
     schedule: 'Weekdays at 9 AM',
     status: 'Active',
     enabled: true,
@@ -45,6 +57,7 @@ function setup(overrides: { rows?: RoutineRow[]; pendingId?: string } = {}) {
 describe('routines list', () => {
   it('filters routines and agents without losing navigation', () => {
     const props = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
     fireEvent.input(screen.getByRole('searchbox'), {
       target: { value: 'finance' },
     });
@@ -56,7 +69,7 @@ describe('routines list', () => {
     );
     expect(props.onOpen).toHaveBeenCalledWith('revenue');
     expect(props.onOpen).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
     fireEvent.click(screen.getByRole('button', { name: 'Morning briefing' }));
     expect(props.onOpen).toHaveBeenLastCalledWith('mine');
     expect(screen.queryByRole('button', { name: /^Team$/ })).toBeNull();
@@ -91,6 +104,16 @@ describe('routines list', () => {
     fireEvent.click(button);
     expect(props.onToggle).not.toHaveBeenCalled();
     expect(props.onOpen).not.toHaveBeenCalled();
+  });
+  it('marks each target with the provider of the model it runs on', () => {
+    setup();
+    const providerOf = (name: string) =>
+      screen
+        .getByText(name)
+        .parentElement?.querySelector('[data-ai-provider]')
+        ?.getAttribute('data-ai-provider');
+    expect(providerOf('Sonnet 5.5')).toBe('anthropic');
+    expect(providerOf('Finance agent')).toBeUndefined();
   });
   it('opens a blank routine without a templates section', () => {
     const props = setup();

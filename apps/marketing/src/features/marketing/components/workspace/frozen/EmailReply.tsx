@@ -67,7 +67,7 @@ export function EmailReply(props: {
                 class="size-5 rounded-full"
                 src={homepagePeople.jacob.photo}
               />
-              Jacob Beckerman
+              Jacob
             </span>
             <Button size="sm" variant="plain" onClick={() => setCc(!cc())}>
               Cc

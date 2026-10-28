@@ -5,6 +5,7 @@ export function getMacroNotify(): {
   notificationIngressQueueName: pulumi.Output<string>;
   notificationIngressQueueArn: pulumi.Output<string>;
   notificationApnsVoipPlatformArn: pulumi.Output<string>;
+  notificationFcmPlatformArn: pulumi.Output<string>;
 } {
   const notificationServiceStack = new pulumi.StackReference(
     'notification-service-stack',
@@ -28,9 +29,25 @@ export function getMacroNotify(): {
       .requireOutput('notificationApnsVoipPlatformArn')
       .apply((arn) => arn as string);
 
+  // Read from the long-deployed platform list rather than a new output: stacks
+  // deploy in parallel, so a consumer could run before the new output exists.
+  const notificationFcmPlatformArn: pulumi.Output<string> =
+    notificationServiceStack
+      .requireOutput('notificationSnsPlatformArns')
+      .apply((arns) => {
+        const fcmArn = (arns as string[]).find((arn) =>
+          arn.includes(':app/GCM/')
+        );
+        if (!fcmArn) {
+          throw new Error('notification-service exports no FCM platform');
+        }
+        return fcmArn;
+      });
+
   return {
     notificationIngressQueueName,
     notificationIngressQueueArn,
     notificationApnsVoipPlatformArn,
+    notificationFcmPlatformArn,
   };
 }

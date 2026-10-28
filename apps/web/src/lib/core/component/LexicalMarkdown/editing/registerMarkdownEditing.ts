@@ -10,6 +10,7 @@
 import type { BlockName } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import {
   AwaitNode,
@@ -18,6 +19,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { Accessor } from 'solid-js';
 import type { MarkdownEditorErrors } from '../constants';
 import type { LexicalWrapper } from '../context/LexicalWrapperContext';
@@ -51,6 +53,7 @@ import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
 } from '../plugins/checkbox-to-task';
+import { createChecklistControls } from '../plugins/checklist-controls';
 import { codePlugin } from '../plugins/code/codePlugin';
 import { emojisPlugin } from '../plugins/emojis/emojisPlugin';
 import { iosCursorScrollPlugin } from '../plugins/ios-cursor-scroll';
@@ -238,6 +241,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
     );
   }
   useAll(slots?.beforeCode?.(accessories));
+  const checklistControls = createChecklistControls();
   plugins
     .use(
       codePlugin({
@@ -245,6 +249,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
         setAccessories: setAccessoryStore,
       })
     )
+    .use(checklistControls.plugin)
     .use(listToTablePlugin());
 
   return {
@@ -252,6 +257,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
     dragInsert,
     draggableBlock,
     accessories,
+    checklistControls: checklistControls.data,
     /** Whether an inline menu owns the arrow and enter keys. */
     isInlineMenuOpen: () =>
       menus.mentions.isOpen() ||
@@ -281,15 +287,28 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
       event: DragEvent,
       blockName?: BlockName
     ) {
-      handleFileFolderDrop(
-        fileEntries,
-        folderEntries,
-        createFilesReadyHandler(editor, filesBlockId, blockName, () =>
-          getDragDropPosition(editor, event, true)
-        )
+      fireAndForget(
+        dropFilesIntoEditor(
+          fileEntries,
+          folderEntries,
+          createFilesReadyHandler(editor, filesBlockId, blockName, () =>
+            getDragDropPosition(editor, event, true)
+          )
+        ),
+        'markdown-file-drop'
       );
     },
   };
+}
+
+async function dropFilesIntoEditor(
+  ...args: Parameters<typeof handleFileFolderDrop>
+) {
+  try {
+    await handleFileFolderDrop(...args);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'markdown-file-drop' });
+  }
 }
 
 export type MarkdownEditing = ReturnType<typeof registerMarkdownEditing>;

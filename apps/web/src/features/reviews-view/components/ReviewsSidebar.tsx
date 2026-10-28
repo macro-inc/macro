@@ -1,10 +1,15 @@
 import {
   CollapsibleSection,
+  SearchBar,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { ViewCreateMenu } from '@app/features/command/view-create-menu';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { PrOriginIcon } from '@block-pr/component/PrLinks';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
+import { PR_ORIGIN_LABELS, type PrOriginTool } from '@block-pr/data/pr-origin';
 import {
   type PrForeignEntityData,
   prForeignEntityQueryOptions,
@@ -12,16 +17,17 @@ import {
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { GithubLabelPill } from '@entity/components/GithubLabelPill';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import SplitIcon from '@phosphor/columns.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StarIcon from '@phosphor/star.svg';
-import UserIcon from '@phosphor/user.svg';
-import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
 import {
   useFavoritesData,
@@ -30,8 +36,15 @@ import {
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { makePersisted } from '@solid-primitives/storage';
 import { useQueries } from '@tanstack/solid-query';
+import { TagDot } from '@ui';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
-import { REVIEWS_SCOPES, type ReviewsScope } from '../reviews-types';
+import {
+  REVIEWS_SCOPES,
+  type ReviewsScope,
+  type ReviewsStatusTabId,
+} from '../reviews-types';
+import { RepositoriesPromotion } from './RepositoriesPromotion';
+import { ReviewsStatusTabs } from './ReviewsStatusTabs';
 
 const SCOPE_ITEMS: Record<
   ReviewsScope,
@@ -74,10 +87,10 @@ function ReviewFavoriteRow(props: {
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent class="min-w-56 max-w-[22rem] text-xs text-ink-muted">
           <MenuItem
             icon={SplitIcon}
-            text="Open in new split"
+            text={t('entityActions.openInNewSplit')}
             disabled={!globalSplitManager()?.canAppendSplit()}
             onClick={() => {
               if (globalSplitManager()?.canAppendSplit())
@@ -86,7 +99,7 @@ function ReviewFavoriteRow(props: {
           />
           <MenuItem
             icon={StarIcon}
-            text="Remove from favorites"
+            text={t('entityActions.removeFromFavorites')}
             onClick={() =>
               removeFavorite.mutate({
                 entityType: 'foreign_entity',
@@ -152,9 +165,9 @@ function ReviewFavorites(props: {
 }
 
 /**
- * GitHub labels among the visible pull requests. Like the Tags section, a row
- * is a destination: choosing a label shows it alone, and choosing the active
- * label clears it.
+ * GitHub labels among the visible pull requests, drawn like the email Tags
+ * section. A row is a destination: choosing a label shows it alone, and
+ * choosing the active label clears it.
  */
 function ReviewLabels(props: {
   labels: GithubPullRequestLabel[];
@@ -185,7 +198,59 @@ function ReviewLabels(props: {
                     )
                   }
                 >
-                  <GithubLabelPill name={label.name} color={label.color} />
+                  <ViewSidebar.Icon>
+                    <TagDot fill={githubLabelColor(label.color)} />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{label.name}</span>
+                </ViewSidebar.Item>
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
+  );
+}
+
+/**
+ * The tools the visible pull requests were started from, such as Claude or
+ * Codex. Like Labels, choosing one shows it alone and choosing it again clears it.
+ */
+function ReviewAgents(props: {
+  tools: readonly PrOriginTool[];
+  activeTools: readonly string[];
+  onActiveToolsChange: (tools: string[]) => void;
+}) {
+  const [open, setOpen] = makePersisted(createSignal(true), {
+    name: 'reviews-agents-open',
+  });
+
+  return (
+    <Show when={props.tools.length > 0}>
+      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">Agents</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Content>
+          <ViewSidebar.Nav aria-label="Pull request agents">
+            <For each={props.tools}>
+              {(tool) => (
+                <ViewSidebar.Item
+                  title={t('viewMenus.startedFrom', {
+                    origin: PR_ORIGIN_LABELS[tool],
+                  })}
+                  active={props.activeTools.includes(tool)}
+                  onClick={() =>
+                    props.onActiveToolsChange(
+                      selectSidebarTag(props.activeTools, tool)
+                    )
+                  }
+                >
+                  <ViewSidebar.Icon>
+                    <PrOriginIcon tool={tool} class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{PR_ORIGIN_LABELS[tool]}</span>
                 </ViewSidebar.Item>
               )}
             </For>
@@ -197,11 +262,22 @@ function ReviewLabels(props: {
 }
 
 export function ReviewsSidebar(props: {
+  search: string;
+  onSearchChange: (search: string) => void;
+  /** The status toggle; omitted when the status selection is custom or the board shows. */
+  status?: {
+    value: ReviewsStatusTabId | undefined;
+    onChange: (value: ReviewsStatusTabId) => void;
+  };
   scope: ReviewsScope;
   onScopeChange: (scope: ReviewsScope) => void;
   labels: GithubPullRequestLabel[];
   activeLabels: readonly string[];
   onActiveLabelsChange: (labels: string[]) => void;
+  /** Tools the visible pull requests were started from, in display order. */
+  agents: readonly PrOriginTool[];
+  activeAgents: readonly string[];
+  onActiveAgentsChange: (tools: string[]) => void;
   onOpenReview: (id: string, newSplit: boolean) => void;
   activeForeignEntityId?: string;
 }) {
@@ -216,12 +292,50 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search reviews"
+        search={() => (
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            onEscape={() => props.onSearchChange('')}
+          />
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
+      <Show when={!isTouchDevice()}>
+        <ViewSidebar.Primary>
+          <ViewCreateMenu presentation="sidebar" />
+        </ViewSidebar.Primary>
+      </Show>
+      <Show when={isTouchDevice()}>
+        <ViewSidebar.Primary class="flex flex-col gap-2">
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            class="border-0 bg-ink/5 shadow-none"
+            onEscape={() => props.onSearchChange('')}
+          />
+          <Show when={props.status}>
+            {(status) => (
+              <ReviewsStatusTabs
+                value={status().value}
+                onChange={status().onChange}
+              />
+            )}
+          </Show>
+        </ViewSidebar.Primary>
+      </Show>
       <ViewSidebar.Content>
         <ViewSidebar.Nav aria-label="Pull request views">
           <For each={REVIEWS_SCOPES}>
@@ -245,11 +359,17 @@ export function ReviewsSidebar(props: {
           onOpenReview={props.onOpenReview}
           activeForeignEntityId={props.activeForeignEntityId}
         />
+        <ReviewAgents
+          tools={props.agents}
+          activeTools={props.activeAgents}
+          onActiveToolsChange={props.onActiveAgentsChange}
+        />
         <ReviewLabels
           labels={props.labels}
           activeLabels={props.activeLabels}
           onActiveLabelsChange={props.onActiveLabelsChange}
         />
+        <RepositoriesPromotion class="mt-auto" />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

@@ -1,4 +1,5 @@
-import { onCleanup, onMount, Show } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { type JSX, onCleanup, onMount, Show, splitProps } from 'solid-js';
 
 export function FormInput(props: {
   id: string;
@@ -37,7 +38,7 @@ export function FormInput(props: {
       required={props.required ?? true}
       autocomplete={props.id}
       onInput={(event) => props.onInput(event.currentTarget.value)}
-      class="ln-input w-full px-4 py-3 rounded-lg border border-edge bg-surface text-sm text-ink placeholder:text-ink-placeholder focus:border-accent focus:outline-none transition-colors user-invalid:border-failure"
+      class="obf-input w-full rounded-2xl border border-edge bg-input px-4 py-3 text-sm text-ink placeholder:text-ink-placeholder transition-colors focus:border-ink/40 focus:outline-none user-invalid:border-failure"
     />
   );
 }
@@ -49,5 +50,27 @@ export function FormError(props: { message?: string }) {
         {props.message}
       </p>
     </Show>
+  );
+}
+
+/** Onboarding's pill buttons: filled for the main action, outlined otherwise. */
+export function AuthButton(
+  props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: 'primary' | 'secondary';
+  }
+) {
+  const [local, rest] = splitProps(props, ['variant', 'class', 'type']);
+  return (
+    <button
+      type={local.type ?? 'button'}
+      class={cn(
+        'flex min-h-14 w-full items-center justify-center gap-3 rounded-full px-6 py-3.5 text-base font-medium transition-[opacity,background-color] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40',
+        local.variant === 'secondary'
+          ? 'border border-edge text-ink hover:bg-ink/5'
+          : 'bg-ink text-surface hover:opacity-90',
+        local.class
+      )}
+      {...rest}
+    />
   );
 }

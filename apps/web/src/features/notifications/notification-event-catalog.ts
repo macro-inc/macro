@@ -12,6 +12,7 @@ export type NotificationEventGroupId =
   | 'channels'
   | 'projects'
   | 'documents'
+  | 'sharing'
   | 'crm'
   | 'tasks'
   | 'calendar'
@@ -32,6 +33,22 @@ export type NotificationEventGroup = {
 };
 
 export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
+  {
+    id: 'sharing',
+    label: 'Sharing',
+    events: [
+      {
+        type: 'entity_access_requested',
+        label: 'Permission requests',
+        description: 'Requests for more access to items you manage',
+      },
+      {
+        type: 'entity_access_granted',
+        label: 'Access granted',
+        description: 'When a permission request is approved',
+      },
+    ],
+  },
   {
     id: 'channels',
     label: 'Channels',
@@ -127,6 +144,12 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'calendar_event_reminder',
         label: 'Event reminders',
         description: 'When a calendar event is about to start',
+      },
+      {
+        type: 'calendar_event_join_request',
+        label: 'Requests to join',
+        description:
+          'When someone asks to be added to an event you shared in a channel',
       },
     ],
   },

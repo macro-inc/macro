@@ -53,7 +53,7 @@ interface ICommandState {
   commandScopePlaceholder: Accessor<string | undefined>;
   registerCommandScopePlaceholder: (
     scopeId: string,
-    placeholder: string
+    placeholder: () => string
   ) => () => void;
   activateCommandScopePlaceholder: (scopeId: string) => void;
 
@@ -91,16 +91,23 @@ function createCommandState(): ICommandState {
     EntityData[]
   >([]);
 
-  /** Optional input placeholders for command scopes, keyed by scope id. */
-  const commandScopePlaceholders = new Map<string, string>();
-  const [commandScopePlaceholder, setCommandScopePlaceholder] =
-    createSignal<string>();
+  /**
+   * Optional input placeholders for command scopes, keyed by scope id. Stored
+   * as accessors so a translated placeholder follows the interface language.
+   */
+  const commandScopePlaceholders = new Map<string, () => string>();
+  const [activePlaceholder, setActivePlaceholder] =
+    createSignal<() => string>();
+  const commandScopePlaceholder = () => activePlaceholder()?.();
+  const setCommandScopePlaceholder = (
+    placeholder: (() => string) | undefined
+  ) => setActivePlaceholder(() => placeholder);
 
   const [hint, setHint] = createSignal<CommandMenuHint>();
 
   function registerCommandScopePlaceholder(
     scopeId: string,
-    placeholder: string
+    placeholder: () => string
   ) {
     commandScopePlaceholders.set(scopeId, placeholder);
     return () => {
@@ -176,6 +183,9 @@ function createCommandState(): ICommandState {
   function onMenuClose() {
     setLastClosedTime(Date.now());
     setHint(undefined);
+    // Opening clears the query too late for a menu that mounts reading it, and
+    // the previous search's results would briefly reappear.
+    clearQuery();
     clearCommandScopeCommands();
     clearEntityActionEntities();
   }

@@ -9,6 +9,12 @@ include:
   - infra/stacks/fusionauth-instance/docker-compose.yml
 
 x-common-env: &common-env
+  # Bound console logs even when a worker repeatedly fails.
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
   # The xtask orchestrator points this at a per-instance generated env file via
   # MACRO_ENV_FILE (run-local/run-dev). Defaults to .env for any legacy/manual
   # `docker compose` invocation, and is optional so a missing file is not fatal.
@@ -101,46 +107,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # ============================================================================
-  # document_cognition_service (Port 8085)
-  # Document analysis and processing
-  # ============================================================================
-  document_cognition_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/document_cognition_service"]
-    ports:
-      - "8085:8080"
-    depends_on:
-      - document_storage_service
-      - email_service
-      - static_file_service
-      - sync_service
-      - lexical_service
-      - ai_editing_worker
-    environment:
-      - OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://document-storage-service:8080
-      - OVERRIDE_AI_EDITING_WORKER_URL=http://ai-editing-worker:8933
-      # The import pipeline (and chat's CreateDocument) create documents from
-      # inside DCS, which initializes content through lexical + sync.
-      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
-      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
-      # Import/ai-projection completions push gateway nudges from inside DCS.
-      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
-    networks:
-      databases:
-      services:
-        aliases:
-          - document-cognition-service
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
-  # document_storage_service (Port 8086)
-  # Main document storage API
   # ============================================================================
   document_storage_service:
     <<: [*common-env, *rust-services-image]
@@ -301,7 +267,6 @@ services:
       OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
     depends_on:
       - redis
-      - document_cognition_service
       - authentication-service
       - connection_gateway
       - document_storage_service
@@ -317,36 +282,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # ============================================================================
-  # scheduled_action_service (Port 8099)
-  # Scheduled actions API and dispatcher
-  # ============================================================================
-  scheduled_action_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/service"]
-    ports:
-      - "8099:8080"
-    environment:
-      OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
-    depends_on:
-      - postgres
-      - authentication-service
-      - connection_gateway
-    networks:
-      databases:
-      services:
-        aliases:
-          - scheduled-action-service
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
-  # search_processing_service (Port 8092)
-  # Search indexing worker
   # ============================================================================
   search_processing_service:
     <<: [*common-env, *rust-services-image]
@@ -379,21 +314,6 @@ services:
   # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
   # instead. Trigger processing and external sessions run without either.
   # ============================================================================
-  preview_gateway:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/preview_gateway"]
-    restart: on-failure
-    environment:
-      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
-    depends_on:
-      - postgres
-      - connection_gateway
-    networks:
-      databases:
-      services:
-        aliases:
-          - preview-gateway
-
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]
@@ -422,7 +342,11 @@ services:
       - kafka
       - connection_gateway
       - lexical_service
+      - fusionauth
     networks:
+      # `auth` too: public MCP boot resolves the Google identity provider in
+      # FusionAuth, which lives on that network only.
+      auth:
       databases:
       services:
         aliases:
@@ -434,45 +358,33 @@ services:
           - agent-harness-service
 
   # ============================================================================
-  # mcp_service
-  # Macro's own MCP server: the DCS AI toolset over streamable HTTP, OAuth
-  # 2.1-fronted. Its one local client is the agent egress proxy, which serves
-  # it to sandboxes and Cursor agents under the reserved `macro` slug and
-  # dials it in-network - no host port, no proxy route.
+  # whatsapp_session_service
+  # Personal WhatsApp linked devices: one outbound websocket per account,
+  # leased through Postgres advisory locks on a DATABASE_URL connection
+  # (the local Postgres; nothing pools it). Nothing calls it, so no host
+  # port and no proxy route. OVERRIDE_WHATSAPP_* stay unset: those are for
+  # tests against the fake server.
   # ============================================================================
-  mcp_service:
+  whatsapp_session_service:
     <<: [*common-env, *rust-services-image]
-    command: ["/app/out/mcp_service"]
+    command: ["/app/out/whatsapp_session_service"]
     restart: on-failure
-    environment:
-      # Its own public identity, not the env-wide value (which is document
-      # cognition's MCP OAuth callback route): rmcp only answers requests
-      # whose Host is on this URL's allowed-hosts list, and the egress proxy
-      # dials it as `mcp-service`.
-      - MCP_PUBLIC_URL=http://mcp-service:8080
-      # Links in tool responses open the local app.
-      - APP_BASE_URL=http://localhost:${FRONTEND_PORT:-3000}
-      - REDIS_URL=redis://redis:6379
-      # In-network sync address, for documents its CreateDocument initializes.
-      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
+    # Drain releases accounts in batches before exiting, as on ECS.
+    stop_grace_period: 120s
     depends_on:
       - postgres
-      - redis
-      - fusionauth
     networks:
-      # `auth` too: boot resolves the Google identity provider in FusionAuth,
-      # which lives on that network only.
-      auth:
       databases:
       services:
         aliases:
-          # Hyphenated for the same reason as the harness alias above, and
-          # because it is the host OVERRIDE_MCP_SERVICE_URL names.
-          - mcp-service
+          - whatsapp-session-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-  # ============================================================================
-  # static_file_service (Port 8094)
-  # Static file serving - DynamoDB
   # ============================================================================
   static_file_service:
     <<: [*common-env, *rust-services-image]

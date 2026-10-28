@@ -27,6 +27,9 @@ export function restoreFocusPlugin() {
         );
       }),
       registerRootEventListener(editor, 'focusin', (e) => {
+        // Embedded controls and editors own their focus, even though their
+        // focusin event bubbles through the outer editor root.
+        if (e.target !== editor.getRootElement()) return;
         if (clickFlag) return;
         e.preventDefault();
         editor.focus(undefined, { defaultSelection: 'rootStart' });

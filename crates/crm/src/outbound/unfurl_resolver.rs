@@ -17,12 +17,15 @@
 //!
 //! Failures (network errors, SSRF-blocked redirects, parse errors,
 //! non-HTML responses) are logged and surfaced as
-//! [`DomainMetadata::default`] so the caller can persist a
-//! negative-cache entry and never re-resolve the domain.
+//! [`DomainResolution::Unavailable`], so the domain is retried a bounded
+//! number of times instead of cached empty on a transient error.
 
 use std::sync::Arc;
 
-use crate::domain::{company_metadata_resolver::CompanyMetadataResolver, model::DomainMetadata};
+use crate::domain::{
+    company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
+    model::DomainMetadata,
+};
 use unfurl::domain::ports::UnfurlService;
 
 /// Adapter that resolves [`DomainMetadata`] by unfurling
@@ -58,7 +61,7 @@ where
     U: UnfurlService,
 {
     #[tracing::instrument(skip(self))]
-    async fn resolve(&self, domain: &str) -> DomainMetadata {
+    async fn resolve(&self, domain: &str) -> DomainResolution {
         let url = format!("https://{domain}");
         match self.unfurl_service.unfurl(&url).await {
             Ok(response) => {
@@ -73,20 +76,16 @@ where
                 } else {
                     Some(title.to_string())
                 };
-                DomainMetadata {
+                DomainResolution::Resolved(Box::new(DomainMetadata {
                     name,
                     description: response.description,
                     icon_url: response.favicon_url,
                     ..Default::default()
-                }
+                }))
             }
             Err(e) => {
-                tracing::warn!(
-                    error=?e,
-                    domain,
-                    "unfurl failed; returning empty DomainMetadata for negative cache"
-                );
-                DomainMetadata::default()
+                tracing::warn!(error=?e, domain, "unfurl failed; domain metadata unavailable");
+                DomainResolution::Unavailable
             }
         }
     }

@@ -4,16 +4,10 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev --env local",
-		"start": "wrangler dev",
-		"gen-types": "wrangler types",
 		"test": "bun test/tests.ts",
 		"plaintext": "bash scripts/test-plaintext.sh",
 		"cognition": "bash scripts/test-cognition.sh",
 		"search": "bash scripts/test-search.sh",
-		"deploy-dev": "wrangler deploy --env dev",
-		"deploy-prod": "wrangler deploy --env prod",
 		"check": "tsc --noEmit --project tsconfig.check.json"
 	},
 	"dependencies": {
@@ -56,8 +50,6 @@
 	"devDependencies": {
 		"@types/bun": "^1.2.19",
 		"@types/node": "22.13.0",
-		"@types/service-worker-mock": "^2.0.4",
-		"tsx": "^4.20.3",
-		"wrangler": "^4.25.1"
+		"tsx": "^4.20.3"
 	}
 }

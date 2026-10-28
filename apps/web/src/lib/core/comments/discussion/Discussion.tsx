@@ -11,8 +11,8 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import type { MessageActions } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import {
   createEffect,
   createMemo,
@@ -106,16 +106,14 @@ export function Discussion(props: {
   });
 
   const rootMetaById = createMemo(() => {
-    const messages = source.threads().flatMap((thread) => {
+    const entries = source.threads().flatMap((thread) => {
       const root = thread.comments[0];
       if (!root) return [];
       const message = discussionCommentToChannelMessage(root);
       message.thread.reply_count = thread.comments.length - 1;
-      return [message];
+      return [{ type: 'message' as const, message }];
     });
-    const metaById = buildChannelMessageListMeta(messages, () => false, true);
-
-    return metaById;
+    return buildChannelMessageListMeta(entries, () => false, true);
   });
 
   return (
@@ -410,6 +408,9 @@ export function DiscussionThreadView(props: {
                             onClose={() => {
                               setIsReplying(false);
                             }}
+                            onEscape={() => {
+                              setIsReplying(false);
+                            }}
                             onReady={(handle) => {
                               replyInputHandle = handle;
                             }}
@@ -503,6 +504,9 @@ function DiscussionMessageView(props: {
                 }}
                 onSend={props.onEditSave}
                 onClose={() => {
+                  props.onEditCancel();
+                }}
+                onEscape={() => {
                   props.onEditCancel();
                 }}
               />

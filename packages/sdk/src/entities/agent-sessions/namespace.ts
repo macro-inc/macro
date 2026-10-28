@@ -1,4 +1,8 @@
-import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
+import type {
+  AgentMode,
+  CodingPreferencesBody,
+  SandboxSize,
+} from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
@@ -18,6 +22,14 @@ export class AgentSessionNamespace {
   /** Create a managed agent session. */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
+   * (`'code'`), as the app's Auto mode decides before starting a session.
+   */
+  chooseMode(prompt: string): Promise<AgentMode> {
+    return AgentSession.chooseMode(this.client, prompt);
   }
 
   /**
@@ -53,5 +65,17 @@ export class AgentSessionNamespace {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     return AgentSession.setDefaultSandboxSize(this.client, size);
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  codingPreferences(): Promise<CodingPreferencesBody> {
+    return AgentSession.codingPreferences(this.client);
+  }
+
+  /** Replace the caller's coding preferences. */
+  setCodingPreferences(
+    preferences: CodingPreferencesBody,
+  ): Promise<CodingPreferencesBody> {
+    return AgentSession.setCodingPreferences(this.client, preferences);
   }
 }

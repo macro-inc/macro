@@ -19,6 +19,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
+import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -101,6 +102,7 @@ import { promptSmartTag } from './SmartTagDialog';
 
 export { buildChannelRailRows } from './build-channel-rail-rows';
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
@@ -216,7 +218,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       // Only fetched selections need to join the browser router's transition.
       await startTransition(() => {
         if (request === activation)
-          void selectChannel(channel, channelId, openInNewSplit);
+          fireAndForget(
+            selectChannel(channel, channelId, openInNewSplit),
+            'channels-view'
+          );
       });
     } catch (error) {
       if (request === activation) reportActivationError(error);
@@ -252,9 +257,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // Telemetry installs ZoneAwarePromise; native async results are not
     // instances of that constructor. Detect the pending edge structurally.
     if ('then' in selection) {
-      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
+      fireAndForget(
+        selectHydratedChannel(selection, request, channelId, openInNewSplit),
+        'channels-view'
+      );
     } else {
-      void selectChannel(selection, channelId, openInNewSplit);
+      fireAndForget(
+        selectChannel(selection, channelId, openInNewSplit),
+        'channels-view'
+      );
     }
   };
 
@@ -504,11 +515,14 @@ export function ChannelsRail(props: ChannelsRailProps) {
         else {
           const request = ++activation;
           if (openInNewSplit) {
-            void selectHydratedChannel(
-              fetchChannelSelectionById(channelId),
-              request,
-              channelId,
-              true
+            fireAndForget(
+              selectHydratedChannel(
+                fetchChannelSelectionById(channelId),
+                request,
+                channelId,
+                true
+              ),
+              'channels-view'
             );
           } else setSelectedChannel({ type: 'channel', id: channelId });
         }
@@ -716,7 +730,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           if (!source.isLoadingMore()) {
             if (!source.hasMore()) return true;
-            void source.loadMore();
+            fireAndForget(source.loadMore(), 'channels-view');
           }
 
           if (row.scope === 'direct_messages') {
@@ -846,6 +860,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reason: 'pointer',
       metadata: event ? { event } : undefined,
     });
+  };
+
+  // A mouse press reaches the server before the click that opens its channel.
+  // Touch presses also start scrolls, which would fetch every row they cross.
+  const prefetchRow = (rowId: ChannelRailRow['id'], event: PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    // Threads-tab rows filter the thread list in place.
+    if (tab() === 'threads') return;
+    const row = visibleRows().find((row) => row.id === rowId);
+    if (row?.kind === 'conversation') {
+      // A message target loads around that message instead.
+      if (!row.channel.target) prefetchLatestChannelMessages(row.channel.id);
+    } else if (
+      row?.kind === 'favorite' &&
+      row.favorite.entityType === 'channel'
+    ) {
+      prefetchLatestChannelMessages(row.favorite.entityId);
+    }
   };
 
   // Explain shared versus private scope before creating or changing labels.
@@ -1146,7 +1178,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       setChannelLabel(drag.channelId, undefined);
       return;
     }
-    void createLabel([drag.channelId, target.channelId]);
+    fireAndForget(
+      createLabel([drag.channelId, target.channelId]),
+      'channels-view'
+    );
   });
 
   const registerVirtualizer = (
@@ -1199,6 +1234,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSortBy,
     registerRootRef: setListRoot,
     activateRow,
+    prefetchRow,
     registerScrollRef: (group, element) => {
       setSectionScrollRoots((current) => ({
         ...current,

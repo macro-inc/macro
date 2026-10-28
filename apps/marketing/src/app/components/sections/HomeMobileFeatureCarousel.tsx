@@ -543,7 +543,7 @@ export function HomeMobileFeatureCarousel() {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': 'clamp(23px, 6.2vw, 28px)',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.015em',
               'line-height': 1.08,
               margin: '0',

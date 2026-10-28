@@ -19,7 +19,7 @@ export function entityReferencesToIdSet(refs: EntityReference[]): Set<string> {
 export function updateEntityReferences(
   currentRefs: EntityReference[],
   newSelectedIds: Set<string>,
-  entityInfo?: Array<{ id: string; entity_type: string }>
+  entityInfo?: Array<{ id: string; entity_type: EntityType }>
 ): EntityReference[] {
   const currentIds = new Set(currentRefs.map((ref) => ref.entity_id));
 
@@ -38,15 +38,19 @@ export function updateEntityReferences(
 
   // Add new entities with proper entity type
   for (const id of addedIds) {
-    const entityType =
-      entityInfo?.find((info) => info.id === id)?.entity_type || 'DOCUMENT';
     updatedRefs.push({
       entity_id: id,
-      entity_type: entityType as EntityReference['entity_type'],
+      entity_type:
+        entityInfo?.find((info) => info.id === id)?.entity_type ?? 'DOCUMENT',
     });
   }
 
   return updatedRefs;
+}
+
+/** `undefined` means this build doesn't know the entity type. */
+export function parseEntityType(value: string): EntityType | undefined {
+  return Object.values(EntityType).find((type) => type === value);
 }
 
 /** `undefined` means the entity type has no item-preview surface. */
@@ -68,7 +72,7 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
       'DATABASE_ROW',
       () => undefined
     )
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 export function macroEntityToPropertyEntityType(
@@ -101,15 +105,15 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
-    .with({ type: 'reminder' }, () => {
-      throw new Error('reminders do not support properties');
-    })
     .with({ type: 'calendar_event' }, () => {
       // CALENDAR_EVENT is not a property-editing target on the frontend yet.
       throw new Error('calendar events do not support properties');
     })
     .with({ type: 'database' }, () => {
       throw new Error('databases do not support properties');
+    })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
     })
     .exhaustive();
 }

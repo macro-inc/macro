@@ -1,13 +1,24 @@
 import { runDatabaseSql } from '@core/database-sql/driver';
 import { readTranscript, replay } from '@core/database-sql/tests/transcript';
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import type { CacheHost, CacheReadArgs } from '@graphql-cache/host/types';
+import {
+  INITIAL_CACHE_REVISION,
+  type ReadResult,
+} from '@graphql-cache/protocol';
 import type {
   DatabaseRowFieldsFragment,
   DatabaseRowsQuery,
   GroupSoupQuery,
   SoupPropertyValueFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
-import { createClient, type Exchange, type Operation } from '@urql/core';
-import { describe, expect, it } from 'vitest';
+import {
+  createClient,
+  type Exchange,
+  fetchExchange,
+  type Operation,
+} from '@urql/core';
+import { describe, expect, it, vi } from 'vitest';
 import { empty, fromValue, mergeMap, pipe } from 'wonka';
 import { createGraphqlRowSource } from './graphql-source';
 
@@ -324,6 +335,48 @@ describe('the GraphQL row source', () => {
     });
   });
 
+  it('reads a property value type from a newer server as an empty cell', async () => {
+    const fromNewerServer = JSON.parse(
+      '{"__typename":"GraphqlRatingPropertyValue","rating":4}'
+    );
+    const server = fakeClient(() =>
+      soupPage(
+        [
+          row(ACME, DEALS, '80', [
+            property(NAME, {
+              __typename: 'GraphqlStringPropertyValue',
+              stringValue: 'Acme',
+            }),
+            property(AMOUNT, fromNewerServer),
+          ]),
+        ],
+        null
+      )
+    );
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+      people: noPeople,
+    });
+
+    const page = await source.page(
+      { type: 'soup', table: DEALS, propf: null, keyHint: null },
+      [],
+      null,
+      500,
+      { request: () => {}, headers: () => ({}) }
+    );
+
+    expect(page._unsafeUnwrap().rows).toEqual([
+      {
+        id: ACME,
+        position: '80',
+        cells: { [NAME]: { type: 'text', value: 'Acme' } },
+      },
+    ]);
+  });
+
   it('follows the Soup cursor page by page', async () => {
     const transcript = readTranscript('paging');
     const server = fakeClient((operation) =>
@@ -369,4 +422,81 @@ describe('the GraphQL row source', () => {
       },
     ]);
   });
+});
+
+describe('concurrent SQL cache and network reads', () => {
+  it.each([
+    ['cache-only', false],
+    ['cache-first', false],
+    ['cache-first', true],
+  ] as const)(
+    'keeps a %s probe independent from a network refresh (hit: %s)',
+    async (requestPolicy, cacheHit) => {
+      const transcript = readTranscript('row-position');
+      let finishCache!: (value: ReadResult) => void;
+      const readQuery = vi.fn(
+        (_args: CacheReadArgs) =>
+          new Promise<ReadResult>((resolve) => {
+            finishCache = resolve;
+          })
+      );
+      const host = {
+        readQuery,
+        writeQuery: async () => ({
+          revision: INITIAL_CACHE_REVISION,
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        }),
+        teardown: async () => {},
+        onMutationSettled: () => () => {},
+        onOpsAffected: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+        claimNextMutation: async () => undefined,
+      } as unknown as CacheHost;
+      const fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: soupPage([initech, globex, acme], null) }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+      );
+      const client = createClient({
+        url: 'http://test.invalid/graphql',
+        fetch,
+        exchanges: [normalizedCacheExchange(host), fetchExchange],
+      });
+      const read = (policy: 'cache-only' | 'cache-first' | 'network-only') =>
+        runDatabaseSql(transcript.catalog, transcript.sql, {
+          source: createGraphqlRowSource({
+            client,
+            catalog: transcript.catalog,
+            requestPolicy: policy,
+            cache: host,
+            people: noPeople,
+          }),
+          open: replay(transcript),
+        });
+      const probe = read(requestPolicy);
+      await vi.waitFor(() => expect(readQuery).toHaveBeenCalledTimes(1));
+      const refresh = read('network-only');
+      // With a cache-only urql subscription this request joins the probe and
+      // never reaches fetchExchange, even after the cache miss resolves.
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      expect(readQuery.mock.calls[0][0].opKey).toBeUndefined();
+      finishCache(
+        cacheHit
+          ? { kind: 'hit', data: soupPage([initech, globex, acme], null) }
+          : { kind: 'miss' }
+      );
+      expect((await refresh)._unsafeUnwrap()).toEqual(transcript.outcome);
+      const cached = await probe;
+      if (requestPolicy === 'cache-only') expect(cached.isErr()).toBe(true);
+      else expect(cached._unsafeUnwrap()).toEqual(transcript.outcome);
+    }
+  );
 });

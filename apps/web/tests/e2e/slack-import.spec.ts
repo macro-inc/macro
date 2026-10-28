@@ -104,13 +104,13 @@ for (const history of [false, true]) {
     ).toBeDisabled();
     await page.getByLabel('Select all visible conversations').check();
     await page.getByRole('button', { name: 'Clear visible selection' }).click();
-    await expect(page.getByText('2 selected.', { exact: false })).toBeVisible();
+    await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
     if (!history) await page.getByLabel('Include message history').uncheck();
     await page
       .getByRole('button', { name: 'Import selected channels (2)' })
       .click();
     await expect(
-      page.getByText('completed with errors', { exact: true })
+      page.getByText('Completed with errors', { exact: true })
     ).toBeVisible();
     const writes = await page.evaluate(() =>
       JSON.parse(localStorage.getItem('slack-test-writes') ?? '[]')
@@ -148,7 +148,9 @@ for (const history of [false, true]) {
     await page.reload();
     await opener.click();
     await page
-      .getByRole('button', { name: /2026-09-30.*completed with errors/ })
+      .getByRole('region', { name: 'Job history' })
+      .getByRole('button', { name: /Completed with errors/ })
+      .filter({ has: page.locator('time[datetime="2026-09-30T00:00:00Z"]') })
       .click();
     await expect(
       page.getByText(
@@ -158,7 +160,9 @@ for (const history of [false, true]) {
     await expect(
       page.getByRole('heading', { name: 'same name', exact: true })
     ).toHaveCount(2);
-    await expect(page.getByText('Error: invalid input')).toBeVisible();
+    await expect(
+      page.getByText('Invalid input', { exact: true })
+    ).toBeVisible();
     await expect(page.getByText('unselected', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Filter conversations')).toHaveCount(0);
     expect(
@@ -310,7 +314,9 @@ test.describe('local backend selection contract', () => {
       await page
         .getByRole('region', { name: 'Job history' })
         .getByRole('button')
-        .filter({ hasText: receipt.createdAt })
+        .filter({
+          has: page.locator(`time[datetime="${receipt.createdAt}"]`),
+        })
         .click();
       await expect(
         page.getByText(

@@ -142,15 +142,12 @@ describe('calendar reminder dates in Home', () => {
     expect(homeGroupTimestamp(entity, context)).toBe(recentSync);
   });
 
-  it('preserves own-activity ordering and non-notification tabs', () => {
+  it('preserves own-activity ordering', () => {
     const entity = mapApiSoupItemToEntity({
       ...calendarItem(),
       touched_at: recentSync,
     });
     expect(mergeHomeEntities([entity], [entity], context)[0].sortTs).toBe(
-      recentSync
-    );
-    expect(homeGroupTimestamp(entity, { ...context, tab: 'reminders' })).toBe(
       recentSync
     );
   });

@@ -1,5 +1,5 @@
 /**
- * Unlinked text nodes are basic text nodes that serialize and deserialize to plain text.
+ * Unlinked text nodes preserve an explicit choice to keep URL-shaped text inert.
  * They basically flag off the the auto link listener. you cannot unlink a url shaped string
  * while the auto linker is listening without some sort of flag.
  */
@@ -55,9 +55,7 @@ export class UnlinkedTextNode extends TextNode {
     };
   }
   static importJSON(serializedNode: SerializedUnlinkedTextNode) {
-    super.importJSON(serializedNode);
-    const node = $createUnlinkedTextNode(serializedNode.text);
-    return node;
+    return $createUnlinkedTextNode().updateFromJSON(serializedNode);
   }
 }
 

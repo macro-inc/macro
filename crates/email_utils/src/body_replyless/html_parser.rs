@@ -88,6 +88,12 @@ fn find_outlook_splitter(document: &Html) -> Option<ElementRef<'_>> {
     if let Some(container) = document.select(&OUTLOOK_REPLY_CONTAINER_SELECTOR).next() {
         return Some(container);
     }
+    // Outlook mobile and Outlook on the web put a horizontal rule immediately
+    // above `div#divRplyFwdMsg`. A later `border-top` "From:" block is usually a
+    // quote nested inside that thread, so the rule has to win.
+    if let Some(header) = document.select(&OUTLOOK_REPLY_HEADER_SELECTOR).next() {
+        return Some(outlook_reply_header_splitter(header));
+    }
 
     // Check for a bordered element containing the header text.
     for element in document.select(&ANY_ELEMENT_SELECTOR) {
@@ -136,6 +142,57 @@ fn find_text_based_splitter(document: &Html) -> Option<ElementRef<'_>> {
         }
     }
     None
+}
+
+/// The quoted thread starts at the horizontal rule when one sits directly
+/// above the reply header. Empty wrappers around that rule count; real reply
+/// text in between means the header itself is the cut.
+fn outlook_reply_header_splitter(header: ElementRef<'_>) -> ElementRef<'_> {
+    let mut sibling = header.prev_sibling();
+    while let Some(node) = sibling {
+        if let Some(element) = ElementRef::wrap(node) {
+            if is_horizontal_rule(element) {
+                return element;
+            }
+            if element.text().collect::<String>().trim().is_empty() {
+                sibling = node.prev_sibling();
+                continue;
+            }
+            return header;
+        }
+        if let Some(text) = node.value().as_text()
+            && !text.trim().is_empty()
+        {
+            return header;
+        }
+        sibling = node.prev_sibling();
+    }
+    header
+}
+
+/// An `hr`, or an element that contains nothing else (Outlook centers the rule
+/// in a div).
+fn is_horizontal_rule(element: ElementRef<'_>) -> bool {
+    if element.value().name().eq_ignore_ascii_case("hr") {
+        return true;
+    }
+    let mut saw_rule = false;
+    for child in element.children() {
+        if let Some(child_element) = ElementRef::wrap(child) {
+            if child_element.value().name().eq_ignore_ascii_case("br") {
+                continue;
+            }
+            if !is_horizontal_rule(child_element) {
+                return false;
+            }
+            saw_rule = true;
+        } else if let Some(text) = child.value().as_text()
+            && !text.trim().is_empty()
+        {
+            return false;
+        }
+    }
+    saw_rule
 }
 
 // --- Low-Level Utilities ---

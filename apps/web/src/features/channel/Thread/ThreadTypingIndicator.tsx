@@ -1,5 +1,6 @@
+import { AgentTyping } from '@app/features/agent-activity/agent-typing';
 import { idToDisplayName } from '@core/user';
-import { getTypingUsers } from '@queries/messages/typing';
+import { getTypingAgents, getTypingUsers } from '@queries/messages/typing';
 import type { MessageParent } from '@service-storage/messages';
 import { createMemo, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -10,9 +11,11 @@ type ThreadTypingIndicatorProps = {
 };
 
 export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
+  // Agents type as a row of their own, with their turn beneath.
   const typingUsers = createMemo(() => {
+    const agents = getTypingAgents(props.parent, props.threadId);
     const users = getTypingUsers(props.parent, props.threadId);
-    return Array.from(users);
+    return Array.from(users).filter((user) => !agents.has(user));
   });
 
   const typingText = createMemo(() => {
@@ -22,11 +25,14 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
   const isActive = () => typingUsers().length > 0;
 
   return (
-    <div class="flex flex-row items-stretch justify-start ml-[calc(var(--message-padding-x)+var(--user-icon-width)+--spacing(2))] min-h-7">
-      <Show when={isActive()}>
-        <ThreadTypingIndicatorContent text={typingText()} />
-      </Show>
-    </div>
+    <>
+      <AgentTyping parent={props.parent} threadId={props.threadId} />
+      <div class="flex flex-row items-stretch justify-start ml-[calc(var(--message-padding-x)+var(--user-icon-width)+--spacing(2))] min-h-7">
+        <Show when={isActive()}>
+          <ThreadTypingIndicatorContent text={typingText()} />
+        </Show>
+      </div>
+    </>
   );
 }
 

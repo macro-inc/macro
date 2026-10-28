@@ -9,6 +9,7 @@ import type { CreateCalendarEventRequestCalendarId } from './createCalendarEvent
 import type { CreateCalendarEventRequestConference } from './createCalendarEventRequestConference';
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
+import type { CreateCalendarEventRequestGuestPolicy } from './createCalendarEventRequestGuestPolicy';
 import type { CreateCalendarEventRequestIdempotencyKey } from './createCalendarEventRequestIdempotencyKey';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
 import type { CreateCalendarEventRequestOutOfOffice } from './createCalendarEventRequestOutOfOffice';
@@ -32,10 +33,15 @@ inbox default. */
   /** Connected inbox whose primary calendar receives the event; defaults
 to the requester's primary inbox. */
   emailLinkId?: CreateCalendarEventRequestEmailLinkId;
+  guestPolicy?: CreateCalendarEventRequestGuestPolicy;
   /** Stable retry identity, scoped to the authenticated organizer. */
   idempotencyKey?: CreateCalendarEventRequestIdempotencyKey;
   /** Optional location label. */
   location?: CreateCalendarEventRequestLocation;
+  /** Mint a Macro call and write its join link into the description and
+location before creating the event, so the invitation carries it.
+Cannot be combined with `conference`. */
+  macroCall?: boolean;
   outOfOffice?: CreateCalendarEventRequestOutOfOffice;
   /** Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). */
   recurrenceLines?: string[];

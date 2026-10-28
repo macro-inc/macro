@@ -15,12 +15,12 @@ import { type Accessor, createMemo, mapArray } from 'solid-js';
 import type {
   DatabaseRelationFailure,
   DatabaseRelationSource,
-} from '../context/relation-source';
+} from '../../database/context/relation-source';
 import {
   type DatabaseRelatedRow,
   sameRelatedRows,
-} from '../core/database-relations';
-import { titleColumn } from '../core/table';
+} from '../../database/core/database-relations';
+import { titleColumn } from '../../database/core/table';
 import { tableRowsStatement } from '../sql';
 import { toViewColumn } from './table-rows';
 

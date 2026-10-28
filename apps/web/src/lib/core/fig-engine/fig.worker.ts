@@ -83,7 +83,10 @@ const partlyDecoded = () =>
 const channel = new MessageChannel();
 channel.port1.onmessage = () => {
   scheduled = false;
-  void pump();
+  // pump reports each request's failure itself; this is only a failed report.
+  pump().catch((error: unknown) => {
+    console.error('[fig-engine] worker could not report a failure', error);
+  });
 };
 
 function schedule() {
@@ -320,7 +323,11 @@ async function serve(request: FigRequest) {
         .with('apply', () =>
           f.apply(request.page, request.ops ?? '[]', request.coalesce)
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
+      if (json === undefined) {
+        fail(request.id, `unknown edit action: ${request.action}`);
+        return;
+      }
       post({ id: request.id, ok: true, kind: 'edit', json });
       return;
     }

@@ -18,6 +18,7 @@ mod document;
 mod entity_body;
 mod entity_permission;
 mod foreign_entity;
+mod form;
 mod history;
 mod initiative;
 mod pin;
@@ -37,14 +38,15 @@ pub use document::DocumentAccessExtractor;
 pub use entity_body::EntityBodyAccessLevelExtractor;
 pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;
+pub use form::FormAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use initiative::InitiativeAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
-pub use principal::principal_entity_access_receipt;
+pub use principal::{message_sender_entity_access_receipt, principal_entity_access_receipt};
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
 pub use reminder::ReminderAccessExtractor;
 pub use scheduled_action::ScheduledActionAccessExtractor;
-pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
+pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2, user_team_receipt};
 pub use thread::ThreadAccessLevelExtractor;
 
 use std::borrow::Cow;
@@ -139,3 +141,6 @@ impl IntoResponse for ExtractorError {
         (status, Json(ErrorResponse { message })).into_response()
     }
 }
+
+mod external_chat;
+pub use external_chat::ExternalChatAccessLevelExtractor;

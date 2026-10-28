@@ -10,19 +10,19 @@ import valentina from '../../../assets/people/valentina.webp';
 /** Local participants in the homepage's launch example. */
 export const homepagePeople = {
   jacob: {
-    name: 'Jacob Beckerman',
+    name: 'Jacob',
     shortName: 'Jacob',
     initials: 'JB',
     photo: jacob,
   },
   julia: {
-    name: 'Julia Westphal',
+    name: 'Julia',
     shortName: 'Julia',
     initials: 'JW',
     photo: julia,
   },
   gabriel: {
-    name: 'Gabriel Birman',
+    name: 'Gabriel',
     shortName: 'Gabriel',
     initials: 'GB',
     photo: gabriel,

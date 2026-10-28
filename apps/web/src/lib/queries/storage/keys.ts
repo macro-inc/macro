@@ -128,15 +128,22 @@ export const databasesKeys = createQueryKeys('databases', {
   }),
 });
 
-export const savedDatabaseQueryKeys = createQueryKeys('saved-database-query', {
-  definition: (queryId: string) => ({ queryKey: [queryId] }),
+export const formsKeys = createQueryKeys('forms', {
+  list: null,
+  forDatabase: (databaseId: string) => ({ queryKey: [databaseId] }),
+  detail: (formId: string) => ({ queryKey: [formId] }),
+  mine: (formId: string, userId: string) => ({ queryKey: [formId, userId] }),
+  summary: (formId: string) => ({ queryKey: [formId] }),
+  tally: (formId: string) => ({ queryKey: [formId] }),
+  permissions: (formId: string) => ({ queryKey: [formId] }),
 });
 
-export const instructionsMdKeys = createQueryKeys('instructionsMd', {
-  id: null,
-  text: (id: string) => ({
-    queryKey: [id],
-  }),
+/** One form's own-response queries, whoever the viewer is. */
+export const myResponseKeyOf = (formId: string) =>
+  [...formsKeys.mine._def, formId] as const;
+
+export const savedDatabaseQueryKeys = createQueryKeys('saved-database-query', {
+  definition: (queryId: string) => ({ queryKey: [queryId] }),
 });
 
 /**

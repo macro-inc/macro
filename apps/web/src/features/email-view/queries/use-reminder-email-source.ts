@@ -12,9 +12,9 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EmailEntity, isEmailEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
-import { collectionReminderEntity } from '@queries/reminders/collection';
 import { useEmailReminderCollection } from '@queries/reminders/email-collection';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { ListEmailRemindersParams } from '@service-storage/generated/schemas/listEmailRemindersParams';
@@ -29,6 +29,7 @@ import {
   untrack,
 } from 'solid-js';
 import { EMAIL_FACETS } from '../filters/email-facets';
+import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery } from './email-query';
 import type {
   EmailDataSource,
@@ -89,6 +90,7 @@ export function useReminderEmailSource(
           {
             tab: 'reminders',
             inboxIds: state.inboxIds,
+            aliasFilter: state.aliasFilter,
             facets: state.facets,
             facetContext: tagContext(),
           },
@@ -98,7 +100,7 @@ export function useReminderEmailSource(
     );
   });
   const scope = createMemo(() =>
-    JSON.stringify([userId(), active(), filters()])
+    JSON.stringify([userId(), active(), filters(), state.aliasFilter])
   );
   const [disposed, setDisposed] = createSignal(false);
   onCleanup(() => setDisposed(true));
@@ -144,18 +146,18 @@ export function useReminderEmailSource(
   });
   const reminders = createMemo<Map<string, EmailRowReminder>>(() => {
     if (!active()) return new Map();
-    const visibleIds = new Set(entities().map((email) => email.id));
+    const visibleEmails = new Map(entities().map((email) => [email.id, email]));
     return new Map(
       pages().flatMap((page) =>
         page.items
-          .filter((item) => visibleIds.has(item.threadId))
+          .filter((item) => visibleEmails.has(item.threadId))
           .map(
             (item) =>
               [
                 item.threadId,
                 {
-                  nearest: collectionReminderEntity(item.nearest),
-                  count: item.count,
+                  ...item.followup,
+                  name: visibleEmails.get(item.threadId)!.name,
                 },
               ] as const
           )
@@ -164,30 +166,6 @@ export function useReminderEmailSource(
   });
   const [loadingMore, setLoadingMore] = createSignal(false);
   const [loadError, setLoadError] = createSignal<Error>();
-  const error = () =>
-    failed()[0]?.error ??
-    loadError() ??
-    (entities().length === 0 ? (collection.error ?? undefined) : undefined);
-  const hasMore = () =>
-    Boolean(
-      collection.hasNextPage || loadingMore() || pending() || failed().length
-    );
-  const built = createMemo((): EmailDataSourceItem[] => {
-    const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
-    // A sparse page or an unhydrated final page still has reachable work.
-    if (hasMore())
-      rows.push(
-        createSoupLoadMoreRow({
-          scopeId: 'email:reminders',
-          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
-          isLoading:
-            loadingMore() || collection.isFetchingNextPage || pending(),
-        })
-      );
-    return rows;
-  });
-  const items = createSoupRowStore(built);
-
   // Every caller waits for the same operation, including native row publication.
   // Returning a resolved no-op while a fetch is pending makes detail navigation
   // spin its hasMore loop and can starve the network task itself.
@@ -240,12 +218,55 @@ export function useReminderEmailSource(
     return inFlight;
   };
 
+  const aliasAdvance = advanceEmptyAliasPages({
+    scope,
+    enabled: () => active() && !!state.aliasFilter,
+    ready: () =>
+      queryReadyGate(collection) &&
+      !collection.isFetching &&
+      !loadingMore() &&
+      !pending() &&
+      !hydration().some((query) => query.isFetching) &&
+      !failed().length &&
+      !loadError() &&
+      !collection.error,
+    hasItems: () => entities().length > 0,
+    hasNextPage: () => !!collection.hasNextPage,
+    loadMore,
+  });
+  const error = () =>
+    failed()[0]?.error ??
+    loadError() ??
+    aliasAdvance.error() ??
+    (entities().length === 0 ? (collection.error ?? undefined) : undefined);
+  const hasMore = () =>
+    Boolean(
+      collection.hasNextPage || loadingMore() || pending() || failed().length
+    );
+  const built = createMemo((): EmailDataSourceItem[] => {
+    const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
+    if (hasMore())
+      rows.push(
+        createSoupLoadMoreRow({
+          scopeId: 'email:reminders',
+          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
+          isLoading:
+            loadingMore() || collection.isFetchingNextPage || pending(),
+        })
+      );
+    return rows;
+  });
+  const items = createSoupRowStore(built);
+
   // Optimistic archive/tag changes must remove stale membership immediately.
   // Refill from the authoritative collection once per changed membership, not
   // from an unfiltered native page. Read changes intentionally retain admission.
   let reconciled = '';
   createEffect(() => {
     const currentScope = scope();
+    // The collection is not alias-filtered. Missing alias members are expected,
+    // not stale collection membership; refetching would revisit sparse pages.
+    if (state.aliasFilter) return;
     // An intermediate fetch is not evidence that a mismatch disappeared.
     // Retain the reconciliation signature while any admitted page refreshes.
     if (
@@ -271,7 +292,8 @@ export function useReminderEmailSource(
     const signature = JSON.stringify([currentScope, missing]);
     if (signature === reconciled) return;
     reconciled = signature;
-    if (missing.length && active()) untrack(() => void collection.refetch());
+    if (missing.length && active())
+      untrack(() => fireAndForget(collection.refetch(), 'email-view'));
   });
   createEffect(() => {
     scope();
@@ -285,15 +307,19 @@ export function useReminderEmailSource(
       (state.tab === 'reminders' && enabled().loading) ||
       !ready() ||
       collection.isLoading ||
-      (entities().length === 0 && pending()),
+      (entities().length === 0 && (pending() || aliasAdvance.isFetching())),
     isFetching: () =>
       collection.isFetching || hydration().some((query) => query.isFetching),
     error,
     hasMore,
     isLoadingMore: () =>
       loadingMore() || collection.isFetchingNextPage || pending(),
-    loadMore,
+    loadMore: () => {
+      aliasAdvance.resetError();
+      return loadMore();
+    },
     refresh: async () => {
+      aliasAdvance.resetError();
       setLoadError(undefined);
       await Promise.all([
         collection.refetch(),

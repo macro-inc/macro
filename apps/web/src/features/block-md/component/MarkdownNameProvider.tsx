@@ -21,7 +21,7 @@ export const MarkdownNameProvider: FlowComponent = (props) => {
   // Keep the editable title and the label separate. An empty persisted
   // title is a real editor value so TitleEditor can stay empty and show its
   // placeholder, but surrounding UI should still display the block fallback
-  // such as "New Note" or "New Task".
+  // such as "New Document" or "New Task".
   const { persistedName, fallbackName } = useMarkdownDocument();
   const [optimisticName, setOptimisticName] = createSignal<
     string | undefined

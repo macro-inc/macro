@@ -5,12 +5,26 @@ import * as pulumi from '@pulumi/pulumi';
 import { hasItems } from '../../packages/utils';
 
 const config = new pulumi.Config();
+const BASE_NAME = pulumi.getProject();
 
 const certArn = config.require('certArn');
 const domain = config.require('domain');
 const subdomain = config.require('subdomain');
 const domainName = `${subdomain}.${domain}`;
 const stack = pulumi.getStack();
+// Every CloudFront alias must be covered by certArn, even for redirect-only hosts.
+const enableChatRedirect = config.getBoolean('enableChatRedirect') ?? false;
+const chatSubdomain = enableChatRedirect
+  ? stack === 'prod'
+    ? 'chat'
+    : stack === 'dev'
+      ? `chat-${subdomain}`
+      : undefined
+  : undefined;
+const aliases = stack === 'prod' ? [domainName, domain] : [domainName];
+if (chatSubdomain) {
+  aliases.push(`${chatSubdomain}.${domain}`);
+}
 const staticSiteDir = '../../../apps/marketing/dist';
 
 // The sync never deletes, so an unbuilt dist would "deploy" nothing and still invalidate.
@@ -135,8 +149,6 @@ const wwwRedirectFn = new aws.cloudfront.Function(
   }
 );
 
-const SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL =
-  '78ba335f-4e54-45a3-85d5-1d9933b1363d';
 const SHARED_ARRAY_RESPONSE_HEADERS_NO_CACHE_CONTROL =
   'c9d6f215-ca3d-4c29-8eb4-41ee30fb2129';
 const CACHING_DISABLED = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
@@ -167,22 +179,71 @@ const securityHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   }
 );
 
-const compressibleCachePolicy = new aws.cloudfront.CachePolicy(
-  `cache-policy-${stack}`,
+// Booking links open in a dialog on the website, so macro.com may frame them.
+// Otherwise the same headers as the shared app policy, which denies framing.
+const bookingPageHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
+  `booking-page-headers-${stack}`,
   {
-    parametersInCacheKeyAndForwardedToOrigin: {
-      enableAcceptEncodingGzip: true,
-      enableAcceptEncodingBrotli: true,
-      cookiesConfig: {
-        cookieBehavior: 'none',
+    securityHeadersConfig: {
+      frameOptions: {
+        frameOption: 'SAMEORIGIN',
+        override: true,
       },
-      headersConfig: {
-        headerBehavior: 'none',
-      },
-      queryStringsConfig: {
-        queryStringBehavior: 'none',
+      contentSecurityPolicy: {
+        contentSecurityPolicy: "frame-ancestors 'self'",
+        override: true,
       },
     },
+    customHeadersConfig: {
+      items: [
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+      ],
+    },
+  }
+);
+
+const compressedCacheKey = {
+  enableAcceptEncodingGzip: true,
+  enableAcceptEncodingBrotli: true,
+  cookiesConfig: { cookieBehavior: 'none' },
+  headersConfig: { headerBehavior: 'none' },
+  queryStringsConfig: { queryStringBehavior: 'none' },
+};
+
+const compressibleCachePolicy = new aws.cloudfront.CachePolicy(
+  `cache-policy-${stack}`,
+  { parametersInCacheKeyAndForwardedToOrigin: compressedCacheKey }
+);
+
+// Immutable objects carry their lifetime in S3 metadata. Missing objects and
+// mutable entrypoints must never inherit a one-year browser or edge lifetime.
+const appAssetHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
+  `${BASE_NAME}-app-asset-headers-${stack}`,
+  {
+    name: `${BASE_NAME}-app-asset-headers-${stack}`,
+    customHeadersConfig: {
+      items: [
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+        { header: 'Cache-Control', value: 'no-store', override: false },
+      ],
+    },
+  }
+);
+const appAssetCachePolicy = new aws.cloudfront.CachePolicy(
+  `${BASE_NAME}-app-asset-cache-${stack}`,
+  {
+    minTtl: 0,
+    defaultTtl: 0,
+    maxTtl: 31536000,
+    parametersInCacheKeyAndForwardedToOrigin: compressedCacheKey,
   }
 );
 
@@ -294,15 +355,23 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
     },
     {
       pathPattern: '/app/*.*',
-      responseHeadersPolicyId:
-        SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL,
+      responseHeadersPolicyId: appAssetHeadersPolicy.id,
       targetOriginId: macroWebAppBucketArn,
       viewerProtocolPolicy: 'redirect-to-https',
       allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
       cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
-      cachePolicyId: compressibleCachePolicy.id,
+      cachePolicyId: appAssetCachePolicy.id,
       compress: true,
     },
+    ...['/app/book/*', '/app/booking/*'].map((pathPattern) => ({
+      pathPattern,
+      targetOriginId: macroWebAppRouteLambdaId,
+      cachePolicyId: CACHING_DISABLED,
+      responseHeadersPolicyId: bookingPageHeadersPolicy.id,
+      viewerProtocolPolicy: 'redirect-to-https',
+      allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+    })),
     {
       pathPattern: '/app',
       targetOriginId: macroWebAppBucketArn,
@@ -344,18 +413,18 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
       },
     },
   ],
+  // A transient missing upload must not remain an edge error after publication.
+  customErrorResponses: [403, 404, 500, 502, 503, 504].map((errorCode) => ({
+    errorCode,
+    errorCachingMinTtl: 0,
+  })),
   restrictions: {
     geoRestriction: {
       restrictionType: 'none',
     },
   },
   priceClass: stack === 'prod' ? 'PriceClass_All' : 'PriceClass_100',
-  aliases:
-    stack === 'prod'
-      ? [domainName, domain, `chat.${domain}`]
-      : stack === 'dev'
-        ? [domainName, `chat-${domainName}`]
-        : [domainName],
+  aliases,
   viewerCertificate: {
     cloudfrontDefaultCertificate: false,
     acmCertificateArn: certArn,
@@ -390,19 +459,6 @@ if (stack === 'prod') {
       },
     ],
   });
-
-  new aws.route53.Record('chat', {
-    name: 'chat',
-    zoneId: zone.zoneId,
-    type: 'A',
-    aliases: [
-      {
-        name: cdn.domainName,
-        zoneId: cdn.hostedZoneId,
-        evaluateTargetHealth: true,
-      },
-    ],
-  });
 }
 
 if (stack === 'dev') {
@@ -413,9 +469,11 @@ if (stack === 'dev') {
     records: ['macro-site-solidify.pages.dev'],
     ttl: 300,
   });
+}
 
-  new aws.route53.Record('chat-dev', {
-    name: 'chat-dev',
+if (chatSubdomain) {
+  new aws.route53.Record(chatSubdomain, {
+    name: chatSubdomain,
     zoneId: zone.zoneId,
     type: 'A',
     aliases: [

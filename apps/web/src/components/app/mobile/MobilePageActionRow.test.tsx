@@ -1,4 +1,7 @@
-import type { MobileNavViewId } from '@components/app/mobile/mobile-nav-views';
+import {
+  MOBILE_NAV_VIEW_IDS,
+  type MobileNavViewId,
+} from '@components/app/mobile/mobile-nav-views';
 import {
   cleanup,
   fireEvent,
@@ -15,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   mountComposer: vi.fn(),
   unmountComposer: vi.fn(),
   view: 'mail' as MobileNavViewId | undefined,
+  viewAccessor: undefined as (() => MobileNavViewId | undefined) | undefined,
   createItem: vi.fn(),
   createMenu: vi.fn(),
   openEvent: vi.fn(),
@@ -49,19 +53,20 @@ vi.mock(
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => () => true,
 }));
-vi.mock('@app/features/crm/crm-create', () => ({
+vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: mocks.openCompany,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
 }));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@components/app/mobile/use-mobile-nav', () => ({
-  useForegroundMobileView: () => () => mocks.view,
+  useForegroundMobileView: () => () =>
+    mocks.viewAccessor ? mocks.viewAccessor() : mocks.view,
   useMobileNavNavigate: () => vi.fn(),
 }));
 vi.mock('@components/app/mobile/mobile-dock-views', () => ({
   useMobileDockViews: () => () => [],
-}));
-vi.mock('@components/app/mobile/PillTabs', () => ({
-  PillTabs: () => <div role="tablist" aria-label="Search scopes" />,
 }));
 vi.mock('@components/app/mobile/MobileDockIsland', () => ({
   MobileDockIsland: (props: { children: import('solid-js').JSX.Element }) => (
@@ -90,7 +95,6 @@ import type { CreatableBlock } from '@app/features/command/types';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
-import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { mobilePageCreateBlock } from '@components/app/mobile/mobile-page-create-action';
 import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { MobilePageActionRow } from './MobilePageActionRow';
@@ -105,6 +109,7 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.view = 'mail';
+  mocks.viewAccessor = undefined;
   setVirtualKeyboardVisible(false);
   SearchState.close();
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -131,6 +136,7 @@ describe('Mobile page action row', () => {
   it.each(['input', 'textarea', 'contenteditable'] as const)(
     'hides while an outside %s is focused and preserves the AI draft',
     (kind) => {
+      mocks.view = 'agents';
       render(() => <MobilePageActionRow />);
       const draft = screen.getByRole('textbox', {
         name: 'Chat draft',
@@ -171,6 +177,7 @@ describe('Mobile page action row', () => {
   );
 
   it('starts hidden when another field is already focused and returns for a non-editable control', () => {
+    mocks.view = 'agents';
     render(() => (
       <>
         <input aria-label="Email subject" />
@@ -186,10 +193,11 @@ describe('Mobile page action row', () => {
   });
 
   it('starts compact and yields to screen-specific controls, then returns', () => {
+    mocks.view = 'agents';
     const page = render(() => <MobilePageActionRow />);
     const draft = screen.getByRole('textbox', { name: 'Chat draft' });
     fireEvent.input(draft, { target: { value: 'Keep this draft' } });
-    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     const reply = render(() => (
       <FloatRegion region="accessory">
         <button>Reply</button>
@@ -204,7 +212,7 @@ describe('Mobile page action row', () => {
     expect(mocks.mountComposer).toHaveBeenCalledOnce();
     expect(mocks.unmountComposer).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     page.unmount();
     expect(mocks.unmountComposer).toHaveBeenCalledOnce();
   });
@@ -213,7 +221,11 @@ describe('Mobile page action row', () => {
     // Mount the fallback last to ensure priority, rather than mount order, wins.
     render(() => (
       <>
-        <MobileViewsRow />
+        <FloatRegion
+          region="accessory"
+          priority={100}
+          active={SearchState.isOpen}
+        />
         <FloatRegion region="accessory" active={canComment}>
           <button>Leave a comment</button>
         </FloatRegion>
@@ -226,7 +238,7 @@ describe('Mobile page action row', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
 
     SearchState.open();
-    expect(screen.getByRole('tablist', { name: 'Search scopes' })).toBeTruthy();
+    expect(mount.textContent).toBe('');
     expect(
       screen.queryByRole('button', { name: 'Leave a comment' })
     ).toBeNull();
@@ -238,14 +250,14 @@ describe('Mobile page action row', () => {
       screen.getByRole('button', { name: 'Leave a comment' })
     ).toBeTruthy();
     setCanComment(false);
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
 
     SearchState.open();
-    expect(screen.getByRole('tablist', { name: 'Search scopes' })).toBeTruthy();
+    expect(mount.textContent).toBe('');
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     SearchState.close();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     setCanComment(true);
     expect(
       screen.getByRole('button', { name: 'Leave a comment' })
@@ -282,7 +294,7 @@ describe('Mobile page action row', () => {
     ['tasks', 'Task'],
     ['documents', 'Document'],
     ['channels', 'Message'],
-  ] as const)('keeps New on %s alongside the AI composer', (view, label) => {
+  ] as const)('keeps New on %s without the AI composer', (view, label) => {
     mocks.view = view;
     render(() => <MobilePageActionRow />);
     const createButton = screen.getByRole('button', {
@@ -292,7 +304,7 @@ describe('Mobile page action row', () => {
     fireEvent.click(createButton);
     expect(mocks.createItem).toHaveBeenCalledWith(label);
     expect(mocks.send).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
   });
   it('shows only the AI composer on Agents, without a redundant create button', () => {
     mocks.view = 'agents';
@@ -300,7 +312,7 @@ describe('Mobile page action row', () => {
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
   });
-  it('opens company creation from CRM alongside the AI composer', () => {
+  it('opens company creation from CRM without the AI composer', () => {
     mocks.view = 'companies';
     render(() => <MobilePageActionRow />);
     const createButton = screen.getByRole('button', { name: 'New company' });
@@ -308,7 +320,7 @@ describe('Mobile page action row', () => {
     fireEvent.click(createButton);
     expect(mocks.openCompany).toHaveBeenCalledOnce();
     expect(mocks.createMenu).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
   });
   it('opens the event composer from the Calendar New menu', async () => {
     mocks.view = 'calendar';
@@ -364,14 +376,70 @@ describe('Mobile page action row', () => {
       expect(mocks.send).not.toHaveBeenCalled();
     }
   );
-  it('hides only the page action while the keyboard is visible', () => {
+  it.each(['input', 'textarea', 'contenteditable'] as const)(
+    'restores New when a focused %s is removed without a blur event',
+    async (kind) => {
+      render(() => <MobilePageActionRow />);
+      const ancestor = document.createElement('div');
+      const wrapper = document.createElement('div');
+      const editor = document.createElement(
+        kind === 'contenteditable' ? 'div' : kind
+      );
+      if (kind === 'contenteditable') {
+        editor.setAttribute('contenteditable', 'true');
+        editor.tabIndex = 0;
+      }
+      wrapper.append(editor);
+      ancestor.append(wrapper);
+      document.body.append(ancestor);
+      editor.focus();
+      setVirtualKeyboardVisible(true);
+      expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
+      // Removing a focused subtree need not dispatch focusout (including iOS
+      // search teardown and navigation away from an editor).
+      const focusout = vi.fn();
+      editor.addEventListener('focusout', focusout);
+      ancestor.remove();
+      expect(focusout).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(document.body);
+      setVirtualKeyboardVisible(false);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy()
+      );
+    }
+  );
+
+  it('hides the non-AI page action while the keyboard is visible', () => {
     render(() => <MobilePageActionRow />);
-    const draft = screen.getByRole('textbox', { name: 'Chat draft' });
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
     setVirtualKeyboardVisible(true);
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBe(draft);
+    expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
     setVirtualKeyboardVisible(false);
     expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
-    expect(mocks.mountComposer).toHaveBeenCalledOnce();
+    expect(mocks.mountComposer).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ...MOBILE_NAV_VIEW_IDS.filter((view) => view !== 'agents'),
+    undefined,
+  ])('does not mount a floating AI composer on %s', (view) => {
+    mocks.view = view;
+    render(() => <MobilePageActionRow />);
+    expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+    expect(mocks.mountComposer).not.toHaveBeenCalled();
+  });
+
+  it('reacts to navigation into and out of Agents', () => {
+    const [view, setView] = createSignal<MobileNavViewId>('home');
+    mocks.viewAccessor = view;
+    render(() => <MobilePageActionRow />);
+    expect(mocks.mountComposer).not.toHaveBeenCalled();
+    setView('agents');
+    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
+    setView('mail');
+    expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
   });
 });

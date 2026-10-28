@@ -87,6 +87,9 @@ pub fn validate_profile(profile: &Profile, team: bool) -> Result<(), Error> {
         {
             return invalid("Scheduling type does not match the profile");
         }
+        if event.macro_call && event.google_meet {
+            return invalid("Choose either a Macro call or Google Meet");
+        }
         if event.questions.len() > 20
             || event
                 .questions
@@ -193,6 +196,9 @@ pub fn slots_for_date(
     now: DateTime<Utc>,
     busy: &[BusyRange],
 ) -> Result<Vec<Slot>, Error> {
+    if busy.iter().any(|interval| interval.end < interval.start) {
+        return Err(Error::CalendarUnavailable);
+    }
     if !event.enabled {
         return Ok(vec![]);
     }
@@ -224,7 +230,10 @@ pub fn slots_for_date(
                 .iter()
                 .filter(|host| {
                     !busy.iter().any(|b| {
-                        &b.host == *host && b.start < occupied_end && b.end > occupied_start
+                        &b.host == *host
+                            && b.start < b.end
+                            && b.start < occupied_end
+                            && b.end > occupied_start
                     })
                 })
                 .cloned()

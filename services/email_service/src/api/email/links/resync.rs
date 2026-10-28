@@ -1,20 +1,17 @@
 use crate::api::context::{ApiContext, AuthorizationService};
-use crate::api::email::links::access::{InboxActionError, authorize_inbox_access};
-use anyhow::Context;
+use crate::api::email::links::access::InboxActionError;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Json, Response};
+use email::domain::mailbox::lifecycle::InboxActor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
-};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// The response returned from the resync endpoint.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct ResyncResponse {
-    /// The backfill job driving the (re-)sync. Either the freshly enqueued job or
+    /// Opaque ID of the backfill job or provider sync stream driving the resync.
     /// the one already in progress.
     pub backfill_job_id: Uuid,
     /// True when a backfill was already running and this call was a no-op.
@@ -47,70 +44,19 @@ pub async fn resync_link_handler(
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
-    let (link, _access) = authorize_inbox_access(
-        &ctx,
-        &authorization.authorization.user.user_context.user_id,
-        link_id,
-    )
-    .await?;
-
-    if let Some(active) =
-        email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
-            .await
-            .context("failed to check active backfill job")?
-    {
-        return Ok(Json(ResyncResponse {
-            backfill_job_id: active.id,
-            already_in_progress: true,
-        })
-        .into_response());
-    }
-
-    let Some(backfill_job) = email_db_client::backfill::job::insert::create_backfill_job(
-        &ctx.db,
-        link.id,
-        link.fusionauth_user_id.as_str(),
-        None,
-        false,
-    )
-    .await
-    .context("failed to create backfill job")?
-    else {
-        // A concurrent request started the backfill between the check above and here.
-        let active = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
-            .await
-            .context("failed to fetch active backfill job after insert conflict")?
-            .context("backfill insert conflicted but no active job found")?;
-        return Ok(Json(ResyncResponse {
-            backfill_job_id: active.id,
-            already_in_progress: true,
-        })
-        .into_response());
+    let actor = InboxActor {
+        macro_id: authorization.authorization.user.macro_user_id.clone(),
+        credential_owner: authorization
+            .authorization
+            .user
+            .user_context
+            .fusion_user_id
+            .to_string(),
     };
-
-    let ps_message = BackfillPubsubMessage {
-        backfill_operation: BackfillOperation::Init(JobScopedPayload {
-            link_id: link.id,
-            job_id: backfill_job.id,
-            payload: InitPayload {},
-        }),
-    };
-
-    if let Err(e) = ctx
-        .sqs_client
-        .enqueue_email_backfill_message(ps_message)
-        .await
-    {
-        email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
-            .await
-            .context("failed to persist backfill publication failure")?;
-
-        return Err(e.context("failed to enqueue backfill message").into());
-    }
-
+    let result = ctx.inbox_lifecycle.resync(&actor, link_id).await?;
     Ok(Json(ResyncResponse {
-        backfill_job_id: backfill_job.id,
-        already_in_progress: false,
+        backfill_job_id: result.run_id,
+        already_in_progress: result.already_in_progress,
     })
     .into_response())
 }

@@ -81,3 +81,12 @@ pub trait SoupRealtimePublisher: Send + Sync + 'static {
         message: SoupRealtimeMessage,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
+
+/// Finds session entities whose displayed PR metadata depends on a pull request.
+pub trait PullRequestSessions: Send + Sync + 'static {
+    /// Return linked sessions; recipients must still be resolved using each session's access.
+    fn linked_sessions(
+        &self,
+        github_key: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
+}

@@ -1,8 +1,4 @@
 import {
-  CLAUDE_BOT_NAME,
-  CLAUDE_BOT_PRINCIPAL_ID,
-} from '@core/constant/claudeAgent';
-import {
   CODEX_BOT_NAME,
   CODEX_BOT_PRINCIPAL_ID,
 } from '@core/constant/codexAgent';
@@ -14,10 +10,6 @@ import {
   MACRO_AGENT_NAME,
   MACRO_AGENT_PRINCIPAL_ID,
 } from '@core/constant/macroAgent';
-import {
-  MACRO_CODER_NAME,
-  MACRO_CODER_PRINCIPAL_ID,
-} from '@core/constant/macroCoder';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { IUser } from '@core/user/types';
 
@@ -53,21 +45,8 @@ export function macroMentionUser(agentSessions: boolean): IUser {
 }
 
 /**
- * A synthetic [`IUser`] entry so Macro Coder appears in the channel
- * `@`-mention typeahead, exactly like [`macroMentionUser`]. Mentioning it
- * opens a sandboxed coding-agent session rather than a chat reply.
- */
-export function macroCoderMentionUser(): IUser {
-  return {
-    id: MACRO_CODER_PRINCIPAL_ID,
-    name: MACRO_CODER_NAME,
-    email: MACRO_CODER_NAME,
-  };
-}
-
-/**
  * The Cursor bot as a synthetic mention user, exactly like
- * [`macroCoderMentionUser`]. Mentioning it opens an agent session served by
+ * [`macroMentionUser`]. Mentioning it opens an agent session served by
  * a Cursor cloud agent.
  */
 export function cursorMentionUser(): IUser {
@@ -84,14 +63,5 @@ export function codexMentionUser(): IUser {
     id: CODEX_BOT_PRINCIPAL_ID,
     name: CODEX_BOT_NAME,
     email: CODEX_BOT_NAME,
-  };
-}
-
-/** Claude as a bot mention, using the canonical principal identifier. */
-export function claudeMentionUser(): IUser {
-  return {
-    id: CLAUDE_BOT_PRINCIPAL_ID,
-    name: CLAUDE_BOT_NAME,
-    email: CLAUDE_BOT_NAME,
   };
 }

@@ -2,23 +2,38 @@ import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitPanel } from '@components/app/split-panel';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { Permissions } from '@core/component/SharePermissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
+import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
+import IconShared from '@icon/share.svg';
+import IconLink from '@icon/system/regular/link.svg';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
   useRefreshGithubPullRequest,
 } from '@queries/storage/github-pull-requests';
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
-import { useQueryClient } from '@tanstack/solid-query';
-import { Button, cn, Layer, Scroll } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  CopyButton,
+  cn,
+  Layer,
+  Scroll,
+  Tooltip,
+} from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
-import { MergePullRequestButton } from '../component/MergePullRequestButton';
+import { confirmMergePullRequest } from '../component/MergePullRequestButton';
 import { PrChangesProvider } from '../component/PrChanges';
 import {
   PrDescriptionSkeleton,
@@ -32,14 +47,20 @@ import {
   PrStatusIcon,
 } from '../component/PrStatus';
 import { PrTimeline } from '../component/PrTimeline';
+import { PullRequestActionsButton } from '../component/PullRequestActionsButton';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import {
-  invalidatePrForeignEntity,
   type PrForeignEntityData,
   prForeignEntityQueryKey,
   usePrForeignEntityQuery,
 } from '../data/queries';
+import { usePrShare } from '../hooks/usePrShare';
+import {
+  createPrActions,
+  type PrActions,
+} from '../primitives/create-pr-actions';
+import { usePrFileOperations } from '../primitives/pr-file-operations';
 import {
   cleanGithubMarkdown,
   githubAvatarUrl,
@@ -50,7 +71,6 @@ import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
 /** Share PR query state without coupling the host's header to the detail body. */
 export function usePrDetail(foreignEntityId: Accessor<string>) {
-  const queryClient = useQueryClient();
   const query = usePrForeignEntityQuery(foreignEntityId);
   // Detail-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
@@ -61,15 +81,6 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
     return pullRequest?.additions != null && pullRequest.deletions != null
       ? { additions: pullRequest.additions, deletions: pullRequest.deletions }
       : undefined;
-  };
-  const invalidateRefreshedPullRequest = async () => {
-    const id = foreignEntityId();
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) }),
-      queryClient.invalidateQueries({
-        queryKey: githubPullRequestChangesKeys.summary(id).queryKey,
-      }),
-    ]);
   };
   useRefreshGithubPullRequest(
     () => {
@@ -84,7 +95,13 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
         url: pullRequest.url,
       };
     },
-    () => void invalidateRefreshedPullRequest()
+    () => {
+      const id = foreignEntityId();
+      return [
+        prForeignEntityQueryKey(id),
+        githubPullRequestChangesKeys.summary(id).queryKey,
+      ];
+    }
   );
   return { query, data, discussionSource, changeCounts };
 }
@@ -160,7 +177,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
 /** Native hosts place this content below their header inside `PrChangesProvider`. */
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
-    <div class="relative min-h-0 min-w-0 flex-1">
+    <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
@@ -190,26 +207,53 @@ export function PrDetailContent(props: PrDetailBodyProps) {
   );
 }
 
-export function PrDetailActions(props: { detail?: PrForeignEntityData }) {
+export function PrDetailActions(props: {
+  detail?: PrForeignEntityData;
+  actions: PrActions;
+}) {
+  const { openShare, copyLink, ShareModal } = usePrShare(
+    () => props.detail?.id ?? '',
+    () => props.detail?.pullRequest.name ?? 'Pull request'
+  );
+
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
       <Show when={props.detail}>
-        {(detail) => (
-          <MergePullRequestButton
-            target={{ ...detail().prRef, title: detail().pullRequest.name }}
-            status={detail().pullRequest.status}
-            onMerged={() => invalidatePrForeignEntity(detail().id)}
-          />
-        )}
+        <HeaderActionGroup label="Sharing">
+          <Tooltip label="Share pull request">
+            <HeaderActionButton
+              grouped
+              label="Share"
+              icon={
+                <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
+              onClick={openShare}
+            />
+          </Tooltip>
+          <CopyButton
+            as={ButtonGroup.Button}
+            variant="ghost"
+            aria-label="Copy Share Link"
+            tooltip="Copy Share Link"
+            size="icon-sm"
+            onClick={copyLink}
+          >
+            <IconLink class="size-3.5" />
+          </CopyButton>
+        </HeaderActionGroup>
+        <PullRequestActionsButton actions={props.actions} />
       </Show>
       <ChangesToggle />
       <SidePanel.Toggle />
+      <ShareModal />
     </div>
   );
 }
 
 export function StandalonePrDetail(props: { foreignEntityId: string }) {
   const detail = usePrDetail(() => props.foreignEntityId);
+  const actions = createPrActions(detail.data, confirmMergePullRequest);
+  const operations = usePrFileOperations(detail.data, actions);
   const name = () => {
     const data = detail.data();
     return (
@@ -231,7 +275,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
       >
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex">
+            <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
               <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
               <Show when={detail.data()?.pullRequest.status}>
                 {(status) => <PrStatusIcon status={status()} />}
@@ -239,14 +283,24 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
               <span class="min-w-0 truncate text-sm font-semibold">
                 {name()}
               </span>
-              <PrDetailActions detail={detail.data()} />
+              <div class="shrink-0">
+                <SplitFileMenu
+                  id={props.foreignEntityId}
+                  itemType="foreign"
+                  name={name()}
+                  entityKind="pr"
+                  permissions={Permissions.CAN_VIEW}
+                  ops={operations()}
+                />
+              </div>
+              <PrDetailActions detail={detail.data()} actions={actions} />
             </ViewShell.TopBar>
             <PrDetailContent
               foreignEntityId={props.foreignEntityId}
               data={detail.data()}
               status={detail.query.status}
               discussionSource={detail.discussionSource}
-              onRetry={() => void detail.query.refetch()}
+              onRetry={() => fireAndForget(detail.query.refetch(), 'pr-detail')}
             />
           </div>
         </ChangesSplit>
@@ -343,6 +397,12 @@ function PrMetadata(props: {
           </Show>
         </Layer>
       </Show>
+      <Layer depth={2}>
+        <PrAgentSessionsChip
+          url={props.pullRequest?.url ?? prHtmlUrl(props.prRef)}
+          class="border-edge-muted bg-surface px-2 text-sm font-normal"
+        />
+      </Layer>
       <GithubLabelPills
         labels={props.pullRequest?.labels ?? []}
         class="contents"
@@ -377,7 +437,7 @@ function PrLoadErrorBanner(props: { onRetry: () => void }) {
   return (
     <div class="mt-6 flex flex-col items-start gap-3 rounded-lg border border-edge-muted px-3 py-2 text-xs text-ink-muted">
       <span>Couldn't load this pull request from cached GitHub data.</span>
-      <Button variant="outline" size="sm" onClick={props.onRetry}>
+      <Button variant="secondary" size="sm" onClick={props.onRetry}>
         Retry
       </Button>
     </div>

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::document::FileType;
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConvertRequest {
     /// The bucket of the current item
@@ -26,4 +28,11 @@ pub struct ConvertQueueMessage {
     pub from_key: String,
     /// The destination key of the current item we are converting
     pub to_key: String,
+    /// The source file type, for keys without an extension such as
+    /// versioned document keys. Falls back to the `from_key` extension.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_file_type: Option<FileType>,
+    /// The target file type. Falls back to the `to_key` extension.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_file_type: Option<FileType>,
 }

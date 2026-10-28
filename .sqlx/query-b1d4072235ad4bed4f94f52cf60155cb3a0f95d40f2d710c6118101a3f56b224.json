@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, amount_cents, stripe_invoice_id, status::text AS \"status!\",\n                   (status = 'pending'\n                    AND stripe_invoice_id IS NULL\n                    AND updated_at < NOW() - INTERVAL '10 minutes') AS \"orphaned!\"\n            FROM ai_credit_reload\n            WHERE user_id = $1\n              AND (status = 'pending'\n                   OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))\n            ORDER BY created_at\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "stripe_invoice_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "orphaned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "b1d4072235ad4bed4f94f52cf60155cb3a0f95d40f2d710c6118101a3f56b224"
+}

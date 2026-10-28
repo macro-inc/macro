@@ -1,3 +1,4 @@
+import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -21,7 +22,10 @@ import {
 } from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
+import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
+import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import {
@@ -45,7 +49,7 @@ import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/view
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
   markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -57,6 +61,7 @@ import {
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -91,15 +96,15 @@ import {
   type SearchLocation,
 } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import InfoIcon from '@phosphor/info.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import Spinner from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Layer, Tooltip } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -171,6 +176,10 @@ const MobileTabLoadingBar = () => (
 );
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+
+const reportSoupViewError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'soup-view' });
+
 /** The row components a soup view can render. */
 type SoupRowComponent =
   | typeof ListEntity
@@ -232,6 +241,13 @@ interface SoupViewProps {
   additionalEntities?: Accessor<EntityData[]>;
   /** The view's tour, e.g. `<ViewTour tour={callsTour} />`. */
   tour?: JSX.Element;
+  /**
+   * Replaces the split-header title, tabs, search, and filter toolbar for
+   * views that compose their own chrome (e.g. a sidebar layout).
+   */
+  header?: JSX.Element;
+  /** Compose a detail outlet while keeping the list's state initialized. */
+  renderContent?: (list: () => JSX.Element) => JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -305,10 +321,7 @@ export const SoupView = (props: SoupViewProps) => {
         : undefined;
       let initialActiveTab = persistedActiveTab ?? persistedViewActiveTab;
 
-      if (
-        (initialActiveTab === undefined || contentId === 'reminders') &&
-        isListViewID(contentId)
-      ) {
+      if (initialActiveTab === undefined && isListViewID(contentId)) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
       }
 
@@ -359,8 +372,8 @@ export const SoupView = (props: SoupViewProps) => {
     return view ? LIST_VIEW_DOCS_URL[view] : undefined;
   });
 
-  const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
+  const [filterOpen, setFilterOpen] = createSignal(false);
+  let focusSearch: (() => void) | undefined;
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -369,8 +382,9 @@ export const SoupView = (props: SoupViewProps) => {
     registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
-      if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
-      setNarrowSearchExpanded(true);
+      // The Search view's own field owns the shortcut.
+      if (isTouchDevice() || isComponentListView('search')) return false;
+      focusSearch?.();
       return true;
     },
   });
@@ -380,15 +394,14 @@ export const SoupView = (props: SoupViewProps) => {
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <Show when={true}>
+      <Show when={props.header === undefined} fallback={props.header}>
         <div class="flex flex-col w-full">
           <SplitHeaderLeft>
             <div
               class={cn(
                 'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
                 {
-                  'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
-                  'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                  'shrink-0': !isTouchDevice(),
                   'w-full flex-1 min-w-0': isTouchDevice(),
                 }
               )}
@@ -399,27 +412,26 @@ export const SoupView = (props: SoupViewProps) => {
               <Show when={isTouchDevice()}>
                 <MobileSoupViewTabs />
               </Show>
-              <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
+              <Show when={!isTouchDevice()}>
                 <div class="flex items-center gap-1">
                   <span class="text-sm font-semibold">{props.viewName}</span>
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
-                        size="icon-md"
+                        aria-label="View documentation"
+                        tooltip="View documentation"
+                        size="icon-sm"
                         variant="ghost"
-                        class="p-0.5 text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
-                        label="View documentation"
+                        class="@max-[380px]/split-header:hidden"
                         onClick={() => openExternalUrl(url())}
                       >
-                        <InfoIcon class="size-3.5" />
+                        <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                       </Button>
                     )}
                   </Show>
                 </div>
               </Show>
-              <Show
-                when={!narrowSearchExpanded() && !isComponentListView('search')}
-              >
+              <Show when={!isComponentListView('search')}>
                 <Show when={!isTouchDevice()}>
                   <CollapsibleHeaderItem
                     id="tabs"
@@ -437,40 +449,13 @@ export const SoupView = (props: SoupViewProps) => {
                   </CollapsibleHeaderItem>
                 </Show>
               </Show>
-              <Show
-                when={
-                  !isTouchDevice() &&
-                  !narrowSearchExpanded() &&
-                  isComponentListView('mail')
-                }
-              >
+              <Show when={!isTouchDevice() && isComponentListView('mail')}>
                 <InboxSelector />
               </Show>
             </div>
           </SplitHeaderLeft>
           <Show when={!isTouchDevice()}>
             <SplitHeaderRight>
-              <Show
-                when={
-                  !narrowSearchExpanded() &&
-                  !isComponentListView('search') &&
-                  props.showCreateButton !== false
-                }
-              >
-                <SoupViewCreateButton />
-              </Show>
-              <Show when={narrowSearchExpanded()}>
-                <Layer depth={2}>
-                  <div class="flex-1 min-w-0">
-                    <SoupSearchbar
-                      variant="secondary"
-                      autoFocus
-                      initialValue={props.initialSearchText}
-                      onDismiss={() => setNarrowSearchExpanded(false)}
-                    />
-                  </div>
-                </Layer>
-              </Show>
               <Show
                 when={!isComponentListView('search')}
                 fallback={
@@ -488,47 +473,33 @@ export const SoupView = (props: SoupViewProps) => {
                   </>
                 }
               >
-                <Show when={!narrowSearchExpanded()}>
-                  <CollapsibleHeaderItem
-                    id="search"
-                    priority={0}
-                    onCollapsedChange={(isCollapsed) => {
-                      setSearchIsCollapsed(isCollapsed);
-                      if (!isCollapsed) setNarrowSearchExpanded(false);
-                    }}
-                  >
-                    {(isCollapsed) => (
-                      <Show
-                        when={!isCollapsed()}
-                        fallback={
-                          <Tooltip
-                            label="Search"
-                            hotkey={TOKENS.soup.openSearch}
-                          >
-                            <Button
-                              size="icon-md"
-                              variant="outline"
-                              class="p-1 size-7 ml-2"
-                              onClick={() => setNarrowSearchExpanded(true)}
-                              depth={2}
-                            >
-                              <SearchIcon class="size-4 touch:size-6" />
-                            </Button>
-                          </Tooltip>
-                        }
-                      >
-                        <Layer depth={2}>
-                          <div class="w-60 ml-2">
-                            <SoupSearchbar
-                              variant="secondary"
-                              initialValue={props.initialSearchText}
-                            />
-                          </div>
-                        </Layer>
-                      </Show>
-                    )}
-                  </CollapsibleHeaderItem>
+                <Show when={props.filterBarVariant !== 'tag'}>
+                  <HeaderActionGroup label="Filters">
+                    <UnifiedFilterDropdown
+                      grouped
+                      hideLabel
+                      variant="ghost"
+                      open={filterOpen}
+                      onOpenChange={setFilterOpen}
+                    />
+                  </HeaderActionGroup>
                 </Show>
+                <HeaderActionGroup label="View options">
+                  <Show when={!isComponentListView('home')}>
+                    <SoupViewContextSort grouped />
+                  </Show>
+                  <SoupViewContextGroup grouped hideLabel variant="ghost" />
+                </HeaderActionGroup>
+                <Show when={props.showCreateButton !== false}>
+                  <SoupViewCreateButton />
+                </Show>
+                <ListHeaderSearch
+                  label={`Search ${props.viewName}`}
+                  value={soupView.searchText()}
+                  onValueChange={soupView.setSearchText}
+                  onEscape={() => panel.panelRef()?.focus()}
+                  registerFocus={(focus) => (focusSearch = focus)}
+                />
               </Show>
             </SplitHeaderRight>
           </Show>
@@ -552,7 +523,8 @@ export const SoupView = (props: SoupViewProps) => {
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isHomeView() &&
-            !isComponentListView('search')
+            !isComponentListView('search') &&
+            !isComponentListView('calls')
           }
         >
           <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
@@ -564,7 +536,7 @@ export const SoupView = (props: SoupViewProps) => {
       </Suspense>
     </div>
   );
-  return content();
+  return props.renderContent ? props.renderContent(content) : content();
 };
 
 interface SoupViewListProps {
@@ -573,7 +545,12 @@ interface SoupViewListProps {
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
-  emptyState?: () => JSX.Element;
+  emptyState?: (state: {
+    filtered: boolean;
+    clearFilters: () => void;
+  }) => JSX.Element;
+  loadingContent?: JSX.Element;
+  errorContent?: (retry: () => void) => JSX.Element;
   emptyContent?: JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -609,6 +586,8 @@ export const SoupViewList = (props: SoupViewListProps) => (
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
+      loadingContent={props.loadingContent}
+      errorContent={props.errorContent}
       emptyContent={props.emptyContent}
     />
   </SoupRowMetadataProvider>
@@ -810,7 +789,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     userId,
     notificationSource: () => notificationSource,
   });
-  const markNotDoneAction = makeMarkNotDoneAction({
+  const _markNotDoneAction = makeMarkNotDoneAction({
     notificationSource: () => notificationSource,
   });
 
@@ -822,7 +801,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     )
       return;
 
-    source.fetchNextPage();
+    source.fetchNextPage().catch(reportSoupViewError);
   }, 15);
 
   type EntityClickArgs = {
@@ -853,7 +832,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    markReminderSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1152,7 +1131,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     ref={setEmptyStateRef}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
-                    <LoadErrorPanel onRetry={retryLoad} />
+                    {props.errorContent ? (
+                      props.errorContent(retryLoad)
+                    ) : (
+                      <LoadErrorPanel onRetry={retryLoad} />
+                    )}
                   </div>
                 </Match>
                 <Match
@@ -1164,7 +1147,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
                   <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                    <LoadingBlock />
+                    {props.loadingContent ?? <LoadingBlock />}
                   </div>
                 </Match>
                 <Match
@@ -1185,7 +1168,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <Show
-                      when={!searchText() && props.emptyState}
+                      when={props.emptyState}
                       fallback={
                         <EmptyState
                           content={props.emptyContent}
@@ -1197,7 +1180,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         />
                       }
                     >
-                      {(emptyState) => emptyState()()}
+                      {(emptyState) =>
+                        emptyState()({
+                          filtered: hasActiveRefinements(),
+                          clearFilters: resetToTabDefaults,
+                        })
+                      }
                     </Show>
                   </div>
                 </Match>
@@ -1225,7 +1213,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       onSwipeLeft={(entityId) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return;
-                        markDoneAction.executeWithSoup([entity.original], soup);
+                        markDoneAction
+                          .executeWithSoup([entity.original], soup)
+                          .catch(reportSoupViewError);
                       }}
                       setCollapseEntity={soup.collapseEntity.set}
                     >
@@ -1236,7 +1226,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                           soupNavigationTouchHighlight(el);
                         }}
                         scrollerRef={setListScrollerRef}
-                        virtualizerClass={'scrollbar-hidden space-y-2'}
+                        virtualizerClass="scrollbar-hidden space-y-2"
                         class="overflow-hidden flex min-w-0"
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
@@ -1332,9 +1322,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="outline"
-                                              size="sm"
-                                              depth={2}
+                                              variant="secondary"
+                                              size="xs"
                                               class={cn({
                                                 'bg-surface': !highlighted(),
                                                 'border-transparent':
@@ -1348,16 +1337,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="outline"
-                                            size="sm"
-                                            depth={2}
+                                            variant="secondary"
+                                            size="xs"
                                             class={cn({
                                               'bg-surface': !highlighted(),
                                               'border-transparent':
                                                 highlighted(),
                                             })}
                                             onClick={() => {
-                                              fetchNextGroupPage(group().key);
+                                              fetchNextGroupPage(
+                                                group().key
+                                              ).catch(reportSoupViewError);
                                             }}
                                           >
                                             <CaretDownIcon class="size-2.5" />
@@ -1385,24 +1375,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         source.deferRowInteractions?.() === true
                                       }
                                       entity={row.original}
-                                      onToggleReminderDone={
-                                        row.original.type === 'reminder'
-                                          ? async () => {
-                                              if (
-                                                row.original.type !== 'reminder'
-                                              )
-                                                return;
-                                              if (row.original.completedAt)
-                                                await markNotDoneAction.execute(
-                                                  [row.original]
-                                                );
-                                              else
-                                                await markDoneAction.execute([
-                                                  row.original,
-                                                ]);
-                                            }
-                                          : undefined
-                                      }
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {
@@ -1437,7 +1409,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           event,
                                           location: undefined,
                                           rowIndex: row.index,
-                                        });
+                                        }).catch(reportSoupViewError);
                                       }}
                                       onProjectClick={(
                                         projectEntity,
@@ -1450,7 +1422,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           event,
                                           location: undefined,
                                           rowIndex: row.index,
-                                        });
+                                        }).catch(reportSoupViewError);
                                       }}
                                       onContentHitClick={(
                                         e: PointerEvent | MouseEvent,
@@ -1462,7 +1434,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           event: e,
                                           location,
                                           rowIndex: row.index,
-                                        });
+                                        }).catch(reportSoupViewError);
                                       }}
                                       entityRowConfig={{
                                         swipeLeftColor: 'bg-success',

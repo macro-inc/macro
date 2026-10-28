@@ -76,7 +76,10 @@ type BuildCatalog = (schema: Schema, scope?: string) => Promise<Catalog>;
 export interface DatabaseSqlQueryCapabilities {
   client: () => Client;
   cacheHost: () =>
-    | Pick<CacheHost, 'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys'>
+    | Pick<
+        CacheHost,
+        'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys' | 'readQuery'
+      >
     | undefined;
   people: () => Promise<Person[]>;
   /** The engine; the wasm module unless a test says otherwise. */
@@ -191,6 +194,7 @@ export function createDatabaseSqlQuery(
             client: capabilities.client(),
             catalog: built,
             requestPolicy,
+            cache: host,
             people: capabilities.people,
             membership: host ? { host, baselines, reconcile } : undefined,
           }),

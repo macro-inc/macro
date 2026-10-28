@@ -51,6 +51,17 @@ fn surrounding_quotes_and_whitespace_are_trimmed() {
     assert_eq!(ApiKey::new("'crsr_abc'").expose(), "crsr_abc");
 }
 
+#[test]
+fn both_cursor_key_prefixes_build_a_client() {
+    for key in ["crsr_abc", "grok_abc"] {
+        CursorClient::new(CursorConfig {
+            api_key: ApiKey::new(key),
+            ..config()
+        })
+        .unwrap_or_else(|error| panic!("{key:?} should build a client: {error}"));
+    }
+}
+
 /// A placeholder must fail at startup with something recognizable, which is
 /// why the error deliberately reports a length and a short prefix.
 #[test]

@@ -22,7 +22,14 @@ const getBlockElementId = (blockId: string) => `block-${blockId}`;
 
 function resolveEntityType(blockName: BlockName) {
   return match(blockName)
-    .with('chat', 'channel', 'project', 'database', (entityType) => entityType)
+    .with(
+      'chat',
+      'channel',
+      'project',
+      'database',
+      'form',
+      (entityType) => entityType
+    )
     .otherwise(() => 'document' as const);
 }
 

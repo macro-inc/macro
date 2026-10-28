@@ -142,3 +142,36 @@ async fn completion_caches_tools_system_and_conversation() {
 async fn stream_caches_tools_system_and_conversation() {
     assert_cached_wire_body(true).await;
 }
+
+#[test]
+fn only_probed_models_load_tools_by_reference() {
+    let client = Arc::new(
+        anthropic::Client::builder()
+            .api_key("test-anthropic-key")
+            .build()
+            .unwrap(),
+    );
+    let loads_by_reference = |id: &str| {
+        AnthropicModel::new(Model::try_from(id).unwrap(), client.clone()).loads_tools_by_reference()
+    };
+    for id in [
+        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-opus-4-7",
+        "anthropic/claude-opus-4-8",
+        "anthropic/claude-opus-5",
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-sonnet-5-5",
+    ] {
+        assert!(loads_by_reference(id), "{id}");
+    }
+    for id in [
+        "anthropic/claude-fable-5",
+        "anthropic/claude-fable-5-1",
+        "anthropic/claude-opus-4-6",
+        "anthropic/claude-opus-4-8-unreleased",
+    ] {
+        assert!(!loads_by_reference(id), "{id}");
+    }
+}

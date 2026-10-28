@@ -1,19 +1,20 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { InlineTagsPill } from '@property/tags';
 import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { Button, EntityComposer, Scroll } from '@ui';
+import { Button, EntityComposer } from '@ui';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
+import { DocumentFields } from '../../document-composer/components/document-fields';
+import { createDocumentEditor } from '../../document-composer/primitives/create-document-editor';
 import type { ComposeTaskSuccess } from '../component/ComposeTask';
-import { ComposeTaskTitleEditor } from '../component/ComposeTask';
 import { createDocumentWithTags } from '../queries/create-document-with-tags';
 import { createDocumentComposerTags } from '../util/documentComposerProperties';
 
@@ -40,7 +41,8 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   const portalScope = () => (panel.handle.isPopover() ? 'local' : 'block');
 
   const submit = async (expand = false) => {
-    const documentTitle = title().trim() || (expand ? 'New Note' : '');
+    const documentTitle =
+      title().trim() || (expand ? blockNameToDefaultFile('md') : '');
     if (isCreating() || !documentTitle) return;
     const documentContent = content().trim();
     const entries = tags.tagEntries();
@@ -110,24 +112,11 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   };
 
   let submitButton: HTMLButtonElement | undefined;
-  const editorConfig = buildConfig('markdown')
-    .withAppLinkResolver(useMacroMentionLinkResolver())
-    .withMentions()
-    .withTags({
-      applyTargetLabel: 'Document',
-      isApplied: (tag) => tags.composerTags.isApplied(tag.optionId),
-      onCreate: (tag) => {
-        void tags.composerTags.applyTag(tag.scope, tag.optionId);
-      },
-    })
-    .withEmojis()
-    .withActions()
-    .withCode()
-    .withMedia({ fileDrop: true })
-    .withSelectionData()
-    .withFloatingFormatMenu()
-    .withHistory()
-    .onChange(setContent)
+  const editorConfig = createDocumentEditor({
+    resolveAppLink: useMacroMentionLinkResolver(),
+    tags: tags.composerTags,
+    onChange: setContent,
+  })
     .onFocusLeave({
       onStart: () => titleRoot?.focus(),
       onEnd: () => submitButton?.focus(),
@@ -136,7 +125,6 @@ export function ComposeDocument(props: ComposeDocumentProps) {
       container()?.focus();
       return true;
     });
-  const editor = editorConfig.buildHandle().lexical;
   let titleRoot: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -149,7 +137,7 @@ export function ComposeDocument(props: ComposeDocumentProps) {
     scopeId: scope,
     description: 'Create document',
     keyDownHandler: () => {
-      void submit();
+      fireAndForget(submit(), 'compose-document');
       return true;
     },
     runWithInputFocused: true,
@@ -161,56 +149,47 @@ export function ComposeDocument(props: ComposeDocumentProps) {
         <div class="flex-1 flex items-center">
           <Show when={panel.handle.isPopover()}>
             <Button
-              onMouseDown={() => void submit(true)}
+              variant="ghost"
+              onMouseDown={() =>
+                fireAndForget(submit(true), 'compose-document')
+              }
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-composer"
+              size="icon-md"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
         <Button
+          variant="ghost"
           onClick={() => panel.handle.close()}
           tabIndex={-1}
           tooltip="Close"
-          size="icon-composer"
+          size="icon-md"
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
-      <EntityComposer.Main>
-        <EntityComposer.Title>
-          <ComposeTaskTitleEditor
-            placeholder="New document"
-            value={title}
-            onChange={setTitle}
-            disabled={isCreating}
-            bodyEditor={() => editor}
-            containerRef={container}
-            onUserInput={() => {}}
-            onTagSelected={(tag) => {
-              void tags.composerTags.applyTag(tag.scope, tag.optionId);
-            }}
-            onDeleteTagsAtStart={() => false}
-            portalScope={portalScope()}
-            ref={(root) => {
-              titleRoot = root;
-            }}
-          />
-        </EntityComposer.Title>
-        <EntityComposer.Body>
-          <Scroll>
-            <MarkdownShell
-              config={editorConfig}
-              initialValue={props.initialContent || undefined}
-              placeholder="Add content..."
-              portalScope={portalScope()}
-            />
-          </Scroll>
-        </EntityComposer.Body>
-      </EntityComposer.Main>
+      <DocumentFields
+        title={title()}
+        onTitleChange={setTitle}
+        editor={editorConfig}
+        initialValue={props.initialContent || undefined}
+        disabled={isCreating()}
+        containerRef={container}
+        titleRef={(root) => {
+          titleRoot = root;
+        }}
+        onTagSelected={(tag) => {
+          fireAndForget(
+            tags.composerTags.applyTag(tag.scope, tag.optionId),
+            'compose-document'
+          );
+        }}
+        portalScope={portalScope()}
+      />
       <EntityComposer.Footer class="items-center">
         <Suspense fallback={<div class="h-7" />}>
           <InlineTagsPill docTags={tags.composerTags} showPlaceholder />
@@ -219,8 +198,8 @@ export function ComposeDocument(props: ComposeDocumentProps) {
           ref={(button) => {
             submitButton = button;
           }}
-          variant="strong"
-          onClick={() => void submit()}
+          variant="primary"
+          onClick={() => fireAndForget(submit(), 'compose-document')}
           disabled={!title().trim() || isCreating()}
           hasContent={!!title().trim()}
         >

@@ -798,7 +798,7 @@ function ChannelsFounderLetter() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '26px' : '32px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.12,
             margin: mobile() ? '0 0 40px' : '0 0 56px',
@@ -1501,7 +1501,7 @@ const slabTitle = (opts?: {
   'font-size':
     opts?.size ??
     (mobile() ? 'clamp(32px, 9vw, 40px)' : 'clamp(40px, 4.2vw, 52px)'),
-  'font-weight': '315',
+  'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
   'letter-spacing': '-0.015em',
   'line-height': 1.12,
   margin: '0',
@@ -1954,7 +1954,7 @@ function ComparisonSection() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '26px' : '32px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.12,
             margin: 0,

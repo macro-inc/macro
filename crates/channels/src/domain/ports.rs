@@ -6,14 +6,14 @@ use crate::domain::models::{
     ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant, ChannelPreview,
     ChannelPreviewRow, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
     CreatedChannel, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, PatchChannelRequest, ReferencedShareItem, RemoveParticipantsRequest,
-    Sender,
+    GetOrCreatePrivateRequest, PatchChannelRequest, ReferenceShareResult, ReferencedShareItem,
+    RemoveParticipantsRequest, Sender,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
     ChannelMessage, ChannelWithLatest, ChannelWithParticipants, GetChannelsParams,
     GetChannelsRequest, GetThreadReplyRowsParams, GetThreadReplyRowsRequest, LatestMessage,
-    UserName,
+    ReferenceSource, ReferenceTarget, UserName,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -28,14 +28,14 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
-#[cfg(feature = "list")]
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-/// Verified channel administration access required to change a channel picture.
-pub type ChannelPictureAccess =
-    EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>;
+/// Verified channel participation required to change a channel picture.
+///
+/// The picture is part of the channel identity any participant may edit, so it
+/// carries the same requirement as renaming rather than an admin-only one.
+pub type ChannelPictureAccess = EntityAccessReceipt<MemberParticipantRole>;
 
 /// Repository for channel list persistence and query data.
 #[cfg(feature = "list")]
@@ -63,6 +63,14 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         &self,
         req: GetThreadReplyRowsParams,
     ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
+
+    /// Distinct documents and undeleted messages that currently mention or
+    /// attach any of `targets`. Unauthorized: callers must apply the reading
+    /// user's access to every returned source.
+    fn get_reference_sources(
+        &self,
+        targets: &[ReferenceTarget],
+    ) -> impl Future<Output = Result<Vec<ReferenceSource>, rootcause::Report>> + Send;
 }
 
 /// Repository for user display names needed by channel list rendering.
@@ -95,6 +103,15 @@ pub trait ChannelListService: Send + Sync + 'static {
         &self,
         req: GetThreadReplyRowsRequest,
     ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
+
+    /// Distinct documents and undeleted messages that currently mention or
+    /// attach any of `targets`. The result is not authorized for any user:
+    /// callers must apply the reader's access to each source before
+    /// exposing it.
+    fn get_reference_sources(
+        &self,
+        targets: &[ReferenceTarget],
+    ) -> impl Future<Output = Result<Vec<ReferenceSource>, rootcause::Report>> + Send;
 
     /// Fetch names for user ids.
     fn get_names(
@@ -162,12 +179,13 @@ pub trait HistoricalChannelRepo: Send + Sync + 'static {
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
-    /// Replace or remove the channel's static-file picture reference.
+    /// Replace or remove the channel's static-file picture reference atomically.
+    /// Returns whether the stored reference changed.
     fn set_channel_picture(
         &self,
         channel_id: Uuid,
         picture_id: Option<Uuid>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     /// Error type for repo operations.
     type Err: Into<anyhow::Error> + Send;
 
@@ -199,6 +217,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<ChannelInfo, Self::Err>> + Send;
+
+    /// Whether a channel is a direct agent conversation: one user's private
+    /// channel with an agent persona.
+    fn is_direct_agent_conversation(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Atomically assign a channel join code if absent and return the persisted code.
     fn get_or_create_channel_join_code(
@@ -234,6 +259,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         info: &ChannelInfo,
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 
     /// Check whether a user belongs to a team.
     fn user_has_team(
@@ -394,7 +426,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
 
 /// Service for channel reads and mutations.
 pub trait ChannelService: Send + Sync + 'static {
-    /// Set a channel picture using verified channel administration access.
+    /// Set a channel picture using verified channel participation.
     fn set_channel_picture(
         &self,
         access: ChannelPictureAccess,
@@ -414,6 +446,13 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr>> + Send;
 
     /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
     fn get_channel_metadata(
@@ -572,6 +611,25 @@ pub trait ChannelService: Send + Sync + 'static {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Share referenced items with a channel's current members.
+    ///
+    /// The actor must already be allowed to share each item. Calendar events,
+    /// agent sessions, databases, and forms are stored as direct `entity_access`
+    /// channel grants; other items follow the same reference-sharing policy as
+    /// posting them in a message.
+    fn share_referenced_items_with_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _items: Vec<ReferencedShareItem>,
+    ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel sharing is not configured".to_string(),
             ))
         }
     }
@@ -749,6 +807,23 @@ pub enum ChannelMessagesErr {
     MessageNotFound(Uuid),
 }
 
+/// Decides whether a viewer may see the entity a comment belongs to, so comment
+/// references are authorized by the parent's own permissions rather than by
+/// channel participation.
+///
+/// Object-safe (`async_trait`) because the service holds it as `Arc<dyn _>`.
+#[async_trait::async_trait]
+pub trait CommentParentAccess: Send + Sync + 'static {
+    /// Whether `viewer` may view the stored parent entity; unknown parent types
+    /// and unparseable viewers are not viewable.
+    async fn can_view_parent(
+        &self,
+        viewer: &str,
+        parent_entity_type: &str,
+        parent_entity_id: &str,
+    ) -> anyhow::Result<bool>;
+}
+
 /// Publisher for realtime channel side-effect commands.
 pub trait ChannelRealtimePublisher: Send + Sync + 'static {
     /// Error type for publishing operations.
@@ -876,13 +951,17 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Update channel share permissions according to the referenced entity's policy.
     ///
     /// Implementations must not grant access for an item the actor cannot already view.
-    /// Agent sessions require ownership and grant edit access; other references grant view.
+    /// Agent sessions require ownership and grant view access; a calendar event requires
+    /// the actor to hold it (owner or linked account) and grants view; PDFs grant comment
+    /// access, capped at the actor's own access; other references grant view. Each item
+    /// is reported as shared or not permitted. An existing direct grant is left unchanged
+    /// and still counts as shared.
     fn update_channel_share_permissions_for_referenced_items(
         &self,
         actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, Self::Err>> + Send;
 }
 
 /// Errors that can occur while mutating channels.

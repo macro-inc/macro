@@ -32,6 +32,17 @@ describe('uploaded workbook retrieval', () => {
     expect(query().queryKey).not.toEqual(query('xlsx', 2).queryKey);
     expect(query().queryKey).not.toEqual(query('csv').queryKey);
   });
+  it.each(['xlsm', 'XLSM'])(
+    'decodes a macro-enabled %s upload with the Excel worker',
+    async (fileType) => {
+      const signal = new AbortController().signal;
+      vi.mocked(platformFetch).mockResolvedValueOnce(
+        new Response(new Uint8Array([4, 5]))
+      );
+      await query(fileType).queryFn({ signal });
+      expect(excel).toHaveBeenCalledWith(new Uint8Array([4, 5]), signal);
+    }
+  );
   it('opens CSV text as safe typed cells, without invoking the Excel worker', async () => {
     vi.mocked(platformFetch).mockResolvedValueOnce(
       new Response('ID,Amount\r\n00123,12.5')

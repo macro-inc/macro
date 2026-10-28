@@ -24,6 +24,14 @@ export function SenderIcon(props: SenderIconProps) {
     return sender;
   };
 
+  // Someone outside Macro, such as a WhatsApp participant, has no principal.
+  const externalAuthor = () => {
+    const name = message().imported_author?.name?.trim();
+    return !message().sender_id && name
+      ? { name, avatar_url: null }
+      : undefined;
+  };
+
   return (
     <div
       class={cn('shrink-0 size-(--user-icon-width)', props.class, {
@@ -33,7 +41,11 @@ export function SenderIcon(props: SenderIconProps) {
     >
       {!props.hidden && (
         <Show
-          when={botSender()}
+          when={
+            message().guest_name
+              ? { name: message().guest_name, avatar_url: null }
+              : (externalAuthor() ?? botSender())
+          }
           fallback={<UserIcon id={message().sender_id} size="fill" />}
         >
           {(bot) => (

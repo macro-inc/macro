@@ -11,7 +11,7 @@ const adb =
   process.env.ADB ??
   `${process.env.HOME}/Library/Android/sdk/platform-tools/adb`;
 const output = process.env.ANDROID_SMOKE_OUTPUT ?? '/tmp/macro-task03-smoke';
-const packageName = 'com.macro.app.prod';
+const packageName = 'com.macro.workspace.mobile';
 const port = 9236;
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function adbRun(...args) {
@@ -430,7 +430,7 @@ try {
     results.nativeUpload = { exactBytes: true, checksumHeader: true };
     console.log('Native streaming PUT and checksum passed');
   } finally {
-    receiver.stop(true);
+    await receiver.stop(true);
   }
   assert.equal((await pendingShares())[0].token, first[0].token);
   await adbRun(

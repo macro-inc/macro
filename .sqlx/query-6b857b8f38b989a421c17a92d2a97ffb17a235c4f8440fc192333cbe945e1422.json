@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_messages (\n        id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id, provider_history_id, internal_date_ts,\n            snippet, size_estimate, subject, from_name, from_contact_id, sent_at, has_attachments, is_read,\n            is_starred, is_sent, is_draft, body_text, body_html_sanitized, headers_jsonb\n        )\n    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)\n        ON CONFLICT (link_id, provider_id) WHERE provider_id IS NOT NULL DO UPDATE SET\n            global_id = EXCLUDED.global_id,\n            provider_history_id = EXCLUDED.provider_history_id,\n            provider_thread_id = EXCLUDED.provider_thread_id,\n            replying_to_id = COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),\n            from_name = EXCLUDED.from_name,\n            from_contact_id = EXCLUDED.from_contact_id,\n            internal_date_ts = EXCLUDED.internal_date_ts,\n            snippet = EXCLUDED.snippet,\n            size_estimate = EXCLUDED.size_estimate,\n            subject = EXCLUDED.subject,\n            sent_at = EXCLUDED.sent_at,\n            has_attachments = EXCLUDED.has_attachments,\n            is_read = EXCLUDED.is_read,\n            is_starred = EXCLUDED.is_starred,\n            is_sent = EXCLUDED.is_sent,\n            is_draft = EXCLUDED.is_draft,\n            headers_jsonb = CASE\n                WHEN email_messages.headers_jsonb IS DISTINCT FROM EXCLUDED.headers_jsonb\n                THEN EXCLUDED.headers_jsonb ELSE email_messages.headers_jsonb END,\n            body_text = CASE\n                WHEN email_messages.body_text IS DISTINCT FROM EXCLUDED.body_text\n                THEN EXCLUDED.body_text ELSE email_messages.body_text END,\n            body_html_sanitized = CASE\n                WHEN email_messages.body_html_sanitized IS DISTINCT FROM EXCLUDED.body_html_sanitized\n                THEN EXCLUDED.body_html_sanitized ELSE email_messages.body_html_sanitized END,\n            updated_at = NOW()\n        -- Large columns last: the row comparison stops at the first difference.\n        WHERE (\n            email_messages.global_id, email_messages.provider_history_id,\n            email_messages.provider_thread_id, email_messages.replying_to_id,\n            email_messages.from_name, email_messages.from_contact_id,\n            email_messages.internal_date_ts, email_messages.snippet,\n            email_messages.size_estimate, email_messages.subject, email_messages.sent_at,\n            email_messages.has_attachments, email_messages.is_read, email_messages.is_starred,\n            email_messages.is_sent, email_messages.is_draft, email_messages.headers_jsonb,\n            email_messages.body_text, email_messages.body_html_sanitized\n        ) IS DISTINCT FROM (\n            EXCLUDED.global_id, EXCLUDED.provider_history_id,\n            EXCLUDED.provider_thread_id, COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),\n            EXCLUDED.from_name, EXCLUDED.from_contact_id,\n            EXCLUDED.internal_date_ts, EXCLUDED.snippet,\n            EXCLUDED.size_estimate, EXCLUDED.subject, EXCLUDED.sent_at,\n            EXCLUDED.has_attachments, EXCLUDED.is_read, EXCLUDED.is_starred,\n            EXCLUDED.is_sent, EXCLUDED.is_draft, EXCLUDED.headers_jsonb,\n            EXCLUDED.body_text, EXCLUDED.body_html_sanitized\n        )\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Text",
+        "Varchar",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6b857b8f38b989a421c17a92d2a97ffb17a235c4f8440fc192333cbe945e1422"
+}

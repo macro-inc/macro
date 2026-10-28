@@ -116,17 +116,6 @@ fn notion_import_failure_reason_preserves_the_actual_error() {
 }
 
 #[test]
-fn slack_gather_lists_channels_with_an_explicit_empty_query() {
-    let prompt = prompts::gather_system(ImportSource::Slack);
-
-    assert!(prompt.contains("FIRST call `Search channels`"));
-    assert!(prompt.contains(r#"{"query": ""}"#));
-    assert!(prompt.contains("an empty query lists all channels"));
-    assert!(!prompt.contains("Always pass a non-empty query"));
-    assert!(prompt.contains("Participant details are optional"));
-}
-
-#[test]
 fn notion_fetch_text_parses_the_fetch_document_shape() {
     let parsed = parse_notion_fetch_result(serde_json::Value::String(
         r##"{"id":"abc","title":"Roadmap H2","text":"# Roadmap\ncontent","url":"https://notion.so/x","properties":{"title":"Roadmap H2","Tags":["Planning","H2"],"Done":"__YES__","Score":4.5,"date:Due:start":"2026-08-01","date:Due:is_datetime":0}}"##
@@ -287,30 +276,13 @@ fn notion_fetch_recognizes_documented_tool_aliases() {
 }
 
 #[test]
-fn notion_page_references_become_external_markdown_links() {
-    let input = r#"<ancestor-path>
-<ancestor-3-page url="https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1" title=""/>
-<ancestor-4-page url="https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410" title="Parent"/>
-</ancestor-path>
-See <mention-page url="https://notion.so/roadmap">Roadmap</mention-page>.
-<page url="https://notion.so/spec">Product spec</page>
-<page url="https://notion.so/draft">Plan \ [draft]</page>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "[Notion page](https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1)\n\
-[Parent](https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410)\n\
-See [Roadmap](https://notion.so/roadmap).\n\
-[Product spec](https://notion.so/spec)\n\
-[Plan \\\\ \\[draft\\]](https://notion.so/draft)"
-    );
-}
-
-#[test]
 fn notion_prompt_imports_only_source_backed_body_content() {
     let prompt = prompts::NOTION_IMPORT_SYSTEM;
 
     assert!(prompt.contains("canonical Notion `notion-fetch` tool"));
+    assert!(prompt.contains("connector's page retrieval and block-children tools instead"));
+    assert!(prompt.contains("following pagination and recursively reading blocks"));
+    assert!(prompt.contains("Page metadata alone is not body content"));
     assert!(prompt.contains("Never use a search snippet or a generic `view` result"));
     assert!(prompt.contains("ONLY body content that actually appears in the fetched page"));
     assert!(prompt.contains(r#"Here is the result of "view"..."#));
@@ -328,76 +300,9 @@ fn notion_prompt_imports_only_source_backed_body_content() {
 fn notion_tool_result_wrappers_are_rejected_as_content() {
     let view_wrapper = r#"Here is the result of "view" for the Page with URL https://app.notion.com/p/39dd7bb70863806ab8afe6d96ecf9701 as of 2026-07-14T21:50:42.234Z:
 [{"title":""}]"#;
-    assert!(prepare_notion_markdown(view_wrapper).is_err());
-    assert!(prepare_notion_markdown(r#"[{"title":"Content team"}]"#).is_err());
-    assert!(prepare_notion_markdown("# Actual page content").is_ok());
-}
-
-#[test]
-fn notion_toggles_and_databases_are_not_imported_as_markup() {
-    let input = r#"# Useful notes {toggle="true"}
-Keep this text.
-<database url="https://notion.so/database">Content calendar</database>
-<mention-database url="https://notion.so/roadmap">Roadmap</mention-database>
-End."#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "# Useful notes\nKeep this text.\n\n\nEnd."
-    );
-}
-
-#[test]
-fn notion_enhanced_markdown_becomes_macro_markdown() {
-    let input = r#"<details color="Gray">
-<summary>Coming in Q2 (starts <mention-date start="2024-04-01"/>)</summary>
-	### Revamp Java PDF Parser
-	- [ ] Open task
-	- [x] Assigned to <mention-user url="https://notion.so/user">Teo Nys</mention-user>
-	<callout icon="🔢" color="Gray">
-		Numbers are estimates in **weeks**.
-	</callout>
-</details>
-
-<file src="https://notion.so/organizing-polish.docx">Organizing-polish.docx</file>
-<span underline="true">Readable text</span>
-<unknown url="https://notion.so/unsupported" alt="Linked preview"/>
-<empty-block/>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "Coming in Q2 (starts April 1, 2024)\n\
-### Revamp Java PDF Parser\n\
-- [ ] Open task\n\
-- [x] Assigned to @Teo Nys\n\
-> 🔢 Numbers are estimates in **weeks**.\n\
-\n\
-[Organizing-polish.docx](https://notion.so/organizing-polish.docx)\n\
-Readable text\n\
-[Linked preview](https://notion.so/unsupported)"
-    );
-}
-
-#[test]
-fn notion_escaped_todos_are_repaired_but_code_examples_are_untouched() {
-    let input = r#"\[x\] Completed
-	\[ \] Nested
-
-```text
-\[x\] This is an example
-<page url="https://notion.so/example">also an example</page>
-```"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "- [x] Completed\n\
-\t- [ ] Nested\n\
-\n\
-```text\n\
-\\[x\\] This is an example\n\
-<page url=\"https://notion.so/example\">also an example</page>\n\
-```"
-    );
+    assert!(check_notion_markdown(view_wrapper).is_err());
+    assert!(check_notion_markdown(r#"[{"title":"Content team"}]"#).is_err());
+    assert!(check_notion_markdown("# Actual page content").is_ok());
 }
 
 #[test]
@@ -418,37 +323,4 @@ fn notion_database_heavy_pages_are_detected() {
         "Useful non-database documentation. ".repeat(20)
     );
     assert!(!notion_page_is_mostly_database(&substantive));
-}
-
-#[test]
-fn notion_tables_become_rectangular_macro_pipe_tables() {
-    let input = r#"<table fit-page-width="true" header-row="true">
-<colgroup>
-<col width="379">
-<col width="230">
-</colgroup>
-<tr>
-<td>AI PDF Editors</td>
-<td>Features</td>
-<td>Pricing</td>
-</tr>
-<tr>
-lc
-</tr>
-<tr>
-<td>PDFelement</td>
-<td>• Automatically bookmarks important pages
-• Use Lumi AI to chat with PDFs</td>
-<td>Paid plans start at $79.99 per year.</td>
-</tr>
-<tr><td>Forma | Pro</td><td>Draft with AI</td></tr>
-</table>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "| AI PDF Editors | Features | Pricing |\n\
-| --- | --- | --- |\n\
-| PDFelement | • Automatically bookmarks important pages\\n• Use Lumi AI to chat with PDFs | Paid plans start at $79.99 per year. |\n\
-| Forma &#124; Pro | Draft with AI |  |"
-    );
 }

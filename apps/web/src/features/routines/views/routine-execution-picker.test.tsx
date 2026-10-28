@@ -366,14 +366,18 @@ describe('routine execution picker', () => {
       'Its runtime is disconnected'
     );
     let trigger = openPicker();
-    expect(
-      screen
-        .getByRole('menuitem', { name: /Local worker/ })
-        .getAttribute('aria-disabled')
-    ).toBe('true');
+    // A disconnected macrod agent stays clickable: selecting it is the
+    // reconnect path (opens Settings → Runtimes) rather than a dead row.
+    const reconnect = screen.getByRole('menuitem', { name: /Local worker/ });
+    expect(reconnect.getAttribute('aria-disabled')).not.toBe('true');
+    expect(reconnect.textContent).toContain('Reconnect runtime');
+    fireEvent.keyDown(reconnect, { key: 'Enter' });
+    expect(onConnect.mock.calls[0][0].harness).toBe('macrod');
+    await expectClosed(trigger);
+    trigger = openPicker();
     const connect = screen.getByRole('menuitem', { name: /Connect Cursor/ });
     fireEvent.keyDown(connect, { key: 'Enter' });
-    expect(onConnect.mock.calls[0][0].harness).toBe('cursor');
+    expect(onConnect.mock.calls[1][0].harness).toBe('cursor');
     await expectClosed(trigger);
     trigger = openPicker();
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Create agent' }), {

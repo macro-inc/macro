@@ -14,8 +14,6 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 macro_env_var::env_vars!(
-    /// Browser-facing static file base, read only when using local AWS.
-    pub struct StaticFileServiceUrl;
     /// Local static file bucket, read only when using local AWS.
     pub struct StaticStorageBucket;
     /// Comma-separated Kafka bootstrap servers.
@@ -31,7 +29,7 @@ macro_env_var::env_vars!(
     /// validators expect.
     pub struct MacroApiTokenIssuer;
     /// OAuth client ID for the Pipedream API. The same credentials
-    /// `document_cognition_service` uses: the connections a sandbox spends
+    /// `agent_harness_service::cognition` uses: the connections a sandbox spends
     /// are the ones the person connected in Macro, in the same rows.
     pub struct PipedreamClientId;
     /// OAuth client secret for the Pipedream API.
@@ -39,19 +37,26 @@ macro_env_var::env_vars!(
     /// The Pipedream Connect project ID (`proj_...`).
     pub struct PipedreamProjectId;
     /// AES key the `mcp_servers` rows' OAuth credentials are encrypted with -
-    /// the same one `document_cognition_service` writes them with, so the
+    /// the same one `agent_harness_service::cognition` writes them with, so the
     /// custom MCP servers a person added in Macro are the ones the egress
     /// proxy can refresh and stamp for their sandboxes.
     pub struct McpCredentialsKeySecretName;
 );
 
 macro_env_var::maybe_env_vars!(
-    /// KMS key for encrypted per-owner Claude OAuth connections.
-    pub struct ClaudeOauthKmsKeyId;
+    /// PostHog project token for feature flags and public MCP analytics. When
+    /// unset, both are off.
+    pub struct PosthogApiKey;
+    /// Regional PostHog ingestion origin; defaults to the US origin.
+    pub struct PosthogHost;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
+    /// The authentication service's own internal key, which settlement
+    /// requests for counted usage present. Required while
+    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
+    pub struct AuthenticationServiceSecretKey;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -67,9 +72,52 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Optional TypeSafe key for Command K classification.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
+    pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
+    /// Workers AI token paired with the account ID.
+    pub cloudflare_api_token: universal_input::outbound::clairic::CloudflareApiToken,
+    /// Shared pool for sessions, chat, integrations, and routine workers.
+    #[macro_config_default(30)]
+    pub database_max_connections: u32,
+    /// FusionAuth API origin used by the public MCP OAuth broker.
+    pub fusionauth_base_url: FusionauthBaseUrl,
+    /// FusionAuth application used for MCP sign-in.
+    pub fusionauth_client_id: FusionauthClientId,
+    /// Secret name of the FusionAuth API credential.
+    pub fusionauth_api_key_secret_key: FusionauthApiKeySecretKey,
+    /// Secret name of the FusionAuth OAuth client credential.
+    pub fusionauth_client_secret_key: FusionauthClientSecretKey,
+    /// Google OAuth application used by MCP sign-in.
+    pub google_client_id: GoogleClientId,
+    /// Secret name of the Google OAuth client credential.
+    pub google_client_secret_key: GoogleClientSecretKey,
+    /// Browser-reachable FusionAuth origin, when different from the API.
+    pub fusionauth_public_url: FusionauthPublicUrl,
+    /// Additional trusted client callback hosts, overriding the built-in list.
+    pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
+
+    /// Hide agent DM contexts from standalone lists. Enable only after all
+    /// replicas use the independent for_warming lifecycle marker.
+    #[macro_config_default(false)]
+    pub hide_agent_dm_sessions: bool,
+    /// Backend feature flags, evaluated using the authenticated session owner.
+    pub posthog_api_key: PosthogApiKey,
+    /// Same regional origin as the frontend's PostHog project.
+    pub posthog_host: PosthogHost,
+    /// Pinned Deno executable. Unset hosts do not advertise code execution.
+    pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances. When enabled, counted
+    /// usage recorded here asks the authentication service to settle; that
+    /// service's own policy decides whether it does.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
+    /// Key settlement requests present to the authentication service.
+    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -82,8 +130,6 @@ pub struct Config {
     /// Markup on paid AI usage past the allowance, as a whole percent of
     /// provider cost. Mandatory; set in Doppler.
     pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
-    /// OAuth encryption key; deployments without a key do not advertise sign-in.
-    pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
@@ -231,26 +277,6 @@ impl Config {
         )
     }
 
-    /// Resolve the deployment-injected encryption key. Local stacks use their
-    /// existing LocalStack key with a separate Claude encryption context.
-    pub fn claude_oauth_kms_key_id(&self) -> Option<String> {
-        self.claude_oauth_kms_key_id
-            .value()
-            .filter(|key| !key.trim().is_empty())
-            .map(str::to_owned)
-            .or_else(|| {
-                ClaudeOauthKmsKeyId::new().and_then(|key| {
-                    key.value()
-                        .filter(|key| !key.trim().is_empty())
-                        .map(str::to_owned)
-                })
-            })
-            .or_else(|| {
-                matches!(self.environment, Environment::Local)
-                    .then(|| "alias/macro-local-cursor-api-key".to_owned())
-            })
-    }
-
     /// Resolve the optional key from Doppler or the deployment-injected environment.
     pub fn codex_oauth_kms_key_id(&self) -> Option<String> {
         self.codex_oauth_kms_key_id
@@ -268,13 +294,60 @@ impl Config {
             .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 
+    /// Where this host's settlement requests go: the authentication service
+    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
+    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
+        let client = self
+            .authentication_service_secret_key
+            .value()
+            .filter(|key| !key.trim().is_empty())
+            .map(|key| {
+                anyhow::Ok(std::sync::Arc::new(
+                    authentication_service_client::AuthServiceClient::new(
+                        key.to_owned(),
+                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    ),
+                ))
+            })
+            .transpose()?;
+        Ok(ai_billing::composition::SettlementRoute::from_policy(
+            self.enable_ai_usage_billing,
+            client,
+        )?)
+    }
+
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         let mut config = macro_config::ConfigLoader::load::<Config>()
             .context("failed to load agent harness service config")?;
         config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
         Ok(config)
     }
+}
+
+macro_env_var::env_vars! {
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthBaseUrl;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthClientId;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthApiKeySecretKey;
+    /// Public MCP OAuth configuration.
+    pub struct FusionauthClientSecretKey;
+    /// Public MCP OAuth configuration.
+    pub struct GoogleClientId;
+    /// Public MCP OAuth configuration.
+    pub struct GoogleClientSecretKey;
+}
+macro_env_var::maybe_env_vars! {
+    /// Optional public MCP OAuth configuration.
+    pub struct FusionauthPublicUrl;
+    /// Optional public MCP OAuth configuration.
+    pub struct McpAllowedRedirectHosts;
 }

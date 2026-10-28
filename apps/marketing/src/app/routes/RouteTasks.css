@@ -4,7 +4,7 @@
 .tasks-h3 {
   color: var(--c1);
   font-family: 'display';
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   margin: 0;
 }
 .tasks-h1 {

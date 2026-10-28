@@ -1,0 +1,97 @@
+/* Phone signup pages, styled like the app's sign-in card. Shared by
+   /mobile-signup and /mobile-signup-sent. */
+
+.mobile-signup-card {
+  align-content: center;
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  margin: 0 auto;
+  max-width: 384px;
+  min-height: calc(100dvh / var(--site-scale, 1));
+  padding: 56px 0 12vh;
+  text-align: center;
+  width: 100%;
+}
+
+.mobile-signup-card-title {
+  color: var(--color-ink);
+  font-family: 'Roboto Slab Variable', 'display', serif;
+  font-size: 30px;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin: 32px 0 0;
+  text-wrap: balance;
+}
+
+.mobile-signup-card-subtitle {
+  color: var(--color-ink-muted);
+  font-family: 'Inter Variable', 'body', sans-serif;
+  font-size: 14px;
+  line-height: 24px;
+  margin: 16px 0 0;
+  text-wrap: balance;
+}
+
+.mobile-signup-card-body {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  margin-top: 36px;
+  width: 100%;
+}
+
+/* Scoped under the card to outrank index.css's `button:not(...)` and
+   `input:not(...)` defaults. */
+.mobile-signup-card .mobile-signup-card-field {
+  background: transparent;
+  border: 1px solid var(--color-edge);
+  border-radius: 16px;
+  box-sizing: border-box;
+  color: var(--color-ink);
+  font-family: 'Inter Variable', 'body', sans-serif;
+  /* 16px minimum: iOS Safari zooms the page when focusing a smaller field. */
+  font-size: 16px;
+  outline: none;
+  padding: 12px 16px;
+  transition: border-color 160ms ease;
+  width: 100%;
+}
+.mobile-signup-card .mobile-signup-card-field::placeholder {
+  color: var(--color-ink-placeholder);
+}
+.mobile-signup-card .mobile-signup-card-field:focus {
+  border-color: color-mix(in srgb, var(--color-ink) 40%, transparent);
+}
+
+.mobile-signup-card .mobile-signup-card-pill {
+  align-items: center;
+  background: var(--color-ink);
+  border: 0;
+  border-radius: 999px;
+  box-sizing: border-box;
+  color: var(--color-surface-0);
+  cursor: default;
+  display: flex;
+  font-family: 'Inter Variable', 'body', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 56px;
+  padding: 14px 24px;
+  text-decoration: none;
+  transition: opacity 160ms ease;
+  width: 100%;
+}
+.mobile-signup-card .mobile-signup-card-pill:hover { opacity: 0.9; }
+.mobile-signup-card .mobile-signup-card-pill:disabled { opacity: 0.4; }
+.mobile-signup-card .mobile-signup-card-pill:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 4px;
+}
+
+@media (min-width: 640px) {
+  .mobile-signup-card-title { font-size: 36px; }
+  .mobile-signup-card-subtitle { font-size: 15px; }
+}

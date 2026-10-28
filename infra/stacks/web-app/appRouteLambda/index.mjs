@@ -7,6 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const template = readFileSync(join(__dirname, 'index.html'), 'utf-8');
 const PREVIEW_URL = process.env.PREVIEW_URL;
+const HTML_HEADERS = {
+  'Content-Type': 'text/html',
+  'Cache-Control': 'no-store',
+};
 
 function escapeHtmlText(value) {
   return String(value ?? '')
@@ -22,9 +26,7 @@ export const handler = async (event) => {
   if ((!rawPath.includes('@') && fileName.includes('.') && fileName !== 'index.html') || !template) {
     return {
       statusCode: '404',
-      headers: {
-        'Content-Type': 'text/html',
-      },
+      headers: HTML_HEADERS,
       body: 'Not Found',
     };
   }
@@ -36,9 +38,7 @@ export const handler = async (event) => {
     if (blockName === 'chat' || blockName === 'channel') {
       return {
         statusCode: '200',
-        headers: {
-          'Content-Type': 'text/html',
-        },
+        headers: HTML_HEADERS,
         body: template,
       };
     }
@@ -64,18 +64,14 @@ export const handler = async (event) => {
     // Return the response
     return {
       statusCode: '200',
-      headers: {
-        'Content-Type': 'text/html',
-      },
+      headers: HTML_HEADERS,
       body,
     };
   } catch (error) {
     console.error('Error building response:', error);
     return {
       statusCode: '200',
-      headers: {
-        'Content-Type': 'text/html',
-      },
+      headers: HTML_HEADERS,
       body: template,
     };
   }

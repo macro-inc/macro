@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
@@ -8,6 +9,7 @@ import {
 } from '../telemetry';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheReadState,
   type CleanupToPageEnvelope,
   type CoordinatorToTabEnvelope,
   ENGINE_STARTUP_PHASES,
@@ -23,6 +25,7 @@ import {
 import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
+  WorkerRestartedError,
 } from './effect-worker-transport';
 import {
   listOpfsRootNames,
@@ -46,6 +49,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   scope: string;
   hotCapacity?: number;
   tabId?: string;
+  visibility?: Pick<Document, 'visibilityState'> &
+    Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+  onCacheReadAvailabilityChanged?: (state: CacheReadState) => void;
   createSharedWorker?: (scope: string) => SharedWorkerLike;
   createDedicatedWorker?: (
     scope: string,
@@ -96,7 +102,9 @@ interface CoordinatorConnection {
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
 const DEFAULT_CLEANUP_TIMEOUT_MS = 30_000;
 
-const withVersion = <T extends { coordinatorVersion: 6 }>(
+const withVersion = <
+  T extends { coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION },
+>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -104,10 +112,13 @@ const withVersion = <T extends { coordinatorVersion: 6 }>(
     ...value,
   }) as unknown as T;
 
-const defaultSharedWorkerFactory = (scope: string): SharedWorkerLike =>
+const defaultSharedWorkerFactory = (
+  scope: string,
+  buildTime: number
+): SharedWorkerLike =>
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
-    { type: 'module', name: `graphql-cache-coordinator:${scope}` }
+    { type: 'module', name: `graphql-cache-coordinator:${scope}:${buildTime}` }
   );
 
 const defaultDedicatedWorkerFactory = (
@@ -141,6 +152,21 @@ export class CacheCoordinatorPageAdapter {
   ) => DedicatedWorkerLike;
   private readonly lockManager: Pick<LockManager, 'request'> | undefined;
   private readonly gracefulTimeoutMs: number;
+  private readonly visibility: CacheCoordinatorPageAdapterOptions['visibility'];
+  private lastVisibility: boolean | undefined;
+  private readonly onVisibilityChange = (): void => {
+    if (!this.registered || this.closed) return;
+    const visible = this.visibility?.visibilityState !== 'hidden';
+    if (visible === this.lastVisibility) return;
+    this.lastVisibility = visible;
+    this.postCoordinator(
+      withVersion<TabToCoordinatorEnvelope>({
+        kind: 'tab-visibility',
+        tabId: this.tabId,
+        visible,
+      })
+    );
+  };
   private coordinatorConnection: CoordinatorConnection | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
   private ownerEpoch: number | undefined;
@@ -159,6 +185,7 @@ export class CacheCoordinatorPageAdapter {
   private readonly terminatedOwnerEpochs = new Set<number>();
   private highestOwnerEpochSeen = 0;
   private latestEngineReplacedEpoch = 0;
+  private latestReadStateEpoch = 0;
   private startupProgress:
     | Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
     | undefined;
@@ -178,8 +205,13 @@ export class CacheCoordinatorPageAdapter {
       throw new Error('hot capacity must be a positive integer');
     }
     this.tabId = options.tabId ?? crypto.randomUUID();
+    this.visibility =
+      options.visibility ??
+      (typeof document === 'undefined' ? undefined : document);
     this.createSharedWorker =
-      options.createSharedWorker ?? defaultSharedWorkerFactory;
+      options.createSharedWorker ??
+      ((scope) =>
+        defaultSharedWorkerFactory(scope, options.buildTime ?? APP_BUILD_TIME));
     this.createDedicatedWorker =
       options.createDedicatedWorker ?? defaultDedicatedWorkerFactory;
     this.lockManager = options.lockManager;
@@ -463,7 +495,11 @@ export class CacheCoordinatorPageAdapter {
         },
         onError: (error) => {
           this.failTerminal(
-            new Error(`coordinator Effect transport failed: ${error.message}`)
+            error instanceof WorkerRestartedError
+              ? error
+              : new Error(
+                  `coordinator Effect transport failed: ${error.message}`
+                )
           );
         },
         closeEndpoint: () => this.closePort(worker.port),
@@ -483,12 +519,14 @@ export class CacheCoordinatorPageAdapter {
     }
     this.coordinatorConnection = { worker, transport };
     void transport.ready.catch(() => undefined);
+    this.lastVisibility = this.visibility?.visibilityState !== 'hidden';
     this.postCoordinator(
       withVersion<TabToCoordinatorEnvelope>({
         kind: 'register-tab',
         scope: this.options.scope,
         tabId: this.tabId,
         livenessLockName,
+        visible: this.lastVisibility,
         hotCapacity: this.options.hotCapacity,
         buildTime: this.options.buildTime ?? APP_BUILD_TIME,
       })
@@ -502,6 +540,18 @@ export class CacheCoordinatorPageAdapter {
       return;
     }
     const message = parsed.value;
+    if (message.kind === 'cache-read-availability') {
+      if (!this.registered) {
+        this.failTerminal(new Error('owner handoff preceded registration'));
+      } else if (
+        message.ownerEpoch >=
+        Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
+      ) {
+        this.latestReadStateEpoch = message.ownerEpoch;
+        this.options.onCacheReadAvailabilityChanged?.(message.state);
+      }
+      return;
+    }
     switch (message.kind) {
       case 'registered':
         if (message.tabId !== this.tabId || this.registered) {
@@ -515,6 +565,11 @@ export class CacheCoordinatorPageAdapter {
         this.resolveRegistration = undefined;
         this.rejectRegistration = undefined;
         this.registerPagehide();
+        this.visibility?.addEventListener(
+          'visibilitychange',
+          this.onVisibilityChange
+        );
+        this.onVisibilityChange();
         for (const request of this.queuedRequests.splice(0)) {
           this.postMessage(request);
         }
@@ -602,7 +657,11 @@ export class CacheCoordinatorPageAdapter {
         break;
       }
       case 'engine-replaced':
-        if (message.ownerEpoch <= this.latestEngineReplacedEpoch) return;
+        if (
+          message.ownerEpoch <= this.latestEngineReplacedEpoch ||
+          message.ownerEpoch < this.latestReadStateEpoch
+        )
+          return;
         this.latestEngineReplacedEpoch = message.ownerEpoch;
         this.highestOwnerEpochSeen = Math.max(
           this.highestOwnerEpochSeen,
@@ -638,7 +697,10 @@ export class CacheCoordinatorPageAdapter {
           message.tabId === this.tabId &&
           message.ownerEpoch === this.ownerEpoch
         ) {
-          void this.removeStaleDatabases();
+          fireAndForget(
+            this.removeStaleDatabases(),
+            'graphql-cache-coordinator'
+          );
         }
         break;
     }
@@ -912,7 +974,10 @@ export class CacheCoordinatorPageAdapter {
     addEventListener(
       'pagehide',
       () => {
-        void this.dispose({ graceful: false, preserveDatabase: true });
+        fireAndForget(
+          this.dispose({ graceful: false, preserveDatabase: true }),
+          'graphql-cache-coordinator'
+        );
       },
       { once: true }
     );
@@ -964,6 +1029,10 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private closeCoordinatorPort(): void {
+    this.visibility?.removeEventListener(
+      'visibilitychange',
+      this.onVisibilityChange
+    );
     const connection = this.coordinatorConnection;
     this.coordinatorConnection = undefined;
     if (!connection) return;

@@ -4,20 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrStatusChanged } from './githubPrStatusChanged';
+import type { ExternalChatMessageMetadata } from './externalChatMessageMetadata';
 import type { NotifEventOneOfThreesevenTag } from './notifEventOneOfThreesevenTag';
 
 /**
- * A GitHub pull request changed lifecycle state.
-
-The `github_pr_event` alias keeps rows and queue messages persisted
-before the rename deserializable.
+ * A live message in a shared external chat.
  */
 export type NotifEventOneOfThreeseven = {
-  /** A GitHub pull request changed lifecycle state.
-
-The `github_pr_event` alias keeps rows and queue messages persisted
-before the rename deserializable. */
-  content: GithubPrStatusChanged;
+  /** A live message in a shared external chat. */
+  content: ExternalChatMessageMetadata;
   tag: NotifEventOneOfThreesevenTag;
 };

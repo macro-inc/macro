@@ -9,14 +9,14 @@ use models_properties::shared::{DataType, EntityReference};
 use super::super::column_types::is_complete_url;
 use super::super::{option_label_key, takes_options};
 use super::{Place, Planner, RelatedRow};
-use crate::domain::catalog::{self, ColumnEntry, TableEntry, entity_type};
+use crate::domain::catalog::{self, ColumnEntry, StorageTable, entity_type};
 use crate::domain::models::{CellChanges, ColumnConfig, DatabaseError};
 
 impl Planner {
     /// One row's cells as stored values; `None` empties a cell.
     pub(super) fn cells(
         &mut self,
-        entry: &TableEntry,
+        entry: &StorageTable,
         op: usize,
         row: Option<usize>,
         cells: &[CellWrite],
@@ -40,6 +40,13 @@ impl Planner {
                 .find(|column| column.column.id == cell.column)
                 .ok_or_else(|| place.refuse("no such column in this table"))?;
             let value = self.value(place, column, &cell.value)?;
+            if !column.column.nullable
+                && !value
+                    .as_ref()
+                    .is_some_and(crate::domain::models::cell_has_value)
+            {
+                return Err(place.refuse(format!("\"{}\" requires a value", column.name())));
+            }
             stored.push((column.definition.definition.id, value));
         }
         Ok(stored)
@@ -53,6 +60,12 @@ impl Planner {
         column: &ColumnEntry,
         value: &CellValue,
     ) -> Result<Option<PropertyValue>, DatabaseError> {
+        if column.column.formula().is_some() {
+            return Err(place.refuse(format!(
+                "\"{}\" is computed by its formula; write the columns it uses instead",
+                column.name()
+            )));
+        }
         let data_type = column.definition.definition.data_type;
         let misfit = || {
             place.refuse(format!(
@@ -88,6 +101,11 @@ impl Planner {
             }
             CellValue::Date(date) if data_type == DataType::Date => {
                 Ok(Some(PropertyValue::Date(*date)))
+            }
+            CellValue::DateRange(range) if data_type == DataType::DateRange => {
+                models_properties::shared::DateRange::new(range.start, range.end)
+                    .map(|range| Some(PropertyValue::DateRange(range)))
+                    .map_err(|_| place.refuse("a date range cannot end before it starts"))
             }
             CellValue::Link(urls) if data_type == DataType::Link => {
                 single(urls.len())?;
@@ -225,6 +243,7 @@ pub(super) fn column_kind_name(column: &ColumnEntry) -> &'static str {
         DataType::Number => "number",
         DataType::Boolean => "checkbox",
         DataType::Date => "date",
+        DataType::DateRange => "date range",
         DataType::Link => "link",
         DataType::SelectString => "select",
         DataType::SelectNumber => "numeric select",
@@ -240,6 +259,7 @@ fn value_kind_name(value: &CellValue) -> &'static str {
         CellValue::Number(_) => "a number",
         CellValue::Boolean(_) => "true or false",
         CellValue::Date(_) => "a date",
+        CellValue::DateRange(_) => "a date range",
         CellValue::Link(_) => "a link",
         CellValue::Options(_) => "an option",
         CellValue::Entities(_) => "a reference",

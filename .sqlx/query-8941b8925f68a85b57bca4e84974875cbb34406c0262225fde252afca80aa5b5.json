@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.fusionauth_user_id,\n                l.email_address::text AS \"email_address!\",\n                l.provider::text AS \"provider!\",l.id AS link_id,l.sync_generation,l.grant_generation,\n                COALESCE(g.granted_scopes, '{}') AS \"granted_scopes!\"\n            FROM email_links l\n            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id\n            WHERE l.id = $1 AND l.macro_id = $2\n            FOR UPDATE OF l\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "granted_scopes!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8941b8925f68a85b57bca4e84974875cbb34406c0262225fde252afca80aa5b5"
+}

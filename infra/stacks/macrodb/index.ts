@@ -5,7 +5,7 @@ import { get_coparse_api_vpc } from '../../packages/vpc';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'macrodb',
 };
 
@@ -92,12 +92,45 @@ const password = aws.secretsmanager
 
 // ---- Parameter Groups ----
 
+const parameters = [
+  { name: 'checkpoint_timeout', value: '900' },
+  { name: 'max_wal_size', value: '16384' },
+  { name: 'min_wal_size', value: '4096' },
+  { name: 'vacuum_cost_page_miss', value: '10' },
+  {
+    name: 'shared_preload_libraries',
+    value: 'pg_stat_statements,auto_explain',
+    applyMethod: 'pending-reboot',
+  },
+  { name: 'auto_explain.log_format', value: 'json' },
+  { name: 'auto_explain.log_min_duration', value: '1000' },
+  { name: 'auto_explain.log_analyze', value: 'on' },
+  { name: 'auto_explain.log_buffers', value: 'on' },
+  { name: 'auto_explain.log_timing', value: 'off' },
+  { name: 'auto_explain.log_triggers', value: 'on' },
+  { name: 'auto_explain.log_verbose', value: 'on' },
+  { name: 'auto_explain.log_nested_statements', value: 'on' },
+  { name: 'auto_explain.sample_rate', value: '1' },
+  { name: 'idle_in_transaction_session_timeout', value: '300000' },
+  // Tune planner costs and prefetch for gp3 SSD.
+  { name: 'random_page_cost', value: '1.1' },
+  { name: 'effective_io_concurrency', value: '256' },
+  // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
+  { name: 'work_mem', value: '16384' },
+  // Avoid JIT startup cost for one-off dynamic Soup queries.
+  { name: 'jit', value: '0' },
+  // Log spills of at least 10MB for follow-up tuning.
+  { name: 'log_temp_files', value: '10240' },
+  // Keep vacuum on the primary from removing rows that replica queries still
+  // read; those snapshot conflicts stall WAL replay for up to 30 s.
+  { name: 'hot_standby_feedback', value: '1' },
+];
+
 // The original parameter group we assign to the dbs
-// For prod, we need to use the _legacy family config value to ensure we don't destroy the existing one while it's still needed
+// For prod and dev, we need to use the _legacy family config value to ensure we don't destroy the existing one while it's still needed
 const parameterGroupFamily =
-  stack === 'prod'
-    ? config.require('parameter_group_family_legacy')
-    : config.require('parameter_group_family');
+  config.get('parameter_group_family_legacy') ??
+  config.require('parameter_group_family');
 
 const originalParameterGroup = new aws.rds.ParameterGroup(
   'parameter-group',
@@ -105,36 +138,7 @@ const originalParameterGroup = new aws.rds.ParameterGroup(
     name: `macro-db-parameter-group-${stack}`,
     family: parameterGroupFamily,
     description: `Custom parameter group for macro-db-${stack}`,
-    parameters: [
-      { name: 'checkpoint_timeout', value: '900' },
-      { name: 'max_wal_size', value: '16384' },
-      { name: 'min_wal_size', value: '4096' },
-      { name: 'vacuum_cost_page_miss', value: '10' },
-      {
-        name: 'shared_preload_libraries',
-        value: 'pg_stat_statements,auto_explain',
-        applyMethod: 'pending-reboot',
-      },
-      { name: 'auto_explain.log_format', value: 'json' },
-      { name: 'auto_explain.log_min_duration', value: '1000' },
-      { name: 'auto_explain.log_analyze', value: 'on' },
-      { name: 'auto_explain.log_buffers', value: 'on' },
-      { name: 'auto_explain.log_timing', value: 'off' },
-      { name: 'auto_explain.log_triggers', value: 'on' },
-      { name: 'auto_explain.log_verbose', value: 'on' },
-      { name: 'auto_explain.log_nested_statements', value: 'on' },
-      { name: 'auto_explain.sample_rate', value: '1' },
-      { name: 'idle_in_transaction_session_timeout', value: '300000' },
-      // Tune planner costs and prefetch for gp3 SSD.
-      { name: 'random_page_cost', value: '1.1' },
-      { name: 'effective_io_concurrency', value: '256' },
-      // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
-      { name: 'work_mem', value: '16384' },
-      // Avoid JIT startup cost for one-off dynamic Soup queries.
-      { name: 'jit', value: '0' },
-      // Log spills of at least 10MB for follow-up tuning.
-      { name: 'log_temp_files', value: '10240' },
-    ],
+    parameters,
     tags,
   },
   { protect: true }
@@ -148,41 +152,32 @@ if (stack === 'prod') {
       name: `macro-db-parameter-group-v16-${stack}`,
       family: config.require('parameter_group_family'),
       description: `Custom parameter group (${config.require('parameter_group_family')}) for macro-db-${stack}`,
-      parameters: [
-        { name: 'checkpoint_timeout', value: '900' },
-        { name: 'max_wal_size', value: '16384' },
-        { name: 'min_wal_size', value: '4096' },
-        { name: 'vacuum_cost_page_miss', value: '10' },
-        {
-          name: 'shared_preload_libraries',
-          value: 'pg_stat_statements,auto_explain',
-          applyMethod: 'pending-reboot',
-        },
-        { name: 'auto_explain.log_format', value: 'json' },
-        { name: 'auto_explain.log_min_duration', value: '1000' },
-        { name: 'auto_explain.log_analyze', value: 'on' },
-        { name: 'auto_explain.log_buffers', value: 'on' },
-        { name: 'auto_explain.log_timing', value: 'off' },
-        { name: 'auto_explain.log_triggers', value: 'on' },
-        { name: 'auto_explain.log_verbose', value: 'on' },
-        { name: 'auto_explain.log_nested_statements', value: 'on' },
-        { name: 'auto_explain.sample_rate', value: '1' },
-        { name: 'idle_in_transaction_session_timeout', value: '300000' },
-        // Tune planner costs and prefetch for gp3 SSD.
-        { name: 'random_page_cost', value: '1.1' },
-        { name: 'effective_io_concurrency', value: '256' },
-        // Reduce sort/hash disk spills; 16MB sized for the smallest (8GiB dev) instance.
-        { name: 'work_mem', value: '16384' },
-        // Avoid JIT startup cost for one-off dynamic Soup queries.
-        { name: 'jit', value: '0' },
-        // Log spills of at least 10MB for follow-up tuning.
-        { name: 'log_temp_files', value: '10240' },
-      ],
+      parameters,
       tags,
     },
     { protect: true }
   );
 }
+
+// Dev was upgraded to Postgres 18 by hand on 2026-08-09, which created this
+// group outside Pulumi. Adopt it with `pulumi import` before the first update.
+const postgres18ParameterGroup =
+  stack === 'dev'
+    ? new aws.rds.ParameterGroup(
+        'parameter-group-pg18',
+        {
+          name: `macro-db-parameter-group-${stack}-pg18`,
+          family: config.require('parameter_group_family'),
+          description: 'dev params for postgres 18',
+          parameters,
+          tags,
+        },
+        { protect: true }
+      )
+    : undefined;
+
+const instanceParameterGroup =
+  postgres18ParameterGroup ?? originalParameterGroup;
 
 export const parameterGroupArn = originalParameterGroup.arn;
 
@@ -222,7 +217,7 @@ const database = new aws.rds.Instance(
     finalSnapshotIdentifier:
       stack === 'prod' ? `macro-db-${stack}-final` : undefined, // only final snapshot prod
     deletionProtection: stack === 'prod',
-    parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
+    parameterGroupName: pulumi.interpolate`${instanceParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     multiAz: stack === 'prod',
@@ -262,7 +257,7 @@ const readReplica = new aws.rds.Instance(
     ),
     publiclyAccessible: true,
     vpcSecurityGroupIds: databaseVpcSecurityGroupIds,
-    parameterGroupName: pulumi.interpolate`${originalParameterGroup.name}`,
+    parameterGroupName: pulumi.interpolate`${instanceParameterGroup.name}`,
     enabledCloudwatchLogsExports:
       stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     skipFinalSnapshot: true,

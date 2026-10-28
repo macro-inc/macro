@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { untrack } from 'solid-js';
 import type {
   ExternalChange,
@@ -183,7 +184,7 @@ export function createUrlNavigation(options: {
       revert,
     });
 
-    void runner.startUrl(navigation, false);
+    fireAndForget(runner.startUrl(navigation, false), 'split-router');
   };
 
   /** A link into the router's routes, handled before it lands; the router writes the URL itself. */
@@ -193,7 +194,7 @@ export function createUrlNavigation(options: {
       mode: 'push',
     });
 
-    void runner.startUrl(navigation, false);
+    fireAndForget(runner.startUrl(navigation, false), 'split-router');
 
     return false;
   };
@@ -209,6 +210,8 @@ export function createUrlNavigation(options: {
         from,
         cause: 'external' as const,
         signal: UNCANCELLABLE,
+        // The host only asks permission; the router cannot observe its commit.
+        onCommit: () => {},
       };
 
       return checksFor(guards.select(pane, PANE_LEVEL), context);
@@ -233,7 +236,7 @@ export function createUrlNavigation(options: {
       const unsubscribe = history.subscribe(follow);
       const stopIntercept = history.intercept?.(intercept);
 
-      void load(url.lastKnown());
+      fireAndForget(load(url.lastKnown()), 'split-router');
 
       return () => {
         unsubscribe();

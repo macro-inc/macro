@@ -1,6 +1,7 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
+import { FreeTierModel } from '@service-cognition/generated/schemas/freeTierModel';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -18,6 +19,7 @@ export const Model = {
   opus55: 'anthropic/claude-opus-5-5',
   haiku45: 'anthropic/claude-haiku-4-5',
   gpt6Astra: 'openai/gpt-6-astra',
+  gpt61Sol: 'openai/gpt-6.1-sol',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
   gemini38Flash: 'google/gemini-3.8-flash',
@@ -37,6 +39,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'anthropic/claude-opus-5-5': 'Opus 5.5',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
   'openai/gpt-6-astra': 'GPT-6 Astra',
+  'openai/gpt-6.1-sol': 'GPT-6.1 Sol',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
   'google/gemini-3.8-flash': 'Gemini 3.8 Flash',
@@ -47,6 +50,7 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'anthropic/claude-opus-5-5': ClaudeIcon,
   'anthropic/claude-haiku-4-5': ClaudeIcon,
   'openai/gpt-6-astra': OpenAiIcon,
+  'openai/gpt-6.1-sol': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
   'google/gemini-3.8-flash': GoogleIcon,
@@ -56,27 +60,27 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 export const DEFAULT_MODEL: TModel = Model.sonnet55;
 
 /**
- * Default model for free users. Free users aren't entitled to the premium
- * models (which the backend rejects with a 403), so they start on Haiku.
+ * Models a free user may select, generated from the backend's free tier
+ * (`chat::domain::models::FREE_MODEL`). Every other model is paid-only: the
+ * backend rejects it with a 403, and the selector shows it locked, where
+ * selecting one opens the paywall.
  */
-export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
+export const FREE_MODELS: readonly TModel[] = Object.values(FreeTierModel);
+
+/**
+ * Default model for free users, and the model for AI that runs for every plan
+ * without a model choice (e.g. Home suggestions).
+ */
+export const FREE_DEFAULT_MODEL: TModel = FREE_MODELS[0];
 
 /** Models a paid user may select. */
 export const PAID_MODELS: readonly TModel[] = Object.values(Model);
 
 /**
  * Model for database AI: question answering, the database assistant, and chats
- * opened from a database. Paid-only, like every model but {@link FREE_DEFAULT_MODEL}.
+ * opened from a database. Available on both free and paid plans.
  */
-export const DATABASE_MODEL: TModel = Model.gemini38Flash;
-
-/**
- * Models a free user may select. Free users only get Haiku
- * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
- * the selector, where selecting one opens the paywall instead of being sent
- * and rejected by the backend.
- */
-export const FREE_MODELS: readonly TModel[] = [FREE_DEFAULT_MODEL];
+export const DATABASE_MODEL: TModel = FREE_DEFAULT_MODEL;
 
 /** The default model for a user given their paid entitlement. */
 export function defaultModelForPlan(hasPaidAccess: boolean): TModel {
@@ -101,6 +105,7 @@ export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-opus-5-5': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
   'openai/gpt-6-astra': 'openai',
+  'openai/gpt-6.1-sol': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',
   'google/gemini-3.8-flash': 'google',

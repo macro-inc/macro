@@ -13,7 +13,7 @@ import type { CrmQueryDependencies } from './dependencies';
 
 import { throwOnErr } from '@core/util/result';
 import type { View } from '@service-storage/generated/schemas/view';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
 import type { TeamConfigSource } from '../context/crm-sources';
@@ -29,6 +29,14 @@ export {
 
 const CRM_SAVED_VIEWS_QUERY_KEY = ['crm', 'saved-views'] as const;
 
+function personalCrmViewsQueryOptions(deps: CrmQueryDependencies) {
+  return queryOptions({
+    queryKey: CRM_SAVED_VIEWS_QUERY_KEY,
+    queryFn: async () =>
+      await throwOnErr(async () => await deps.storage.views.getSavedViews()),
+  });
+}
+
 export type PersonalCrmView = View & { config: CrmViewConfig };
 
 /** Personal saved views (server-persisted via /saved_views). */
@@ -36,11 +44,7 @@ export function usePersonalCrmViews(deps: CrmQueryDependencies) {
   const queryClient = deps.client;
 
   const viewsQuery = useQuery(
-    () => ({
-      queryKey: CRM_SAVED_VIEWS_QUERY_KEY,
-      queryFn: async () =>
-        await throwOnErr(async () => await deps.storage.views.getSavedViews()),
-    }),
+    () => personalCrmViewsQueryOptions(deps),
     () => deps.client
   );
 

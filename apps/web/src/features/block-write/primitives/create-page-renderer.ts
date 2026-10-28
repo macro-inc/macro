@@ -4,6 +4,7 @@ import {
   renderPage,
 } from '@core/docx-engine/client';
 import type { Band, PageInfo } from '@core/docx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 /** The most pixels per CSS pixel a page is drawn with. */
 const MAX_DPR = 2;
@@ -145,7 +146,7 @@ export function createPageRenderer(options: {
     } finally {
       busy = false;
     }
-    void pump();
+    fireAndForget(pump(), 'docx-editor');
   }
 
   return {
@@ -184,23 +185,23 @@ export function createPageRenderer(options: {
           discard(s);
         }
       }
-      void pump();
+      fireAndForget(pump(), 'docx-editor');
     },
     /** Gives a page its canvas (or takes it away when it scrolls off). */
     attach(index: number, canvas: HTMLCanvasElement | undefined) {
       const s = state(index);
       s.canvas = canvas;
       if (!canvas) discard(s);
-      void pump();
+      fireAndForget(pump(), 'docx-editor');
     },
     setVisible(index: number, visible: boolean) {
       state(index).visible = visible;
-      if (visible) void pump();
+      if (visible) fireAndForget(pump(), 'docx-editor');
     },
     /** Redraws everything (after a zoom change). */
     invalidate() {
       for (const s of states.values()) discard(s);
-      void pump();
+      fireAndForget(pump(), 'docx-editor');
     },
     pixelWidth,
     pixelHeight,

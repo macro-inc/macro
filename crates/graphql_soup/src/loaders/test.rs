@@ -5,23 +5,20 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use item_filters::{
-    SharedEmailFilter,
-    ast::{
-        call::CallLiteral,
-        channel::{ChannelLiteral, ChannelThreadLiteral},
-        chat::ChatLiteral,
-        crm_company::CrmCompanyLiteral,
-        document::DocumentLiteral,
-        email::EmailLiteral,
-        foreign_entity::ForeignEntityLiteral,
-        project::ProjectLiteral,
-    },
+use item_filters::ast::{
+    call::CallLiteral,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+    chat::ChatLiteral,
+    crm_company::CrmCompanyLiteral,
+    document::DocumentLiteral,
+    email::EmailLiteral,
+    foreign_entity::ForeignEntityLiteral,
+    project::ProjectLiteral,
 };
 use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_soup::{document::SoupDocument, item::SoupItem};
+use models_soup::{document::SoupDocument, email_thread::SoupEmailThreadPreview};
 use soup::domain::{
     models::{
         EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField,
@@ -41,6 +38,7 @@ struct RecordedRequest {
     limit: u16,
     /// Inbox IDs attached to the request.
     link_ids: Vec<Uuid>,
+    team_id: Option<String>,
 }
 
 /// Soup service that records raw requests and returns configured items by user.
@@ -73,7 +71,6 @@ impl SoupService for RecordingSoupService {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + serde::Serialize + Send,
     {
-        assert!(team_receipt.is_none());
         let items = self
             .responses
             .lock()
@@ -88,6 +85,7 @@ impl SoupService for RecordingSoupService {
                 user_id: req.user,
                 limit: req.limit,
                 link_ids: req.link_ids,
+                team_id: team_receipt.map(|receipt| receipt.entity().entity_id.to_string()),
             });
         let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
             Paginated::from_parts(items, None);
@@ -147,24 +145,25 @@ impl SoupService for RecordingSoupService {
     }
 }
 
-/// Inbox reader that records users and returns configured inbox IDs.
+/// Thread reader that records requests and returns configured previews by user.
 #[derive(Clone, Default)]
-struct RecordingInboxReader {
-    /// Users whose inboxes were requested.
-    calls: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
-    /// Inbox IDs returned for each user.
-    responses: Arc<HashMap<MacroUserIdStr<'static>, Vec<Uuid>>>,
+struct RecordingThreadReader {
+    /// Users and thread ids whose previews were requested.
+    calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Vec<Uuid>)>>>,
+    /// Previews returned for each user.
+    responses: Arc<HashMap<MacroUserIdStr<'static>, Vec<SoupEnrichedEmailThreadPreview<()>>>>,
 }
 
-impl SoupInboxReader for RecordingInboxReader {
-    async fn get_inbox_ids(
+impl SoupEmailThreadReader for RecordingThreadReader {
+    async fn read_threads(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<Uuid>, SoupItemLoaderError> {
+        thread_ids: Vec<Uuid>,
+    ) -> Result<Vec<SoupEnrichedEmailThreadPreview<()>>, SoupItemLoaderError> {
         self.calls
             .lock()
-            .expect("inbox calls lock")
-            .push(user_id.clone());
+            .expect("thread calls lock")
+            .push((user_id.clone(), thread_ids));
         Ok(self.responses.get(&user_id).cloned().unwrap_or_default())
     }
 }
@@ -201,6 +200,36 @@ fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     })
 }
 
+/// Build an email thread preview as the access-checked reader returns it.
+fn email_thread(id: Uuid) -> SoupEnrichedEmailThreadPreview<()> {
+    SoupEnrichedEmailThreadPreview {
+        thread: SoupEmailThreadPreview {
+            id,
+            provider_id: None,
+            owner_id: user("macro|teammate@example.com"),
+            inbox_visible: true,
+            is_read: false,
+            is_draft: false,
+            is_important: false,
+            is_signal: false,
+            name: Some("Shared thread".to_owned()),
+            snippet: None,
+            sender_email: None,
+            sender_name: None,
+            sender_photo_url: None,
+            sort_ts: DateTime::<Utc>::default(),
+            created_at: DateTime::<Utc>::default(),
+            updated_at: DateTime::<Utc>::default(),
+            viewed_at: None,
+            project_id: None,
+        },
+        attachments: Vec::new(),
+        participants: Vec::new(),
+        labels: Vec::new(),
+        extra: (),
+    }
+}
+
 /// Collect literal UUIDs from a binary expression tree.
 fn collect_ids<T>(expr: &Expr<T>, literal_id: impl Copy + Fn(&T) -> Option<Uuid>) -> HashSet<Uuid> {
     match expr {
@@ -214,40 +243,6 @@ fn collect_ids<T>(expr: &Expr<T>, literal_id: impl Copy + Fn(&T) -> Option<Uuid>
     }
 }
 
-/// Collect thread IDs from an expression that contains only positive thread-ID literals.
-fn positive_email_thread_ids(expr: &Expr<EmailLiteral>) -> Option<HashSet<Uuid>> {
-    match expr {
-        Expr::And(left, right) | Expr::Or(left, right) => {
-            let mut ids = positive_email_thread_ids(left)?;
-            ids.extend(positive_email_thread_ids(right)?);
-            Some(ids)
-        }
-        Expr::Not(_) => None,
-        Expr::Literal(EmailLiteral::ThreadId(id)) => Some(HashSet::from([*id])),
-        Expr::Literal(_) => None,
-    }
-}
-
-/// Return whether positive thread IDs are combined with shared-thread inclusion via `And`.
-fn includes_shared_threads(expr: &Expr<EmailLiteral>, expected_ids: &HashSet<Uuid>) -> bool {
-    let is_shared_include = |expr: &Expr<EmailLiteral>| {
-        matches!(
-            expr,
-            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Include))
-        )
-    };
-    let has_expected_ids =
-        |expr: &Expr<EmailLiteral>| positive_email_thread_ids(expr).as_ref() == Some(expected_ids);
-
-    match expr {
-        Expr::And(left, right) => {
-            (has_expected_ids(left) && is_shared_include(right))
-                || (is_shared_include(left) && has_expected_ids(right))
-        }
-        Expr::Or(_, _) | Expr::Not(_) | Expr::Literal(_) => false,
-    }
-}
-
 #[tokio::test]
 async fn batches_all_keys_for_one_user_into_one_soup_request() {
     let user_id = user("macro|one@example.com");
@@ -258,7 +253,7 @@ async fn batches_all_keys_for_one_user_into_one_soup_request() {
         vec![document(first_id), document(second_id)],
     );
     let calls = Arc::clone(&service.calls);
-    let loader = SoupItemLoader::new(service, RecordingInboxReader::default());
+    let loader = SoupItemLoader::new(service, RecordingThreadReader::default());
     let keys = vec![
         (
             user_id.clone(),
@@ -291,7 +286,7 @@ async fn separates_one_soup_request_per_unique_user() {
         .with_response(first_user.clone(), vec![document(first_id)])
         .with_response(second_user.clone(), vec![document(second_id)]);
     let calls = Arc::clone(&service.calls);
-    let loader = SoupItemLoader::new(service, RecordingInboxReader::default());
+    let loader = SoupItemLoader::new(service, RecordingThreadReader::default());
     let keys = vec![
         (
             first_user.clone(),
@@ -317,20 +312,25 @@ async fn separates_one_soup_request_per_unique_user() {
     assert_eq!(users, HashSet::from([first_user, second_user]));
 }
 
+/// A thread outside the viewer's inboxes (a teammate's thread reached through
+/// the team's CRM) hydrates when entity access grants it, without any inbox
+/// scope and without a Soup request.
 #[tokio::test]
-async fn resolves_inboxes_once_for_a_users_email_entities() {
+async fn email_threads_hydrate_through_the_access_checked_reader_not_the_viewer_inboxes() {
     let user_id = user("macro|email@example.com");
     let first_id = Uuid::from_u128(11);
     let second_id = Uuid::from_u128(12);
-    let inbox_id = Uuid::from_u128(13);
     let service = RecordingSoupService::default();
     let soup_calls = Arc::clone(&service.calls);
-    let inbox_calls = Arc::new(Mutex::new(Vec::new()));
-    let inbox_reader = RecordingInboxReader {
-        calls: Arc::clone(&inbox_calls),
-        responses: Arc::new(HashMap::from([(user_id.clone(), vec![inbox_id])])),
+    let thread_calls = Arc::new(Mutex::new(Vec::new()));
+    let thread_reader = RecordingThreadReader {
+        calls: Arc::clone(&thread_calls),
+        responses: Arc::new(HashMap::from([(
+            user_id.clone(),
+            vec![email_thread(first_id), email_thread(second_id)],
+        )])),
     };
-    let loader = SoupItemLoader::new(service, inbox_reader);
+    let loader = SoupItemLoader::new(service, thread_reader);
     let keys = vec![
         (
             user_id.clone(),
@@ -342,15 +342,79 @@ async fn resolves_inboxes_once_for_a_users_email_entities() {
         ),
     ];
 
-    Loader::<SoupItemLoaderKey>::load(&loader, &keys)
+    let loaded = Loader::<SoupItemLoaderKey>::load(&loader, &keys)
         .await
         .expect("batch loads");
 
-    assert_eq!(inbox_calls.lock().expect("inbox calls lock").len(), 1);
+    assert_eq!(loaded.len(), 2);
+    assert!(matches!(
+        &loaded[&keys[0]].item,
+        SoupItem::EmailThread(thread) if thread.thread.id == first_id
+    ));
+    assert!(matches!(
+        &loaded[&keys[1]].item,
+        SoupItem::EmailThread(thread) if thread.thread.id == second_id
+    ));
     assert_eq!(
-        soup_calls.lock().expect("Soup calls lock")[0].link_ids,
-        vec![inbox_id]
+        *thread_calls.lock().expect("thread calls lock"),
+        vec![(user_id, vec![first_id, second_id])]
     );
+    assert!(soup_calls.lock().expect("Soup calls lock").is_empty());
+}
+
+#[tokio::test]
+async fn email_threads_and_other_entities_hydrate_side_by_side() {
+    let user_id = user("macro|mixed@example.com");
+    let document_id = Uuid::from_u128(14);
+    let thread_id = Uuid::from_u128(15);
+    let service =
+        RecordingSoupService::default().with_response(user_id.clone(), vec![document(document_id)]);
+    let soup_calls = Arc::clone(&service.calls);
+    let thread_reader = RecordingThreadReader {
+        calls: Arc::default(),
+        responses: Arc::new(HashMap::from([(
+            user_id.clone(),
+            vec![email_thread(thread_id)],
+        )])),
+    };
+    let loader = SoupItemLoader::new(service, thread_reader);
+    let keys = vec![
+        (
+            user_id.clone(),
+            EntityType::Document.with_entity_string(document_id.to_string()),
+        ),
+        (
+            user_id.clone(),
+            EntityType::EmailThread.with_entity_string(thread_id.to_string()),
+        ),
+    ];
+
+    let loaded = Loader::<SoupItemLoaderKey>::load(&loader, &keys)
+        .await
+        .expect("batch loads");
+
+    assert_eq!(loaded.len(), 2);
+    let soup_calls = soup_calls.lock().expect("Soup calls lock");
+    assert_eq!(soup_calls.len(), 1);
+    assert_eq!(soup_calls[0].limit, 1);
+    assert!(soup_calls[0].link_ids.is_empty());
+}
+
+#[tokio::test]
+async fn a_thread_the_reader_withholds_is_absent() {
+    let user_id = user("macro|denied@example.com");
+    let entity = EntityType::EmailThread.with_entity_string(Uuid::from_u128(16).to_string());
+    let loader = SoupItemDataLoader::new(SoupItemLoader::new(
+        RecordingSoupService::default(),
+        RecordingThreadReader::default(),
+    ));
+
+    let item = loader
+        .load_one((user_id, entity))
+        .await
+        .expect("an inaccessible thread is not a loader failure");
+
+    assert!(item.is_none());
 }
 
 #[tokio::test]
@@ -364,7 +428,7 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
     let responses = Arc::clone(&service.responses);
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
         service,
-        RecordingInboxReader::default(),
+        RecordingThreadReader::default(),
     ));
 
     let first = loader
@@ -393,7 +457,7 @@ async fn context_loader_returns_none_for_a_missing_item() {
     let entity = EntityType::Document.with_entity_string(Uuid::from_u128(21).to_string());
     let loader = SoupItemDataLoader::new(SoupItemLoader::new(
         RecordingSoupService::default(),
-        RecordingInboxReader::default(),
+        RecordingThreadReader::default(),
     ));
 
     let item = loader
@@ -405,17 +469,13 @@ async fn context_loader_returns_none_for_a_missing_item() {
 }
 
 #[test]
-fn email_entity_filter_includes_shared_threads() {
+fn email_threads_are_not_encoded_into_the_soup_request() {
     let thread_id = Uuid::from_u128(20);
     let entities = vec![EntityType::EmailThread.with_entity_string(thread_id.to_string())];
 
-    let ast = entity_filter_ast(&entities).expect("valid AST");
-    let email_filter = ast.email_filter.tree.as_deref().expect("email filter");
+    let error = entity_filter_ast(&entities).expect_err("email threads bypass Soup");
 
-    assert!(includes_shared_threads(
-        email_filter,
-        &HashSet::from([thread_id])
-    ));
+    assert!(error.to_string().contains("thread reader"));
 }
 
 #[test]
@@ -476,9 +536,9 @@ fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
         ),
         HashSet::from([nil])
     );
-    assert!(includes_shared_threads(
-        ast.email_filter.tree.as_deref().expect("email filter"),
-        &HashSet::from([nil])
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::ThreadId(id))) if id.is_nil()
     ));
     assert_eq!(
         collect_ids(
@@ -561,4 +621,91 @@ fn database_row_hydration_targets_exact_ids_and_rules_rows_out_otherwise() {
         ast.database_row_filter.as_deref(),
         Some(&Expr::val(DatabaseRowLiteral::Id(Uuid::nil())))
     );
+}
+
+struct CurrentTeam(Mutex<Option<EntityAccessReceipt<MemberTeamRole>>>);
+impl SoupTeamReader for CurrentTeam {
+    fn team_receipt(
+        &self,
+        _: MacroUserIdStr<'static>,
+    ) -> BoxFuture<'_, Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupItemLoaderError>>
+    {
+        Box::pin(async { Ok(self.0.lock().unwrap().clone()) })
+    }
+}
+
+#[tokio::test]
+async fn pr_and_session_hydration_recheck_team_on_each_batch() {
+    use entity_access::domain::models::{EntityPermission, TeamRole};
+    let viewer = user("macro|viewer@example.com");
+    let team_id = Uuid::now_v7();
+    let team = Arc::new(CurrentTeam(Mutex::new(Some(
+        EntityAccessReceipt::try_new_authenticated_user(
+            viewer.clone(),
+            entity_access::domain::models::Entity {
+                entity_type: EntityType::Team,
+                entity_id: team_id.to_string(),
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .unwrap(),
+    ))));
+    let soup = RecordingSoupService::default();
+    let mut loader = SoupItemLoader::new(soup.clone(), RecordingThreadReader::default());
+    loader.team_reader = Some(team.clone());
+    let keys = vec![
+        (
+            viewer.clone(),
+            EntityType::ForeignEntity.with_entity_string(Uuid::now_v7().to_string()),
+        ),
+        (
+            viewer.clone(),
+            EntityType::AgentSession.with_entity_string(Uuid::now_v7().to_string()),
+        ),
+    ];
+    loader.load(&keys).await.unwrap();
+    assert_eq!(
+        soup.calls.lock().unwrap()[0].team_id,
+        Some(team_id.to_string())
+    );
+    *team.0.lock().unwrap() = None;
+    loader.load(&keys).await.unwrap();
+    assert_eq!(soup.calls.lock().unwrap()[1].team_id, None);
+}
+
+#[tokio::test]
+async fn crm_record_hydration_carries_the_viewer_team() {
+    use entity_access::domain::models::{EntityPermission, TeamRole};
+    let viewer = user("macro|viewer@example.com");
+    let team_id = Uuid::now_v7();
+    let team = Arc::new(CurrentTeam(Mutex::new(Some(
+        EntityAccessReceipt::try_new_authenticated_user(
+            viewer.clone(),
+            entity_access::domain::models::Entity {
+                entity_type: EntityType::Team,
+                entity_id: team_id.to_string(),
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .unwrap(),
+    ))));
+    let soup = RecordingSoupService::default();
+    let mut loader = SoupItemLoader::new(soup.clone(), RecordingThreadReader::default());
+    loader.team_reader = Some(team);
+    for entity_type in [EntityType::CrmCompany, EntityType::CrmContact] {
+        let keys = vec![(
+            viewer.clone(),
+            entity_type.with_entity_string(Uuid::now_v7().to_string()),
+        )];
+        loader.load(&keys).await.unwrap();
+        assert_eq!(
+            soup.calls.lock().unwrap().last().unwrap().team_id,
+            Some(team_id.to_string()),
+            "{entity_type} hydration needs the viewer's team"
+        );
+    }
 }

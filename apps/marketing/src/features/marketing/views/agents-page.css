@@ -1,50 +1,48 @@
-.agents-page-providers {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 32px 24px;
-  width: min(872px, calc(100% - 48px));
-  margin: 40px auto 0;
-  padding: 36px 0;
-  list-style: none;
-  border-block: 1px solid #ffffff14;
-  color: #b8b8b3;
-  font: 400 15px/1.5 'Inter Variable', Inter, sans-serif;
+.agents-connections {
+  width:min(872px, calc(100% - 48px));
+  margin:40px auto 0;
+  font:400 15px/1.7 'Inter Variable', Inter, sans-serif;
+}
+.agents-connection-paths { display:grid; grid-template-columns:1fr 1fr; gap:56px; }
+.agents-connection-path { display:flex; flex-direction:column; align-items:flex-start; border-top:1px solid #ffffff24; padding-top:24px; }
+.agents-connection-path h3 { margin:0; color:#e0e0de; font:500 20px/1.4 'Inter Variable', Inter, sans-serif; letter-spacing:-.4px; }
+.agents-connection-path p { margin:16px 0 24px; color:#a3a3a3; }
+.agents-connections .agents-setup-link {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin-top:auto;
+  color:#e0e0de;
+  text-decoration:none;
+}
+.agents-setup-link svg { width:16px; height:16px; }
+.agents-connections .agents-setup-link:hover { text-decoration:underline; text-underline-offset:4px; }
+.agents-mcp-disclosure { margin-top:40px; border-block:1px solid #ffffff20; }
+.agents-mcp-disclosure > summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding:20px 0;
+  color:#b8b8b3;
+  list-style:none;
+  cursor:pointer;
+}
+.agents-mcp-disclosure > summary::-webkit-details-marker { display:none; }
+.agents-mcp-disclosure > summary > svg { width:18px; height:18px; flex:none; }
+.agents-mcp-disclosure[open] > summary > svg { transform:rotate(180deg); }
+.agents-mcp-content { padding-bottom:24px; text-align:left; }
+.agents-mcp-content .agent-mcp-cards { margin-top:0; }
+@media (max-width:699px) {
+  .agents-connections { width:100%; font-size:14px; margin-top:32px; }
+  .agents-connection-paths { grid-template-columns:1fr; gap:32px; }
+  .agents-connection-path h3 { font-size:18px; }
+  .agents-mcp-disclosure { margin-top:32px; }
 }
 
-.agents-page-providers li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.agents-page-provider-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 36px;
-}
-
-.agents-page-provider-icon svg {
-  width: 28px;
-  height: 28px;
-}
-
-.agents-page-providers li[data-agent='Hermes'] svg {
-  width: 18px;
-  height: 36px;
-}
-
-/* The MCP settings window sits under the provider row. */
-.agents-page-mcp {
-  margin-top: 8px;
-}
-
-@media (max-width: 699px) {
-  .agents-page-providers {
-    width: 100%;
-    justify-content: flex-start;
-    gap: 24px 32px;
-    padding-block: 28px;
-  }
+/* Two intentional lines stay below the width of the hero’s second line. */
+.agents-hero .email-page-hero-description { white-space: nowrap; }
+.agents-hero .email-page-hero-break { display: block; }
+@media (max-width:699px) {
+  .agents-hero .email-page-hero > .email-page-hero-description { font-size:clamp(10px, 2.9vw, 14px); }
 }

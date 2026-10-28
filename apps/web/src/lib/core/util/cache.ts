@@ -80,11 +80,13 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
       expiresAt,
     };
 
-    result.then((value) => {
-      if (value.isErr()) {
-        cache.delete(key);
-      }
-    });
+    result
+      .then((value) => {
+        if (value.isErr()) {
+          cache.delete(key);
+        }
+      })
+      .catch(() => cache.delete(key));
 
     cache.set(key, cacheEntry);
     return result;

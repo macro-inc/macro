@@ -5,8 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
-  datadogAgentContainer,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
@@ -107,9 +106,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
@@ -132,7 +129,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
               },
               // No portMappings - workers don't expose ports
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
             cpuArchitecture: `${

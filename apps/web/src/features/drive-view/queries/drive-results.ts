@@ -57,7 +57,7 @@ export function driveEntityMatchesLocation(
     );
   }
 
-  if (entity.type === 'database') {
+  if (entity.type === 'database' || entity.type === 'form') {
     if (
       !userId ||
       location.tab === 'recent' ||
@@ -85,7 +85,8 @@ export function orderDriveEntities(
     return [...entities];
 
   const timestamp = (entity: EntityData) => {
-    if (entity.type === 'database') return entity.createdAt;
+    if (entity.type === 'database' || entity.type === 'form')
+      return entity.createdAt;
     if (sort === 'created_at') return entity.sortTs ?? entity.createdAt;
     if (sort === 'viewed_at') return entity.sortTs ?? entity.viewedAt;
 

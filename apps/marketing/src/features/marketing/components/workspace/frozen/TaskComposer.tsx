@@ -23,9 +23,16 @@ export function TaskComposer(props: {
   draft: WorkspaceTask;
   /** The channel whose message became this task's description. */
   sourceChannel?: string;
+  /** A selected date in a narrated task-creation walkthrough. */
+  dueDateLabel?: string;
   update: (patch: Partial<WorkspaceTask>) => void;
   submit: () => void;
   close: () => void;
+  priorityPlayback?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    automatic?: boolean;
+  };
 }) {
   const [createMore, setCreateMore] = createSignal(false);
   const [shared, setShared] = createSignal(true);
@@ -93,6 +100,7 @@ export function TaskComposer(props: {
         />
         <TaskPriorityMenu
           task={props.draft}
+          playback={props.priorityPlayback}
           onSave={(priority) => props.update({ priority })}
         />
         <TaskOwnerMenu
@@ -101,7 +109,7 @@ export function TaskComposer(props: {
         />
         <span class="sample-task-composer-empty">
           <CalendarBlank class="size-3" />
-          Due Date
+          {props.dueDateLabel ?? 'Due Date'}
         </span>
         <span class="sample-task-composer-empty">
           <Tag class="size-3" />

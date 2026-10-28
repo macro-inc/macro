@@ -27,7 +27,7 @@
 .homepage-demo-carousel { position: relative; z-index: 1; margin-top: -120px; text-align: center; touch-action: pan-y; }
 .homepage-demo-slide-copy { min-height: 120px; display: grid; justify-items: center; align-content: start; user-select: none; cursor: grab; }
 .homepage-demo-slide-copy:active { cursor: grabbing; }
-.homepage-demo-slide-copy h2 { margin: 0; max-width: 900px; color: #eee; font-family: 'Roboto Slab Variable', display, serif; font-size: 34px; font-weight: 315; letter-spacing: -.015em; line-height: 1.2; white-space: pre-line; }
+.homepage-demo-slide-copy h2 { margin: 0; max-width: 900px; color: #eee; font-family: 'Roboto Slab Variable', display, serif; font-size: 34px; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); letter-spacing: -.015em; line-height: 1.2; white-space: pre-line; }
 .homepage-demo-slide-controls { display: flex; align-items: center; justify-content: center; gap: 0; margin: 0 0 12px; }
 .homepage-demo-carousel button { color: #999; background: transparent; border: 0; font: inherit; }
 .homepage-demo-carousel button:hover { color: #eee; }
@@ -44,4 +44,27 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .homepage-embedded-stage::after, .homepage-demo-slide-dot span { transition: none; }
+}
+
+/* Preserve the original cream backdrop without altering the typography PR. */
+html[data-palette='cream'] .homepage-embedded-wallpaper {
+  background:
+    radial-gradient(ellipse at 8% 20%, #e7dfd2 0%, transparent 53%),
+    radial-gradient(ellipse at 72% 0%, #dde3da 0%, transparent 55%),
+    radial-gradient(ellipse at 30% 100%, #e4e1d1 0%, transparent 57%),
+    radial-gradient(ellipse at 100% 90%, #ebdfd0 0%, transparent 55%), #ebe6dc;
+}
+html[data-palette='cream'] .homepage-embedded-window { border-color: #1d1c1a1a; box-shadow: 0 32px 70px -24px #1d1c1a40; }
+html[data-palette='cream'] .homepage-embedded-stage::after { background: linear-gradient(to bottom, transparent, #f5f1e855 35%, #f5f1e8bb 65%, #f5f1e8 96%); }
+html[data-palette='cream'] .homepage-demo-slide-dot span { background: #cfcac0; }
+html[data-palette='cream'] .homepage-demo-slide-dot[aria-pressed=true] span { background: #1d1c1a; }
+
+/* Keep the restored agent composer above the decorative caption and fade. */
+.homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-window { box-sizing: border-box; padding-bottom: 136px; }
+.homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-stage::after { inset: calc(100% - 160px) 0 -1px; }
+
+/* Match HomepageOpenSource's viewport gate before hydration. The server sends
+   desktop markup; phones must never paint it before the mobile branch mounts. */
+@media (max-width: 799px) {
+  .homepage-embedded-demo { display: none; }
 }

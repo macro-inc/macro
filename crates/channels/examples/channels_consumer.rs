@@ -67,6 +67,7 @@ fn event_type(event: &ChannelTopicEvent) -> &'static str {
     match event {
         ChannelTopicEvent::Created(_) => "channel.created",
         ChannelTopicEvent::Updated(_) => "channel.updated",
+        ChannelTopicEvent::PictureChanged(_) => "channel.picture_changed",
         ChannelTopicEvent::Deleted(_) => "channel.deleted",
         ChannelTopicEvent::ParticipantAdded(_) => "channel.participant_added",
         ChannelTopicEvent::ParticipantRemoved(_) => "channel.participant_removed",

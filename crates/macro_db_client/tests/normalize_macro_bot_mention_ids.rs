@@ -1,5 +1,10 @@
 use sqlx::{Pool, Postgres};
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 const NORMALIZED_MACRO_BOT_ID: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
 const OTHER_UUID: &str = "11111111-1111-1111-1111-111111111111";
 const MIGRATION: &str =
@@ -180,6 +185,7 @@ async fn migration_normalizes_bare_uuid_message_senders(
 }
 
 async fn create_minimal_tables(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA).execute(pool).await?;
     sqlx::raw_sql(
         r#"
         CREATE TABLE comms_messages (

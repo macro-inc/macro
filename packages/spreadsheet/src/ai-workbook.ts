@@ -8,7 +8,9 @@ import type {
   SpreadsheetReadCell,
   SpreadsheetReadRequest,
   SpreadsheetReadResponse,
+  SpreadsheetReadValidation,
   SpreadsheetSheetSummary,
+  SpreadsheetTableSummary,
   SpreadsheetValue,
 } from './ai-types';
 import type {
@@ -17,6 +19,14 @@ import type {
   WorkbookCalculation,
 } from './calculation';
 import { fillCopies } from './cell-copy';
+import { insertCheckboxEdits } from './checkboxes';
+import {
+  dropdownRule,
+  literalListItems,
+  overlappingValidations,
+  replaceValidations,
+  validationReference,
+} from './data-validation';
 import { validateSpreadsheetDocument } from './document-validation';
 import {
   type CellSelection,
@@ -24,6 +34,7 @@ import {
   selectionBounds,
 } from './grid-selection';
 import { qualifyScratchFormula } from './scratch-formula';
+import { tableColumnNames } from './sheet-tables';
 import {
   appendSpreadsheetRows,
   formatCellAddress,
@@ -43,12 +54,16 @@ import {
 } from './spreadsheet-document';
 import {
   addSpreadsheetSheet,
+  createSpreadsheetTable,
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
   readSpreadsheetWorkbook,
   renameSpreadsheetSheet,
   type SpreadsheetWorkbookSheet,
+  setSpreadsheetValidations,
 } from './workbook-document';
+
+const MAX_READ_VALIDATIONS = 50;
 
 export const SPREADSHEET_AI_LIMITS = {
   readCells: 500,
@@ -167,26 +182,55 @@ function usedRange(
   return bounds ? rangeName(bounds) : null;
 }
 
+function tableSummaries(
+  sheet: SpreadsheetWorkbookSheet
+): SpreadsheetTableSummary[] {
+  return (sheet.metadata?.tables ?? []).map((table) => {
+    const columns = tableColumnNames(table, sheet.cells);
+    const filteredColumns = Object.keys(table.filters ?? {}).flatMap(
+      (offset) => columns[Number(offset)] ?? []
+    );
+    const columnTypes = Object.entries(table.columnTypes ?? {})
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .flatMap(([offset, type]) => {
+        const column = columns[Number(offset)];
+        return column === undefined ? [] : [{ column, type }];
+      });
+    return {
+      name: table.name,
+      range: table.range,
+      columns,
+      totalsRow: table.totalsRow,
+      ...(filteredColumns.length && { filteredColumns }),
+      ...(columnTypes.length && { columnTypes }),
+    };
+  });
+}
+
 function summaries(
   workbook: SpreadsheetWorkbookSheet[],
   results: WorkbookCalculation
 ): SpreadsheetSheetSummary[] {
-  return workbook.map((sheet) => ({
-    id: sheet.id,
-    name: sheet.name,
-    rowCount: sheet.layout.rowCount,
-    columnCount: sheet.layout.columnCount,
-    usedRange: usedRange(sheet, results[sheet.id] ?? {}),
-    populatedCells: Object.values(sheet.cells).filter(
-      (cell) => cell.value !== ''
-    ).length,
-    formulaCells: Object.values(sheet.cells).filter(
-      (cell) => cell.format !== 'text' && cell.value.startsWith('=')
-    ).length,
-    errorCells: Object.values(results[sheet.id] ?? {}).filter(
-      (cell) => cell.error
-    ).length,
-  }));
+  return workbook.map((sheet) => {
+    const tables = tableSummaries(sheet);
+    return {
+      id: sheet.id,
+      name: sheet.name,
+      rowCount: sheet.layout.rowCount,
+      columnCount: sheet.layout.columnCount,
+      usedRange: usedRange(sheet, results[sheet.id] ?? {}),
+      populatedCells: Object.values(sheet.cells).filter(
+        (cell) => cell.value !== ''
+      ).length,
+      formulaCells: Object.values(sheet.cells).filter(
+        (cell) => cell.format !== 'text' && cell.value.startsWith('=')
+      ).length,
+      errorCells: Object.values(results[sheet.id] ?? {}).filter(
+        (cell) => cell.error
+      ).length,
+      ...(tables.length && { tables }),
+    };
+  });
 }
 
 function readCell(
@@ -205,6 +249,38 @@ function readCell(
       cell?.format !== 'text' && { formula: source }),
     ...(includeStyles && { style }),
   };
+}
+
+function readValidations(
+  sheet: SpreadsheetWorkbookSheet,
+  selection: CellSelection
+): SpreadsheetReadValidation[] {
+  return overlappingValidations(
+    sheet.metadata?.validations,
+    rangeName(selection)
+  )
+    .slice(0, MAX_READ_VALIDATIONS)
+    .map((rule) => {
+      const [first] = rule.formulas ?? [];
+      const items =
+        rule.type === 'list' && first !== undefined
+          ? literalListItems(first)
+          : undefined;
+      return {
+        range: rule.range,
+        type: rule.type,
+        ...(items
+          ? { items }
+          : rule.type === 'list' && first !== undefined
+            ? { source: first }
+            : rule.formulas && { formulas: rule.formulas }),
+        ...(rule.operator && { operator: rule.operator }),
+        ...(rule.type === 'list' && { dropdown: rule.dropdown !== false }),
+        rejectInvalid:
+          !!rule.showError && (rule.errorStyle ?? 'stop') === 'stop',
+        ...(rule.colors && { colors: rule.colors }),
+      };
+    });
 }
 
 export function readSpreadsheetForAi(
@@ -244,11 +320,13 @@ export function readSpreadsheetForAi(
       remaining--;
       bytes -= size;
     }
+    const validations = readValidations(sheet, selection);
     return {
       sheetId: sheet.id,
       sheetName: sheet.name,
       range: rangeName(selection),
       cells,
+      ...(validations.length && { validations }),
       truncated,
     };
   });
@@ -526,6 +604,77 @@ export function prepareSpreadsheetEdit(
             }
             summary = `Resized ${operation.columns.length} column(s) in “${sheet.name}”.`;
             break;
+          case 'set_dropdown': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            if (
+              (operation.items === undefined) ===
+              (operation.source === undefined)
+            )
+              throw new Error(
+                'A dropdown needs exactly one of items (typed choices) or source (a range of cells holding the choices).'
+              );
+            const sourceSheet =
+              operation.source === undefined
+                ? undefined
+                : validationReference(operation.source)?.sheet;
+            if (sourceSheet !== undefined) resolveSheet(workbook, sourceSheet);
+            const rule = dropdownRule({
+              ...(operation.items === undefined
+                ? { range: operation.source ?? '' }
+                : { items: operation.items }),
+              rejectInvalid: operation.rejectInvalid,
+              colors: operation.colors,
+            });
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range, rule)
+            );
+            summary = `Added a dropdown to ${range} in “${sheet.name}”.`;
+            break;
+          }
+          case 'clear_validation': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range)
+            );
+            summary = `Removed data validation from ${range} in “${sheet.name}”.`;
+            break;
+          }
+          case 'insert_checkboxes': {
+            const selection = checkedRange(operation.range, sheet);
+            const edits = insertCheckboxEdits(sheet.cells, selection);
+            count(Object.keys(edits).length);
+            writeSpreadsheetCells(fork, edits, sheet.id);
+            summary = `Added checkboxes to ${rangeName(selection)} in “${sheet.name}”.`;
+            break;
+          }
+          case 'create_table': {
+            const selection = checkedRange(operation.range, sheet);
+            const range = rangeName(selection);
+            const { top, bottom, left, right } = selectionBounds(selection);
+            // A conversion writes the header and total rows, and the data
+            // cells of the columns it types.
+            count(
+              (right - left + 1) * (operation.totalsRow ? 2 : 1) +
+                (operation.columnTypes?.length ?? 0) * (bottom - top)
+            );
+            const name = createSpreadsheetTable(fork, sheet.id, {
+              range,
+              name: operation.name,
+              totalsRow: operation.totalsRow,
+              columnTypes: Object.fromEntries(
+                (operation.columnTypes ?? []).map(({ column, type }) => [
+                  column,
+                  type,
+                ])
+              ),
+            });
+            summary = `Converted ${range} in “${sheet.name}” to the table “${name}”.`;
+            break;
+          }
         }
       }
       const range = operationRange(operation);

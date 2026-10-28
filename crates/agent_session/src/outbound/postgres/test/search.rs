@@ -31,6 +31,7 @@ async fn search_snapshot_folds_persisted_acp_instead_of_indexing_protocol_frames
                 agent_session_id: session.id,
                 user_id: Some(user_id(OWNER)),
                 content: serde_json::from_value(content).unwrap(),
+                logged_at: None,
             },
         )
         .await

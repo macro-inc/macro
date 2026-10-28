@@ -1,5 +1,6 @@
-import { isTabFocused } from '@core/signal/tabFocus';
+import { isTabVisible } from '@core/signal/tabFocus';
 import type { EntityId } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
 import { ok } from 'neverthrow';
 import {
@@ -9,7 +10,6 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
-
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
 import {
   reportHeartbeatLapse,
@@ -51,12 +51,17 @@ export const connectionGatewayClient = {
         trackedEntities.set(args.entity_id, {
           entityType: args.entity_type,
           count: 1,
+          // Visible, not focused: someone reading beside the window they are
+          // typing in is still looking, and should keep their presence dot.
           heartbeat: setInterval(() => {
-            if (isTabFocused())
-              void connectionGatewayClient.trackEntity({
-                ...args,
-                action: 'ping',
-              });
+            if (isTabVisible())
+              fireAndForget(
+                connectionGatewayClient.trackEntity({
+                  ...args,
+                  action: 'ping',
+                }),
+                'connection-gateway'
+              );
             else reportLapseOnce(args);
           }, 20_000),
           lastSeen: Date.now(),
@@ -121,7 +126,10 @@ export function useEntitySubscription(
     on(target, (value) => {
       if (!value) return;
       const track = (action: TrackEntityMessage['action']) =>
-        void connectionGatewayClient.trackEntity({ ...value, action });
+        fireAndForget(
+          connectionGatewayClient.trackEntity({ ...value, action }),
+          'connection-gateway'
+        );
       track('open');
       const callbacks = trackedEntities.get(value.entity_id)!.refreshCallbacks;
       if (onRefresh) {
@@ -165,26 +173,29 @@ export function useReopenTrackedEntitiesOnReconnect(): void {
 }
 
 /**
- * Pings every tracked entity as soon as the tab regains focus, since the heartbeat pauses in
+ * Pings every tracked entity as soon as the tab is visible again, since the heartbeat pauses in
  * the background. A tab that went unseen longer than the gateway's activity window was left
  * out of the entity's events meanwhile, so its views refresh as they do after a reconnect.
  */
 export function useRefreshTrackedEntitiesOnFocus(): void {
   createEffect(
     on(
-      isTabFocused,
-      (focused) => {
-        if (!focused) return;
+      isTabVisible,
+      (visible) => {
+        if (!visible) return;
         const now = Date.now();
         for (const [entity_id, tracked] of trackedEntities) {
           const entity = { entity_id, entity_type: tracked.entityType };
           const pausedMs = now - tracked.lastSeen;
           const missedEvents = pausedMs >= GATEWAY_ACTIVITY_WINDOW_MS;
           if (missedEvents) reportHeartbeatResumed(entity, pausedMs);
-          void connectionGatewayClient.trackEntity({
-            ...entity,
-            action: 'ping',
-          });
+          fireAndForget(
+            connectionGatewayClient.trackEntity({
+              ...entity,
+              action: 'ping',
+            }),
+            'connection-gateway'
+          );
           if (missedEvents)
             for (const onRefresh of tracked.refreshCallbacks.keys())
               onRefresh(entity);

@@ -125,7 +125,7 @@ export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
       {/* Same elevated surface as the other floating bars. */}
       <Layer depth={2}>
         <div
-          class="p-2 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg ring-1 ring-edge cursor-default select-none"
+          class="menu-surface p-2 fixed top-0 left-0 z-action-menu cursor-default select-none"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
             reactiveOnContainer: editor()?.getRootElement(),

@@ -11,6 +11,7 @@ fn prompt_entry(text: &str) -> QueuedEntry {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        context: None,
     }
 }
 
@@ -132,6 +133,7 @@ fn only_prompts_are_editable() {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        context: None,
     };
     queues.enqueue(session, compact.clone()).unwrap();
 
@@ -256,6 +258,7 @@ fn a_snapshot_round_trips_through_the_durable_shape() {
     let session = AgentSessionId::TEST_A;
     let mut entry = prompt_entry("keep me");
     entry.announce = Some(AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(0xf0)),
         thread_id: Uuid::from_u128(0xf1),

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_projection_outbox(id,link_id,generation,payload) VALUES($1,$2,$3,'{\"kind\":\"link_changed\"}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb2373b1ba2f6f0d57eeb81e88cf5cf11d1c8dfe65608cd23537c310b9f5bcbf"
+}

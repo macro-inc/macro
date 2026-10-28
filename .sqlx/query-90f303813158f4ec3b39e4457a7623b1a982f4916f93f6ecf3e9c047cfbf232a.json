@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT calendar_note_event_visible($1, $2, calendar_note_link_key($2, $3)) AS \"visible!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "visible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "90f303813158f4ec3b39e4457a7623b1a982f4916f93f6ecf3e9c047cfbf232a"
+}

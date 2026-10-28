@@ -11,8 +11,8 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -48,7 +48,7 @@ type EntityInputProps = {
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
-    entityInfo?: { id: string; entity_type: string }[]
+    entityInfo?: { id: string; entity_type: EntityType }[]
   ) => void;
   onClose?: () => void;
   pinnedOptions?: PinnedOption[];
@@ -234,13 +234,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         converted.push(userToEntity(augmentedUser));
       } else {
         const entity = quickAccessItemToEntity(item);
-        // Filter by specific entity type if needed
-        if (specificEntityType) {
-          const entityType = getEntityType(entity);
-          if (entityType === specificEntityType) {
-            converted.push(entity);
-          }
-        } else {
+        const entityType = getEntityType(entity);
+        if (
+          entityType &&
+          (!specificEntityType || entityType === specificEntityType)
+        ) {
           converted.push(entity);
         }
       }
@@ -348,6 +346,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     index === selectedEntityCountAtOpen();
 
   const toggleEntity = (entity: CombinedEntity) => {
+    const entityType = getEntityType(entity);
+    if (!entityType) return;
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
 
@@ -365,7 +365,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     props.setSelectedOptions(newSelected, [
       {
         id: entity.id,
-        entity_type: getEntityType(entity),
+        entity_type: entityType,
       },
     ]);
 
