@@ -1,10 +1,12 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
@@ -233,8 +235,10 @@ export function CallOverlay(props: {
   localName?: string;
   /** The host may hide chat until account or guest session credentials are ready. */
   showChat?: boolean;
-  /** Places the toggle in the host's meeting-link action row. */
+  /** Places the phone toggle in the host's right header island. */
   chatButtonMount?: HTMLElement;
+  /** Host-owned action aligned to the left of the media controls. */
+  footerLeading?: JSXElement;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
 }) {
@@ -247,6 +251,11 @@ export function CallOverlay(props: {
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   const [chatOpen, setChatOpen] = createSignal(false);
   const [chatMounted, setChatMounted] = createSignal(false);
+  const [footerChatMount, setFooterChatMount] = createSignal<HTMLDivElement>();
+  const [controlsFooter, setControlsFooter] = createSignal<HTMLDivElement>();
+  const footerSize = createElementSize(controlsFooter);
+  const chatToggleMount = () =>
+    isMobile() ? props.chatButtonMount : footerChatMount();
   const chatId = createUniqueId();
   let chatButton: HTMLButtonElement | undefined;
   const closeChat = () => {
@@ -323,6 +332,7 @@ export function CallOverlay(props: {
         variant="outline"
         size="icon-lg"
         label={chatOpen() ? 'Close chat' : 'Open chat'}
+        tooltipPlacement="top"
         aria-pressed={chatOpen()}
         aria-expanded={chatOpen()}
         aria-controls={chatId}
@@ -333,15 +343,18 @@ export function CallOverlay(props: {
     </Show>
   );
   return (
-    <div class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)">
+    <div
+      class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)"
+      style={{ '--call-footer-height': `${footerSize.height ?? 0}px` }}
+    >
       <Show
-        when={props.chatButtonMount}
+        when={chatToggleMount()}
         fallback={<div class="absolute right-3 top-3 z-30">{chatToggle}</div>}
       >
         {(mount) => <Portal mount={mount()}>{chatToggle}</Portal>}
       </Show>
       <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col @container/call-stage">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>
             <div class="flex-1 min-h-0 pt-2">
@@ -418,6 +431,7 @@ export function CallOverlay(props: {
           </div>
           {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
           <div
+            ref={setControlsFooter}
             class="relative flex shrink-0 flex-col items-center gap-2 py-3"
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
@@ -459,8 +473,15 @@ export function CallOverlay(props: {
                 </button>
               </Tooltip>
             </Show>
-            <div class="flex w-full justify-center px-2">
-              <CallControls onLeave={props.onLeave} />
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-1 mobile:px-0 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+              <div class="min-w-0 max-w-48">{props.footerLeading}</div>
+              <div class="flex min-w-0 justify-center">
+                <CallControls onLeave={props.onLeave} />
+              </div>
+              <div
+                ref={setFooterChatMount}
+                class="flex justify-end mobile:hidden"
+              />
             </div>
           </div>
         </div>

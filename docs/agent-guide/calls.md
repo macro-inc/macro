@@ -190,8 +190,9 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. The in-call header has a gray `Copy Meeting Url` button with a copy icon
-and shows the current local time before the call name. Owners can click the name
+button. During a call, the gray `Copy Meeting Url` button sits at the bottom-left,
+level with the media controls; narrow panes and phones show only its copy icon.
+The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
 
@@ -206,8 +207,9 @@ Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
-Open live chat with **Open chat** at the right of the header, aligned with
-**Copy Meeting Url**. Desktop chat fills the call content height alongside both
+Open live chat with **Open chat** at the bottom-right, level with the media controls.
+On phones, the toggle stays in the right header island.
+Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
 the participant tiles. Narrow desktop panes overlay chat instead; phones use the
 shared bottom sheet.

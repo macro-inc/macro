@@ -1,5 +1,8 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
@@ -178,14 +181,18 @@ export function ChannelCallTab(props: {
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
         <div class="flex size-full min-h-0 flex-col">
-          <div class="flex items-center justify-between gap-2 px-2 pt-2">
-            <ActiveCallLink />
-            <div ref={setChatButtonMount} class="ml-auto shrink-0" />
-          </div>
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
+              <HeaderIsland class="px-1">
+                <div ref={setChatButtonMount} />
+              </HeaderIsland>
+            </SplitHeaderRight>
+          </Show>
           <div class="min-h-0 flex-1">
             <CallOverlay
               onLeave={handleLeave}
               chatButtonMount={chatButtonMount()}
+              footerLeading={<ActiveCallLink />}
             />
           </div>
         </div>

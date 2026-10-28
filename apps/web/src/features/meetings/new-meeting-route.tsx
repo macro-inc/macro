@@ -150,7 +150,13 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name, _credentials, chatButtonMount) => (
+      renderCall={(
+        onLeave,
+        name,
+        _credentials,
+        chatButtonMount,
+        copyButton
+      ) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -173,6 +179,7 @@ function NewMeetingSetup(props: {
               onLeave={onLeave}
               localName={name()}
               chatButtonMount={chatButtonMount()}
+              footerLeading={copyButton}
               showTeamSharing={false}
             />
           </div>

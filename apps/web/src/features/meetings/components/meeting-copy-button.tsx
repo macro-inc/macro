@@ -46,6 +46,8 @@ export function MeetingCopyButton(props: {
         type="button"
         variant="ghost"
         size="lg"
+        label="Copy Meeting Url"
+        tooltipPlacement="top"
         disabled={props.disabled || copying()}
         aria-busy={copying()}
         class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
@@ -54,7 +56,7 @@ export function MeetingCopyButton(props: {
         <Show when={copied()} fallback={<Copy class="size-4" />}>
           <Check class="size-4" />
         </Show>
-        Copy Meeting Url
+        <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
       </Button>
       <span role="status" class="sr-only">
         {copied() ? 'Meeting URL copied' : ''}

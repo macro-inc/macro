@@ -1,5 +1,7 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import Phone from '@icon/system/regular/phone-call.svg';
@@ -60,7 +62,8 @@ export function MeetingPage(props: {
     onLeave: () => void,
     name: Accessor<string>,
     credentials: Accessor<MeetingCredentials | undefined>,
-    chatButtonMount: Accessor<HTMLDivElement | undefined>
+    chatButtonMount: Accessor<HTMLDivElement | undefined>,
+    copyButton: JSX.Element
   ) => JSX.Element;
 }) {
   const session = createMeetingSession(props.session);
@@ -191,12 +194,13 @@ export function MeetingPage(props: {
             title={ready()?.title || 'Call'}
             onRename={props.onRename}
           />
-          <div class="flex flex-1 basis-56 items-center justify-between gap-2">
-            <Show when={props.url}>
-              {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
-            </Show>
-            <div ref={setChatButtonMount} class="ml-auto shrink-0" />
-          </div>
+          <Show when={isMobile()}>
+            <div class="ml-auto">
+              <HeaderIsland class="px-1">
+                <div ref={setChatButtonMount} />
+              </HeaderIsland>
+            </div>
+          </Show>
         </Show>
       </header>
       <Switch>
@@ -214,7 +218,12 @@ export function MeetingPage(props: {
               () => fireAndForget(leave(), 'meetings'),
               displayName,
               session.credentials,
-              chatButtonMount
+              chatButtonMount,
+              <Show when={props.url}>
+                {(url) => (
+                  <MeetingCopyButton url={url()} onCopy={props.onCopy} />
+                )}
+              </Show>
             )}
           </div>
         </Match>

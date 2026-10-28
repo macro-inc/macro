@@ -5,7 +5,7 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type Setter } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
 
@@ -151,8 +151,18 @@ function setUpCallState(
   return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
   mocks.displayNames.clear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 
 describe('CallOverlay muted microphone badges', () => {

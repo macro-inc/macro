@@ -219,7 +219,9 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-with **Open chat** at the right of the header, aligned with **Copy Meeting Url**.
+with **Open chat** at the bottom-right, level with the media controls. On phones,
+the toggle stays in the right header island. **Copy Meeting Url** sits at the
+bottom-left, level with the media controls, and becomes icon-only in narrow panes.
 Desktop chat fills the call content height; phones use a bottom sheet. Messages
 persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
