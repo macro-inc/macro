@@ -1,5 +1,7 @@
+import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateDatabaseGraphic from '@design/empty-state-folder.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
@@ -21,18 +23,23 @@ export function CrmDatabasesView(props: {
     <Show
       when={flag().enabled}
       fallback={
-        <Show
-          when={flag().loading}
-          fallback={
-            <CrmListEmpty
-              graphic={EmptyStateDatabaseGraphic}
-              title="Databases are unavailable"
-              description="Database access is not enabled for this account."
-            />
-          }
-        >
-          <CrmListSkeleton label="Loading databases" />
-        </Show>
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Show when={!props.scope && !isTouchDevice()}>
+            <ListHeader title={props.title ?? 'Databases'} />
+          </Show>
+          <Show
+            when={flag().loading}
+            fallback={
+              <CrmListEmpty
+                graphic={EmptyStateDatabaseGraphic}
+                title="Databases are unavailable"
+                description="Database access is not enabled for this account."
+              />
+            }
+          >
+            <CrmListSkeleton label="Loading databases" />
+          </Show>
+        </div>
       }
     >
       <DatabasesList scope={props.scope} title={props.title} />

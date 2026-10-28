@@ -20,6 +20,8 @@ Companies after flags finish loading. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Databases additionally requires `enable-databases`, including record tabs and direct tab links.
+Database flag loading and unavailable states keep the desktop title and navigation
+toggle visible, without mounting the list query or creation controls.
 Task creation opens immediately from the focused pane's registered preset,
 without fetching record details. Contact company prefills use already-loaded
 details. If CRM's flag is still loading, CRM supplies no preset. Later flag,
