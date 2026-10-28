@@ -178,7 +178,9 @@ A handle to a message in this channel by id.
 
 > **messages**(`opts?`): `AsyncGenerator`\<[`Message`](../../message/classes/Message.md)\>
 
-Root messages in this channel, most recent first, auto-paginated.
+Root messages in this channel, most recent first, auto-paginated. Yields
+seeded [Message](../../message/classes/Message.md) handles: call and await their fields, such as
+`await message.content()`.
 
 #### Parameters
 
@@ -198,7 +200,9 @@ Root messages in this channel, most recent first, auto-paginated.
 > **messagesAfter**(`after`, `opts?`): `AsyncGenerator`\<[`Message`](../../message/classes/Message.md)\>
 
 Root messages created or replied to at or after `after`, most recent
-first, auto-paginated. Use it to catch up after a disconnect.
+first, auto-paginated. Use it to catch up after a disconnect. Yields
+seeded [Message](../../message/classes/Message.md) handles: call and await their fields, such as
+`await message.content()`.
 
 #### Parameters
 
@@ -439,6 +443,12 @@ A mixed message and activity timeline page.
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; \}
+
+Serialize as `{ id, detail }`, where `detail` is the cached record, or as
+`{ id }` when nothing is cached yet. Never fetches. This is what
+`JSON.stringify(handle)` uses; it is a snapshot for logging and transport,
+not a typed read API, and the record's shape follows the API response
+that seeded it.
 
 #### Returns
 

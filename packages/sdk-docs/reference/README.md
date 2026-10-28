@@ -117,6 +117,13 @@ the handle does not fetch its data. Read fields with `await document.name()`
 or call methods such as `await document.content()`. Related objects are handles
 too: `await document.owner()` returns a user you can inspect.
 
+A handle is not its record. Fields are async functions, so `document.name` is
+a function and `await document.name()` is the value. Record keys the class
+does not expose, such as `message.sender_id`, read as `undefined` rather than
+throwing. `JSON.stringify(handle)` yields `{ id, detail }` only when the
+record is already cached (for example, a handle from a list page) and `{ id }`
+otherwise; it is a snapshot, not a typed read API.
+
 List and search methods that return async iterators fetch pages as you iterate.
 Use `for await` to process results and `break` when you have enough. Independent
 reads can run together with `Promise.all`; await dependencies before using them.

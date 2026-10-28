@@ -181,14 +181,20 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return Message.byId(this.client, this.id, id);
   }
 
-  /** Root messages in this channel, most recent first, auto-paginated. */
+  /**
+   * Root messages in this channel, most recent first, auto-paginated. Yields
+   * seeded {@link Message} handles: call and await their fields, such as
+   * `await message.content()`.
+   */
   messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
     return this.timeline({ limit: opts?.pageSize });
   }
 
   /**
    * Root messages created or replied to at or after `after`, most recent
-   * first, auto-paginated. Use it to catch up after a disconnect.
+   * first, auto-paginated. Use it to catch up after a disconnect. Yields
+   * seeded {@link Message} handles: call and await their fields, such as
+   * `await message.content()`.
    */
   messagesAfter(
     after: Date | string,

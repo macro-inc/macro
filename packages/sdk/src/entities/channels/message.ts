@@ -11,9 +11,43 @@ import { Thread } from './thread';
 export type MessageData = MessageRecord;
 
 /**
- * A message in a channel. A thin handle: `id` and `channelId` are known up
- * front, and record-backed fields (`content`, `author`) load lazily on first
- * access and cache. Actions carry the ids for you.
+ * A handle to a channel message, not the message record: `content`,
+ * `createdAt`, `editedAt` and `updatedAt` are async functions to call and await.
+ *
+ * `id`, `channelId` and `mentions` are plain properties. `mentions` is empty
+ * unless a list, thread, or event supplied it. Record-backed reads load the
+ * record once and cache it. Actions carry the ids for you.
+ *
+ * Handles from {@link Channel.messages}, {@link Channel.messagesAfter},
+ * {@link Channel.timelinePage} and {@link Thread.replies} are seeded from the
+ * page, so reads make no request. Handles from {@link Channel.message},
+ * {@link Message.byId}, {@link Channel.send}, {@link Message.reply} and
+ * channel events start empty and fetch the message on the first read. {@link react}, {@link edit}
+ * and other writes drop the cache.
+ *
+ * Read the sender with {@link author} and thread replies with
+ * {@link Thread.replies}. Reactions, attachments, bot or imported author
+ * details, and the reply count and preview that list pages return have no
+ * typed accessor on this handle. They can appear in `JSON.stringify(message)`
+ * output for seeded handles (see {@link Message.toJSON}), but that is a
+ * serialization snapshot, not a supported read API.
+ *
+ * Common pitfalls: `message.content` is a function, so call and await it;
+ * record keys such as `message.sender_id` or `message.reactions` are
+ * `undefined` on the handle rather than an error, and so are fields read
+ * through the protected `message.detail` cache.
+ *
+ * @example
+ * const me = await macro.users.me();
+ * for await (const message of channel.messagesAfter(since)) {
+ *   const [author, content] = await Promise.all([
+ *     message.author(),
+ *     message.content(),
+ *   ]);
+ *   if (author.id !== me.id) continue;
+ *   const replies = await message.thread().replies();
+ *   console.log(content.slice(0, 80), replies.length);
+ * }
  */
 export class Message extends FavoritableEntity<MessageRecord> {
   /** Favorites identify channel messages as `channel_message`. */

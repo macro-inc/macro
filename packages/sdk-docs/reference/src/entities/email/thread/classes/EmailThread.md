@@ -397,6 +397,12 @@ The thread's subject, from its first message with one.
 
 > **toJSON**(): \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}
 
+Serialize as `{ id, detail }`, where `detail` is the cached record, or as
+`{ id }` when nothing is cached yet. Never fetches. This is what
+`JSON.stringify(handle)` uses; it is a snapshot for logging and transport,
+not a typed read API, and the record's shape follows the API response
+that seeded it.
+
 #### Returns
 
 \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}

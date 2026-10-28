@@ -1,8 +1,45 @@
 # Class: Message
 
-A message in a channel. A thin handle: `id` and `channelId` are known up
-front, and record-backed fields (`content`, `author`) load lazily on first
-access and cache. Actions carry the ids for you.
+A handle to a channel message, not the message record: `content`,
+`createdAt`, `editedAt` and `updatedAt` are async functions to call and await.
+
+`id`, `channelId` and `mentions` are plain properties. `mentions` is empty
+unless a list, thread, or event supplied it. Record-backed reads load the
+record once and cache it. Actions carry the ids for you.
+
+Handles from [Channel.messages](../../channel/classes/Channel.md#messages), [Channel.messagesAfter](../../channel/classes/Channel.md#messagesafter),
+[Channel.timelinePage](../../channel/classes/Channel.md#timelinepage) and [Thread.replies](../../thread/classes/Thread.md#replies) are seeded from the
+page, so reads make no request. Handles from [Channel.message](../../channel/classes/Channel.md#message),
+[Message.byId](#byid), [Channel.send](../../channel/classes/Channel.md#send), [Message.reply](#reply) and
+channel events start empty and fetch the message on the first read. [react](#react), [edit](#edit)
+and other writes drop the cache.
+
+Read the sender with [author](#author) and thread replies with
+[Thread.replies](../../thread/classes/Thread.md#replies). Reactions, attachments, bot or imported author
+details, and the reply count and preview that list pages return have no
+typed accessor on this handle. They can appear in `JSON.stringify(message)`
+output for seeded handles (see [Message.toJSON](#tojson)), but that is a
+serialization snapshot, not a supported read API.
+
+Common pitfalls: `message.content` is a function, so call and await it;
+record keys such as `message.sender_id` or `message.reactions` are
+`undefined` on the handle rather than an error, and so are fields read
+through the protected `message.detail` cache.
+
+## Example
+
+```ts
+const me = await macro.users.me();
+for await (const message of channel.messagesAfter(since)) {
+  const [author, content] = await Promise.all([
+    message.author(),
+    message.content(),
+  ]);
+  if (author.id !== me.id) continue;
+  const replies = await message.thread().replies();
+  console.log(content.slice(0, 80), replies.length);
+}
+```
 
 ## Extends
 
@@ -162,6 +199,12 @@ The thread rooted at this message.
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+
+Serialize as `{ id, detail }`, where `detail` is the cached record, or as
+`{ id }` when nothing is cached yet. Never fetches. This is what
+`JSON.stringify(handle)` uses; it is a snapshot for logging and transport,
+not a typed read API, and the record's shape follows the API response
+that seeded it.
 
 #### Returns
 

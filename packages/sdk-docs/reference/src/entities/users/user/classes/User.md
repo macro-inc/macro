@@ -189,6 +189,12 @@ value when `value` is omitted.
 
 > **toJSON**(): \{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; \}
 
+Serialize as `{ id, detail }`, where `detail` is the cached record, or as
+`{ id }` when nothing is cached yet. Never fetches. This is what
+`JSON.stringify(handle)` uses; it is a snapshot for logging and transport,
+not a typed read API, and the record's shape follows the API response
+that seeded it.
+
 #### Returns
 
 \{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; \}

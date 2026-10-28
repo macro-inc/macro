@@ -104,6 +104,10 @@ const owner = await doc.owner();
 const email = await owner.email();
 ```
 
+A handle is not its record: fields are async functions (`doc.name` is a
+function), and record keys the class does not expose read as `undefined`.
+`JSON.stringify(handle)` includes `detail` only once the record is cached.
+
 ### Forms
 
 Forms collect answers into a table. Respondents can read questions and submit

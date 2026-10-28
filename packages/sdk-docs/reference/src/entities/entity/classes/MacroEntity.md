@@ -5,6 +5,19 @@ detail record loads lazily on first field access and is dropped after any
 mutation. Subclasses implement fetch and build their surface from
 field and mutate.
 
+A handle is not its record. `id` is a plain property; record-backed fields
+are async functions, so read them with `await handle.name()`, not
+`handle.name`. Record keys the class does not expose as fields read as
+`undefined` on the handle rather than throwing. The cached record sits in a
+protected `detail` cache: in plain JavaScript `handle.detail` exists, but it
+is the cache object, not the record, so `handle.detail.someField` is
+`undefined` too.
+
+A seeded handle was built from a record the SDK already received, such as a
+list page, and reads fields without a request. Handles from `byId` start
+empty and fetch on the first field read; some list and search methods also
+return empty handles. Any mutation through the handle drops the cache.
+
 ## Extended by
 
 - [`AgentSession`](../../agent-sessions/agent-session/classes/AgentSession.md)
@@ -65,6 +78,12 @@ field and mutate.
 ### toJSON()
 
 > **toJSON**(): \{ `detail?`: `Detail`; `id`: `string`; \}
+
+Serialize as `{ id, detail }`, where `detail` is the cached record, or as
+`{ id }` when nothing is cached yet. Never fetches. This is what
+`JSON.stringify(handle)` uses; it is a snapshot for logging and transport,
+not a typed read API, and the record's shape follows the API response
+that seeded it.
 
 #### Returns
 
