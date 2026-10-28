@@ -34,6 +34,10 @@ export function occurrenceAtInvitationTime(
 ): boolean {
   const start = instant(invitation.start);
   if (start === undefined) return false;
+  // An all-day invitation and a timed copy from midnight to midnight span the
+  // same instants but are different times.
+  const allDay = invitation.start?.kind === 'date';
+  if (allDay !== (item.occurrence.time.kind === 'allDay')) return false;
   const end = instant(invitation.end);
   const occurrence = occurrenceBounds(item);
   return (

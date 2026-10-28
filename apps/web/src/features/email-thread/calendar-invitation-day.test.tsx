@@ -3,6 +3,7 @@ import {
   NO_VIEWER_CAPABILITIES,
 } from '@app/features/calendar/types';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -103,6 +104,16 @@ const ownCopy = occurrence(
   '2026-09-24T17:00:00Z',
   '2026-09-24T17:30:00Z'
 );
+/** The viewer's copy, moved to another time shape on the same day. */
+const ownCopyAt = (time: EventTime): CalendarOccurrenceItem => ({
+  event: { ...ownCopy.event, time },
+  occurrence: { ...ownCopy.occurrence, time },
+});
+const allDayInvitation: CalendarInvitation = {
+  ...invitationFixture,
+  start: { kind: 'date', value: '2026-09-24' },
+  end: { kind: 'date', value: '2026-09-25' },
+};
 const standup = occurrence(
   'standup',
   'Standup',
@@ -166,6 +177,38 @@ describe('CalendarInvitationDay', () => {
     const rows = within(agenda).getAllByRole('listitem');
     expect(rows[1]?.textContent).toContain('Product review');
     expect(rows[1]?.classList.contains('bg-accent-bg')).toBe(true);
+    expect(within(agenda).getAllByText('This invitation')).toHaveLength(1);
+  });
+
+  it('shows an all-day invitation once, as its all-day copy', () => {
+    day.items = [
+      ownCopyAt({
+        kind: 'allDay',
+        startDate: '2026-09-24',
+        endDate: '2026-09-25',
+      }),
+    ];
+    const agenda = renderDay(allDayInvitation);
+    const [row] = within(agenda).getAllByRole('listitem');
+    expect(row?.textContent).toContain('All day');
+    expect(within(agenda).getAllByText('This invitation')).toHaveLength(1);
+    expect(row && within(row).getByText('This invitation')).toBeTruthy();
+  });
+
+  it('keeps an all-day invitation’s time above a timed copy over the same day', () => {
+    day.items = [
+      ownCopyAt({
+        kind: 'timed',
+        startsAt: new Date('2026-09-24T00:00:00').toISOString(),
+        endsAt: new Date('2026-09-25T00:00:00').toISOString(),
+        timeZone: 'America/Los_Angeles',
+      }),
+    ];
+    const agenda = renderDay(allDayInvitation);
+    const line = within(agenda).getByText('This invitation').closest('p');
+    expect(line?.textContent).toContain(invitationTime(allDayInvitation));
+    const [row] = within(agenda).getAllByRole('listitem');
+    expect(row?.classList.contains('bg-accent-bg')).toBe(true);
     expect(within(agenda).getAllByText('This invitation')).toHaveLength(1);
   });
 
