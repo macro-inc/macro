@@ -1,10 +1,14 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createSignal, For } from 'solid-js';
+import { type Accessor, createSignal, For } from 'solid-js';
+import type { TagFilter } from '../tag-filter-state';
 import { SearchFacetChip } from './search-facet-chip';
 import { useSearchFacets } from './search-facets';
-import { createSearchFiltersController } from './search-filters-state';
+import {
+  createSearchFiltersController,
+  type SearchFiltersController,
+} from './search-filters-state';
 
 /**
  * Always-visible filter row for the search view. Renders one chip per facet
@@ -12,7 +16,6 @@ import { createSearchFiltersController } from './search-filters-state';
  */
 export function SearchFiltersRow() {
   const controller = createSearchFiltersController();
-  const facets = useSearchFacets(controller);
   const panel = useSplitPanelOrThrow();
   const [typeMenuOpen, setTypeMenuOpen] = createSignal(false);
 
@@ -28,13 +31,35 @@ export function SearchFiltersRow() {
   });
 
   return (
-    <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+    <SearchFilterControls
+      controller={controller}
+      typeMenuOpen={typeMenuOpen}
+      setTypeMenuOpen={setTypeMenuOpen}
+    />
+  );
+}
+
+/** The global Search facet controls, with host-owned state and focus. */
+export function SearchFilterControls(props: {
+  controller: SearchFiltersController;
+  tags?: Pick<TagFilter, 'hasTags' | 'options' | 'defByOption'>;
+  typeMenuOpen?: Accessor<boolean>;
+  setTypeMenuOpen?: (open: boolean) => void;
+  onPickerClose?: () => void;
+}) {
+  const facets = useSearchFacets(props.controller, props.tags);
+  return (
+    <div
+      aria-label="Search filters"
+      class="flex items-center gap-1.5 flex-wrap min-w-0"
+    >
       <For each={facets()}>
         {(facet) => (
           <SearchFacetChip
             facet={facet}
-            open={facet.id === 'type' ? typeMenuOpen : undefined}
-            setOpen={facet.id === 'type' ? setTypeMenuOpen : undefined}
+            onPickerClose={props.onPickerClose}
+            open={facet.id === 'type' ? props.typeMenuOpen : undefined}
+            setOpen={facet.id === 'type' ? props.setTypeMenuOpen : undefined}
           />
         )}
       </For>

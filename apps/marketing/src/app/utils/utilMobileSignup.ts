@@ -80,7 +80,7 @@ export const isLikelyEmail = (value: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 /** Must match `SendMobileWelcomeEmailError::PersonalEmail` in the auth service. */
-const WORK_EMAIL_REQUIRED = 'Please use your work email';
+const WORK_EMAIL_REQUIRED = 'Please use your work email or Gmail';
 
 export type MobileSignupResult = { ok: true } | { ok: false; message: string };
 

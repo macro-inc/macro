@@ -1,7 +1,8 @@
+import { formatLocalDate } from '@core/util/local-date';
 import type { EventApi } from '@fullcalendar/core';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarEvent } from '../types';
-import { formatLocalDate, isTimedPointEvent } from './calendar-date';
+import { isTimedPointEvent } from './calendar-date';
 import { guestEditsRestricted } from './event-guest-editing';
 
 interface FullCalendarEventRange {

@@ -513,8 +513,8 @@ async fn test_get_new_invites_keeps_invites_scoped_to_team(
     Ok(())
 }
 
-/// Re-inviting an already-invited user within the 5-minute window should not
-/// return them (rate limited), so the result should be empty.
+/// Re-inviting an already-invited user inside the invite email's rate-limit
+/// window should not return them (rate limited), so the result should be empty.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
@@ -538,8 +538,39 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     Ok(())
 }
 
-/// Re-inviting an already-invited user after the 5-minute window has passed
-/// should return them (re-sent).
+/// A resend minutes after the last email would be dropped by the email's
+/// rate limit, so the repository must not offer it for sending.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_existing_user_inside_email_rate_limit(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '30 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+
+    assert!(invited.is_empty());
+
+    Ok(())
+}
+
+/// Re-inviting an already-invited user after the invite email's rate-limit
+/// window has passed should return them (re-sent).
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
@@ -549,9 +580,9 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
-    // Push last_sent_at back 10 minutes so the rate limit window has passed
+    // Push last_sent_at back past the invite email's rate-limit window
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -583,7 +614,7 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
 
     // Push existing invite past the rate limit window
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -621,7 +652,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
 
     // Push past rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -663,7 +694,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
 
     // Push past rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -702,7 +733,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Push last_sent_at back so it's past the rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE id = $1"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE id = $1"#,
         &invite_id,
     )
     .execute(&pool)
@@ -1404,6 +1435,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1433,6 +1465,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1461,6 +1494,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1488,6 +1522,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1499,6 +1534,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1510,6 +1546,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(None),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;

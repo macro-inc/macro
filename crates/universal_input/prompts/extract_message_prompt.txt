@@ -1,0 +1,1 @@
+Separate the addressing instruction from the outgoing body. Expect a leading DM/person/channel addressing instruction, supplying recipients; followed by message body. People mentioned only inside the body are not extra recipients.

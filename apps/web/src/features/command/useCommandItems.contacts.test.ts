@@ -17,6 +17,7 @@ const VIEWER = 'macro|viewer@macro.com';
 
 const mocks = vi.hoisted(() => ({
   lists: {} as Record<string, () => QuickAccessItem[]>,
+  searchDms: (): QuickAccessItem[] => [],
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
@@ -42,7 +43,10 @@ vi.mock('@core/context/quickAccess', () => ({
         if (first.enabled && !first.enabled()) return [];
         const buckets = Array.isArray(first.buckets) ? first.buckets : [];
         return searchQuickAccessItems(
-          buckets.flatMap((bucket) => mocks.lists[bucket]?.() ?? []),
+          [
+            ...buckets.flatMap((bucket) => mocks.lists[bucket]?.() ?? []),
+            ...(buckets.includes('dm') ? mocks.searchDms() : []),
+          ],
           first.searchTerm?.() ?? ''
         );
       };
@@ -125,6 +129,7 @@ let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   mocks.lists = {};
+  mocks.searchDms = () => [];
 });
 
 function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
@@ -135,9 +140,11 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
     const [contacts, setContacts] = createSignal<CrmContactEntity[]>([]);
     const [users, setUsers] = createSignal<UserItem[]>([]);
     const [dms, setDms] = createSignal<EntityItem[]>([]);
+    const [searchDms, setSearchDms] = createSignal<EntityItem[]>([]);
     const [hasMore, setHasMore] = createSignal(false);
     const [loading, setLoading] = createSignal(false);
     mocks.lists = { person: users, dm: dms };
+    mocks.searchDms = searchDms;
     const discovery = {
       search: undefined as Accessor<string> | undefined,
       active: undefined as Accessor<boolean> | undefined,
@@ -171,6 +178,7 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
       setContacts,
       setUsers,
       setDms,
+      setSearchDms,
       setHasMore,
       setLoading,
     };
@@ -178,6 +186,33 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
 }
 
 describe('command menu contact discovery', () => {
+  it.each(['all', 'dms'] as const)(
+    'merges a DM found beyond the recent list with its person and CRM alias in %s',
+    (category) => {
+      const t = setup(category);
+      const person = user('person@example.com', 'Sample Person');
+      const dm = directMessage('older-dm', 'Sample Person', person.id);
+      t.setUsers([person]);
+      t.setQuery('Sample');
+      expect(t.ids()).toEqual([`search:${category}:Sample`, person.id]);
+
+      // Typed cache search finds this DM without adding it to the browse list.
+      t.setSearchDms([dm]);
+      expect(t.ids()).toEqual([`search:${category}:Sample`, dm.id]);
+      t.setContacts([
+        contact('crm-person', 'Sample CRM alias', person.data.email),
+      ]);
+      expect(t.ids()).toEqual([`search:${category}:Sample`, dm.id]);
+      const result = t.result.items().find((item) => item.id === dm.id);
+      expect(result?.searchText).toContain(person.data.email);
+      expect(result?.searchText).toContain('Sample CRM alias');
+
+      // Hydrating the browse list later must not add a second row.
+      t.setDms([dm]);
+      expect(t.ids()).toEqual([`search:${category}:Sample`, dm.id]);
+    }
+  );
+
   it.each(['all', 'dms'] as const)(
     'finds a teammate without a DM or CRM contact in %s, including with CRM disabled',
     (category) => {

@@ -1,17 +1,18 @@
 import { ContentLoading } from '@app/components/app/ContentLoading';
 import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { t } from '@app/lib/i18n';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
+import IconGear from '@icon/system/regular/gear.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Telemetry } from '@macro-inc/observability';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import DotsSixVerticalIcon from '@phosphor/dots-six-vertical.svg';
-import IconGear from '@phosphor/gear.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
@@ -64,7 +65,7 @@ function MoreViewsDrawer(props: {
     >
       <MobileDrawer.Trigger
         as={MobileDockButton}
-        ariaLabel="More views"
+        ariaLabel={t('mobile.moreViews')}
         icon={CaretUpIcon}
         unread={props.views
           .slice(props.visibleCount)
@@ -73,7 +74,9 @@ function MoreViewsDrawer(props: {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
-          aria-label={customizing() ? 'Customize dock' : 'More views'}
+          aria-label={
+            customizing() ? t('mobile.customizeDock') : t('mobile.moreViews')
+          }
           targetHeight={customizing() ? 85 : undefined}
         >
           <MobileDrawer.Handle />
@@ -84,22 +87,22 @@ function MoreViewsDrawer(props: {
                 <div class="mx-3 flex flex-col gap-1 px-1">
                   <MobileDrawer.Close
                     as={MobileDrawer.Item}
-                    aria-label="Settings"
+                    aria-label={t('nav.settings')}
                     class={settingsOpen() ? 'text-accent' : undefined}
                     onClick={() => {
                       toggleSettings();
                     }}
                   >
                     <IconGear class="size-4 shrink-0" />
-                    <span>Settings</span>
+                    <span>{t('nav.settings')}</span>
                   </MobileDrawer.Close>
                   <MobileDrawer.Item
                     ref={customizeButton}
-                    aria-label="Customize dock"
+                    aria-label={t('mobile.customizeDock')}
                     onClick={() => setCustomizing(true)}
                   >
                     <DotsSixVerticalIcon class="size-4 shrink-0" />
-                    <span>Customize dock</span>
+                    <span>{t('mobile.customizeDock')}</span>
                   </MobileDrawer.Item>
                   <Show when={props.views.length > props.visibleCount}>
                     <div class="-mx-1 h-px shrink-0 bg-edge" />
@@ -110,7 +113,9 @@ function MoreViewsDrawer(props: {
                         as={MobileDrawer.Item}
                         aria-label={view.label}
                         aria-description={
-                          props.hasUnread(view.id) ? 'Unread items' : undefined
+                          props.hasUnread(view.id)
+                            ? t('mobile.unreadItems')
+                            : undefined
                         }
                         data-unread={props.hasUnread(view.id) ? '' : undefined}
                         class={
@@ -138,10 +143,10 @@ function MoreViewsDrawer(props: {
                   </For>
                   <div class="-mx-1 h-px shrink-0 bg-edge" />
                   <MobileDrawer.Close
-                    aria-label="Views"
+                    aria-label={t('mobile.views')}
                     class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
                   >
-                    Views
+                    {t('mobile.views')}
                   </MobileDrawer.Close>
                 </div>
               </MobileDrawer.ScrollBody>
@@ -248,7 +253,7 @@ function MobileNavigationDockRow() {
       <MobileDockIsland class="shrink-0">
         <MobileDockButton
           icon={SearchIcon}
-          ariaLabel="Search"
+          ariaLabel={t('nav.search')}
           onClick={() => {
             // Mount the real input first, then focus it in this same user
             // gesture. Deferring the focus transfer can lose iOS keyboard

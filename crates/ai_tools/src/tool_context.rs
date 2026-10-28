@@ -96,7 +96,9 @@ mod forms;
 pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
-pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
+pub use initiatives::{
+    ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
+};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -903,6 +905,10 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
+    }
+
     async fn generate_token<'a>(
         &self,
         _room_name: &str,
@@ -1505,6 +1511,8 @@ pub struct ToolEntityCreator {
     pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
+    /// Project lifecycle for reviewed issue tracker imports.
+    pub initiative_service: Arc<ToolInitiativeService>,
     /// Folder creation for workspace imports (shared with project tools).
     pub project_service: Arc<ToolProjectService>,
     /// Database creation and writes for workspace imports (shared with
@@ -1716,7 +1724,7 @@ impl ToolEntityCreator {
     /// Apply imported task properties best-effort: each one logs and is
     /// skipped on failure so a bad label or unknown assignee never sinks
     /// the import.
-    async fn apply_task_properties(
+    pub(crate) async fn apply_task_properties(
         &self,
         user: &MacroUserIdStr<'static>,
         task_id: &str,
@@ -2030,18 +2038,24 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
 >;
 
 /// Wire connector discovery at the composition boundary.
+///
+/// `native_servers` answers for overlaid apps, which connect through the
+/// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }

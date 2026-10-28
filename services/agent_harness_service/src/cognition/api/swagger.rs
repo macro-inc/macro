@@ -31,8 +31,8 @@ use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryRe
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
-    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamTokenResponse,
-    PipedreamUpdateRequest,
+    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamOverlayResponse,
+    PipedreamRecoverRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
 };
 
 use crate::cognition::api::preview::get_batch_preview::{
@@ -98,6 +98,8 @@ use utoipa::OpenApi;
             import_api::run_import_handler,
             import_api::discover_handler,
             import_api::notion_report_handler,
+            import_api::workspace_report_handler,
+            import_api::cancel_workspace_handler,
             import_api::cancel_notion_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,
@@ -118,7 +120,9 @@ use utoipa::OpenApi;
             pipedream_api::delete_connection,
             pipedream_api::create_connect_token,
             pipedream_api::complete_connection,
-            pipedream_api::browse_catalog_handler
+            pipedream_api::recover_connection,
+            pipedream_api::browse_catalog_handler,
+            pipedream_api::list_overlays
         ),
         components(
             schemas(
@@ -263,8 +267,10 @@ use utoipa::OpenApi;
                 PipedreamUpdateRequest,
                 PipedreamTokenResponse,
                 PipedreamCompleteRequest,
+                PipedreamRecoverRequest,
                 PipedreamCatalogResponse,
                 PipedreamCatalogEntryResponse,
+                PipedreamOverlayResponse,
                 model_error_response::ErrorResponse,
             ),
         ),

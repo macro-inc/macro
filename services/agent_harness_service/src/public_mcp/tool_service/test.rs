@@ -8,6 +8,7 @@ fn empty_service() -> AuthenticatedToolService<()> {
         (),
         "https://macro.com".to_owned(),
         url::Url::parse("https://static-file-service.macro.com").unwrap(),
+        McpAnalytics::disabled(),
     )
 }
 
@@ -361,7 +362,10 @@ mod code_mode {
         let app = app(Arc::new(Runs::default()));
 
         let flagged = rpc(app.clone(), FLAGGED, "tools/list", serde_json::json!({})).await;
-        assert_eq!(tool_names(&flagged), ["DescribeCodeTools", "ExecuteCode"]);
+        assert_eq!(
+            tool_names(&flagged),
+            ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+        );
         let unflagged = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
         assert!(tool_names(&unflagged).is_empty());
 

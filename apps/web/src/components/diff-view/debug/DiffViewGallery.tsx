@@ -3,8 +3,8 @@
  * them, over example changes. Registered as the `diff-view-ui` component.
  */
 
-import CopyIcon from '@phosphor/copy.svg';
-import FileIcon from '@phosphor/file.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import FileIcon from '@icon/system/regular/file.svg';
 import { Button, Tabs } from '@ui';
 import { FileTree } from '@ui/components/FileTree';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
@@ -112,7 +112,7 @@ function CustomHeaderDemo() {
                 tooltip="Copy path"
                 onClick={() => setCopied(entry.file.path)}
               >
-                <CopyIcon />
+                <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </>
           )}

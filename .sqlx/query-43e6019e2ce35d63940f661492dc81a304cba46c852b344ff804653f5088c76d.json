@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment a SET retry_at = now() + interval '5 minutes'\n            FROM external_chat_media_blob blob\n            WHERE (a.chat_id, a.person_id, a.source_id, a.ordinal) IN (\n                SELECT chat_id, person_id, source_id, ordinal FROM external_chat_attachment\n                WHERE state = 'downloaded' AND retry_at <= now()\n                ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)\n              AND blob.id = a.blob_id\n            RETURNING a.chat_id, a.person_id, a.source_id, a.ordinal, a.blob_id, a.attempts,\n                blob.user_id, blob.filename, blob.mime",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "person_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ordinal",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "blob_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "mime",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "43e6019e2ce35d63940f661492dc81a304cba46c852b344ff804653f5088c76d"
+}

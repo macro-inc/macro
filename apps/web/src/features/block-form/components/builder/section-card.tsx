@@ -1,9 +1,9 @@
-import ArrowBendDownRight from '@phosphor/arrow-bend-down-right.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import ShieldCheck from '@phosphor/shield-check.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowBendDownRight from '@icon/system/regular/arrow-bend-down-right.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { LiveTextarea, LiveTextInput } from './live-text-input';
@@ -21,7 +21,7 @@ export function SectionMenu(props: {
   return (
     <Dropdown>
       <Dropdown.Trigger variant="ghost" size="icon-sm" aria-label={props.label}>
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-52">
         <Dropdown.Item disabled={!props.canMoveUp} onSelect={props.onMoveUp}>
@@ -209,7 +209,7 @@ export function GateCard(props: {
                 ? 'A rule checks a question that is no longer before this gate. Responses are refused until it is fixed.'
                 : `${props.brokenRules} rules check questions that are no longer before this gate. Responses are refused until they are fixed.`}
             </span>
-            <Button variant="outline" size="sm" onClick={props.onRepair}>
+            <Button variant="secondary" size="sm" onClick={props.onRepair}>
               Remove broken rules
             </Button>
           </div>
@@ -241,7 +241,7 @@ export function GateCard(props: {
             when={props.editingRules}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
                 class="self-start"
                 onClick={props.onEditRules}

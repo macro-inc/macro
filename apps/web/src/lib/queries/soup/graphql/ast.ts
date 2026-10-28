@@ -398,6 +398,7 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
 }
 
 function mapCrmAssociation(value: unknown): GraphqlCrmAssociation {
+  if (value === 'activity') return { activity: true };
   const [field, id] = singleLiteralField(value);
   if (field === 'company') return { company: mapString(id, 'company') };
   if (field === 'contact') return { contact: mapString(id, 'contact') };

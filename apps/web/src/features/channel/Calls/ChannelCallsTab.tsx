@@ -33,8 +33,8 @@ import {
   ListEntityMetadataQueryProvider,
   ListLayoutProvider,
 } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { validateSearchServiceText } from '@queries/soup/search';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, EmptyStatePanel } from '@ui';
@@ -277,6 +277,7 @@ function ChannelCallsList(props: { channelId: string }) {
               >
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading calls"
                     class="size-5 animate-spin"
                   />
@@ -291,7 +292,7 @@ function ChannelCallsList(props: { channelId: string }) {
                       : 'Calls couldn’t be loaded.'}
                   </span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(source.refresh(), 'channel-calls')
@@ -423,9 +424,8 @@ function ChannelCallsList(props: { channelId: string }) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
-                                    depth={2}
                                     disabled={loadMore().isLoading}
                                     class="bg-surface"
                                   >

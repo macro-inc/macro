@@ -439,7 +439,10 @@ impl Client {
     /// decrypt.
     pub(crate) async fn immediate_request_message_from_phone(self: &Arc<Self>, info: &MessageInfo) {
         let request = self.build_unavailable_message_request(&info.chat, &info.sender, &info.id);
-        match self.send_peer_message(request).await {
+        // Boxed (Macro addition): the send future is large, and this runs
+        // nested in message decryption; inline it overflows a 2 MiB stack in
+        // debug builds.
+        match Box::pin(self.send_peer_message(request)).await {
             Err(error) => {
                 tracing::warn!(error = %error, "failed to send request for unavailable message to phone")
             }
@@ -454,6 +457,7 @@ impl Client {
     }
 
     /// Sends a retry receipt for an incoming message that didn't decrypt.
+    #[tracing::instrument(name = "whatsmeow.retry_receipt.send", skip_all, fields(retry_count))]
     pub(crate) async fn send_retry_receipt(
         self: &Arc<Self>,
         node: &Node,
@@ -481,6 +485,7 @@ impl Client {
             }
             *count
         };
+        tracing::Span::current().record("retry_count", retry_count);
         if retry_count >= 5 {
             tracing::warn!("not sending any more retry receipts");
             return;

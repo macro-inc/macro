@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { RecordOverview } from '../components/record-overview';
@@ -93,7 +93,7 @@ export function Company(props: {
                 onOpenContact={props.onOpenContact}
                 actions={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     // Contact emails are pinned to the company's primary
                     // domain; disabled until the company has loaded.
                     disabled={!company()?.domains[0]}

@@ -9,7 +9,7 @@ use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator,
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{
     DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
-    NotionWorkspaceImporter, StageOutcome,
+    StageOutcome, WorkspaceImporter,
 };
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
@@ -22,6 +22,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 mod import_from_notion;
+mod import_from_tracker;
+pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
 
@@ -70,12 +72,14 @@ impl<T> ImportToolContext<T> {
 }
 
 /// The import toolset for interactive chat.
-pub fn import_toolset<T: ImportStager + NotionPageImporter + NotionWorkspaceImporter>()
+pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>()
 -> AsyncToolCollection<ImportToolContext<T>> {
     AsyncToolCollection::new()
         .add_tool::<CreateImportEntity, ImportToolContext<T>>()
         .add_tool::<ImportNotionPage, ImportToolContext<T>>()
         .add_tool::<ImportFromNotion, ImportToolContext<T>>()
+        .add_tool::<ImportFromLinear, ImportToolContext<T>>()
+        .add_tool::<ImportFromJira, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

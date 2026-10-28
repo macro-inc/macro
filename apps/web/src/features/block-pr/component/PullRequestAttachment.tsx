@@ -1,6 +1,6 @@
 import { PullRequestEntityLink } from '@core/component/LexicalMarkdown/component/decorator/PullRequestMention';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { usePrMentionQuery } from '@queries/storage/pr-mention';
 import { type JSX, Show } from 'solid-js';
 

@@ -3,6 +3,8 @@ import type { UpcomingCalendarEvent } from '../core/upcoming-calendar-events';
 
 export type ActiveQuickCall = {
   id: string;
+  /** The live call behind the meeting, once someone has joined. */
+  callId?: string;
   createdBy: string;
   title: string;
   url: string;

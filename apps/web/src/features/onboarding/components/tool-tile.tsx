@@ -1,7 +1,7 @@
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Show } from 'solid-js';
 import type { Tool, ToolConnectionState } from '../context/onboarding-context';
 

@@ -125,7 +125,7 @@ impl Client {
     #[tracing::instrument(
         name = "whatsmeow.send_message",
         skip_all,
-        fields(message_id, is_group = to.server == GROUP_SERVER, peer = extra.peer),
+        fields(message_id, is_group = to.server == GROUP_SERVER, peer = extra.peer, devices),
         err
     )]
     pub async fn send_message(
@@ -784,6 +784,8 @@ impl Client {
             .instrument(tracing::info_span!("whatsmeow.send_message.get_devices"))
             .await
             .map_err(|error| error.wrap("failed to get device list"))?;
+        // Macro addition: the fan-out on the `whatsmeow.send_message` span.
+        tracing::Span::current().record("devices", all_devices.len());
         if to.server == GROUP_SERVER {
             all_devices
                 .retain(|jid| jid.server != HOSTED_SERVER && jid.server != HOSTED_LID_SERVER);
@@ -1023,7 +1025,8 @@ impl Client {
                     }
                 };
             if !session_exists {
-                return Err(ClientError::NoSession.wrap(format!("with {address}")));
+                // Deviation from Go: the error doesn't name the address.
+                return Err(ClientError::NoSession);
             }
         }
         let ciphertext = {

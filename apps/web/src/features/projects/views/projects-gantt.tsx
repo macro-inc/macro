@@ -4,9 +4,9 @@ import { deriveGanttRange } from '@app/components/gantt/gantt-date';
 import { STATUS_GROUP_HEADER_TINTS } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { Button, cn, Layer } from '@ui';
@@ -77,6 +77,7 @@ export function ProjectsGantt(props: {
         <Match when={collection.state().kind === 'loading'}>
           <div class="grid flex-1 place-items-center text-ink-muted">
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading project timeline"
               class="size-5 animate-spin"
             />
@@ -89,7 +90,7 @@ export function ProjectsGantt(props: {
           >
             Projects couldn’t be loaded.
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => fireAndForget(collection.refresh(), 'projects')}
             >
               Try again

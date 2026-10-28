@@ -333,6 +333,7 @@ impl Memory {
             CellValue::Number(number) => Some(Cell::Number(number)),
             CellValue::Boolean(checked) => Some(Cell::Bool(checked)),
             CellValue::Date(date) => Some(Cell::Date(date)),
+            CellValue::DateRange(range) => Some(Cell::DateRange(range)),
             CellValue::Link(urls) => Some(Cell::Text(urls.join(" "))),
             CellValue::Options(refs) => Some(Cell::Options(
                 refs.into_iter()

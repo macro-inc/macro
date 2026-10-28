@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => ({
   failure: vi.fn(),
   success: vi.fn(),
   linkId: 'oauth-link',
-  searchParams: {} as Record<string, string>,
+  searchParams: {} as Record<string, string | string[]>,
+  tutorialComplete: true as boolean,
   restore: vi.fn(),
+  track: vi.fn(),
   openAddInbox: vi.fn(),
   fetchProviders: vi.fn(),
 }));
@@ -41,7 +43,7 @@ vi.mock('@core/auth', () => ({ updateUserAuth: vi.fn() }));
 vi.mock('@core/auth/email', () => ({ redirectToEmailAuth: vi.fn() }));
 vi.mock('@core/auth/login-events', () => ({ publishLoginSuccess: vi.fn() }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
-  useAnalytics: () => ({ pageView: vi.fn() }),
+  useAnalytics: () => ({ pageView: vi.fn(), track: mocks.track }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success, failure: mocks.failure },
@@ -58,7 +60,9 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: vi.fn(),
-  useUserInfoQuery: () => ({ data: { tutorialComplete: true } }),
+  useUserInfoQuery: () => ({
+    data: { tutorialComplete: mocks.tutorialComplete },
+  }),
 }));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -104,6 +108,7 @@ const { EmailLinkCallback } = makeEmailAuthComponents({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.linkId = 'oauth-link';
+  mocks.tutorialComplete = true;
   mocks.searchParams = { link_id: mocks.linkId };
   mocks.fetchProviders.mockResolvedValue({
     gmail: true,
@@ -130,6 +135,10 @@ describe('inbox consent callback', () => {
       forceShare: false,
     });
     expect(mocks.refetch).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'connected' }
+    );
   });
 
   it('explains pending work and lets the user return without a later redirect', async () => {
@@ -173,6 +182,10 @@ describe('inbox consent callback', () => {
       )
     );
     expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'no_gmail_grant' }
+    );
   });
 
   it('still holds the callback for a shared-inbox confirmation', async () => {
@@ -293,5 +306,27 @@ describe('consent that ended without a grant', () => {
     expect(mocks.openAddInbox).toHaveBeenCalledOnce();
     expect(mocks.restore).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledOnce();
+  });
+
+  it('returns a first-run user to the deep-linked onboarding step', async () => {
+    mocks.tutorialComplete = false;
+    mocks.searchParams = { link_id: 'oauth-link', step: 'plan' };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/onboarding?step=plan', {
+        replace: true,
+      })
+    );
+  });
+
+  it('drops an unknown step when returning a first-run user to onboarding', async () => {
+    mocks.tutorialComplete = false;
+    mocks.searchParams = { link_id: 'oauth-link', step: 'nope' };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/onboarding', {
+        replace: true,
+      })
+    );
   });
 });

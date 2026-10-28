@@ -12,8 +12,8 @@ import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useMessageLink,
   useMessageRootsQuery,

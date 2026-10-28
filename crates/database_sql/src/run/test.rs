@@ -959,3 +959,131 @@ fn derived_columns_cannot_be_written() {
     );
     assert!(sink.applied.lock().unwrap().is_empty());
 }
+
+const CONTRACT: Uuid = Uuid::from_u128(0x0f);
+
+/// `crm.deals` with a `contract` date range.
+fn catalog_with_contract() -> Catalog {
+    let mut catalog = catalog();
+    let deals = catalog
+        .tables
+        .iter_mut()
+        .find(|table| table.id == DEALS)
+        .unwrap();
+    deals.columns.push(crate::catalog::Column {
+        id: CONTRACT,
+        placement: ColumnId::from_uuid(CONTRACT),
+        name: "contract".into(),
+        kind: crate::catalog::ColumnKind::DateRange,
+        formula: None,
+    });
+    catalog
+}
+
+#[test]
+fn date_ranges_compare_to_dates_and_sort_by_start() {
+    let august = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+    };
+    let july_into_august = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 7, 25, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap(),
+    };
+    let october = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 10, 3, 0, 0, 0).unwrap(),
+    };
+    let mut rows = deals();
+    rows[0].cells.insert(CONTRACT, Cell::DateRange(august));
+    rows[1].cells.insert(CONTRACT, Cell::DateRange(october));
+    rows[2]
+        .cells
+        .insert(CONTRACT, Cell::DateRange(july_into_august));
+    let source = source(rows);
+    let sink = FakeSink::new();
+
+    // Overlapping August: ends on or after its first day, starts on or
+    // before its last. Initech has no contract and fails both.
+    let outcome = pollster::block_on(run(
+        &catalog_with_contract(),
+        "SELECT name, contract FROM crm.deals WHERE contract >= '2026-08-01' AND contract <= '2026-08-31' ORDER BY contract",
+        &source,
+        &sink,
+    ))
+    .unwrap();
+    assert_eq!(
+        outcome.rows,
+        vec![
+            vec![
+                Some(Cell::Text("Hooli".into())),
+                Some(Cell::DateRange(july_into_august)),
+            ],
+            vec![
+                Some(Cell::Text("Acme".into())),
+                Some(Cell::DateRange(august)),
+            ],
+        ]
+    );
+    assert_eq!(outcome.columns[1].kind, OutcomeKind::DateRange);
+
+    let containing = pollster::block_on(run(
+        &catalog_with_contract(),
+        "SELECT name FROM crm.deals WHERE contract = '2026-08-15'",
+        &source,
+        &sink,
+    ))
+    .unwrap();
+    assert_eq!(containing.rows, vec![vec![Some(Cell::Text("Acme".into()))]]);
+}
+
+#[test]
+fn a_date_range_is_written_as_an_interval_or_one_day() {
+    let sink = FakeSink {
+        inserted: vec![NEW_ROW, SECOND_NEW_ROW],
+        ..FakeSink::new()
+    };
+    pollster::block_on(run(
+        &catalog_with_contract(),
+        "INSERT INTO crm.deals (name, contract) VALUES ('Acme', '2026-08-10/2026-08-20'), ('Globex', '2026-09-01')",
+        &source(vec![]),
+        &sink,
+    ))
+    .unwrap();
+    let applied = sink.applied.lock().unwrap();
+    let DatabaseOp::Rows {
+        change: RowsChange::Insert { rows },
+        ..
+    } = &applied[0].1[0]
+    else {
+        panic!("an insert sends rows");
+    };
+    assert_eq!(
+        rows[0][1].value,
+        CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        })
+    );
+    assert_eq!(
+        rows[1][1].value,
+        CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[test]
+fn a_date_range_ending_before_it_starts_is_refused() {
+    let sink = FakeSink::new();
+    let error = pollster::block_on(run(
+        &catalog_with_contract(),
+        "UPDATE crm.deals SET contract = '2026-08-20/2026-08-10' WHERE name = 'Acme'",
+        &source(deals()),
+        &sink,
+    ))
+    .unwrap_err();
+    assert!(error.to_string().contains("date range"), "{error}");
+    assert!(sink.applied.lock().unwrap().is_empty());
+}

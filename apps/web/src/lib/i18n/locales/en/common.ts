@@ -1,0 +1,15 @@
+export default {
+  addPhotos: 'Add photos',
+  addFiles: 'Add files',
+  photosFromDevice: 'Images from your device',
+  filesFromDevice: 'Documents and other files',
+  selectedModel: 'This model',
+  imagesUnsupported: "{{model}} doesn't support images",
+  cancel: 'Cancel',
+  close: 'Close',
+  delete: 'Delete',
+  rename: 'Rename',
+  more: 'More',
+  search: 'Search',
+  settings: 'Settings',
+};

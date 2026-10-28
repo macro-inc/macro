@@ -1,9 +1,9 @@
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UsersIcon from '@phosphor/users-three.svg';
-import XIcon from '@phosphor/x.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import UsersIcon from '@icon/system/regular/users-three.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TagDot } from '@property/tags/TagDot';
 import {
   type EditableTag,
@@ -84,7 +84,7 @@ function TagListSection(props: {
       description={props.description}
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => props.onCreate(props.scope)}
         >
@@ -115,9 +115,9 @@ function TagListSection(props: {
                         <Show when={props.onShare}>
                           {(onShare) => (
                             <Button
+                              aria-label={`Share ${optionLabel(option)} with team`}
                               variant="ghost"
                               size="icon-sm"
-                              label={`Share ${optionLabel(option)} with team`}
                               tooltip="Share with team"
                               disabled={
                                 props.deleting ||
@@ -135,9 +135,9 @@ function TagListSection(props: {
                           )}
                         </Show>
                         <Button
+                          aria-label={`Edit ${optionLabel(option)}`}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Edit ${optionLabel(option)}`}
                           tooltip="Edit tag"
                           disabled={props.deleting}
                           onClick={() => props.onEdit(tag())}
@@ -145,9 +145,9 @@ function TagListSection(props: {
                           <PencilIcon class="size-3.5 touch:size-4" />
                         </Button>
                         <Button
+                          aria-label={`Delete ${optionLabel(option)}`}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Delete ${optionLabel(option)}`}
                           tooltip="Delete tag"
                           disabled={props.deleting}
                           onClick={() => props.onDelete(tag())}
@@ -190,7 +190,7 @@ function ConfirmDialog(props: {
             size="icon-sm"
             disabled={props.pending}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
             {props.title}
@@ -207,7 +207,7 @@ function ConfirmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={props.pending}
               onClick={props.onConfirm}
             >
@@ -313,12 +313,7 @@ export function Tags() {
       title="Tags"
       description="Manage personal labels and shared team labels."
       actions={
-        <Button
-          variant="cta"
-          size="sm"
-          depth={3}
-          onClick={() => openCreate('user')}
-        >
+        <Button variant="neutral" size="sm" onClick={() => openCreate('user')}>
           <PlusIcon class="size-4" />
           New tag
         </Button>

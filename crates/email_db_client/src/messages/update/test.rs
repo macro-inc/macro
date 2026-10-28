@@ -1,4 +1,4 @@
-use super::mark_message_as_sent;
+use super::{mark_message_as_sent, set_flags_from_labels};
 use crate::messages::get::fetch_messages_metadata;
 use crate::threads::get::get_thread_by_id_and_link_id;
 use crate::threads::update::update_thread_metadata;
@@ -132,5 +132,51 @@ async fn failed_finalization_rolls_back_sent_recency(pool: PgPool) -> anyhow::Re
         .await?
         .unwrap();
     assert!(thread.latest_outbound_message_ts.is_none());
+    Ok(())
+}
+
+async fn row_version(pool: &PgPool) -> anyhow::Result<String> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT xmin::text AS "xmin!" FROM email_messages WHERE id = $1"#,
+        MESSAGE
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+)]
+async fn flags_that_already_match_their_labels_are_not_rewritten(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // The message has neither UNREAD nor STARRED: it is read and not starred.
+    sqlx::query!(
+        "UPDATE email_messages SET is_read = true, is_starred = false WHERE id = $1",
+        MESSAGE
+    )
+    .execute(&pool)
+    .await?;
+    let before = row_version(&pool).await?;
+
+    let mut tx = pool.begin().await?;
+    set_flags_from_labels(tx.as_mut(), MESSAGE, true, true).await?;
+    tx.commit().await?;
+    assert_eq!(row_version(&pool).await?, before);
+
+    sqlx::query!(
+        "UPDATE email_messages SET is_read = false WHERE id = $1",
+        MESSAGE
+    )
+    .execute(&pool)
+    .await?;
+    let mut tx = pool.begin().await?;
+    set_flags_from_labels(tx.as_mut(), MESSAGE, true, false).await?;
+    tx.commit().await?;
+    let is_read = sqlx::query_scalar!("SELECT is_read FROM email_messages WHERE id = $1", MESSAGE)
+        .fetch_one(&pool)
+        .await?;
+    assert!(is_read);
     Ok(())
 }

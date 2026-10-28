@@ -1,5 +1,6 @@
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import { t } from '@app/lib/i18n';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn, Hotkey } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -45,7 +46,7 @@ export function CarouselCards(props: {
                   type="button"
                   id={props.itemId(item)}
                   data-create-card
-                  aria-label={`Create ${item.label}`}
+                  aria-label={t('create.createItem', { label: item.label })}
                   aria-pressed={active()}
                   aria-hidden={distance() > 5}
                   tabindex={active() ? 0 : -1}
@@ -109,7 +110,7 @@ export function CarouselCards(props: {
       >
         <button
           type="button"
-          aria-label="Previous create option"
+          aria-label={t('create.previousCreateOption')}
           class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge-muted bg-dialog text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
           onClick={() => props.onStep(-1)}
         >
@@ -120,7 +121,10 @@ export function CarouselCards(props: {
             {(page) => (
               <button
                 type="button"
-                aria-label={`Browse create options ${page * 3 + 1}–${Math.min(page * 3 + 3, props.items.length)}`}
+                aria-label={t('create.browseCreateOptions', {
+                  start: page * 3 + 1,
+                  end: Math.min(page * 3 + 3, props.items.length),
+                })}
                 aria-pressed={Math.floor(props.selectedIndex / 3) === page}
                 class="flex h-6 items-center justify-center outline-none focus-visible:outline-2 focus-visible:outline-accent"
                 onClick={() => props.onSelect(page * 3)}
@@ -139,7 +143,7 @@ export function CarouselCards(props: {
         </div>
         <button
           type="button"
-          aria-label="Next create option"
+          aria-label={t('create.nextCreateOption')}
           class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge-muted bg-dialog text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
           onClick={() => props.onStep(1)}
         >

@@ -76,7 +76,11 @@ import {
   renameChannelHandler,
   shareWithChannelHandler,
 } from './ChannelMutations';
-import { describeCodeToolsHandler, executeCodeHandler } from './CodeMode';
+import {
+  describeCodeToolsHandler,
+  executeCodeHandler,
+  readCodeDocsHandler,
+} from './CodeMode';
 import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
@@ -121,6 +125,8 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importFromJiraHandler,
+  importFromLinearHandler,
   importFromNotionHandler,
   importNotionPageHandler,
   listImportEntitiesHandler,
@@ -210,6 +216,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
+  ReadCodeDocs: readCodeDocsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
@@ -258,6 +265,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportFromNotion: importFromNotionHandler,
+  ImportFromLinear: importFromLinearHandler,
+  ImportFromJira: importFromJiraHandler,
   ImportNotionPage: importNotionPageHandler,
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,

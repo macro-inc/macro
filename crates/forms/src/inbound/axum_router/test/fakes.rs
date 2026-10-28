@@ -40,18 +40,24 @@ pub(super) const ROW: RowId = RowId::from_uuid(Uuid::from_u128(0x40));
 pub(super) struct Tokens;
 
 impl JwtValidator for Tokens {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         let user_id = match jwt {
             "owner" => OWNER,
             "respondent" => RESPONDENT,
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: user_id.to_string(),
-            fusion_user_id: format!("fusion-{jwt}"),
-            organization_id: None,
-            permissions: None,
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: user_id.to_string(),
+                fusion_user_id: format!("fusion-{jwt}"),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }

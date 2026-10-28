@@ -449,6 +449,31 @@ use utoipa::OpenApi;
         slack_integration::inbound::axum_router::jobs::finalize,
         slack_integration::inbound::axum_router::jobs::cancel,
 
+        // External chats (any provider)
+        external_chat::inbound::router::list,
+        external_chat::inbound::router::add,
+        external_chat::inbound::router::chat,
+        external_chat::inbound::router::remove,
+        external_chat::inbound::router::messages,
+        external_chat::inbound::router::message,
+        external_chat::inbound::router::message_attachments,
+        external_chat::inbound::router::mark_read,
+        external_chat::inbound::router::permissions,
+        external_chat::inbound::router::update_permissions,
+        external_chat::inbound::router::open_sends,
+        external_chat::inbound::router::send,
+        external_chat::inbound::router::upload,
+        external_chat::inbound::router::delivery,
+
+        // Personal WhatsApp linked as a device
+        whatsapp_linked::inbound::router::account,
+        whatsapp_linked::inbound::router::connect,
+        whatsapp_linked::inbound::router::pairing,
+        whatsapp_linked::inbound::router::cancel,
+        whatsapp_linked::inbound::router::passkey,
+        whatsapp_linked::inbound::router::disconnect,
+        whatsapp_linked::inbound::router::chats,
+
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,
         access_requests::inbound::axum_router::cancel_handler,

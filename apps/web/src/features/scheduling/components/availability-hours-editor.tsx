@@ -1,6 +1,6 @@
-import Clock from '@phosphor/clock.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button } from '@ui';
 import { Index, type JSX, Show } from 'solid-js';
 import {
@@ -93,9 +93,10 @@ export function AvailabilityHoursEditor(props: {
                           onChange={(mode) => update(index, { mode })}
                         />
                         <Button
+                          aria-label={`Remove range ${index + 1}`}
+                          tooltip={`Remove range ${index + 1}`}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Remove range ${index + 1}`}
                           onClick={() => remove(index)}
                         >
                           <Trash class="size-4" />
@@ -171,7 +172,7 @@ export function AvailabilityHoursEditor(props: {
         </div>
         <Button
           ref={addButton}
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="shrink-0 self-start"
           disabled={!nextRange()}

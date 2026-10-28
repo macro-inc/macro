@@ -8,7 +8,7 @@
  */
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Eye from '@phosphor/eye.svg';
+import Eye from '@icon/system/regular/eye.svg';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Layer } from '@ui';
 import { Show } from 'solid-js';
@@ -110,7 +110,7 @@ function FormRespondContent(props: { formId: string }) {
                           Preview · responses won’t be saved
                         </span>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() =>
                             navigate(
                               `/form/${encodeURIComponent(props.formId)}`

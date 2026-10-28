@@ -5,12 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CellValueOneOfOnefiveType } from './cellValueOneOfOnefiveType';
+import type { EntityRef } from './entityRef';
 
 /**
- * Rows of the table a relation column points at.
+ * References to Macro entities of the kind the column points at; at
+most one for a single-valued column.
  */
 export type CellValueOneOfOnefive = {
   type: CellValueOneOfOnefiveType;
-  /** Rows of the table a relation column points at. */
-  value: string[];
+  /** References to Macro entities of the kind the column points at; at
+most one for a single-valued column. */
+  value: EntityRef[];
 };

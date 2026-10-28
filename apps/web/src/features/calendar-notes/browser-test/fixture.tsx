@@ -1,7 +1,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import { Button, ImperativeDialogHost } from '@ui';
 import { ok } from 'neverthrow';
 import { createSignal, onCleanup, Show } from 'solid-js';
@@ -99,6 +99,13 @@ function Fixture() {
           <DocumentNotesView
             source={{
               links: () => ({ data: links(), pending: false }),
+              team: () => ({ data: null, pending: false }),
+              setTeam: async () => {
+                setLinks((current) =>
+                  current.map((link) => ({ ...link, team: undefined }))
+                );
+                return ok(undefined);
+              },
               retry: async () => {},
               unlink: async () => {
                 setLinks([]);
@@ -176,7 +183,7 @@ function Fixture() {
         </div>
         <Button
           ref={setAnchor}
-          variant="outline"
+          variant="secondary"
           size="md"
           class="mt-5"
           onClick={() => setSelected(true)}

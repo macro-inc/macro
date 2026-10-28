@@ -42,15 +42,36 @@ export function previousOnboardingStep(
   return index > 0 ? ONBOARDING_STEPS[index - 1] : undefined;
 }
 
-/** Migrate in-progress sessions from the previous flow without losing OAuth returns. */
+/** A `?step` value that names a current onboarding step. */
+export function parseOnboardingStepParam(
+  value: unknown
+): OnboardingStep | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== 'string') return undefined;
+  return ONBOARDING_STEPS.find((step) => step === raw);
+}
+
+/**
+ * Where to open the flow.
+ * Checkout return, then saved progress (including legacy names), then a
+ * `?step` link, then welcome. A Google sign-up return is passed in as `work`.
+ */
 export function restoreOnboardingStep(
   saved: unknown,
-  checkoutReturn = false
+  checkoutReturn = false,
+  requestedStep?: unknown
 ): OnboardingStep {
   if (checkoutReturn) return 'plan';
-  if (typeof saved !== 'string') return 'welcome';
+  const resumed = resumeSavedStep(saved);
+  if (resumed) return resumed;
+  return parseOnboardingStepParam(requestedStep) ?? 'welcome';
+}
+
+/** Migrate in-progress sessions from the previous flow without losing OAuth returns. */
+function resumeSavedStep(saved: unknown): OnboardingStep | undefined {
+  if (typeof saved !== 'string') return undefined;
   if (saved === 'email') return 'work';
   if (saved.startsWith('connect-')) return 'tools';
   if (saved === 'building' || saved === 'summary') return 'plan';
-  return ONBOARDING_STEPS.find((step) => step === saved) ?? 'welcome';
+  return ONBOARDING_STEPS.find((step) => step === saved);
 }

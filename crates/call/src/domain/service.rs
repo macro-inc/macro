@@ -7,6 +7,7 @@ mod channel_startup;
 mod guest_chat;
 mod meeting_invites;
 mod meetings;
+mod orphan_rooms;
 mod reconcile;
 
 use connection::domain::ports::ConnectionService;
@@ -812,14 +813,16 @@ impl<
             .list_active_calls()
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        for call in calls {
-            self.reconcile_call(&call, now)
+        for call in &calls {
+            self.reconcile_call(call, now)
                 .await
                 .inspect_err(|error| {
                     tracing::warn!(call_id = %call.id, error = ?error, "failed to reconcile call")
                 })
                 .ok();
         }
+        // A failed sweep is recorded on its span and retried next interval.
+        self.sweep_orphan_rooms(&calls, now).await.ok();
         Ok(())
     }
 
@@ -984,12 +987,16 @@ impl<
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<LeaveCallResponse, CallError> {
-        let call = self
+        let Some(call) = self
             .repo
             .get_call_by_channel_id(channel_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
+        else {
+            // A stale token may still hold the user in the last call's room.
+            self.leave_archived_channel_room(channel_id, user_id).await;
+            return Err(CallError::NotFound(channel_id.to_string()));
+        };
 
         // Remove participant from DB (idempotent — no-op if already removed by webhook).
         self.repo
@@ -1099,11 +1106,18 @@ impl<
             .await?;
         }
 
+        // Identities are `macro|<email>`: log which kind of participant this
+        // is, never who.
+        let participant_kind = match (&event.participant_identity, &event.guest_identity) {
+            (Some(_), _) => "user",
+            (None, Some(_)) => "guest",
+            (None, None) => "none",
+        };
         tracing::info!(
             event_type = %event.event,
             event_id = %event.id,
             room_name = ?event.room_name,
-            participant = ?event.participant_identity,
+            participant_kind,
             "processing call webhook event"
         );
 
@@ -1143,13 +1157,22 @@ impl<
             }
             "participant_joined" => {
                 if let (Some(room), Some(identity)) = (&event.room_name, &event.guest_identity) {
-                    if let Some(call) = self
+                    match self
                         .repo
                         .get_call_by_room_name(room)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?
                     {
-                        self.repo.reconcile_guest(&call.id, *identity, true).await?;
+                        Some(call) => {
+                            self.repo.reconcile_guest(&call.id, *identity, true).await?;
+                        }
+                        None => {
+                            self.evict_from_untracked_room(
+                                room,
+                                orphan_rooms::RoomParticipant::Guest(*identity),
+                            )
+                            .await?;
+                        }
                     }
                     return Ok(());
                 }
@@ -1169,7 +1192,12 @@ impl<
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 else {
-                    return Ok(());
+                    return self
+                        .evict_from_untracked_room(
+                            room_name,
+                            orphan_rooms::RoomParticipant::User(participant_identity.copied()),
+                        )
+                        .await;
                 };
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).

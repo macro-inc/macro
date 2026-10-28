@@ -16,10 +16,11 @@ use tower::ServiceExt;
 struct Token;
 
 impl JwtValidator for Token {
-    fn validate(
+    fn validate_credential(
         &self,
         jwt: &str,
-    ) -> Result<ValidatedIdentity, rootcause::Report<MacroAuthorizationError>> {
+    ) -> Result<macro_authorization::ValidatedCredential, rootcause::Report<MacroAuthorizationError>>
+    {
         let user_id = match jwt {
             "owner" => OWNER,
             "viewer" => VIEWER,
@@ -29,12 +30,15 @@ impl JwtValidator for Token {
                 ));
             }
         };
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: user_id.into(),
-            fusion_user_id: "fusion-sql-test".into(),
-            organization_id: None,
-            permissions: None,
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: user_id.into(),
+                fusion_user_id: "fusion-sql-test".into(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }

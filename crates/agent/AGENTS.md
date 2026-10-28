@@ -18,6 +18,10 @@ and usage metering.
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).
+- `src/tool_result_limit.rs`: `ToolResultLimit` cuts tool results too long for
+  the model (in the hook and on replay through `to_rig_messages_limited`) and
+  keeps them for the `ReadToolResult` pager tool; opt in with
+  `AgentLoop::with_tool_result_limit`.
 - `src/structured_output.rs`: prompted JSON generation with offline schema
   preflight and result validation; external schema references are rejected.
 - `src/tool_media.rs`: promotes explicit top-level `modelMedia` results to

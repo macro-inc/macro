@@ -98,6 +98,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'Jira',
         detail: 'Issues',
         icon: IconJira as ImportIcon,
+        ledger: 'jira',
       },
       {
         appSlug: 'asana',

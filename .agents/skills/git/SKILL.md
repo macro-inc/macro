@@ -33,12 +33,49 @@ The PR title follows the same form; squash merges use it as the commit on `main`
 - **body:** why the change was needed and anything a reviewer can't see in the
   diff. Wrap at 72 columns.
 
+## Privacy
+
+Everything written into the repository or onto GitHub is public: PR titles and
+bodies, commit messages, review comments and replies, code comments, docs, and
+test fixtures. Describe the code change and nothing else.
+
+- Never include personal data: names, emails, phone numbers, usernames,
+  addresses, account or workspace ids of real users, or @mentions of people.
+- Never name customers, prospects, partners, their companies, or their
+  products. Name a third-party product only when the code integrates with it
+  (`Slack integration`), never as the source of a request or report.
+- Never cite support channels, tickets, chat channels or threads, calls,
+  meetings, emails, or links into support tools or Macro workspace items
+  (task links are fine). Don't say who asked or where it was reported.
+- Never mention places tied to a person or customer (cities, offices, regions).
+- When the reason matters, say it in general terms: "Users with long read
+  histories saw channels load slowly", not "<customer> reported in
+  <channel> that…". "A user request" is enough; omit the requester.
+- Test fixtures and examples use placeholders (`user@example.com`, `Acme`),
+  never data copied from a real account or conversation.
+- Context the user gives you (a support thread, a customer name, a screenshot)
+  stays in the conversation; restate it as the general problem before writing.
+
+CI's `PR Privacy Check` fails a PR whose title, body, or commits contain
+emails, phone numbers, @mentions, chat-channel names, or support-tool and Macro
+workspace links (Dependabot PRs are exempt). It cannot see names, so passing it
+is not enough: reread every title, body, and message against the list above.
+Run it locally before pushing or opening a PR:
+
+```sh
+just pr-privacy                                   # commit messages on this branch
+PR_TITLE="fix(x): ..." just pr-privacy body.md    # plus the PR title and body you will post
+```
+
+To fix a hit, edit the PR title or body, or reword the commit on your branch.
+
 ## Before pushing
 
 Run what applies to the files you changed, and fix failures before pushing:
 
 ```sh
 just check                                # format, lint, code rules on changed files
+just pr-privacy                           # commit messages carry no personal details
 cargo fmt --all -- --check                # any Rust change
 cargo x deps --check                      # Cargo.toml or crate added/removed
 cargo x workflows --check                 # workflow generators changed
@@ -60,7 +97,7 @@ order, and drop any that would be empty:
 ## Why
 
 The problem or goal, with the evidence: the bug and how it shows up, numbers
-measured, the user request. Link issues.
+measured. Link GitHub issues or Macro tasks. Follow the Privacy section above.
 
 ## How it works
 

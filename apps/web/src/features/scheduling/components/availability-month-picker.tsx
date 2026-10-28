@@ -1,5 +1,5 @@
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import { Popover } from '@kobalte/core/popover';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
 import { Button, Calendar as MiniCalendar } from '@ui';
 import { format, parseISO } from 'date-fns';
 import { createSignal } from 'solid-js';
