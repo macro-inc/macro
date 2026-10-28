@@ -163,10 +163,23 @@ export function filterSoupItemByRequestBody(
           data.id
         )
     )
-    .with(
-      { tag: 'reminder' },
-      ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
-    )
+    .with({ tag: 'initiative' }, ({ data }) => {
+      const filters = body.initiative_filters;
+      // Match the server's opt-in rule; cached projects never leak into tasks
+      // or folders when an older Soup caller has no initiative filter.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.initiative_ids?.length) ||
+        Boolean(filters?.owners?.length) ||
+        (filters?.name !== undefined && filters.name !== null) ||
+        (filters?.due_after !== undefined && filters.due_after !== null) ||
+        (filters?.due_before !== undefined && filters.due_before !== null);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.initiative_ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
     .with({ tag: 'agentSession' }, ({ data }) => {
       const filters = body.agent_session_filters;
       // Agent sessions are opt-in on the server: a body that neither includes
@@ -181,7 +194,11 @@ export function filterSoupItemByRequestBody(
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
     })
-    .exhaustive();
+    .with({ tag: 'databaseRow' }, { tag: 'crmContact' }, () => {
+      // These partitions are opt-in through the filter AST only.
+      return false;
+    })
+    .exhaustive(() => false);
 }
 
 /**

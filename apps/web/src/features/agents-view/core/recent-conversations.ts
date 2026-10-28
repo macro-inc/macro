@@ -29,7 +29,7 @@ function isAgentConversation(
   return entity.type === 'agent_session' || entity.type === 'chat';
 }
 
-/** When a conversation last moved, as epoch millis; 0 when unknown. */
+/** When a conversation last had user-visible work, as epoch millis; 0 when unknown. */
 export function conversationTimestamp(
   entity: Pick<AgentConversationEntity, 'updatedAt' | 'createdAt'>
 ): number {
@@ -88,22 +88,24 @@ export function conversationMode(
       );
 }
 
-type ConversationGroupId = 'recent';
-
-export type ConversationGroup = {
-  id: ConversationGroupId;
-  /** Absent for a lone group that needs no heading. */
-  label: string | undefined;
+export type PartitionedConversations = {
   conversations: AgentConversationEntity[];
+  archived: AgentConversationEntity[];
 };
 
-/** One mixed list, retaining the query's newest-first order. */
-export function groupConversations(
+const isArchived = (conversation: AgentConversationEntity) =>
+  conversation.type === 'agent_session' && conversation.isArchived;
+
+/** Splits archived agent sessions out, keeping the query's newest-first order. */
+export function partitionArchived(
   conversations: readonly AgentConversationEntity[]
-): ConversationGroup[] {
-  return conversations.length
-    ? [{ id: 'recent', label: undefined, conversations: [...conversations] }]
-    : [];
+): PartitionedConversations {
+  return {
+    conversations: conversations.filter(
+      (conversation) => !isArchived(conversation)
+    ),
+    archived: conversations.filter(isArchived),
+  };
 }
 
 export type BotUsage = {

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_tool_standing_approval (\n                agent_session_id, user_id, server_slug, tool_name, granted_by\n            )\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (agent_session_id, user_id, server_slug, (COALESCE(tool_name, '')))\n            DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec910250f6dd6b38b2b7cd83aff36e74c42c99c244ce7ec8f4dbcef1cd3c0276"
+}

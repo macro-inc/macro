@@ -1,0 +1,322 @@
+/* Legal-document layout for /dpa, built to sit alongside /terms and /privacy.
+   Those pages are styled inline in UtilPlainText; the metrics below are taken
+   from it so all three read as one set:
+
+     measure      56rem, centred, 116px 2rem 72px padding (RouteLegal.css)
+     type         `Display` for headings, `body` for everything else
+     paragraphs   1rem / 1.7, 1rem bottom margin
+     sections     1.3rem heading with a rule above it
+     header       uppercase wordmark eyebrow, then title, then the date line
+
+   What this page adds is numbering: clause numbers are CSS counters following
+   the Word scheme (1, 1.1, (a)), set inline at the head of the clause's own
+   text — same colour and weight as the wording, one word space apart — so a
+   numbered clause reads as a single paragraph. */
+
+.dpa {
+  --dpa-rule: color-mix(in srgb, var(--c4) 45%, transparent);
+  --dpa-border: color-mix(in srgb, var(--c4) 34%, transparent);
+  --dpa-nest: 1.5rem;
+  box-sizing: border-box;
+  color: var(--c2);
+  font-family: body, system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.7;
+  /* Matches `.legal-doc` in RouteLegal.css: the top value clears the fixed
+     BaseHeader, which the old 2.5rem did not. */
+  padding: 116px 2rem 72px;
+  width: 100%;
+}
+
+.dpa,
+.dpa * {
+  box-sizing: border-box;
+}
+
+.dpa-doc {
+  margin: 0 auto;
+  max-width: 56rem;
+}
+
+.dpa a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.dpa a:hover {
+  color: var(--c0);
+}
+
+/* Title block ------------------------------------------------------------- */
+
+.dpa-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+}
+
+.dpa-title {
+  font-family: Display, system-ui, sans-serif;
+  font-size: clamp(2.2rem, 7vw, 3.6rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 0 0 1.5rem;
+}
+
+.dpa-version {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  margin: 0 0 1.25rem;
+}
+
+/* Table of contents ------------------------------------------------------- */
+
+/* A grid rather than CSS multi-column: entries fill the first column top to
+   bottom, then the second, and both columns start on the same line. Multi-column
+   balances by height instead, so a wrapped entry pushed the second column's
+   first number a line out of step with the first column's.
+
+   Ruled above only — the first section's own rule closes the list off below, so
+   a bottom border here would double it. */
+.dpa-toc {
+  border-top: 1px dotted var(--dpa-rule);
+  counter-reset: toc;
+  display: grid;
+  gap: 0.5rem 64px;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Row count comes from the component, which derives it from the entry count;
+     this is the fallback if that inline value is ever missing. */
+  grid-template-rows: repeat(8, auto);
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 2rem 0 0;
+}
+
+/* Number and title are each their own column, so every number starts on the
+   same left edge and every title starts on the same one after it — including
+   across the two halves of the list. Wrapped titles align under the title. */
+.dpa-toc li {
+  color: var(--c4);
+  counter-increment: toc;
+  display: grid;
+  grid-template-columns: 2.5em minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  text-wrap: pretty;
+}
+
+.dpa-toc li::before {
+  content: counter(toc) ".";
+  font-variant-numeric: tabular-nums;
+}
+
+.dpa-toc a {
+  color: var(--c4);
+}
+
+.dpa-toc a:hover {
+  color: var(--c0);
+}
+
+/* Sections ---------------------------------------------------------------- */
+
+.dpa-section,
+.dpa-schedule {
+  scroll-margin-top: 96px;
+}
+
+/* No rule between sections — the heading and its spacing carry the break. */
+.dpa-heading,
+.dpa-schedule-heading {
+  font-family: Display, system-ui, sans-serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 2.4rem 0 0.9rem;
+}
+
+/* The number is part of the heading's own text run, exactly as on /terms
+   ("1. ABOUT"). The escape is a non-breaking space, so the number cannot be
+   left stranded at the end of a line. */
+.dpa-heading::before {
+  content: var(--section-num) ".\a0";
+  font-variant-numeric: tabular-nums;
+}
+
+.dpa-subheading {
+  color: var(--c1);
+  font-family: Display, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 1.35rem 0 0.7rem;
+}
+
+/* Schedule 4 letters its regions; California is the only one, so "A." comes
+   from here rather than from the text, matching Word's generated numbering. */
+.dpa-region::before {
+  content: "A. ";
+}
+
+/* Clause lists ------------------------------------------------------------ */
+
+.dpa-clauses {
+  counter-reset: clause;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A clause is an ordinary paragraph, spaced like every paragraph on /privacy —
+   no indent, and no hanging number in a gutter. */
+.dpa-clause {
+  counter-increment: clause;
+  margin: 0 0 1rem;
+}
+
+/* The number opens the clause's own text: same colour, same weight, one word
+   space before the wording, and wrapped lines returning to the left margin —
+   the way "3.1. Who may use the Services" reads on /terms.
+
+   Floated rather than left in flow because a clause with sub-clauses wraps its
+   text in <p>; a static ::before ahead of that block would become its own
+   anonymous line, dropping the number onto a line of its own. Floating puts it
+   on the first line whether the clause's text is bare or wrapped in <p>. */
+.dpa-clause::before {
+  content: counters(clause, ".") ".";
+  float: left;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.35em;
+  white-space: nowrap;
+}
+
+/* Inside a numbered section the clause number is prefixed with the section's
+   number, so section 2's first clause reads 2.1. — as in the source document. */
+.dpa-section .dpa-clause::before {
+  content: var(--section-num) "." counters(clause, ".") ".";
+}
+
+/* Third level in the body and in Schedule 3 is lettered: (a), (b), (c). */
+.dpa-clauses--alpha > .dpa-clause::before {
+  content: "(" counter(clause, lower-alpha) ")";
+}
+
+/* Schedule 4 letters its third level without parentheses: a., b., c. */
+.dpa-clauses--alpha-dot > .dpa-clause::before {
+  content: counter(clause, lower-alpha) ".";
+}
+
+/* The UK Addendum's Table 3 list is lower-roman in parentheses. */
+.dpa-clauses--roman > .dpa-clause::before {
+  content: "(" counter(clause, lower-roman) ")";
+}
+
+/* Depth is the one thing the numbering alone cannot show once nothing is
+   indented, so a sub-list steps in by a modest amount. */
+.dpa-clause > .dpa-clauses {
+  margin-top: 1rem;
+  padding-left: var(--dpa-nest);
+}
+
+.dpa-clauses > .dpa-clause:last-child {
+  margin-bottom: 0;
+}
+
+.dpa-clause p {
+  margin: 0;
+}
+
+.dpa-clause p + p {
+  margin-top: 1rem;
+}
+
+/* A clause's own title ("7.1. Assisting Customer.") sits on its own line, with
+   the clause text starting on the next one. Underlined in the source document;
+   the line break carries the emphasis here instead. */
+.dpa-clause-title {
+  color: var(--c1);
+}
+
+/* The clause text follows directly on the next line, not after a blank one. */
+.dpa-clause-title + p {
+  margin-top: 0;
+}
+
+/* `.dpa-note` is Macro's notice rather than contract text, but it is set as an
+   ordinary paragraph like the rest — the class exists so the page can still be
+   checked against MacroDPA.docx with the notice excluded. */
+.dpa-note,
+.dpa-lede,
+.dpa-para {
+  margin: 0 0 1rem;
+}
+
+.dpa strong,
+.dpa b {
+  color: var(--c0);
+  font-weight: 700;
+}
+
+.dpa u {
+  text-decoration: underline;
+  text-decoration-color: var(--dpa-border);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2.5px;
+}
+
+/* Tables ------------------------------------------------------------------ */
+
+/* Every table is wrapped, so the wrapper alone owns the vertical rhythm and no
+   table can end up flush against the text above it. */
+.dpa-table-wrap {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+/* Plain grid: shared hairline borders, no fills, no rounding. */
+.dpa-table {
+  border-collapse: collapse;
+  min-width: 380px;
+  width: 100%;
+}
+
+.dpa-table th,
+.dpa-table td {
+  border: 1px solid var(--dpa-border);
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.dpa-table th {
+  color: var(--c1);
+  font-weight: 700;
+}
+
+/* Label/value tables: keep the label column from collapsing under long values
+   or stretching under short ones. */
+.dpa-table th[scope='row'] {
+  width: 42%;
+}
+
+@media (max-width: 700px) {
+  .dpa {
+    --dpa-nest: 1rem;
+    padding: 72px 1.25rem 56px;
+  }
+
+  /* One column: entries run straight down in reading order. Row flow makes the
+     inline row count harmless, so it needs no override (and an inline style
+     could not be overridden from here anyway). */
+  .dpa-toc {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

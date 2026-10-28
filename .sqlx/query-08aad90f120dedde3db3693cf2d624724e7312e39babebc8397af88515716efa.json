@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH visible AS (\n                SELECT id AS link_id FROM email_links WHERE macro_id = $1\n                UNION\n                SELECT link_id FROM macro_user_links WHERE primary_macro_id = $1\n            )\n            SELECT visible.link_id AS \"link_id!\", COALESCE(counter.seq, 0) AS \"seq!\"\n            FROM visible\n            LEFT JOIN calendar_change_counters counter ON counter.link_id = visible.link_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "seq!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "08aad90f120dedde3db3693cf2d624724e7312e39babebc8397af88515716efa"
+}

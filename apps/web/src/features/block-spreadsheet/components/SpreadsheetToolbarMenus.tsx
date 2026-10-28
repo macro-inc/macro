@@ -1,15 +1,17 @@
-import AlignMiddle from '@phosphor/align-center-vertical-simple.svg';
-import Check from '@phosphor/check.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import Sigma from '@phosphor/sigma.svg';
-import Table from '@phosphor/table.svg';
-import TextColor from '@phosphor/text-a-underline.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
+import AlignMiddle from '@icon/system/regular/align-center-vertical-simple.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import Sigma from '@icon/system/regular/sigma.svg';
+import Table from '@icon/system/regular/table.svg';
+import TextColor from '@icon/system/regular/text-a-underline.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import {
+  SPREADSHEET_DATE_FORMATS,
   SPREADSHEET_FUNCTIONS,
   SPREADSHEET_NUMBER_FORMATS,
   SPREADSHEET_ZOOM_LEVELS,
@@ -29,11 +31,12 @@ function ToolbarMenu(
   return (
     <Dropdown placement="bottom-start" modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         size="sm"
         variant="ghost"
-        label={props.label}
         disabled={props.disabled}
-        class="h-7 min-h-7 gap-1 rounded-[3px] px-1.5 text-[13px] font-normal text-ink-muted touch:h-[44px] touch:min-h-[44px] touch:min-w-[44px] touch:px-2 touch:text-[max(14px,0.875rem)]"
+        class="h-7 min-h-7 gap-1 px-1.5 text-[13px] font-normal text-ink-muted touch:h-[44px] touch:min-h-[44px] touch:min-w-[44px] touch:px-2 touch:text-[max(14px,0.875rem)]"
       >
         {props.trigger}
         <span
@@ -116,6 +119,52 @@ export function ZoomMenu(props: SpreadsheetToolbarProps) {
   );
 }
 
+function DateFormatsMenu(props: SpreadsheetToolbarProps) {
+  return (
+    <Dropdown.Sub>
+      <Dropdown.SubTrigger
+        disabled={props.readonly}
+        class="h-8 gap-2 touch:h-auto touch:min-h-[44px]"
+      >
+        <span class="size-3.5 shrink-0" />
+        <span class="flex-1">Date formats</span>
+        <CaretRight class="size-3.5 shrink-0" />
+      </Dropdown.SubTrigger>
+      <Dropdown.SubContent class="max-w-[calc(100vw-1rem)] text-sm text-ink touch:text-[max(14px,0.875rem)]">
+        <Dropdown.Group>
+          <For each={SPREADSHEET_DATE_FORMATS}>
+            {(date) => (
+              <Choice
+                disabled={props.readonly}
+                selected={
+                  props.cell?.format === 'date' &&
+                  props.cell.numberFormat === date.numberFormat
+                }
+                onSelect={() =>
+                  props.onStyle({
+                    format: 'date',
+                    numberFormat: date.numberFormat,
+                  })
+                }
+              >
+                {date.example}
+              </Choice>
+            )}
+          </For>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <Choice
+            disabled={props.readonly}
+            onSelect={() => props.onCommand('custom-date-format')}
+          >
+            Custom date and time…
+          </Choice>
+        </Dropdown.Group>
+      </Dropdown.SubContent>
+    </Dropdown.Sub>
+  );
+}
+
 export function NumberFormatMenu(props: SpreadsheetToolbarProps) {
   return (
     <ToolbarMenu
@@ -126,14 +175,19 @@ export function NumberFormatMenu(props: SpreadsheetToolbarProps) {
     >
       <For each={SPREADSHEET_NUMBER_FORMATS}>
         {(format) => (
-          <Choice
-            disabled={props.readonly}
-            selected={(props.cell?.format ?? 'general') === format.value}
-            description={format.example}
-            onSelect={() => props.onStyle({ format: format.value })}
-          >
-            {format.label}
-          </Choice>
+          <>
+            <Choice
+              disabled={props.readonly}
+              selected={(props.cell?.format ?? 'general') === format.value}
+              description={format.example}
+              onSelect={() => props.onStyle({ format: format.value })}
+            >
+              {format.label}
+            </Choice>
+            <Show when={format.value === 'date'}>
+              <DateFormatsMenu {...props} />
+            </Show>
+          </>
         )}
       </For>
     </ToolbarMenu>

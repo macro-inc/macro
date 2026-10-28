@@ -13,7 +13,7 @@ use crate::domain::{
         GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
         TeamTaskReference,
     },
-    ports::GithubSyncRepo,
+    ports::{GithubInstallationLister, GithubSyncRepo},
 };
 
 /// PostgreSQL-backed github repository.
@@ -26,6 +26,31 @@ impl PgGithubSyncRepo {
     /// Create a new repository backed by the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+impl GithubInstallationLister for PgGithubSyncRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_installation_ids(
+        &self,
+        after: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT id AS "id!"
+            FROM github_app_installation
+            WHERE $1::text IS NULL OR id > $1
+            ORDER BY id
+            LIMIT $2
+            "#,
+            after,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 }
 

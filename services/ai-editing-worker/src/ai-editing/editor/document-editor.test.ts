@@ -451,6 +451,23 @@ describe('DocumentEditor — mention methods push insertInline ops', () => {
       kind: 'insertInline',
       spec: { inline: 'mention', mention: { kind: 'pr', id: 'pr-1' } },
     });
+    const ebl = ed();
+    ebl.mentionBookingLink('b1', 0, {
+      profileId: 'profile-1',
+      slug: 'intro',
+      url: 'https://macro.com/app/book/profile-1/intro',
+    });
+    expect(ebl.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: {
+        inline: 'mention',
+        mention: {
+          kind: 'booking_link',
+          profileId: 'profile-1',
+          slug: 'intro',
+        },
+      },
+    });
     const et = ed();
     et.mentionTag('b1', 0, {
       optionId: 'o',

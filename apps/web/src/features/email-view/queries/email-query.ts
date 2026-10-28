@@ -17,9 +17,10 @@ export type EmailQueryContext = {
   tab: EmailTab;
   /** `undefined` = every linked inbox; `[]` = none; otherwise email link ids. */
   inboxIds: string[] | undefined;
+  aliasFilter?: { inboxId: string; emailAddress: string };
   facets: FacetSelection;
   facetContext: EmailFacetContext;
-  /** Macro favorites, resolved before listing or searching the Favorites tab. */
+  /** Macro favorite IDs used only by the separate text-search service. */
   favoriteThreadIds?: readonly string[];
 };
 
@@ -35,8 +36,16 @@ export const emailViewForTab = (tab: EmailTab): string =>
     // Soup source on drafts so its query shape remains valid while disabled.
     .with('scheduled', () => 'drafts')
     .with('sent', () => 'sent')
-    .with('favorites', 'calendar', 'shared', 'all', () => 'all')
-    .exhaustive();
+    .with(
+      'favorites',
+      'calendar',
+      'shared',
+      'all',
+      'reminders',
+      'archived',
+      () => 'all'
+    )
+    .exhaustive(() => 'all');
 
 const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
@@ -56,7 +65,6 @@ function threadIdsClause(ids: readonly string[]): TargetExpr {
 function tabClause(context: EmailQueryContext): TargetExpr {
   return (
     match(context.tab)
-      .with('favorites', () => threadIdsClause(context.favoriteThreadIds ?? []))
       .with('important', () =>
         clause.and(
           clause.eq('emailImportance', true),
@@ -76,10 +84,24 @@ function tabClause(context: EmailQueryContext): TargetExpr {
         )
       )
       .with('shared', () => clause.eq('emailShared', 'only'))
+      .with('archived', () =>
+        clause.and(
+          clause.eq('emailDone', true),
+          clause.eq('emailShared', 'exclude')
+        )
+      )
       // Sent and Drafts are scoped entirely by `emailView`; the server's sent
       // view already covers every linked inbox, so no sender filter is needed.
-      .with('drafts', 'scheduled', 'sent', 'all', anyThread)
-      .exhaustive()
+      .with(
+        'drafts',
+        'scheduled',
+        'sent',
+        'favorites',
+        'all',
+        'reminders',
+        anyThread
+      )
+      .exhaustive(anyThread)
   );
 }
 
@@ -107,6 +129,19 @@ export function buildEmailQuery(
   }
   const inbox = inboxClause(context.inboxIds);
   if (inbox) expressions.push(inbox);
+  if (context.aliasFilter) {
+    const { inboxId, emailAddress } = context.aliasFilter;
+    const address = emailAddress.toLowerCase();
+    expressions.push(
+      clause.eq('emailLinkId', inboxId),
+      clause.or(
+        clause.eq('emailSenderAddress', address),
+        clause.eq('emailRecipientAddress', address),
+        clause.eq('emailCcAddress', address),
+        clause.eq('emailBccAddress', address)
+      )
+    );
+  }
 
   const base = compileClause(confine({ ef: clause.and(...expressions) }));
   const refinements = compileFacets(
@@ -117,10 +152,12 @@ export function buildEmailQuery(
   const body: SoupAstBody = {
     ...mergeAst(base, refinements),
     emailView: emailViewForTab(context.tab),
+    ...(context.tab === 'favorites' ? { favorites_only: true } : {}),
   };
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
+    ...(context.aliasFilter ? { transport: 'graphql' as const } : {}),
     params: {
       expand: true,
       limit: 100,

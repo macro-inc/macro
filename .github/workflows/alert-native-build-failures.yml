@@ -1,0 +1,68 @@
+# A completed workflow can report failures without exposing the Macro bot token
+# to the build runners or checking out code from a pull request.
+# Configure MACRO_BUILD_ALERT_WEBHOOK_URL (repository variable) and
+# MACRO_BUILD_ALERT_BOT_TOKEN (repository secret). The token is a channel-scoped
+# webhook credential for the Alerts channel.
+name: Alert native build failures
+
+on:
+  workflow_run:
+    workflows:
+      - Build Desktop on Tag
+      - iOS Preview
+      - Release Android App Bundle
+    types: [completed]
+
+permissions:
+  actions: read
+
+jobs:
+  alert:
+    if: contains(fromJSON('["failure", "timed_out"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Notify Macro Alerts about failed native builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+          SOURCE_REF: ${{ github.event.workflow_run.head_branch }}
+          MACRO_WEBHOOK_URL: ${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}
+          MACRO_BOT_TOKEN: ${{ secrets.MACRO_BUILD_ALERT_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failed_jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100" --paginate |
+            jq -sr --arg workflow "$SOURCE_WORKFLOW" '
+              [.[].jobs[]
+                | select(.conclusion == "failure" or .conclusion == "timed_out")
+                | select(
+                    if $workflow == "Build Desktop on Tag" then
+                      .name == "Build AppImage" or .name == "Build macOS DMG"
+                    elif $workflow == "iOS Preview" then
+                      .name == "Build iOS simulator app and publish to Appetize"
+                    elif $workflow == "Release Android App Bundle" then
+                      .name == "Build signed Android App Bundle"
+                    else false end
+                  )
+                | .name] | unique | join(", ")
+            ')
+
+          # A release may fail in a deploy or publish job without a native build failing.
+          if [[ -z "$failed_jobs" ]]; then
+            exit 0
+          fi
+
+          if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+            echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+            exit 1
+          fi
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID"
+          message="🚨 $SOURCE_WORKFLOW build failed on $SOURCE_REF. Failed jobs: $failed_jobs. $run_url"
+          jq -n --arg content "$message" '{content: $content}' |
+            curl --fail-with-body --silent --show-error --retry 3 \
+              --header 'Content-Type: application/json' \
+              --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
+              --data-binary @- "$MACRO_WEBHOOK_URL"

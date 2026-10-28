@@ -28,6 +28,8 @@ export function taskMatchesTab(
       return task.ownerId === userId;
     case 'team-tasks':
       return true;
+    case 'projects':
+      return false;
   }
 }
 
@@ -37,10 +39,8 @@ export function taskMatchesView(
 ) {
   if (!taskMatchesTab(task, context.tab, context.userId)) return false;
 
-  return testFacets(
-    context.facets,
-    TASK_FACETS,
-    task,
-    context.facetContext ?? EMPTY_TASK_FACET_CONTEXT
-  );
+  return testFacets(context.facets, TASK_FACETS, task, {
+    ...(context.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
+    viewerId: context.userId,
+  });
 }

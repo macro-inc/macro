@@ -227,7 +227,7 @@ test("initialization races cannot overwrite a winner or revive a tombstone", asy
 	expect(await initialize("surface", retiring, "revive")).toBe(403);
 });
 
-test("Comment cannot write surfaces but retains document websocket behavior", async () => {
+test("Comment cannot write surfaces or document text outside comment marks", async () => {
 	const id = crypto.randomUUID();
 	for (const kind of ["document", "surface"] as const)
 		expect(await initialize(kind, id, "")).toBe(200);
@@ -242,10 +242,13 @@ test("Comment cannot write surfaces but retains document websocket behavior", as
 		id,
 		getTokenForDocument(id, "commenter", "comment"),
 	);
-	write(document, "allowed");
-	await document.socket.waitForNextMessage();
+	write(document, "denied");
+	// The owner's acked write lands after the commenter's, which is refused.
+	const owner = await client("document", id);
+	write(owner, "edited");
+	await owner.socket.waitForNextMessage();
 	expect(await content("surface", id)).toBe("");
-	expect(await content("document", id)).toBe("allowed");
+	expect(await content("document", id)).toBe("edited");
 });
 
 test("pending, revoked and expired sessions fail closed; unsupported endpoints stay unavailable", async () => {

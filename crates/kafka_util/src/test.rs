@@ -6,6 +6,21 @@ impl GroupName for TestConsumerGroup {
     const GROUP_NAME: &'static str = "consumer-group";
 }
 
+struct LatestConsumerGroup;
+
+impl GroupName for LatestConsumerGroup {
+    const GROUP_NAME: &'static str = "latest-group";
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
+}
+
+#[test]
+fn grouped_config_starts_new_partitions_where_the_group_asks() {
+    let config = grouped_config::<LatestConsumerGroup>("broker:9092");
+
+    assert_eq!(config.get("group.id"), Some("latest-group"));
+    assert_eq!(config.get("auto.offset.reset"), Some("latest"));
+}
+
 #[test]
 fn producer_config_uses_brokers_and_message_timeout() {
     let config = producer_config("broker-a:9092,broker-b:9092");

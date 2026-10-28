@@ -16,7 +16,7 @@ fragment ChannelListItemFields on GraphqlSoupEntity {
 		unreadNotifications: notifications(
 			filter: {
 				states: [UNSEEN]
-				eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+				topLevelMessagesOnly: true
 			}
 			limit: 1
 		) {

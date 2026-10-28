@@ -66,13 +66,13 @@ fn test_rename_document_schema_validation() {
 }
 
 #[test]
-fn test_reply_to_document_comment_schema_validation() {
-    let result = generate_validated_input_schema::<ReplyToDocumentComment>();
+fn test_comment_on_text_schema_validation() {
+    let result = generate_validated_input_schema::<CommentOnText>();
     assert!(result.is_ok(), "{:?}", result);
 
     let validated = result.unwrap();
     assert_eq!(
-        validated.name, "ReplyToDocumentComment",
+        validated.name, "CommentOnText",
         "Tool name should match the schemars title"
     );
     assert!(
@@ -84,37 +84,29 @@ fn test_reply_to_document_comment_schema_validation() {
 }
 
 #[test]
-fn test_resolve_document_comment_schema_validation() {
-    let result = generate_validated_input_schema::<ResolveDocumentComment>();
-    assert!(result.is_ok(), "{:?}", result);
-
-    let validated = result.unwrap();
+fn test_comment_on_text_schema_fields() {
+    let schema = schemars::schema_for!(CommentOnText).to_value();
     assert_eq!(
-        validated.name, "ResolveDocumentComment",
-        "Tool name should match the schemars title"
+        schema["required"],
+        serde_json::json!(["documentId", "content", "quote"])
     );
-    assert!(
-        validated
-            .description
-            .contains("Only use this when explicitly asked"),
-        "Description should limit when the tool resolves"
+    let properties = schema["properties"].as_object().unwrap();
+    assert_eq!(properties.len(), 4);
+    for name in ["documentId", "content", "quote", "occurrence"] {
+        assert!(properties.contains_key(name), "missing {name}");
+    }
+    assert_eq!(properties["occurrence"]["minimum"], 1);
+
+    let response = schemars::schema_for!(comment_on_text::CommentOnTextResponse).to_value();
+    assert_eq!(
+        response["required"],
+        serde_json::json!(["documentId", "threadId", "commentId", "markedText"])
     );
 }
 
 #[test]
-fn test_comment_on_document_text_schema_validation() {
-    let result = generate_validated_input_schema::<CommentOnDocumentText>();
-    assert!(result.is_ok(), "{:?}", result);
-
-    let validated = result.unwrap();
-    assert_eq!(
-        validated.name, "CommentOnDocumentText",
-        "Tool name should match the schemars title"
-    );
-    assert!(
-        validated
-            .description
-            .contains("Only use this when explicitly asked"),
-        "Description should limit when the tool posts"
-    );
+fn test_create_skill_schema_validation() {
+    let validated = generate_validated_input_schema::<CreateSkill>()
+        .unwrap_or_else(|error| panic!("CreateSkill: {error:?}"));
+    assert_eq!(validated.name, "CreateSkill");
 }

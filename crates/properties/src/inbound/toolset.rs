@@ -7,7 +7,6 @@ mod edit_tag;
 mod get_entity_properties;
 mod list_tags;
 mod set_entity_property;
-mod tag_color;
 
 #[cfg(test)]
 mod test;

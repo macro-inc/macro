@@ -6,6 +6,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { QueryObserver } from '@tanstack/query-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
+import { createMemo, createRoot } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { previewDataLoader } from '../../preview/dataloader';
@@ -35,6 +36,7 @@ vi.mock('@ui', async () => ({
 }));
 
 import {
+  createCachedChannelPicture,
   handleChannelPictureChanged,
   invalidateChannelPictures,
   useSetChannelPictureMutation,
@@ -170,6 +172,35 @@ it('waits for asynchronous upload confirmation before assigning the picture', as
   expect(storageServiceClient.setChannelPicture).toHaveBeenCalledTimes(1);
 });
 
+it('waits through a full queue retry before saving the uploaded picture', async () => {
+  vi.useFakeTimers();
+  let uploaded = false;
+  vi.mocked(staticFileClient.getMetadata).mockImplementation(async () =>
+    ok({
+      file_id: 'new-picture',
+      owner_id: 'owner',
+      content_type: 'image/png',
+      is_uploaded: uploaded,
+      file_name: 'picture.png',
+      s3_key: 'file/new-picture',
+    })
+  );
+  vi.mocked(storageServiceClient.setChannelPicture).mockResolvedValue(
+    ok(undefined)
+  );
+  const mutation = setup(vi.fn().mockResolvedValue('new-picture'));
+  const pending = mutation.mutateAsync({
+    channelId: 'channel',
+    file: new File(['image'], 'picture.png'),
+  });
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(storageServiceClient.setChannelPicture).not.toHaveBeenCalled();
+  uploaded = true;
+  await vi.advanceTimersByTimeAsync(500);
+  await pending;
+  expect(storageServiceClient.setChannelPicture).toHaveBeenCalledTimes(1);
+});
+
 it('preserves the existing picture if upload confirmation fails', async () => {
   client.setQueryData(channelKeys.picture('channel').queryKey, 'old-picture');
   vi.mocked(staticFileClient.getMetadata).mockRejectedValue(
@@ -186,6 +217,42 @@ it('preserves the existing picture if upload confirmation fails', async () => {
   expect(client.getQueryData(channelKeys.picture('channel').queryKey)).toBe(
     'old-picture'
   );
+});
+
+it('tracks cached picture ids so a menu built before one loads recomputes', () => {
+  createRoot((dispose) => {
+    const cachedPictureId = createCachedChannelPicture();
+    // What a "Remove channel picture" item is gated on. A menu opened against
+    // a cold cache has to pick the item up once the avatar's query lands.
+    const offersRemoval = createMemo(() => !!cachedPictureId('channel'));
+    expect(offersRemoval()).toBe(false);
+
+    client.setQueryData(channelKeys.picture('channel').queryKey, 'picture-1');
+    expect(offersRemoval()).toBe(true);
+
+    client.setQueryData(channelKeys.picture('channel').queryKey, null);
+    expect(offersRemoval()).toBe(false);
+
+    // Another channel's picture must not make this one look removable.
+    client.setQueryData(channelKeys.picture('other').queryKey, 'picture-2');
+    expect(offersRemoval()).toBe(false);
+    dispose();
+  });
+});
+
+it('stops tracking the cache once its owner is disposed', () => {
+  const unsubscribe = vi.fn();
+  const subscribe = vi
+    .spyOn(client.getQueryCache(), 'subscribe')
+    .mockReturnValue(unsubscribe);
+  createRoot((dispose) => {
+    createCachedChannelPicture();
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(unsubscribe).not.toHaveBeenCalled();
+    dispose();
+  });
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+  subscribe.mockRestore();
 });
 
 it('refreshes another session immediately on picture events and after reconnect', async () => {

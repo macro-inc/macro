@@ -8,4 +8,5 @@ publish = false
 anyhow = { workspace = true }
 model_owner = { path = "../model_owner" }
 urlencoding = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

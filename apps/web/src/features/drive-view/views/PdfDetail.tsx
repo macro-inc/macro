@@ -1,3 +1,4 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   PdfDocument,
   PdfDocumentContent,
@@ -8,6 +9,7 @@ import {
 } from '@block-pdf/component/PdfSplitToolbar';
 import { Tabs } from '@block-pdf/component/Tabs';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import { createPdfRouteTarget } from '@block-pdf/primitives/create-pdf-route-target';
 import {
   type LocationSearchParams,
   URL_PARAMS,
@@ -19,6 +21,7 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
+import { SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useIsAuthenticated } from '@core/auth';
 import {
@@ -26,9 +29,12 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { toast } from '@core/component/Toast/Toast';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import Printer from '@icon/system/regular/printer.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
@@ -52,15 +58,33 @@ function PdfDetailContent(props: {
     isAuthenticated: !!isAuth(),
     openLogin: openLoginModal,
   });
+  const download = async () => {
+    try {
+      await downloadPdfDocument({
+        ...auth(),
+        documentProxy: pdf.documentProxy(),
+        hasModifications: hasModificationData(),
+        hasComments: hasComments(),
+        documentId: pdf.documentId(),
+        fileName,
+      });
+    } catch (error) {
+      Telemetry.error(error, { surface: 'pdf-file-actions' });
+      toast.failure('Unable to download file');
+    }
+  };
   const operations: FileOperation[] = [
     {
       label: 'Print',
       icon: Printer,
       action: () => {
-        void printPdfDocument({
-          ...auth(),
-          documentProxy: pdf.documentProxy(),
-        });
+        fireAndForget(
+          printPdfDocument({
+            ...auth(),
+            documentProxy: pdf.documentProxy(),
+          }),
+          'pdf-file-actions'
+        );
       },
     },
     {
@@ -68,14 +92,7 @@ function PdfDetailContent(props: {
       label: 'Download',
       icon: DownloadIcon,
       action: () => {
-        void downloadPdfDocument({
-          ...auth(),
-          documentProxy: pdf.documentProxy(),
-          hasModifications: hasModificationData(),
-          hasComments: hasComments(),
-          documentId: pdf.documentId(),
-          fileName,
-        });
+        fireAndForget(download(), 'pdf-file-actions');
       },
     },
     ...(props.data.documentMetadata.fileType === 'docx'
@@ -85,11 +102,14 @@ function PdfDetailContent(props: {
             label: 'Download DOCX',
             icon: DownloadIcon,
             action: () => {
-              void downloadDocxDocument({
-                ...auth(),
-                documentId: pdf.documentId(),
-                fileName,
-              });
+              fireAndForget(
+                downloadDocxDocument({
+                  ...auth(),
+                  documentId: pdf.documentId(),
+                  fileName,
+                }),
+                'pdf-file-actions'
+              );
             },
           },
         ]
@@ -132,6 +152,7 @@ export function PdfDetailDocument(props: {
   children?: (context: PdfDetailContext) => JSX.Element;
 }) {
   const [searchParams] = useSearchParams();
+  const target = createPdfRouteTarget(() => props.documentId);
   const permissions = () => getPermissions(props.data.userAccessLevel);
 
   return (
@@ -140,6 +161,17 @@ export function PdfDetailDocument(props: {
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
     >
+      <SidePanel.HeaderActions>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: props.documentId,
+            name:
+              props.data.documentMetadata.documentName ?? 'Unknown Filename',
+            fileType: 'pdf',
+          }}
+        />
+      </SidePanel.HeaderActions>
       <PdfDocument
         documentId={props.documentId}
         documentVersionId={props.data.documentMetadata.documentVersionId}
@@ -156,6 +188,7 @@ export function PdfDetailDocument(props: {
           isOwner: props.data.userAccessLevel === 'owner',
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
       >
         <PdfDetailContent data={props.data} children={props.children} />
       </PdfDocument>
@@ -170,6 +203,7 @@ export function PdfDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="pdf"
       label="PDF"
       load={loadPdfDocument}
     >

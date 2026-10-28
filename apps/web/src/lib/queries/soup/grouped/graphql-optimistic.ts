@@ -1,5 +1,3 @@
-import { documentOperationName } from '@graphql-cache/exchange/generated-selection';
-import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
   type QueryRevalidation,
@@ -8,13 +6,19 @@ import {
   upsertEmbeddedLink,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { stringifyDocument } from '@urql/core';
+import { getOperationName, stringifyDocument } from '@urql/core';
 import {
   type GroupedSoupInput,
+  GroupSoupDocument,
   GroupSoupMembershipDocument,
   type GroupSoupMembershipQuery,
+  type GroupSoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
-import { groupedSoupLogicalViewKey } from './graphql-operation-registry';
+import { getActiveGraphqlSoupRevalidations } from '../graphql/active-queries';
+import {
+  groupedSoupInputKey,
+  groupedSoupLogicalViewKey,
+} from './graphql-operation-registry';
 import { NOT_SET_GROUP_KEY } from './types';
 
 type BuildArgs = {
@@ -23,7 +27,7 @@ type BuildArgs = {
   propertyDefinitionId: string;
   oldGroupKeys: readonly string[];
   newGroupKeys: readonly string[];
-  /** Unsupported/date values still discover and revalidate relevant fields. */
+  /** Unsupported/date values still revalidate relevant active fields. */
   revalidateOnly?: boolean;
 };
 
@@ -89,52 +93,100 @@ export function groupPagesByLogicalView(
   return views;
 }
 
+/** Only mounted, enabled readers participate; historical cache pages are irrelevant. */
+function activePropertyGroupedInputs(
+  propertyDefinitionId: string
+): GroupedSoupInput[] {
+  return getActiveGraphqlSoupRevalidations().flatMap((query) => {
+    if (query.document !== GroupSoupDocument) return [];
+    // This descriptor is registered by the generated GroupSoup readers.
+    const { input } = query.variables as GroupSoupQueryVariables;
+    return isRelevantPropertyGrouping(input, propertyDefinitionId)
+      ? [input]
+      : [];
+  });
+}
+
+type ReadGroupPage = (input: GroupedSoupInput) => Promise<GroupPage | null>;
+export type PrepareGroupedPropertyUpdates = (
+  args: Omit<BuildArgs, 'host'>
+) => Promise<OptimisticGroupedPropertyUpdates>;
+
 /**
- * Discovers every cached property-grouped field and creates constrained link
- * recipes only where the loaded membership proves the move is applicable.
- * Missing destination bins are created on initial pages; missing pages are
- * left untouched and revalidated after success.
+ * Share membership reads across distinct entities in one bulk edit. A repeat
+ * edit to the same entity must read its newly installed optimistic membership,
+ * not the earlier snapshot. This cache lives only for the bulk submission.
+ * Revalidations remain on every durable mutation: moving them to the last one
+ * would lose recovery if that mutation fails or the page closes during replay.
  */
-export async function buildOptimisticGroupedPropertyUpdates(
+export function createGroupedPropertyPreparation(
+  host: CacheHost
+): PrepareGroupedPropertyUpdates {
+  const pages = new Map<string, Promise<GroupPage | null>>();
+  const preparedEntities = new Set<string>();
+  const readPage: ReadGroupPage = (input) => {
+    const key = groupedSoupInputKey(input);
+    let pending = pages.get(key);
+    if (!pending) {
+      pending = readGroupPage(host, input);
+      pages.set(key, pending);
+    }
+    return pending;
+  };
+  return async (args) => {
+    if (preparedEntities.has(args.entityId)) pages.clear();
+    preparedEntities.add(args.entityId);
+    try {
+      return await prepareGroupedPropertyUpdates(args, readPage);
+    } catch (error) {
+      // A transient cache failure must not poison the rest of a bulk edit.
+      pages.clear();
+      throw error;
+    }
+  };
+}
+
+async function readGroupPage(
+  host: CacheHost,
+  input: GroupedSoupInput
+): Promise<GroupPage | null> {
+  const result = await host.readQuery({
+    query: stringifyDocument(GroupSoupMembershipDocument),
+    operationName: getOperationName(GroupSoupMembershipDocument),
+    variables: { input },
+    priority: 'user-visible',
+  });
+  if (result.kind === 'miss') return null;
+  const data = result.data as GroupSoupMembershipQuery;
+  return { input, bins: data.user.groupSoup.bins };
+}
+
+/** Creates relation recipes from active grouped pages, never a cache-wide inspection. */
+export function buildOptimisticGroupedPropertyUpdates(
   args: BuildArgs
+): Promise<OptimisticGroupedPropertyUpdates> {
+  return createGroupedPropertyPreparation(args.host)(args);
+}
+
+async function prepareGroupedPropertyUpdates(
+  args: Omit<BuildArgs, 'host'>,
+  readPage: ReadGroupPage
 ): Promise<OptimisticGroupedPropertyUpdates> {
   const changes = diffGroupKeys(args.oldGroupKeys, args.newGroupKeys);
   if (!changes && !args.revalidateOnly) {
     return { updates: [], revalidations: [] };
   }
 
-  const selection = selectAll(GroupSoupMembershipDocument)
-    .field('user')
-    .field('groupSoup');
-  const variants = await inspectVariants(args.host, selection);
-  const relevantVariants = variants.filter(({ variables }) =>
-    isRelevantPropertyGrouping(variables.input, args.propertyDefinitionId)
-  );
-  const revalidations: QueryRevalidation[] = relevantVariants.map(
-    ({ variables }) => ({
-      document: GroupSoupMembershipDocument,
-      variables,
-    })
-  );
+  const inputs = activePropertyGroupedInputs(args.propertyDefinitionId);
+  const revalidations: QueryRevalidation[] = inputs.map((input) => ({
+    document: GroupSoupMembershipDocument,
+    variables: { input },
+  }));
   if (args.revalidateOnly || !changes) {
     return { updates: [], revalidations };
   }
 
-  const query = stringifyDocument(selection.document);
-  const operationName = documentOperationName(selection.document);
-  const loadedPages = await Promise.all(
-    relevantVariants.map(async ({ variables }): Promise<GroupPage | null> => {
-      const result = await args.host.readQuery({
-        query,
-        operationName,
-        variables,
-        priority: 'user-visible',
-      });
-      if (result.kind === 'miss') return null;
-      const data = result.data as GroupSoupMembershipQuery;
-      return { input: variables.input, bins: data.user.groupSoup.bins };
-    })
-  );
+  const loadedPages = await Promise.all(inputs.map(readPage));
   const views = groupPagesByLogicalView(
     loadedPages.filter((page): page is GroupPage => page !== null)
   );

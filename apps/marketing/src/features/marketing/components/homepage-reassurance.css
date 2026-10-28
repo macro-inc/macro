@@ -1,0 +1,7 @@
+.homepage-app-reassurance { margin-top: 32px; text-align: center; font: 400 14px/1.8 'Inter Variable', Inter, sans-serif; color: var(--color-ink-extra-muted); }
+.homepage-app-reassurance p { margin: 0; }
+.homepage-app-reassurance p:first-child { color: var(--color-ink-muted); }
+.homepage-app-security { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 28px 0 12px; opacity: .8; }
+.homepage-app-security svg { width: 34px; height: 34px; }
+.homepage-app-reassurance .homepage-app-security-caption { font-size: 11px; }
+@media (max-width: 599px) { .homepage-app-reassurance { font-size: 12px; } }

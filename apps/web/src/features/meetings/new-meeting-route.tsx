@@ -3,10 +3,14 @@ import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
+import { readBackgroundImage } from '@core/media/read-background-image';
 import { idToDisplayName } from '@core/user/util';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
+  cancelMeetingPreparation,
   leaveMeeting,
+  prepareMeeting,
   useCreateMeetingMutation,
   useInviteMeetingUsersMutation,
   useJoinMeetingMutation,
@@ -15,7 +19,9 @@ import {
 } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
-import { Show, Suspense } from 'solid-js';
+import { onCleanup, Show, Suspense } from 'solid-js';
+import { browserMeetingMedia } from './browser/meeting-media';
+import { preloadMeetingRuntime } from './browser/meeting-runtime';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { createNewMeeting } from './primitives/new-meeting';
@@ -26,7 +32,7 @@ import { MeetingPage } from './views/meeting-page';
 function NewMeetingSetup(props: {
   userId: string;
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const call = useCallContext();
   const lifecycle = useMeetingSessionLifecycle();
@@ -38,9 +44,22 @@ function NewMeetingSetup(props: {
   const update = useUpdateMeetingMutation();
   const draft = createNewMeeting({
     people: people.people,
-    create: () => create.mutateAsync({ title: 'Quick Call' }),
+    prepareRoom: prepareMeeting,
+    cancelRoom: cancelMeetingPreparation,
+    create: (preparationId) =>
+      create.mutateAsync({ title: 'Quick Call', preparationId }),
     invite: (shareToken, userIds) =>
       invite.mutateAsync({ shareToken, userIds }),
+  });
+  const onPageShow = (event: PageTransitionEvent) => {
+    // Back/forward cache restores the same component, whose old room was cancelled.
+    if (event.persisted) fireAndForget(draft.warmup(), 'meetings');
+  };
+  window.addEventListener('pagehide', draft.cancel);
+  window.addEventListener('pageshow', onPageShow);
+  onCleanup(() => {
+    window.removeEventListener('pagehide', draft.cancel);
+    window.removeEventListener('pageshow', onPageShow);
   });
   const shareToken = () => draft.meeting()?.shareToken ?? '';
   const meeting = useMeetingQuery(shareToken);
@@ -82,10 +101,9 @@ function NewMeetingSetup(props: {
           showTooltip={false}
         />
       }
-      mediaAccess={{
-        request: (constraints) =>
-          navigator.mediaDevices.getUserMedia(constraints),
-      }}
+      mediaAccess={browserMeetingMedia}
+      initialBackground={call.backgroundEffect()}
+      readBackgroundImage={readBackgroundImage}
       startCall
       url={url()}
       onCopy={async () => {
@@ -110,6 +128,9 @@ function NewMeetingSetup(props: {
       )}
       session={{
         lifecycle,
+        warmup: async () => {
+          await Promise.all([preloadMeetingRuntime(), draft.warmup()]);
+        },
         shareToken,
         prepare: draft.prepare,
         isInCall: call.isInCall,
@@ -122,7 +143,9 @@ function NewMeetingSetup(props: {
             useBrowserSession: true,
           });
           if (call.isInCall() && call.activeCallId() === credentials.callId) {
-            await draft.ring();
+            // Invitations report failures in the call; they must not hold
+            // the host on the setup screen after LiveKit connects.
+            fireAndForget(draft.ring(), 'meetings');
           }
         },
         disconnect: call.meetingSession.disconnect,
@@ -139,7 +162,7 @@ function NewMeetingSetup(props: {
                 type="button"
                 variant="ghost"
                 disabled={draft.inviting()}
-                onClick={() => void draft.ring()}
+                onClick={() => fireAndForget(draft.ring(), 'meetings')}
               >
                 {draft.inviting() ? 'Sending…' : 'Retry invites'}
               </Button>
@@ -160,7 +183,7 @@ function NewMeetingSetup(props: {
 
 export function NewMeetingRoute(props: {
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const authenticated = useIsAuthenticated();
   const userId = useUserId();

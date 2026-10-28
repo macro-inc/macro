@@ -27,7 +27,7 @@ describe('keepImportMetaDev', () => {
       keepImportMetaDev({
         command: 'serve',
         mode: 'development',
-        localBackendOrigin: 'http://localhost:8090',
+        localBackendOrigin: 'https://localhost:8090',
       })
     ).toBe(false);
   });

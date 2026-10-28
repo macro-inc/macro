@@ -802,6 +802,7 @@ pub struct RecordingNotifier {
     reloads: Arc<Mutex<Vec<SessionId>>>,
     pull_requests: Arc<Mutex<Vec<String>>>,
     working_branches: Arc<Mutex<Vec<(String, String)>>>,
+    checkpoints: Arc<Mutex<Vec<CursorRunId>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -832,6 +833,11 @@ impl RecordingNotifier {
             .lock()
             .expect("notifier poisoned")
             .clone()
+    }
+
+    /// Runs checkpointed as fully delivered, in order.
+    pub fn checkpoints(&self) -> Vec<CursorRunId> {
+        self.checkpoints.lock().expect("notifier poisoned").clone()
     }
 
     /// Sessions whose recovered history needs a client load.
@@ -916,8 +922,12 @@ impl SessionNotifier for RecordingNotifier {
     async fn checkpoint(
         &self,
         _session: &SessionId,
-        _run: &CursorRunId,
+        run: &CursorRunId,
     ) -> Result<(), rootcause::Report> {
+        self.checkpoints
+            .lock()
+            .expect("notifier poisoned")
+            .push(run.clone());
         Ok(())
     }
 }

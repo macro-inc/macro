@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 /// An attachment persisted with a message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageEventAttachment {
     /// Attachment row identifier.
     pub attachment_id: Uuid,
@@ -37,6 +38,7 @@ impl From<&super::models::MessageAttachment> for MessageEventAttachment {
 
 /// A committed post, independent of the surface presenting the conversation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePostedMetadata {
     /// Entity that owns the message and determines access to it.
     pub parent: MessageParent,
@@ -90,6 +92,7 @@ impl MessagePostedMetadata {
 /// One mentioned entity in a committed post; the full mention list travels on
 /// the posted fact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageMentionedMetadata {
     /// Entity that owns the message.
     pub parent: MessageParent,
@@ -111,6 +114,7 @@ pub struct MessageMentionedMetadata {
 
 /// A committed content edit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePatchedMetadata {
     /// Entity that owns the message.
     pub parent: MessageParent,
@@ -132,6 +136,7 @@ pub struct MessagePatchedMetadata {
 
 /// A committed message tombstone.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageDeletedMetadata {
     /// Entity that owns the message.
     pub parent: MessageParent,
@@ -149,6 +154,7 @@ pub struct MessageDeletedMetadata {
 
 /// Attachments added to a message, on post or by a later edit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageAttachmentCreatedMetadata {
     /// Entity that owns the message.
     pub parent: MessageParent,
@@ -166,6 +172,7 @@ pub struct MessageAttachmentCreatedMetadata {
 
 /// Attachments removed from a message by an edit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageAttachmentRemovedMetadata {
     /// Entity that owns the message.
     pub parent: MessageParent,

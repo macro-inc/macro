@@ -8,7 +8,6 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   enableCalendarUi,
-  enableReminders,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isCalendarSearchUiEnabled,
@@ -17,6 +16,7 @@ import {
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Params } from '@service-storage/generated/schemas/params';
 import { startOfDay, subWeeks } from 'date-fns';
+import { CRM_TAB_PRESETS } from '../../crm/collection-presets';
 
 type SoupFiltersPreset = {
   /** Filter data for server query */
@@ -57,7 +57,7 @@ type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
 
 type TabConfig = Record<string, TabPresetResolver>;
 
-type ViewTabConfig = {
+export type ViewTabConfig = {
   default: string;
   tabs: TabConfig;
 };
@@ -117,15 +117,8 @@ const getInboxSignalFilters = () => {
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
-      // Reminders are off by default server-side rather than excluded by
-      // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them; the inbox Reminders
-      // tab below sends it too, for the not-yet-fired slice. Behind the flag
-      // so an unflagged user never pays for the reminders lookup on every
-      // Signal fetch.
-      ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
       // Agent sessions the user was notified about (finished, asking, or a
-      // mention). Off by default server-side like reminders, so this literal
+      // mention). Off by default server-side, so this literal
       // is what surfaces them in the feed.
       includeAgentSessions: true,
       // Calendar events with a not-done notification (a fired event alarm).
@@ -242,21 +235,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         groupBy: 'date',
         sortMethod: 'updated_at',
       }),
-      // Every reminder still on the hook: the ones coming up and the ones that
-      // have fired and are waiting to be dealt with (fired ones also surface in
-      // Signal as their notification). Only marking one done drops it. Ascending
-      // by fire time, so overdue leads and upcoming follows soonest-first.
-      reminders: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-          },
-        }),
-        clientFilters: { and: ['reminders-not-done'] },
-        sortDirection: 'asc',
-        sortMethod: 'updated_at',
-      }),
     },
   },
   agents: {
@@ -299,11 +277,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           clientFilters: { and: ['agent', 'shared-entity'] },
         };
       },
-      automations: () => ({
-        // Server returns nothing useful here — automations are merged
+      routines: () => ({
+        // Server returns nothing useful here — routines are merged
         // into the soup client-side via `additionalEntities`.
         filters: defineQueryFilters({}),
-        clientFilters: { and: ['automation'] },
+        clientFilters: { and: ['routine'] },
       }),
       skills: () => ({
         filters: defineQueryFilters({
@@ -529,33 +507,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  companies: {
-    default: 'active',
-    tabs: {
-      active: () => ({
-        filters: defineQueryFilters(
-          { include: { crmCompanyHidden: false } },
-          { skipTargets: ['ccf'] }
-        ),
-        clientFilters: { and: ['crm-company-active'] },
-        groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
-      }),
-      // Admin/owner only — the BE rejects `hidden: true` requests from
-      // non-admins with 403. Returning `undefined` hides the tab for
-      // non-admins via the same pattern context-required views use.
-      hidden: (ctx) => {
-        if (!ctx.isTeamAdmin) return undefined;
-        return {
-          filters: defineQueryFilters(
-            { include: { crmCompanyHidden: true } },
-            { skipTargets: ['ccf'] }
-          ),
-          clientFilters: { and: ['crm-company-hidden'] },
-          groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
-        };
-      },
-    },
-  },
+  companies: CRM_TAB_PRESETS,
   folders: {
     default: 'owned',
     tabs: {
@@ -573,51 +525,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           exclude: { folderId: [NIL_UUID] },
         }),
         clientFilters: { and: ['folders'] },
-      }),
-    },
-  },
-  // Reminders are the one entity type that is opt-in server-side, so naming
-  // `includeReminders` both surfaces them and — via defineQueryFilters, which
-  // NIL-excludes every target this query does not reference — makes the view
-  // reminders-only. Soup already orders them by when they fire.
-  reminders: {
-    default: 'active',
-    tabs: {
-      // Fired and waiting on you — an inbox, so newest arrival on top like
-      // every other feed. `reminderFired` is a server filter rather than a
-      // client one for a reason: both this tab and Scheduled would otherwise
-      // share one `comp:false` query, and the page limit would be spent on
-      // whichever end the sort direction favours, so a user with a hundred
-      // future reminders could open Active on an empty list.
-      active: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-            reminderFired: true,
-          },
-        }),
-        clientFilters: { and: ['reminders-fired'] },
-      }),
-      // Not due yet. Soonest first: "newest first" on a future date means
-      // furthest away first, which puts December above tomorrow.
-      scheduled: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-            reminderFired: false,
-          },
-        }),
-        clientFilters: { and: ['reminders-scheduled'] },
-        sortDirection: 'asc',
-      }),
-      // Dealt with. Most-recently-due first, like every other archive view.
-      done: () => ({
-        filters: defineQueryFilters({
-          include: { includeReminders: true, reminderCompleted: true },
-        }),
-        clientFilters: { and: ['reminders-done'] },
       }),
     },
   },

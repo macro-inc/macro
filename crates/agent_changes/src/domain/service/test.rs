@@ -1,5 +1,8 @@
 use super::*;
-use crate::domain::model::{ChangesetRange, ChangesetSource, ExtractedChangeset, GitRef};
+use crate::domain::model::{
+    ChangedFile, ChangesetRange, ChangesetSource, ExtractedChangeset, FileChangeKind, GitRef,
+    GithubPullRequestChangeset, PullRequestRef,
+};
 use crate::testing::{MemoryBlobStore, MemoryChangesetRepo, ScriptedExtractor};
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 
@@ -25,7 +28,7 @@ type TestService = AgentChangesService<
 >;
 
 fn extracted(patch: &str) -> ExtractedChangeset {
-    ExtractedChangeset {
+    ExtractedChangeset::Patch {
         source: ChangesetSource::GithubPullRequest,
         range: ChangesetRange {
             repository: Some("https://github.com/example/example".to_owned()),
@@ -35,6 +38,41 @@ fn extracted(patch: &str) -> ExtractedChangeset {
         patch: patch.to_owned(),
         truncated: false,
     }
+}
+
+fn shared(id: Uuid) -> ExtractedChangeset {
+    ExtractedChangeset::PullRequest(GithubPullRequestChangeset {
+        id,
+        github_key: "github:1:7".to_owned(),
+        pull_request: PullRequestRef::parse("https://github.com/example/example/pull/7")
+            .expect("a pull request url"),
+        range: ChangesetRange {
+            repository: Some("https://github.com/example/example".to_owned()),
+            base: GitRef {
+                name: Some("main".to_owned()),
+                sha: Some("aaa".to_owned()),
+            },
+            head: GitRef {
+                name: Some("agent/work".to_owned()),
+                sha: Some("bbb".to_owned()),
+            },
+        },
+        files: vec![ChangedFile {
+            path: "src/lib.rs".to_owned(),
+            previous_path: None,
+            kind: FileChangeKind::Modified,
+            additions: 1,
+            deletions: 0,
+            binary: false,
+            patch_omitted: false,
+        }],
+        additions: 1,
+        deletions: 0,
+        patch_bytes: PATCH.len() as u64,
+        truncated: false,
+        patch_key: Some("pull-requests/example/example/7/aaa...bbb.patch".to_owned()),
+        captured_at: Utc::now(),
+    })
 }
 
 fn service(extractor: ScriptedExtractor) -> (TestService, MemoryChangesetRepo, MemoryBlobStore) {
@@ -121,6 +159,48 @@ async fn a_new_capture_replaces_the_summary_and_drops_the_old_patch() {
             .unwrap()
             .contains("run_again")
     );
+}
+
+#[tokio::test]
+async fn a_pull_request_capture_shares_its_changeset_instead_of_storing_a_copy() {
+    let id = macro_uuid::generate_uuid_v7();
+    let extractor = ScriptedExtractor::returning(shared(id));
+    extractor.set_pull_request_patch(id, PATCH);
+    let (service, _repo, blobs) = service(extractor);
+
+    let CaptureOutcome::Captured(changeset) = service.capture(SESSION).await.unwrap() else {
+        panic!("expected a capture");
+    };
+    assert_eq!(changeset.id.as_uuid(), id);
+    assert_eq!(changeset.session, SESSION);
+    assert_eq!(changeset.files.len(), 1);
+    assert_eq!(changeset.range.head.sha.as_deref(), Some("bbb"));
+    assert!(blobs.keys().is_empty(), "the session stores no patch");
+    assert_eq!(service.patch(&view_access()).await.unwrap(), PATCH);
+}
+
+#[tokio::test]
+async fn sharing_a_pull_request_changeset_drops_the_sessions_own_patch() {
+    let extractor = ScriptedExtractor::returning(extracted(PATCH));
+    let (service, _repo, blobs) = service(extractor.clone());
+    service.capture(SESSION).await.unwrap();
+    assert_eq!(blobs.keys().len(), 1);
+
+    extractor.set(shared(macro_uuid::generate_uuid_v7()));
+    service.capture(SESSION).await.unwrap();
+    assert!(blobs.keys().is_empty());
+}
+
+#[tokio::test]
+async fn a_shared_patch_that_can_no_longer_be_read_is_missing() {
+    let (service, _repo, _blobs) = service(ScriptedExtractor::returning(shared(
+        macro_uuid::generate_uuid_v7(),
+    )));
+    service.capture(SESSION).await.unwrap();
+    assert!(matches!(
+        service.patch(&view_access()).await,
+        Err(ChangesError::PatchMissing)
+    ));
 }
 
 #[tokio::test]

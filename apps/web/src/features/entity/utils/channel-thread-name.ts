@@ -22,6 +22,7 @@ export function getChannelThreadName(
     if (
       metadata.tag !== 'channel_message_reply' &&
       metadata.tag !== 'channel_mention' &&
+      metadata.tag !== 'channel_message_reaction' &&
       metadata.tag !== 'channel_message_send'
     ) {
       continue;

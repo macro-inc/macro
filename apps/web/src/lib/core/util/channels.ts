@@ -4,6 +4,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { invalidateContacts } from '@core/user/contactService';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
@@ -21,6 +22,8 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
+  /** An entity owner may need to authorize the resolved DM/channel before sending. */
+  beforeSend?: (channelId: string) => Promise<void>;
 };
 
 type NavigationOptions = {
@@ -52,10 +55,12 @@ export function useSendMessageToPeople() {
     content: string,
     mentions: SimpleMention[],
     attachments: NewAttachment[],
-    navigate?: NavigationOptions
+    navigate?: NavigationOptions,
+    beforeSend?: (channelId: string) => Promise<void>
   ) {
     const senderId = userId();
     if (!senderId) return;
+    await beforeSend?.(channelId);
     const messageResponse = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
@@ -66,8 +71,8 @@ export function useSendMessageToPeople() {
       .catch(() => null);
     if (!messageResponse) return;
 
-    invalidateListChannels();
-    invalidateContacts();
+    fireAndForget(invalidateListChannels(), 'messages');
+    fireAndForget(invalidateContacts(), 'messages');
 
     const navigateToChannel = async () => {
       replaceSplit({
@@ -113,7 +118,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 
@@ -123,7 +129,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 

@@ -1,9 +1,10 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    NullXmlFormatter, ParsedAgentSessionMention, ParsedContactMention, ParsedDateMention,
-    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
-    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter, XmlTag,
+    NullXmlFormatter, ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention,
+    ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedPullRequestMention, ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment,
+    XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -78,7 +79,7 @@ fn parse_single_user_mention() {
     let input = r#"<m-user-mention>{"userId":"macro|rithy@macro.com","email":"rithy@macro.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id }))
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. }))
     ] => {
         assert_eq!(user_id.as_ref(), "macro|rithy@macro.com");
     });
@@ -90,9 +91,9 @@ fn parse_multiple_user_mentions() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hello "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1, .. })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2, .. })),
     ] => {
         assert_eq!(uid1.as_ref(), "macro|a@b.com");
         assert_eq!(uid2.as_ref(), "macro|c@d.com");
@@ -115,7 +116,7 @@ fn parse_bare_uuid_bot_mention() {
     let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> there will come a day when I shall liberate you"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. })),
         TextSegment::Plain(" there will come a day when I shall liberate you"),
     ] => {
         assert_eq!(user_id.into_bot().unwrap().as_uuid().to_string(), "00000000-0000-0000-0000-00000000a1a1");
@@ -127,7 +128,7 @@ fn parse_prefixed_bot_mention() {
     let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. })),
     ] => {
         assert_eq!(user_id.as_ref(), "bot|00000000-0000-0000-0000-00000000a1a1");
     });
@@ -139,6 +140,56 @@ fn bot_mention_renders_display_name() {
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "hi Macro ok");
+}
+
+#[test]
+fn cursor_bot_mention_renders_cursor_not_macro() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> investigate this"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor investigate this");
+}
+
+#[test]
+fn bot_mention_prefers_display_name_over_email() {
+    let input = r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111","email":"Helper Bot","displayName":"Helper"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Helper");
+}
+
+#[test]
+fn team_bot_mention_renders_email_field_as_name() {
+    let input = r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111","email":"Helper Bot"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Helper Bot");
+}
+
+#[test]
+fn system_bot_mention_without_name_fields_uses_registry() {
+    let input =
+        r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor");
+}
+
+#[test]
+fn bot_mention_ignores_blank_name_fields() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"","displayName":" "}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor");
+}
+
+#[test]
+fn unknown_bot_mention_without_name_fields_uses_generic_label() {
+    let input =
+        r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Bot");
 }
 
 #[test]
@@ -741,7 +792,7 @@ fn parse_pull_request_mention() {
     assert_eq!(rendered, "macro/macro#123");
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, label })),
+        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, label, .. })),
     ] => {
         assert_eq!(id.as_ref(), "foreign-1");
         assert_eq!(label.as_deref(), Some("macro/macro#123"));
@@ -754,6 +805,67 @@ fn parse_pull_request_mention_without_label() {
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "Pull request");
+}
+
+#[test]
+fn parse_pull_request_mention_by_github_url() {
+    let input = r#"See <m-pr-mention>{"url":"https://github.com/macro-inc/macro/pull/7945","label":""}</m-pr-mention>."#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "See macro-inc/macro#7945.");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(&out.0[..], [
+        TextSegment::Plain("See "),
+        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, url, .. })),
+        TextSegment::Plain("."),
+    ] => {
+        assert!(id.is_empty());
+        assert_eq!(url.as_deref(), Some("https://github.com/macro-inc/macro/pull/7945"));
+    });
+}
+
+#[test]
+fn pull_request_github_ref_reads_a_url_written_as_the_id() {
+    let input = r#"<m-pr-mention>{"id":"https://github.com/macro-inc/macro/pull/7945","url":null}</m-pr-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "macro-inc/macro#7945");
+}
+
+#[test]
+fn pull_request_github_ref_ignores_non_pull_urls() {
+    for url in [
+        "https://github.com/macro-inc/macro/issues/7945",
+        "https://example.com/macro-inc/macro/pull/7945",
+        "https://github.com/macro-inc/macro/pull/79x",
+    ] {
+        let input = format!(r#"<m-pr-mention>{{"url":"{url}"}}</m-pr-mention>"#);
+        let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(&input).unwrap()).0;
+        assert_eq!(rendered, "Pull request", "{url}");
+    }
+    let input =
+        r#"<m-pr-mention>{"url":"https://www.github.com/a/b/pull/12/files#x"}</m-pr-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "a/b#12");
+}
+
+#[test]
+fn parse_booking_link_mention() {
+    let input = r#"Book here: <m-booking-link-mention>{"profileId":"profile-1","slug":"intro","url":"https://macro.com/app/book/profile-1/intro","label":""}</m-booking-link-mention>"#;
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "Book here: intro");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(&out.0[..], [
+        TextSegment::Plain("Book here: "),
+        TextSegment::Xml(XmlTag::BookingLink(ParsedBookingLinkMention {
+            profile_id,
+            slug,
+            url,
+            ..
+        })),
+    ] => {
+        assert_eq!(profile_id.as_ref(), "profile-1");
+        assert_eq!(slug.as_deref(), Some("intro"));
+        assert_eq!(url.as_ref(), "https://macro.com/app/book/profile-1/intro");
+    });
 }
 
 // =============================================================================

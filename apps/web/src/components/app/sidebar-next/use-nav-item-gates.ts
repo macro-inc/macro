@@ -1,20 +1,39 @@
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableCrm } from '@core/constant/featureFlags';
-import type { Accessor } from 'solid-js';
+import {
+  ENABLE_CALLS,
+  enableCalendarScheduling,
+  enableCrm,
+  enableTasksReviews,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
+import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
+import { useSidebarPrefs } from './use-sidebar-prefs';
 
 /**
- * Subscribes to the flags gating the Calendar and Customers rows, so a flag
- * that resolves after mount still reaches the rendered list. Shared by the
- * sidebar's nav and the More Apps grid so the two can't disagree about which
- * apps exist.
+ * Subscribes to feature flags so flags that resolve after mount reach the
+ * rendered list. Shared by the sidebar's nav and the More menu so the two
+ * agree about which apps exist.
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
   const calendar = useCalendarUiFlag();
+  const scheduling = useFeatureFlag(enableCalendarScheduling);
   const crm = useFeatureFlag(enableCrm);
-  return () => ({
+  const reviews = useFeatureFlag(enableTasksReviews);
+  const activity = useActivityFeedFlag();
+  const external = useFeatureFlag(enableWhatsappLinked);
+  const { prefs } = useSidebarPrefs();
+
+  return createMemo(() => ({
     showCalendar: calendar(),
+    showScheduling: scheduling().enabled,
     showCustomers: crm().enabled,
-  });
+    showCalls: ENABLE_CALLS,
+    showReviews: reviews().enabled,
+    showActivity: activity(),
+    showExternal: external().enabled,
+    prefs: prefs(),
+  }));
 }

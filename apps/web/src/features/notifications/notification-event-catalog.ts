@@ -10,7 +10,10 @@ export const EMAIL_DIGEST_NOTIFICATION_TYPE =
 
 export type NotificationEventGroupId =
   | 'channels'
+  | 'projects'
   | 'documents'
+  | 'sharing'
+  | 'crm'
   | 'tasks'
   | 'calendar'
   | 'email'
@@ -31,6 +34,22 @@ export type NotificationEventGroup = {
 
 export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   {
+    id: 'sharing',
+    label: 'Sharing',
+    events: [
+      {
+        type: 'entity_access_requested',
+        label: 'Permission requests',
+        description: 'Requests for more access to items you manage',
+      },
+      {
+        type: 'entity_access_granted',
+        label: 'Access granted',
+        description: 'When a permission request is approved',
+      },
+    ],
+  },
+  {
     id: 'channels',
     label: 'Channels',
     events: [
@@ -48,6 +67,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'channel_message_reply',
         label: 'Thread replies',
         description: 'Replies in threads you are part of',
+      },
+      {
+        type: 'channel_message_reaction',
+        label: 'Message reactions',
+        description: 'When someone reacts to one of your messages',
       },
     ],
   },
@@ -78,6 +102,30 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
     ],
   },
   {
+    id: 'projects',
+    label: 'Projects',
+    events: [
+      {
+        type: 'initiative_discussion',
+        label: 'Discussion',
+        description:
+          'Mentions, replies, and comments on projects you own or are assigned to',
+      },
+    ],
+  },
+  {
+    id: 'crm',
+    label: 'Companies & contacts',
+    events: [
+      {
+        type: 'crm_discussion',
+        label: 'Discussion',
+        description:
+          'Mentions, replies, and comments on companies you own and their contacts',
+      },
+    ],
+  },
+  {
     id: 'tasks',
     label: 'Tasks',
     events: [
@@ -96,6 +144,12 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'calendar_event_reminder',
         label: 'Event reminders',
         description: 'When a calendar event is about to start',
+      },
+      {
+        type: 'calendar_event_join_request',
+        label: 'Requests to join',
+        description:
+          'When someone asks to be added to an event you shared in a channel',
       },
     ],
   },
@@ -186,6 +240,9 @@ export const MUTED_ENTITY_TYPE_LABELS: Record<string, string> = {
   foreign: 'GitHub',
   foreign_entity: 'GitHub',
   project: 'Folder',
+  initiative: 'Project',
+  crm_company: 'Company',
+  crm_contact: 'Contact',
   reminder: 'Reminder',
   team: 'Team',
 };

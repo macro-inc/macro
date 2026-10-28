@@ -20,18 +20,32 @@ import type { WithNotification } from '../../types/notification';
 import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
 
-export interface BaseListEntityProps<E extends EntityData = EntityData> {
+export interface BaseListEntityProps<E extends EntityData = EntityData>
+  extends Pick<
+    JSX.HTMLAttributes<HTMLDivElement>,
+    'role' | 'tabIndex' | 'onKeyDown'
+  > {
   entity: WithNotification<E>;
   onClick?: (event: MouseEvent) => void;
   timestamp?: DateValue | null;
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
+  /** The row open beside the list, marked while the cursor moves elsewhere. */
+  current?: boolean;
   hovered?: boolean;
   /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
   actions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
+  /** Caller-owned marker between the icon and the title, e.g. a priority. */
+  titleLeading?: JSX.Element;
+  /** Caller-owned leading visual inside the standard Soup icon slot. */
+  icon?: JSX.Element;
+  /** Supporting text after the title in the standard content slot. */
+  titleTrailing?: JSX.Element;
+  /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
+  meta?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -62,8 +76,18 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
+  /** Persistent schedule metadata, including on touch and notification rows. */
+  scheduleStatus?: JSX.Element;
   actions?: JSX.Element;
   leadingAction?: JSX.Element;
+  titleLeading?: JSX.Element;
+  /** Caller-owned leading visual inside the standard Soup icon slot. */
+  icon?: JSX.Element;
+  /** Supporting text after the title in the standard content slot. */
+  titleTrailing?: JSX.Element;
+  meta?: JSX.Element;
+  /** Stored reference values alongside the existing property pills. */
+  referenceProperties?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;
@@ -81,9 +105,21 @@ export interface LayoutProps {
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+  /** Show a task's Project with its other properties (Projects enabled). */
+  showProject?: boolean;
 }
 
-export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
+/**
+ * How rows render once the list is too narrow for columns. `inbox` gives
+ * email rows the compact stacked layout (sender, subject, snippet) on desktop,
+ * for lists that sit beside a reading pane; touch devices keep their own email
+ * rows, with the sender's picture.
+ */
+export type NarrowLayoutVariant =
+  | 'standard'
+  | 'condensed'
+  | 'single-line'
+  | 'inbox';
 
 interface ListLayoutContextValue {
   isWide: Accessor<boolean>;
@@ -95,6 +131,8 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** Responsive rows have a nonzero width and their layout can be restored. */
+  onMeasured?: () => void;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -103,7 +141,9 @@ export function ListLayoutProvider(props: {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWide(width >= WIDE_BREAKPOINT);
+      if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

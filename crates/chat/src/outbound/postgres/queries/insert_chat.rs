@@ -1,13 +1,13 @@
 //! Insert a new chat row.
 
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use sqlx::{Postgres, Transaction};
 
 /// Insert a new chat and return the generated chat ID.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn insert_chat(
     tx: &mut Transaction<'_, Postgres>,
-    user_id: &MacroUserIdStr<'_>,
+    owner: &Owner,
     name: &str,
     project_id: Option<&str>,
 ) -> anyhow::Result<String> {
@@ -17,7 +17,7 @@ pub(crate) async fn insert_chat(
         VALUES ($1, $2, $3)
         RETURNING id
         "#,
-        user_id.as_ref(),
+        owner.principal_id(),
         name,
         project_id,
     )

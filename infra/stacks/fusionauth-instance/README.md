@@ -4,6 +4,10 @@ This pulumi stack contains everything you need to be able to setup a "macro comp
 
 Supports easy setup for local development.
 
+The local FusionAuth container runs with `init: true` to reap orphaned health-check
+processes. Recreate existing FusionAuth containers to apply this setting; restarting
+them does not update their configuration. Keep their database and config volumes.
+
 # Prerequisites
 
 The following are required tools you need to have setup ahead of time:

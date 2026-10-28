@@ -1,24 +1,9 @@
 //! Channel metadata in the existing Soup snapshot, patch, and notification paths.
 
 use super::*;
-use predicate_index::{IntegerAttributePatch, IntegerFact, utc_timestamp_micros};
 use soup_filter_projection::channel::{ChannelProjectionInput, project_channel};
 
 type Object = serde_json::Map<String, serde_json::Value>;
-
-pub(super) fn selected_object(object: &Object, fields: &[&FieldNode]) -> Result<Object, ()> {
-    let mut selected = Object::new();
-    for field in fields {
-        let Some(value) = object.get(&field.response_key) else {
-            continue;
-        };
-        if selected.get(&field.name).is_some_and(|old| old != value) {
-            return Err(());
-        }
-        selected.insert(field.name.clone(), value.clone());
-    }
-    Ok(selected)
-}
 
 fn organization(value: &serde_json::Value) -> Result<Option<i64>, ()> {
     if value.is_null() {
@@ -73,14 +58,7 @@ pub(super) fn patch(
     object: &Object,
     updated_at_fallback_ms: Option<i64>,
 ) -> Result<OptimisticProjectionMutation, ()> {
-    let mut exact = Vec::new();
-    if let Some(value) = object.get("ownerId") {
-        let owner = value.as_str().filter(|owner| !owner.is_empty()).ok_or(())?;
-        exact.push(ExactAttributePatch {
-            attribute: vocabulary::owner(),
-            values: vec![ExactValue::utf8(owner).map_err(|_| ())?],
-        });
-    }
+    let mut exact: Vec<_> = direct_patch::owner(object)?.into_iter().collect();
     if let Some(value) = object.get("channelType") {
         exact.push(ExactAttributePatch {
             attribute: vocabulary::channel_type(),
@@ -121,29 +99,7 @@ pub(super) fn patch(
     if object.contains_key("notifications") {
         exact.extend(notifications::snapshot_patches(&record_key, object)?);
     }
-    let mut integers = Vec::new();
-    let mut sorts = Vec::new();
-    for (field, attribute) in [
-        ("createdAt", vocabulary::created_at()),
-        ("updatedAt", vocabulary::updated_at()),
-    ] {
-        let timestamp = match object.get(field) {
-            Some(value) => Some(graphql_timestamp(value).ok_or(())?),
-            None if field == "updatedAt" => match updated_at_fallback_ms {
-                Some(ms) => Some(chrono::DateTime::from_timestamp_millis(ms).ok_or(())?),
-                None => None,
-            },
-            None => None,
-        };
-        if let Some(timestamp) = timestamp {
-            let value = utc_timestamp_micros(timestamp);
-            integers.push(IntegerAttributePatch {
-                attribute: attribute.clone(),
-                values: vec![value],
-            });
-            sorts.push(IntegerFact { attribute, value });
-        }
-    }
+    let (integers, sorts) = direct_patch::timestamps(object, updated_at_fallback_ms)?;
     Ok(OptimisticProjectionMutation::Patch {
         record_key,
         profile: vocabulary::profile_v4(),

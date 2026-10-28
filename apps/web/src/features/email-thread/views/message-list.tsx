@@ -1,6 +1,8 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Layer } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createEffect,
   createMemo,
@@ -19,7 +21,6 @@ import {
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from '../primitives/scroll-to-message';
-import { EmailParticipants } from './email-participants';
 import { MessageContainer } from './message-container';
 
 interface MessageListProps {
@@ -73,7 +74,10 @@ export function MessageList(props: MessageListProps) {
       ) {
         return;
       }
-      void fetchOlderMessages(list, context.query.fetchNextPage);
+      fireAndForget(
+        fetchOlderMessages(list, context.query.fetchNextPage),
+        'email-thread'
+      );
     };
 
     applyHeight();
@@ -89,8 +93,14 @@ export function MessageList(props: MessageListProps) {
   return (
     <div
       class={cn(
-        'pt-1 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden [overflow-anchor:none] scrollbar-hidden text-sm scroll-pt-4 scroll-pb-4 scroll-smooth motion-reduce:scroll-auto',
+        'pt-4 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden [overflow-anchor:none] scrollbar-hidden text-sm scroll-pt-4 scroll-pb-4 scroll-smooth motion-reduce:scroll-auto',
         'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] mobile:gap-0',
+        // The in-scroll insets only clear the floating chrome at the ends of
+        // the list. Every alignment in between — focusing a card, revealing one
+        // that just grew, keyboard paging — lands against the scrollport edges,
+        // so scroll-padding has to describe the same chrome or a card gets
+        // parked underneath it with its attachments out of reach.
+        'touch:scroll-pt-[calc(var(--mobile-content-inset-top,0px)+1rem)] touch:scroll-pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]',
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
@@ -108,33 +118,28 @@ export function MessageList(props: MessageListProps) {
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
-          void fetchOlderMessages(list, context.query.fetchNextPage);
+          fireAndForget(
+            fetchOlderMessages(list, context.query.fetchNextPage),
+            'email-thread'
+          );
         }
       }}
     >
-      <Show when={props.title}>
-        <div class="shrink-0 w-full flex justify-center">
-          <div
-            class={cn(
-              'macro-message-width macro-message-padding w-full',
-              viewContext.thread.isTouch() ? 'pt-6 pb-3' : 'pt-12 pb-2.5'
-            )}
-          >
-            <EmailThreadTitle
-              onCopy={viewContext.copySubject}
-              title={props.title ?? ''}
-              copyReveal={viewContext.thread.isTouch() ? 'always' : 'hover'}
-              class={
-                viewContext.thread.isTouch()
-                  ? 'text-xl pt-1 pb-0'
-                  : 'text-2xl pb-1.5'
-              }
-            />
-            <Show when={!viewContext.thread.isTouch()}>
-              <EmailParticipants />
-            </Show>
+      {/* Desktop pins the subject and participants above this list; touch
+          scrolls the subject with the messages. */}
+      <Show when={viewContext.thread.isTouch() && props.title}>
+        {(title) => (
+          <div class="shrink-0 w-full flex justify-center">
+            <div class="macro-message-width macro-message-padding w-full pt-6 pb-3">
+              <EmailThreadTitle
+                onCopy={viewContext.copySubject}
+                title={title()}
+                copyReveal="always"
+                class="text-xl pt-1 pb-0"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </Show>
       <Layer depth={1}>
         <StaticMarkdownContext>
@@ -175,11 +180,11 @@ export function MessageList(props: MessageListProps) {
               });
 
               // A message with an in-progress draft reply stays expanded so the
-              // draft remains visible even after newer messages arrive (matches
-              // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
+              // draft (inline on desktop, a preview on touch) remains visible
+              // even after newer messages arrive.
               const hasDraft = createMemo(() => {
                 const messageId = message().db_id;
-                if (!messageId || viewContext.thread.isTouch()) return false;
+                if (!messageId) return false;
                 return !!context.drafts.getDraftForMessage(messageId);
               });
 
@@ -198,21 +203,23 @@ export function MessageList(props: MessageListProps) {
 
               return (
                 <>
-                  <Show when={!hideMiddle()}>
-                    <MessageContainer
-                      isFirstMessage={normalizedIndex() === 0}
-                      isLastMessage={isLastMessage()}
-                      isSelected={isSelectedSelector(
-                        message().db_id ?? undefined
-                      )}
-                      allowHover={props.allowRowHover}
-                      message={message()}
-                      isExpanded={isExpanded()}
-                      markdownDomRef={
-                        isLastMessage() ? props.markdownDomRef : undefined
-                      }
-                    />
-                  </Show>
+                  <CollapseTransition open={!hideMiddle()}>
+                    <div class="w-full shrink-0">
+                      <MessageContainer
+                        isFirstMessage={normalizedIndex() === 0}
+                        isLastMessage={isLastMessage()}
+                        isSelected={isSelectedSelector(
+                          message().db_id ?? undefined
+                        )}
+                        allowHover={props.allowRowHover}
+                        message={message()}
+                        isExpanded={isExpanded()}
+                        markdownDomRef={
+                          isLastMessage() ? props.markdownDomRef : undefined
+                        }
+                      />
+                    </div>
+                  </CollapseTransition>
                   <Show
                     when={
                       chronologicalIndex() === 0 &&

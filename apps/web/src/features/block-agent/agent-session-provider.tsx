@@ -1,11 +1,15 @@
 /** App-facing composition for the agent session and its controllers. */
 
+import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
+import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
+import { useAgentSessionSubscription } from '@queries/agent-session/subscription';
+import { answerAgentSessionToolApproval } from '@queries/agent-session/tool-approvals';
 import type {
   FoldedMessage,
   TurnState,
@@ -24,8 +28,8 @@ import {
   type QueueController,
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
-import { createSendNext } from './context/send-next';
-import { createInteractionController } from './primitives/create-interaction-controller';
+import { createSteering } from './context/steer';
+import { createToolApprovalController } from './primitives/create-tool-approval-controller';
 import type { QuoteInsert } from './ui';
 
 export function AgentSessionProvider(
@@ -36,9 +40,15 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed, error, pendingPrompt } = resolveSessionId(
-    () => props.blockId
-  );
+  const {
+    sessionId,
+    pending,
+    failed,
+    error,
+    pendingPrompt,
+    initialInput,
+    acquired,
+  } = resolveSessionId(() => props.blockId);
 
   createEffect(() => {
     const id = sessionId();
@@ -46,7 +56,7 @@ export function AgentSessionProvider(
   });
 
   const userId = useUserId();
-  const live = createAgentSession(sessionId, { userId });
+  const live = createAgentSession(sessionId, { userId, onAcquire: acquired });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
   // session does not exist until `POST /agent-sessions` answers, and the
@@ -70,6 +80,9 @@ export function AgentSessionProvider(
         parts: [{ kind: 'text', text: prompt }],
         stop: null,
         pending: true,
+        segments: [],
+        phase: null,
+        postedAt: null,
       },
     ];
   };
@@ -83,7 +96,7 @@ export function AgentSessionProvider(
     sessionId: () => (userId() ? sessionId() : undefined),
     messages: live.messages,
   });
-  // A row the user removes may be one `sendNext` already showed as sent;
+  // A row the user removes may be one a force-send already showed as sent;
   // the fold has to forget it too, or it stays a bubble the log never fills.
   const queue: QueueController = {
     ...served,
@@ -92,10 +105,10 @@ export function AgentSessionProvider(
       return served.remove(actionId);
     },
   };
-  const sendNext = createSendNext({
-    currentTurn: live.currentTurn,
+  const steering = createSteering({
     entries: queue.entries,
-    issue: live.issue,
+    waiting: queue.waiting,
+    steer: queue.steer,
     expect: live.expect,
     retract: live.retract,
   });
@@ -105,6 +118,16 @@ export function AgentSessionProvider(
     canEdit: () => live.session()?.canEdit,
     issue: live.issue,
     onFailure: toast.failure,
+  });
+  useAgentSessionSubscription(sessionId);
+  const toolApprovals = createToolApprovalController({
+    sessionId,
+    pending: () => live.metadata()?.pendingInteractions ?? [],
+    ownerId: () => live.session()?.ownerId,
+    userId,
+    canEdit: () => live.session()?.canEdit,
+    onFailure: toast.failure,
+    answer: answerAgentSessionToolApproval,
   });
 
   // The transcript's "Reply to this" chip hands selected text to the
@@ -135,22 +158,34 @@ export function AgentSessionProvider(
           displayName: idToDisplayName,
           sessionId,
           pending,
+          initialInput: initialInput(),
           startupError: error,
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,
           messages,
+          observeRenderedText: (id, turn, element) =>
+            id === sessionId()
+              ? AgentSession.get(id)?.observeRenderedText(turn, element)
+              : undefined,
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
           loadFailed: () => live.loadFailed() || failed(),
           accessDenied: live.accessDenied,
-          // Retrying a 401 gets the same 401.
+          // Retrying a refusal in earnest gets the same refusal. A refusal of
+          // a session this tab just created is not one of those, and never
+          // reaches here as denied access: `AgentSession` waits it out, and
+          // reports a load that can be tried again if it never clears.
           loadRetryable: () => live.loadFailed() && !live.accessDenied(),
           retryLoad: live.retry,
           turn,
           issue: live.issue,
-          sendNext,
+          selectModel: live.selectModel,
+          sendNext: steering.sendNext,
+          steer: steering.steer,
+          steerFailed: steering.failed,
           interactions,
+          toolApprovals,
           queue,
           quoteSelection,
           registerQuoteInsert,
@@ -178,9 +213,7 @@ function CloudExternalUrlPoll(props: {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ||
-      isCodexBotId(session.botId) ||
-      session.harness === 'claude-cloud'
+    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
       ? id
       : undefined;
   });

@@ -1,10 +1,12 @@
-/** Names in string literals are ordinary text, never sheet references. */
-export function formulaReferencesSheet(
-  formula: string,
-  sheetName: string
-): boolean {
-  if (!formula.startsWith('=')) return false;
-  const target = sheetName.toLowerCase();
+/** Lowercase sheet names a formula qualifies references with. A 3-D range such
+ * as `Jan:Dec!A1` may include any sheet, so it reports `any`. Names in string
+ * literals are ordinary text, never sheet references. */
+export function formulaSheetReferences(formula: string): {
+  names: Set<string>;
+  any: boolean;
+} {
+  const references = { names: new Set<string>(), any: false };
+  if (!formula.startsWith('=')) return references;
   for (let index = 1; index < formula.length; ) {
     if (formula[index] === '"') {
       index++;
@@ -42,11 +44,17 @@ export function formulaReferencesSheet(
       while (index < formula.length && /[\p{L}\p{N}_.:]/u.test(formula[index]))
         name += formula[index++];
     }
-    if (
-      formula[index] === '!' &&
-      (name.toLowerCase() === target || name.includes(':'))
-    )
-      return true;
+    if (formula[index] !== '!') continue;
+    if (name.includes(':')) references.any = true;
+    else references.names.add(name.toLowerCase());
   }
-  return false;
+  return references;
+}
+
+export function formulaReferencesSheet(
+  formula: string,
+  sheetName: string
+): boolean {
+  const references = formulaSheetReferences(formula);
+  return references.any || references.names.has(sheetName.toLowerCase());
 }

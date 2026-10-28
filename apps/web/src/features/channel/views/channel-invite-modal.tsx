@@ -1,6 +1,7 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { getDestinationFromOptions } from '@core/util/destination';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { type ComponentProps, createSignal, Show } from 'solid-js';
 import { createChannelInvites } from '../primitives/create-channel-invites';
@@ -62,14 +63,15 @@ export function ChannelInviteModal(props: {
                 Invite people to {props.channelName}
               </Dialog.Title>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
                 disabled={pending()}
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
             <RadioGroup
@@ -150,8 +152,8 @@ export function ChannelInviteModal(props: {
                 Cancel
               </Button>
               <Button
-                variant="accent"
-                onClick={() => void addPeople()}
+                variant="primary"
+                onClick={() => fireAndForget(addPeople(), 'channel-invite')}
                 disabled={!canAdd()}
               >
                 {pending() ? 'Adding…' : 'Add'}

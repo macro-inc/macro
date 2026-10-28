@@ -2,6 +2,7 @@ import 'quill/dist/quill.snow.css';
 import './SignatureEditor.css';
 import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -79,9 +80,13 @@ export default function SignatureEditor(props: {
   /** Fires with the editor's current HTML on every edit; '' when emptied. */
   onInput: (html: string) => void;
   placeholder?: string;
+  label?: string;
+  disabled?: boolean;
   /** Exposes an imperative handle once mounted so commit actions (Save/Remove)
    * can set the editor content deterministically, not via the reactive value. */
   onReady?: (handle: { setContent: (html: string) => void }) => void;
+  /** Return true to preserve custom pasted HTML outside Quill's document model. */
+  onPasteHtml?: (html: string) => boolean;
 }) {
   let toolbarEl!: HTMLDivElement;
   let editorEl!: HTMLDivElement;
@@ -148,19 +153,21 @@ export default function SignatureEditor(props: {
     length: number,
     files: File[]
   ) => {
-    if (!quill) return;
-    if (length > 0) quill.deleteText(index, length, 'user');
+    const editor = quill;
+    if (!editor) return;
+    if (length > 0) editor.deleteText(index, length, 'user');
     let at = index;
     for (const file of files) {
       try {
         const id = await createStaticUploadFile(createUploadFile(file));
-        quill.insertEmbed(at, 'image', staticFileIdEndpoint(id), 'user');
+        if (quill !== editor) return;
+        editor.insertEmbed(at, 'image', staticFileIdEndpoint(id), 'user');
         at += 1;
       } catch {
         toast.failure('Failed to upload image');
       }
     }
-    quill.setSelection(at, 0, 'silent');
+    if (quill === editor) editor.setSelection(at, 0, 'silent');
   };
 
   // Toolbar image button: pick a file, then upload + insert at the cursor.
@@ -173,7 +180,10 @@ export default function SignatureEditor(props: {
       const file = input.files?.[0];
       if (!file || !quill) return;
       const index = quill.getSelection(true)?.index ?? quill.getLength();
-      void uploadAndInsertImages(index, 0, [file]);
+      fireAndForget(
+        uploadAndInsertImages(index, 0, [file]),
+        'signature-editor'
+      );
     });
     input.click();
   };
@@ -195,10 +205,17 @@ export default function SignatureEditor(props: {
         uploader: {
           mimetypes: IMAGE_MIME_TYPES,
           handler: (range: { index: number; length: number }, files: File[]) =>
-            void uploadAndInsertImages(range.index, range.length, files),
+            fireAndForget(
+              uploadAndInsertImages(range.index, range.length, files),
+              'signature-editor'
+            ),
         },
       },
     });
+    quill.enable(!props.disabled);
+    quill.root.setAttribute('role', 'textbox');
+    quill.root.setAttribute('aria-multiline', 'true');
+    quill.root.setAttribute('aria-label', props.label ?? 'Email signature');
     setHtml(props.value);
     quill.on('text-change', () => props.onInput(currentHtml()));
     teardownResizer = setupImageResizer(quill);
@@ -208,6 +225,12 @@ export default function SignatureEditor(props: {
     // becomes a hyperlink on those words.
     const onPaste = (event: ClipboardEvent) => {
       if (!quill) return;
+      const html = event.clipboardData?.getData('text/html');
+      if (html && props.onPasteHtml?.(html)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const range = quill.getSelection();
       const href = pastedHyperlinkHref({
         clipboardPlainText: event.clipboardData?.getData('text/plain') ?? '',
@@ -224,6 +247,10 @@ export default function SignatureEditor(props: {
     };
     quill.root.addEventListener('paste', onPaste, true);
     onCleanup(() => quill?.root.removeEventListener('paste', onPaste, true));
+  });
+
+  createEffect(() => {
+    quill?.enable(!props.disabled);
   });
 
   // Reseed the editor when `props.value` changes. The draft store keeps

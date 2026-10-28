@@ -12,6 +12,8 @@ import type { DeviceType } from './deviceType';
 export interface DeviceRequest {
   /** The device platform type (iOS or Android). */
   deviceType: DeviceType;
+  /** Whether this Android binary supports native Telecom incoming calls. */
+  nativeCallCapable?: boolean;
   /** The device push notification token. */
   token: string;
 }

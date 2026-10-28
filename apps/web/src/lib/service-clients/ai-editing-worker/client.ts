@@ -1,9 +1,14 @@
 import type { DocumentOp } from '@ai-ops/editor';
 import { resumeDocumentSpan } from '@block-md/observability';
-import { toast } from '@core/component/Toast/Toast';
+import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { Telemetry } from '@macro-inc/observability';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
+import { developmentProxyUrl } from '../../core/constant/developmentProxy';
+import {
+  type AiUsageLimitError,
+  readAiUsageLimitError,
+} from '../ai-usage-limit';
 
 // Full-URL override (scheme included) for pointing at a local wrangler dev
 // worker, e.g. VITE_AI_EDITING_WORKER_URL=http://localhost:8788 bun run dev
@@ -12,9 +17,11 @@ const overrideUrl: string | undefined = import.meta.env
 
 const AI_EDITING_WORKER_HOST =
   overrideUrl?.replace(/\/$/, '') ??
-  (import.meta.env.MODE === 'development'
-    ? 'https://ai-editing-worker-dev.macroverse.workers.dev'
-    : 'https://ai-editing-worker.macroverse.workers.dev');
+  developmentProxyUrl(
+    import.meta.env.MODE === 'development'
+      ? 'https://ai-editing-worker-dev.macroverse.workers.dev'
+      : 'https://ai-editing-worker.macroverse.workers.dev'
+  );
 
 /**
  * Model fallback chains per worker role. Mirrors the chains the backend
@@ -58,6 +65,7 @@ export type AiEditMode = 'supervised' | 'fast';
 export type AiEditResult =
   | { kind: 'ok' }
   | { kind: 'failed' }
+  | { kind: 'usage-limit'; error: AiUsageLimitError }
   | { kind: 'cancelled' }
   /** The worker stopped to ask for something only the user can supply. No
    *  edits were made; `message` says what to add to the request. */
@@ -133,6 +141,9 @@ export async function requestAiEdit(args: {
         prompt: args.prompt,
         models: MODELS,
         mode: args.mode,
+        // Inline edits are Macro's own; its name labels the cursors readers
+        // watch, the same way an agent's edits carry the agent's name.
+        editor: { name: MACRO_AGENT_NAME },
         interpret: false,
         propagate: args.onOps === undefined ? undefined : false,
       }),
@@ -140,6 +151,11 @@ export async function requestAiEdit(args: {
     });
     span.setAttr('http.status_code', res.status);
     if (!res.ok) {
+      const error = await readAiUsageLimitError(res);
+      if (error) {
+        span.setAttr('edit.blocked', true);
+        return { kind: 'usage-limit', error };
+      }
       const body = await res.text().catch(() => '');
       console.error('ai edit request failed', res.status, body);
       const message = `HTTP ${res.status} for POST /edit`;
@@ -175,22 +191,4 @@ export async function requestAiEdit(args: {
       syncActiveEditDocs();
     }
   }
-}
-
-/** Toast for a result that did not apply the edit; a user cancel stays silent. */
-export function toastAiEditResult(result: AiEditResult): void {
-  if (result.kind === 'failed') toast.failure('AI edit failed');
-  if (result.kind === 'blocked') toast.failure(result.message);
-}
-
-/**
- * `requestAiEdit` wrapper that toasts on failure or a request for more detail
- * (a user cancel stays silent). The caller supplies a `finally` callback for
- * any post-edit cleanup (e.g. clearing a loading signal).
- */
-export function requestAiEditWithToast(
-  args: { documentId: string; prompt: string },
-  onSettled: () => void
-): void {
-  requestAiEdit(args).then(toastAiEditResult).finally(onSettled);
 }

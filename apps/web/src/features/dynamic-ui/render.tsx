@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { createMemo, ErrorBoundary, For, type JSX, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Col, Row, View } from './core/Layout';
@@ -114,11 +115,19 @@ function RowLayout(props: { node: WidgetOf<'container'> }): JSX.Element {
 export function Compose(props: { view: ComposedView }): JSX.Element {
   return (
     <ErrorBoundary
-      fallback={(err) => (
-        <div class="border-edge-muted text-ink-extra-muted rounded border border-dashed p-3 text-xs">
-          Failed to render view: {String(err)}
-        </div>
-      )}
+      fallback={(err) => {
+        Telemetry.error(err, {
+          surface: 'dynamic-ui',
+          widgetTypes: props.view.widgets
+            .map((widget) => widget.type)
+            .join(','),
+        });
+        return (
+          <div class="border-edge-muted text-ink-extra-muted rounded border border-dashed p-3 text-xs">
+            Failed to render view: {String(err)}
+          </div>
+        );
+      }}
     >
       <Suspense
         fallback={<div class="text-ink-muted p-3 text-sm">Loading…</div>}

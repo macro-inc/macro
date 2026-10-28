@@ -1,12 +1,9 @@
-import { reviewsSplitRoute } from '@app/features/reviews-view/route';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useNavigate } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
-import { enableTasksReviews } from '@core/constant/featureFlags';
-import type { JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { TASK_TABS, type TaskTabItem } from '../constants';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
+import { TaskSavedViewsPicker } from '../views/task-saved-views';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 
 const toPill = (tab: TaskTabItem): PillTabItem<TasksTab> => ({
@@ -15,15 +12,11 @@ const toPill = (tab: TaskTabItem): PillTabItem<TasksTab> => ({
 });
 
 export function TasksMobileTabs(props: { leading?: JSX.Element }) {
-  const { state, setTab } = useTasksView();
-  const navigate = useNavigate();
-  const flag = useFeatureFlag(enableTasksReviews);
-  const items = (): PillTabItem<TasksTab | 'reviews'>[] => [
-    ...(flag().enabled
-      ? [{ value: 'reviews' as const, label: 'Reviews' }]
-      : []),
-    ...TASK_TABS.map(toPill),
-  ];
+  const { state, setTab, projectsEnabled } = useTasksView();
+  const items = (): PillTabItem<TasksTab>[] =>
+    TASK_TABS.filter((tab) => tab.id !== 'projects' || projectsEnabled()).map(
+      toPill
+    );
 
   return (
     <div class="h-10 min-w-0 flex-1">
@@ -31,14 +24,19 @@ export function TasksMobileTabs(props: { leading?: JSX.Element }) {
         scrollable
         class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
         contentClass="px-(--mobile-chrome-gutter)"
-        leading={props.leading ?? <TasksFilterDrawer />}
+        leading={
+          <>
+            {props.leading ?? (
+              <Show when={state.tab !== 'projects'}>
+                <TasksFilterDrawer />
+              </Show>
+            )}
+            <TaskSavedViewsPicker />
+          </>
+        }
         items={items()}
-        value={state.tab}
-        onChange={(tab) => {
-          if (tab === 'reviews')
-            navigate({ route: reviewsSplitRoute, params: {} });
-          else setTab(tab);
-        }}
+        value={state.savedViewActive ? undefined : state.tab}
+        onChange={setTab}
       />
     </div>
   );

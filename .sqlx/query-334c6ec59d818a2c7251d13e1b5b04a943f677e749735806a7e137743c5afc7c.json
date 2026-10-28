@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_domain_directory (\n                domain, name, description, icon_url,\n                apollo_organization_id, website_url, linkedin_url, twitter_url,\n                facebook_url, industry, keywords, technologies,\n                estimated_num_employees, annual_revenue, annual_revenue_printed,\n                total_funding, total_funding_printed, latest_funding_stage,\n                latest_funding_round_date, founded_year, publicly_traded_symbol,\n                publicly_traded_exchange, phone, raw_address, street_address,\n                city, state, postal_code, country, raw, enriched_at\n            )\n            VALUES (\n                $1, $2, $3, $4,\n                $5, $6, $7, $8,\n                $9, $10, $11, $12,\n                $13, $14, $15,\n                $16, $17, $18,\n                $19, $20, $21,\n                $22, $23, $24, $25,\n                $26, $27, $28, $29, $30, now()\n            )\n            ON CONFLICT (LOWER(domain)) DO UPDATE SET\n                name = EXCLUDED.name,\n                description = EXCLUDED.description,\n                icon_url = EXCLUDED.icon_url,\n                apollo_organization_id = EXCLUDED.apollo_organization_id,\n                website_url = EXCLUDED.website_url,\n                linkedin_url = EXCLUDED.linkedin_url,\n                twitter_url = EXCLUDED.twitter_url,\n                facebook_url = EXCLUDED.facebook_url,\n                industry = EXCLUDED.industry,\n                keywords = EXCLUDED.keywords,\n                technologies = EXCLUDED.technologies,\n                estimated_num_employees = EXCLUDED.estimated_num_employees,\n                annual_revenue = EXCLUDED.annual_revenue,\n                annual_revenue_printed = EXCLUDED.annual_revenue_printed,\n                total_funding = EXCLUDED.total_funding,\n                total_funding_printed = EXCLUDED.total_funding_printed,\n                latest_funding_stage = EXCLUDED.latest_funding_stage,\n                latest_funding_round_date = EXCLUDED.latest_funding_round_date,\n                founded_year = EXCLUDED.founded_year,\n                publicly_traded_symbol = EXCLUDED.publicly_traded_symbol,\n                publicly_traded_exchange = EXCLUDED.publicly_traded_exchange,\n                phone = EXCLUDED.phone,\n                raw_address = EXCLUDED.raw_address,\n                street_address = EXCLUDED.street_address,\n                city = EXCLUDED.city,\n                state = EXCLUDED.state,\n                postal_code = EXCLUDED.postal_code,\n                country = EXCLUDED.country,\n                raw = EXCLUDED.raw,\n                enriched_at = EXCLUDED.enriched_at\n            WHERE crm_domain_directory.enriched_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Int4",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "334c6ec59d818a2c7251d13e1b5b04a943f677e749735806a7e137743c5afc7c"
+}

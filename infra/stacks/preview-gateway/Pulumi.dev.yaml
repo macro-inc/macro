@@ -1,0 +1,7 @@
+config:
+  aws:region: us-east-1
+  aws-native:region: us-east-1
+  preview-gateway:preview_domain: dev.macro-agent-gateway.com
+  preview-gateway:preview_zone_id: Z02409452IBB8642CNAGC
+  doppler:dopplerToken:
+    secure: AAABAFBFq1qtlf6BBmHecVLz/D5mHSXzMR31qqk9bGtIPNIvA6lVYFMFvJ7jXMiC/7dcjBhDMBvmZOUlRzn5aaDIBldrILigtGoTKZi87nlz

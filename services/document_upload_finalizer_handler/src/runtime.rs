@@ -1,6 +1,9 @@
 use anyhow::Context as _;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use lexical_client::LexicalClient;
 use macro_env_var::env_vars;
 use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
@@ -8,17 +11,23 @@ use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
 
 use crate::app::{DocumentUploadFinalizer, ObjectCreated};
-use crate::outbound::{PgDocumentUploadPort, S3DocumentObjectReader};
+use crate::outbound::{PgDocumentUploadPort, S3DocumentObjectReader, S3LegacyOfficeUpgradeStorage};
 
 env_vars! {
     struct DatabaseUrl;
     struct InternalApiSecretKey;
     struct SyncServiceAuthKey;
+    struct DocumentStorageBucket;
+    struct DocxDocumentUploadBucket;
 }
 
 /// Concrete app context used by Lambda and local worker entrypoints.
 pub struct AppContext {
-    finalizer: DocumentUploadFinalizer<PgDocumentUploadPort, S3DocumentObjectReader>,
+    finalizer: DocumentUploadFinalizer<
+        PgDocumentUploadPort<PgBotsRepo>,
+        S3DocumentObjectReader,
+        S3LegacyOfficeUpgradeStorage,
+    >,
     lexical_client: LexicalClient,
     sync_service_client: SyncServiceClient,
 }
@@ -33,6 +42,12 @@ impl AppContext {
         let sync_service_auth_key = SyncServiceAuthKey::new()
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?
             .to_string();
+        let document_storage_bucket = DocumentStorageBucket::new()
+            .context("DOCUMENT_STORAGE_BUCKET must be provided")?
+            .to_string();
+        let docx_upload_bucket = DocxDocumentUploadBucket::new()
+            .context("DOCX_DOCUMENT_UPLOAD_BUCKET must be provided")?
+            .to_string();
         let lexical_service_url = LexicalServiceUrl::new()?.to_string();
         let sync_service_url = SyncServiceUrl::new()?.to_string();
 
@@ -42,10 +57,24 @@ impl AppContext {
             .await
             .context("failed to connect to postgres")?;
 
-        let repo = PgDocumentRepo::new(db_pool);
+        let registrar =
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db_pool.clone())));
+        let repo = PgDocumentRepo::new(db_pool, registrar);
         let document_port = PgDocumentUploadPort::new(repo);
-        let object_reader = S3DocumentObjectReader::new(macro_aws_config::s3_client().await);
-        let finalizer = DocumentUploadFinalizer::new(document_port, object_reader);
+        let s3_client = macro_aws_config::s3_client().await;
+        let object_reader = S3DocumentObjectReader::new(s3_client.clone());
+        let convert_queue = macro_queues::ConvertQueue::new();
+        let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
+            &macro_aws_config::get_macro_aws_config().await,
+        ))
+        .convert_queue(&convert_queue);
+        let upgrade_storage = S3LegacyOfficeUpgradeStorage::new(
+            s3_client,
+            sqs_client,
+            document_storage_bucket,
+            docx_upload_bucket,
+        );
+        let finalizer = DocumentUploadFinalizer::new(document_port, object_reader, upgrade_storage);
 
         Ok(Self {
             finalizer,

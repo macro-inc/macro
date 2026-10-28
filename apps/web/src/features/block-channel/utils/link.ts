@@ -1,6 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import type {
+  OpenSplitResult,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -61,16 +62,32 @@ export async function navigateToChannelMessage(
     preferNewSplit?: boolean;
     /** The split this navigation originates from. */
     sourceHandle?: SplitHandle;
+    /** Runs once the destination has actually been applied or reused. */
+    onApplied?: VoidFunction;
   }
 ) {
   const splitManager = options?.splitManager ?? globalSplitManager();
   if (!splitManager) return;
 
+  let onApplied = options?.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
+
   const existing = splitManager.getSplitByContent('channel', channelId);
   if (existing) {
     existing.activate();
+    reportApplied();
   } else {
-    splitManager.openWithSplit(
+    const result = splitManager.openWithSplit(
       {
         type: 'channel',
         id: channelId,
@@ -81,8 +98,10 @@ export async function navigateToChannelMessage(
         referredFrom: null,
         preferNewSplit: options?.preferNewSplit,
         handle: options?.sourceHandle,
+        ...(options?.onApplied ? { onApplied: reportApplied } : {}),
       }
     );
+    reportImmediateResult(result);
   }
 
   await goToChannelMessage(orchestrator, channelId, messageId, threadId);

@@ -10,6 +10,7 @@ import type { AgentSessionResponseInstructions } from './agentSessionResponseIns
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponsePullRequestUrl } from './agentSessionResponsePullRequestUrl';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
+import type { AgentSessionResponseTaskId } from './agentSessionResponseTaskId';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
 import type { AgentSessionResponseThreadParent } from './agentSessionResponseThreadParent';
@@ -40,6 +41,8 @@ creator owns the session, so a create response always says so. */
   /** Instructions the session's runtime works under, when any were stated
 at creation. Absent otherwise, so existing payloads are unchanged. */
   instructions?: AgentSessionResponseInstructions;
+  /** Whether the session is archived and read-only. */
+  isArchived: boolean;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */
@@ -58,6 +61,8 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   sandboxSize: SandboxSize;
   /** The session's status. */
   status: SessionStatusDto;
+  /** The Macro task the session was linked to. */
+  taskId?: AgentSessionResponseTaskId;
   /** The channel `thread_id` lives in, when the session was spawned from a
 channel thread. Derived from `thread_parent`. */
   threadChannelId?: AgentSessionResponseThreadChannelId;

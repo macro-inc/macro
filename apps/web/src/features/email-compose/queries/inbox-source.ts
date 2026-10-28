@@ -1,9 +1,9 @@
-import type { useEmailLinksQuery } from '@queries/email/link';
+import type { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailInbox } from '../context/compose-capabilities';
 
 export type EmailInboxQuery = Pick<
-  ReturnType<typeof useEmailLinksQuery>,
+  ReturnType<typeof useMailAccountsQuery>,
   'data' | 'isSuccess' | 'isError' | 'isPending'
 >;
 
@@ -27,8 +27,10 @@ export function createEmailInboxSource(
       };
     const inboxes = (query.data?.links ?? []).map((inbox) => ({
       id: inbox.id,
+      provider: inbox.provider,
       email_address: inbox.email_address,
       photo_url: inbox.photo_url,
+      sendAs: inbox.sendAs,
       displayName: displayName(inbox.email_address),
       settings: {
         signature: inbox.settings.signature,

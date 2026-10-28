@@ -17,6 +17,10 @@ export type PushRegistrationLifecycle = {
 };
 
 const lifecycles = new Set<PushRegistrationLifecycle>();
+// Incremented at logout to invalidate delayed retries from that session.
+let sessionGeneration = 0;
+// A registration pause set by logout, not an authoritative auth-state check.
+let loggedOut = false;
 
 /** Register a platform push lifecycle. Returns a function that removes it. */
 export function registerPushRegistrationLifecycle(
@@ -30,14 +34,29 @@ const SYNC_RETRY_DELAY_MS = 5_000;
 
 /**
  * (Re-)register this device's push tokens under the current session's user.
- * Call whenever a session is established — on login or at app launch with an
- * existing session.
+ *
+ * `source` identifies the caller's reason for syncing:
+ * - `session` (the default): the caller has established an authenticated
+ *   session. This lifts the registration pause set by logout; this function
+ *   does not verify authentication itself.
+ * - `resume`: app startup/resume or token refresh should reconcile the current
+ *   registration, but must not lift a pause set by logout.
+ *
+ * Logout unregisters devices before clearing authentication because the
+ * unregister request needs valid credentials. A native resume/token event in
+ * that window must not register the account again just because its cookie
+ * still exists. Only a subsequent `session` call may resume registration.
  *
  * A failed sync leaves the previous account's registration in place on the
  * backend, so each lifecycle gets one short delayed retry against transient
  * failures (network blip, backend error).
  */
-export async function syncPushRegistrations(): Promise<void> {
+export async function syncPushRegistrations(
+  source: 'session' | 'resume' = 'session'
+): Promise<void> {
+  if (source === 'resume' && loggedOut) return;
+  if (source === 'session') loggedOut = false;
+  const generation = sessionGeneration;
   await Promise.all(
     [...lifecycles].map(async (lifecycle) => {
       try {
@@ -47,6 +66,9 @@ export async function syncPushRegistrations(): Promise<void> {
         await new Promise((resolve) =>
           setTimeout(resolve, SYNC_RETRY_DELAY_MS)
         );
+        // A logout invalidates this retry even if another login has already
+        // reset loggedOut to false. The boolean alone cannot detect that.
+        if (generation !== sessionGeneration) return;
         try {
           await lifecycle.syncRegistration();
         } catch (retryErr) {
@@ -62,6 +84,8 @@ export async function syncPushRegistrations(): Promise<void> {
  * the session is still valid — the unregister call is authenticated.
  */
 export async function unregisterPushRegistrationsForLogout(): Promise<void> {
+  loggedOut = true;
+  ++sessionGeneration;
   await Promise.all(
     [...lifecycles].map((lifecycle) =>
       lifecycle.unregisterForLogout().catch((err) => {

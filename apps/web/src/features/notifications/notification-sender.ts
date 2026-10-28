@@ -46,6 +46,7 @@ export function getNotificationSenderFallbackName(
       'commented_on_document',
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
+      'crm_discussion',
       () => content?.senderDisplayName ?? undefined
     )
     .with(
@@ -57,6 +58,13 @@ export function getNotificationSenderFallbackName(
       () => content?.senderGithubLogin ?? notification.sender_id ?? undefined
     )
     .otherwise(() => undefined);
+}
+
+/** The sender's avatar when the notification metadata carries one. */
+export function getNotificationSenderAvatarUrl(
+  notification: UnifiedNotification
+): string | undefined {
+  return senderContent(notification)?.senderProfilePictureUrl ?? undefined;
 }
 
 export type NotificationAgentSender = {
@@ -79,6 +87,7 @@ export function getNotificationAgentSender(
       'commented_on_document',
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
+      'crm_discussion',
       () => {
         const name = getNotificationSenderFallbackName(notification)?.trim();
         if (!name) return undefined;

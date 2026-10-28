@@ -1,8 +1,8 @@
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import LinkBreakIcon from '@phosphor/link-break.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import PowerIcon from '@phosphor/power.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import LinkBreakIcon from '@icon/system/regular/link-break.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import PowerIcon from '@icon/system/regular/power.svg';
 import { Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -38,9 +38,11 @@ export function ConnectionMore(props: {
       <Dropdown>
         <Dropdown.Trigger
           aria-label="More"
-          class="relative inline-flex size-6 items-center justify-center rounded-md border-1 border-edge bg-transparent text-ink-muted outline-none hover:bg-hover hover:text-ink"
+          variant="ghost"
+          size="icon-md"
+          class="text-ink-muted hover:text-ink touch:min-h-11 touch:min-w-11"
         >
-          <DotsThreeIcon class="size-4" />
+          <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
         <Dropdown.Content class="w-48">
           <Dropdown.Group>

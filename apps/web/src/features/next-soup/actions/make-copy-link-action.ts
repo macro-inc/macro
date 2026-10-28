@@ -1,4 +1,5 @@
 import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
+import { t } from '@app/lib/i18n';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -58,10 +59,7 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  // A reminder has no block of its own, so `/app/reminder/{id}` resolves to
-  // nothing the orchestrator can open — there is no link to copy.
-  const canExecute = (entity: EntityData): boolean =>
-    entity.type !== 'reminder';
+  const canExecute = (_entity: EntityData): boolean => true;
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)
@@ -82,7 +80,7 @@ export const makeCopyLinkAction = () => {
     const url = getEntityUrl(entity);
 
     await navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
   /** Blocks already know their id and URL discriminator even when their full
@@ -91,7 +89,7 @@ export const makeCopyLinkAction = () => {
     await navigator.clipboard.writeText(
       buildSimpleEntityUrl({ id, type: blockType })
     );
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
   const executeWithSoup = async (

@@ -19,6 +19,7 @@ import type {
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import type { TagMentionLifecycle } from '../plugins/tags';
+import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { UserMentionRecord } from '../utils/mentionsUtils';
 
@@ -129,7 +130,10 @@ export interface EditorControls {
  * Props of an Editor component.
  */
 export interface EditorComponentProps {
+  /** Controlled Markdown. Host updates do not echo through onChange. */
+  value?: string;
   placeholder?: string;
+  ariaLabel?: string;
   /** Initialize with markdown text */
   initialValue?: string;
   /** Initialize with a serialized editor state. Takes precedence over initialValue. */
@@ -164,6 +168,7 @@ export interface EditorConfig {
   agentCommands?: AgentCommandsOptions;
   emojis?: EmojisOptions;
   links?: LinksOptions;
+  resolveAppLink?: MentionLinkResolver;
   history?: HistoryOptions;
   singleLine: boolean;
   handlers: EditorCallbacks;

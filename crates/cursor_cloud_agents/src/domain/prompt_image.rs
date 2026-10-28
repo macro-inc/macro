@@ -10,6 +10,12 @@
 mod test;
 
 use agent_client_protocol::schema::v1::{ContentBlock, ImageContent};
+use nom::{
+    IResult, Parser,
+    branch::alt,
+    bytes::complete::{tag, take_till, take_until},
+    combinator::recognize,
+};
 use std::collections::HashSet;
 
 /// How many images one prompt may carry. Cursor rejects more than this.
@@ -46,15 +52,6 @@ impl CursorPromptImage {
     }
 }
 
-/// Raster types Cursor's prompt image field accepts.
-#[must_use]
-pub fn supported_mime(mime: &str) -> bool {
-    matches!(
-        media_type(mime),
-        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
-    )
-}
-
 /// `image/jpg` and parameter suffixes become the type Cursor wants.
 #[must_use]
 pub fn canonical_mime(mime: &str) -> Option<&'static str> {
@@ -84,10 +81,7 @@ pub fn worth_fetching(mime: Option<&str>) -> bool {
 /// Image type from a `Content-Type` header, else from the leading bytes.
 #[must_use]
 pub fn detect_mime(content_type: Option<&str>, bytes: &[u8]) -> Option<&'static str> {
-    if let Some(mime) = content_type.and_then(canonical_mime) {
-        return Some(mime);
-    }
-    if !content_type.is_none_or(|mime| worth_fetching(Some(mime))) {
+    if !worth_fetching(content_type) {
         return None;
     }
     sniff(bytes)
@@ -166,19 +160,6 @@ pub fn images_in_blocks(blocks: &[ContentBlock]) -> Vec<CursorPromptImage> {
     images
 }
 
-/// Append fetched images that are not already image blocks, keeping the
-/// prompt's own blocks first.
-#[must_use]
-pub fn with_fetched_images(
-    mut blocks: Vec<ContentBlock>,
-    fetched: &[CursorPromptImage],
-) -> Vec<ContentBlock> {
-    for image in fetched {
-        blocks.push(image.to_content_block());
-    }
-    blocks
-}
-
 fn estimated_bytes(base64: &str) -> usize {
     base64.len().saturating_mul(3) / 4
 }
@@ -186,26 +167,28 @@ fn estimated_bytes(base64: &str) -> usize {
 fn collect_urls(text: &str, urls: &mut Vec<String>, seen: &mut HashSet<String>) {
     let mut rest = text;
     while urls.len() < MAX_LINK_FETCHES {
-        let Some(start) = earliest_url(rest) else {
+        let Ok((tail, raw)) = next_url(rest) else {
             break;
         };
-        let tail = &rest[start..];
-        let end = tail
-            .find(|ch: char| ch.is_whitespace() || matches!(ch, '<' | '>' | '"' | '\'' | '`'))
-            .unwrap_or(tail.len());
-        let raw = trim_trailing(&tail[..end]);
-        push_url(raw, urls, seen);
-        rest = &tail[end..];
+        push_url(trim_trailing(raw), urls, seen);
+        rest = tail;
     }
 }
 
-/// Index of the first `http://` or `https://` in `text`.
-fn earliest_url(text: &str) -> Option<usize> {
-    match (text.find("https://"), text.find("http://")) {
-        (Some(https), Some(http)) => Some(https.min(http)),
-        (Some(https), None) => Some(https),
-        (None, Some(http)) => Some(http),
-        (None, None) => None,
+fn next_url(mut input: &str) -> IResult<&str, &str> {
+    loop {
+        let (rest, _) = take_until("http")(input)?;
+        let parsed: IResult<&str, &str> = recognize((
+            alt((tag("https://"), tag("http://"))),
+            take_till(|ch: char| ch.is_whitespace() || matches!(ch, '<' | '>' | '"' | '\'' | '`')),
+        ))
+        .parse(rest);
+        match parsed {
+            Ok(found) => return Ok(found),
+            Err(_) => {
+                input = tag("http")(rest)?.0;
+            }
+        }
     }
 }
 

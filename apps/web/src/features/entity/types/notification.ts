@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { Accessor } from 'solid-js';
 
@@ -5,6 +6,9 @@ export type Notification = Omit<ApiUserNotification, 'owner_id'>;
 
 export type WithNotification<T> = T & {
   notifications?: Accessor<Notification[]>;
+  /** Earliest event this row can represent. Older notifications still count
+   * toward unread state and bulk actions, but cannot supply its label/target. */
+  notificationDisplayCutoff?: DateValue | null;
 };
 
 /**

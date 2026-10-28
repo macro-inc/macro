@@ -20,7 +20,9 @@ import { bindStateAs } from '../utils';
 import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
+import { nativeIosBackspacePlugin } from './native-ios-backspace/nativeIosBackspacePlugin';
 import { normalizeTripleClickPlugin } from './normalize-triple-click';
+import { wordNavigationPlugin } from './word-navigation/wordNavigationPlugin';
 
 export type PluginFunction = (editor: LexicalEditor) => () => void;
 
@@ -35,7 +37,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     history(timeGap = 400, loroManager?: LoroManager) {
       if (type === 'markdown-sync' && loroManager) {
         cleanupFunctions.push(
-          registerLoroHistory(editor, loroManager.doc, timeGap)
+          registerLoroHistory(editor, loroManager, timeGap)
         );
       } else {
         cleanupFunctions.push(
@@ -89,6 +91,8 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       // selection normalization the way the newer RichTextExtension does, so
       // register it explicitly here.
       cleanupFunctions.push(normalizeTripleClickPlugin()(editor));
+      cleanupFunctions.push(wordNavigationPlugin()(editor));
+      cleanupFunctions.push(nativeIosBackspacePlugin()(editor));
       return pluginManager;
     },
 

@@ -13,7 +13,7 @@ use std::{
 
 use super::{
     events::{ActivityTopicEvent, ActivityWireRow},
-    models::Activity,
+    models::{Action, Activity},
     ports::{ActivityAudienceExpander, ActivityEventPublisher, ActivityRealtimePublisher},
 };
 
@@ -42,11 +42,20 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
         let mut recipients = Vec::with_capacity(rows.len());
         for &(kind, id, subject) in rows {
             if let std::collections::hash_map::Entry::Vacant(entry) = audiences.entry((kind, id)) {
-                let users = match self.audience.entity_audience(kind, id).await {
-                    Ok(users) => users,
-                    Err(error) => {
-                        tracing::warn!(?error, entity_type = ?kind, entity_id = id, "activity audience lookup failed");
-                        Vec::new()
+                // A form's grantees are mostly its respondents (View: a channel
+                // it was posted in, a public form's signed-in visitors), and its
+                // activity names who responded and when, which only its editors
+                // may read through the timeline. Its rows reach their subject
+                // alone; editors read the rest through that Edit-gated timeline.
+                let users = if kind == EntityType::Form {
+                    Vec::new()
+                } else {
+                    match self.audience.entity_audience(kind, id).await {
+                        Ok(users) => users,
+                        Err(error) => {
+                            tracing::warn!(?error, entity_type = ?kind, entity_id = id, "activity audience lookup failed");
+                            Vec::new()
+                        }
                     }
                 };
                 entry.insert(users);
@@ -55,10 +64,20 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
                 .iter()
                 .map(|user| user.as_ref().to_owned())
                 .collect();
-            // A subject can read their own feed even after losing entity access.
-            // Bot principals cannot open a user subscription.
-            if MacroUserIdStr::parse_from_str(subject).is_ok() {
-                row_recipients.insert(subject.to_owned());
+            // Project moves can originate in a project the subject has never seen.
+            // Its identifier must remain private, including after access is revoked.
+            // Other domains retain their existing subject-feed behavior.
+            if let Ok(viewer) = MacroUserIdStr::parse_from_str(subject) {
+                let allowed = kind != EntityType::Initiative
+                    || row_recipients.contains(subject)
+                    || self
+                        .audience
+                        .viewer_can_see(kind, id, &viewer)
+                        .await
+                        .unwrap_or(false);
+                if allowed {
+                    row_recipients.insert(subject.to_owned());
+                }
             }
             recipients.push(row_recipients);
         }
@@ -95,10 +114,40 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityRealtimePub
                 .map(|a| (a.entity_type, a.entity_id.as_str(), a.subject_id.as_str()))
                 .collect();
             let recipients = self.recipients(&keys).await;
+            let mut task_audiences = HashMap::<String, BTreeSet<String>>::new();
             let mut deliveries: HashMap<String, Vec<ActivityWireRow>> = HashMap::new();
             for (activity, users) in activities.iter().zip(recipients) {
+                let task_id = match &activity.action {
+                    Action::TaskAdded(change) | Action::TaskRemoved(change) => {
+                        Some(&change.task_id)
+                    }
+                    _ => None,
+                };
+                if let Some(task_id) = task_id
+                    && !task_audiences.contains_key(task_id)
+                {
+                    let audience = self
+                        .audience
+                        .entity_audience(EntityType::Document, task_id)
+                        .await;
+                    let allowed = match audience {
+                        Ok(users) => users.into_iter().map(|user| user.to_string()).collect(),
+                        Err(error) => {
+                            tracing::warn!(?error, "task activity audience lookup failed");
+                            BTreeSet::new()
+                        }
+                    };
+                    task_audiences.insert(task_id.clone(), allowed);
+                }
                 let row = ActivityWireRow::from_activity(activity);
                 for user in users {
+                    // A project grant alone never reveals an associated task. Public-link
+                    // viewers recover through authorized history reads on refetch.
+                    if let Some(task_id) = task_id
+                        && !task_audiences[task_id].contains(&user)
+                    {
+                        continue;
+                    }
                     deliveries.entry(user).or_default().push(row.clone());
                 }
             }

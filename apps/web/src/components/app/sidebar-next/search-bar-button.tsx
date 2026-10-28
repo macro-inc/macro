@@ -1,15 +1,16 @@
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import { SidebarSearchMenu } from '../app-sidebar/sidebar-search-menu';
+import { useSplitLayout } from '../split-layout/layout';
 
 /** Search and command-menu discovery in the compact rail. */
 export const SearchRailButton = () => {
   const analytics = useAnalytics();
-  const layout = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const openSearch = (newSplit: boolean) => {
     analytics.track('sidebar_click', { view: 'search' });
@@ -31,9 +32,12 @@ export const SearchRailButton = () => {
     split = navigateToSidebarView({
       viewId: 'search',
       shiftKey: newSplit,
-      activeSplit: split,
-      openWithSplit: layout.openWithSplit,
+      openWithSplit,
       referredFrom: 'sidebar',
+      onApplied: () => {
+        const active = globalSplitManager()?.activeSplit();
+        if (active?.content().id === 'search') requestSearchFocus(active.id);
+      },
     });
     if (split) requestSearchFocus(split.id);
     globalSplitManager()?.returnFocus();
@@ -45,10 +49,13 @@ export const SearchRailButton = () => {
       triggerProps={{
         size: 'icon-md',
         variant: 'ghost',
-        tooltipPlacement: 'right',
-        hotkey: TOKENS.sidebar.goTo.search,
+        tooltip: {
+          content: t('nav.search'),
+          placement: 'right',
+          hotkey: TOKENS.sidebar.goTo.search,
+        },
         'data-sidebar-next-search': '',
-        class: 'size-10 rounded-xl [&_svg]:size-5',
+        class: 'size-10 rounded-xl',
       }}
     />
   );

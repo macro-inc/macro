@@ -1,0 +1,57 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import { Button } from '@ui';
+import { createSignal, onCleanup, Show } from 'solid-js';
+
+const FEEDBACK_MS = 1800;
+
+/** Keeps clipboard feedback local to the file whose path was copied. */
+export function CopyFilePathButton(props: {
+  path: string;
+  onCopy: (path: string) => Promise<boolean>;
+}) {
+  const [copied, setCopied] = createSignal(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+  let request = 0;
+  onCleanup(() => {
+    disposed = true;
+    clearTimeout(timer);
+  });
+
+  const copy = async () => {
+    const current = ++request;
+    clearTimeout(timer);
+    setCopied(false);
+    const success = await props.onCopy(props.path);
+    if (disposed || current !== request) return;
+    setCopied(success);
+    if (success) timer = setTimeout(() => setCopied(false), FEEDBACK_MS);
+  };
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        tooltip="Copy path"
+        aria-label="Copy path"
+        class="motion-safe:transition-transform motion-safe:duration-150 motion-safe:active:scale-95"
+        onClick={() => fireAndForget(copy(), 'changes')}
+      >
+        <Show
+          when={copied()}
+          fallback={
+            <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
+        >
+          <CheckIcon class="text-success size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+        </Show>
+      </Button>
+      <span class="sr-only" aria-live="polite">
+        {copied() ? 'Path copied' : ''}
+      </span>
+    </>
+  );
+}

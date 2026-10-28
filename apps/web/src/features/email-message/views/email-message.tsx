@@ -6,12 +6,34 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { CalendarFilePreview } from '../components/calendar-file-preview';
+import { CalendarInviteCard } from '../components/calendar-invite-card';
 import type { EmailMessageAction } from '../components/message-actions';
-import type { EmailAttachment } from '../core/email-message';
+import {
+  type CalendarInvitation,
+  groupCalendarInvitations,
+} from '../core/calendar-invitation';
+import { type EmailAttachment, isCalendarFile } from '../core/email-message';
+import { inlineContentIds, normalizeContentId } from '../core/inline-images';
+export interface InvitationRenderOptions {
+  /** Called before a card action opens something else in the app. */
+  onNavigate?: () => void;
+  /** The card is shown inside the calendar file it came from. */
+  inCalendarFile?: boolean;
+}
+
 export interface EmailMessageViewProps {
   message: EmailMessage;
+  renderInvitation?: (
+    message: EmailMessage,
+    invitation: CalendarInvitation,
+    options?: InvitationRenderOptions
+  ) => JSX.Element;
+  renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
@@ -28,31 +50,82 @@ export interface EmailMessageViewProps {
   onFocus?: (element: HTMLElement) => void;
   onReply?: (action: EmailMessageAction) => void;
   onOpenAttachment?: (attachment: EmailAttachment) => void;
+  onDownloadAttachment?: (attachment: EmailAttachment) => void;
   children?: JSX.Element;
 }
+
+const DISCLOSURE_SUMMARY =
+  'flex min-h-10 list-none items-center gap-1.5 text-sm text-ink-muted [&::-webkit-details-marker]:hidden';
+const DISCLOSURE_CARET =
+  'size-3.5 shrink-0 text-ink-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none';
 
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
   const isBodyExpanded = () => props.isExpanded;
+  const invitationGroups = createMemo(() =>
+    groupCalendarInvitations(props.message.calendar_invitations ?? [])
+  );
+  // A calendar file whose event the message already shows opens as that
+  // event; any other file, and a cloud reference with no bytes to download,
+  // goes to the host.
+  const [calendarFile, setCalendarFile] = createSignal<EmailAttachment>();
+  // Closing the dialog returns focus to the chip that opened it.
+  let calendarFileChip: HTMLElement | undefined;
+  const openAttachment = (attachment: EmailAttachment, chip: HTMLElement) => {
+    if (
+      invitationGroups().length > 0 &&
+      !attachment.reference_url &&
+      isCalendarFile(attachment.filename, attachment.mime_type)
+    ) {
+      calendarFileChip = chip;
+      setCalendarFile(attachment);
+      return;
+    }
+    props.onOpenAttachment?.(attachment);
+  };
+  // A card action that opens the calendar closes the dialog first, so it
+  // neither covers the destination nor pulls focus back to the email.
+  const closeForNavigation = () => {
+    calendarFileChip = undefined;
+    setCalendarFile(undefined);
+  };
+  const renderInvitation = (
+    invitation: CalendarInvitation,
+    options?: InvitationRenderOptions
+  ) =>
+    props.renderInvitation ? (
+      props.renderInvitation(props.message, invitation, options)
+    ) : (
+      <CalendarInviteCard
+        invitation={invitation}
+        inCalendarFile={options?.inCalendarFile}
+      />
+    );
+  const body = () => (
+    <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
+      <EmailMessageBody
+        message={props.message}
+        isPersonal={props.isPersonal}
+        isBodyExpanded={isBodyExpanded}
+        setExpandedMessageBody={() => props.onExpandedChange?.(true)}
+        setFocusedMessageId={() => props.onSelect?.()}
+        showFullContent={props.showFullContent}
+        isFocused={props.isSelected}
+      />
+    </div>
+  );
 
   // Hide attachments that are referenced in inline images
-  const inlineContentIds = createMemo(() => {
-    const set = new Set<string>();
-    const html = props.message.body_html_sanitized ?? '';
-    for (const match of html.matchAll(/src=["']cid:([^"']+)["']/gi)) {
-      const normalized = match[1].replace(/[<>]/g, '').trim();
-      if (normalized) set.add(normalized);
-    }
-    return set;
-  });
+  const shownInline = createMemo(() =>
+    inlineContentIds(props.message.body_html_sanitized ?? '')
+  );
 
   const visibleAttachments = createMemo(() => {
     return props.message.attachments.filter((a) => {
       if (!a.db_id) return false;
       const contentId = a.content_id?.toString();
       if (!contentId) return true;
-      const normalized = contentId.replace(/[<>]/g, '').trim();
-      return !inlineContentIds().has(normalized);
+      return !shownInline().has(normalizeContentId(contentId));
     });
   });
 
@@ -122,17 +195,42 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
-            <EmailMessageBody
-              message={props.message}
-              isPersonal={props.isPersonal}
-              isBodyExpanded={isBodyExpanded}
-              setExpandedMessageBody={() => props.onExpandedChange?.(true)}
-              setFocusedMessageId={() => props.onSelect?.()}
-              showFullContent={props.showFullContent}
-              isFocused={props.isSelected}
-            />
-          </div>
+          {props.renderOperation?.(props.message)}
+          {/* Keyed by component so thread refreshes keep each card's state. */}
+          <Key each={invitationGroups()} by={(group) => group.primary.id}>
+            {(group) => {
+              const primary = renderInvitation(group().primary);
+              return (
+                <div>
+                  {primary}
+                  <Show when={group().related.length > 0}>
+                    <details class="group border-t border-edge-muted">
+                      <summary class={DISCLOSURE_SUMMARY}>
+                        <CaretRight class={DISCLOSURE_CARET} />
+                        View {group().related.length} related{' '}
+                        {group().related.length === 1
+                          ? 'occurrence'
+                          : 'occurrences'}
+                      </summary>
+                      <Key each={group().related} by={(invite) => invite.id}>
+                        {(invite) => renderInvitation(invite())}
+                      </Key>
+                    </details>
+                  </Show>
+                </div>
+              );
+            }}
+          </Key>
+          <Show when={invitationGroups().length > 0} fallback={body()}>
+            {/* The card replaces the body; the original stays one click away. */}
+            <details class="group mb-3 border-t border-edge-muted">
+              <summary class={DISCLOSURE_SUMMARY}>
+                <CaretRight class={DISCLOSURE_CARET} />
+                View original email
+              </summary>
+              {body()}
+            </details>
+          </Show>
           {/* Image attachments */}
           <Show when={imageAttachmentsWithSfs().length > 0}>
             <div class="flex flex-wrap gap-2 mt-2">
@@ -158,21 +256,26 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           {/* Other attachments (non-media or without sfs_id) */}
           <Show when={otherAttachments().length > 0}>
             <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
-              <For each={otherAttachments()}>
+              {/* Keyed so a thread refresh keeps each chip, and with it the
+                  calendar file dialog's focus target. */}
+              <Key
+                each={otherAttachments()}
+                by={(attachment) => attachment.db_id}
+              >
                 {(attachment) => (
                   <EmailAttachmentPill
                     attachment={{
-                      fileName: attachment.filename ?? '',
-                      mimeType: attachment.mime_type ?? undefined,
+                      fileName: attachment().filename ?? '',
+                      mimeType: attachment().mime_type ?? undefined,
                     }}
                     onClick={
                       props.onOpenAttachment
-                        ? () => props.onOpenAttachment?.(attachment)
+                        ? (chip) => openAttachment(attachment(), chip)
                         : undefined
                     }
                   />
                 )}
-              </For>
+              </Key>
             </div>
           </Show>
 
@@ -208,6 +311,30 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           </Show>
         </div>
         {props.children}
+      </Show>
+      <Show when={calendarFile()}>
+        {(file) => (
+          <CalendarFilePreview
+            fileName={file().filename ?? ''}
+            open
+            onClose={() => setCalendarFile(undefined)}
+            returnFocus={() => calendarFileChip}
+            onDownload={
+              props.onDownloadAttachment
+                ? () => props.onDownloadAttachment?.(file())
+                : undefined
+            }
+          >
+            <Key each={invitationGroups()} by={(group) => group.primary.id}>
+              {(group) =>
+                renderInvitation(group().primary, {
+                  onNavigate: closeForNavigation,
+                  inCalendarFile: true,
+                })
+              }
+            </Key>
+          </CalendarFilePreview>
+        )}
       </Show>
     </MessageCard>
   );

@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
+import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
 import { findTopLevelMessageInMessageTimeline } from './timeline';
 
@@ -22,13 +23,23 @@ type ThreadRepliesQueryKey = ReturnType<
   typeof messageKeys.threadReplies
 >['queryKey'];
 
+/** Every thread read shares this so a thread never enters the cache without derived senders. */
+export async function fetchMessageThread(
+  parent: MessageParent,
+  rootId: string
+): Promise<MessageThread> {
+  return normalizeMessageThreadSenders(
+    await entityMessagesClient.thread(parent, rootId)
+  );
+}
+
 export function threadRepliesQueryOptions(
   parent: MessageParent,
   messageId: string
 ) {
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
-    queryFn: () => entityMessagesClient.thread(parent, messageId),
+    queryFn: () => fetchMessageThread(parent, messageId),
     staleTime: Infinity,
   };
 }
@@ -54,6 +65,12 @@ export function seedThreadRepliesFromMessageTimeline(
   });
 }
 
+// Cached selectors outlive mounted rows. Keep this outside the hook so its
+// closure cannot retain component accessors and detached thread DOM.
+function selectThreadReplies(thread: MessageThread) {
+  return thread.replies;
+}
+
 export function useThreadRepliesQuery(
   parent: Accessor<MessageParent>,
   messageId: Accessor<string>,
@@ -65,7 +82,7 @@ export function useThreadRepliesQuery(
     return {
       ...threadRepliesQueryOptions(parent(), messageId()),
       enabled: enabled(),
-      select: (thread: MessageThread) => thread.replies,
+      select: selectThreadReplies,
     };
   });
 }

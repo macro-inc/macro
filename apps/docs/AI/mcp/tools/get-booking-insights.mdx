@@ -1,0 +1,17 @@
+---
+title: GetBookingInsights
+description: >-
+  Get the same Booking Links summary statistics and chart data as Insights, for
+  inclusive local dates in an IANA time zone (maximum 366 days).
+---
+
+# GetBookingInsights
+
+Get the same Booking Links summary statistics and chart data as Insights, for inclusive local dates in an IANA time zone (maximum 366 days). Returns current and equally long previous periods: total, completed, rescheduled, cancelled, host/guest no-shows, scheduled meeting minutes, average duration, daily trends, popular hours, and counts by link and host. Optional eventTypeId and hostId filters apply to both periods. Failed and processing requests are excluded. Completed means confirmed and ended without an explicit no-show, not verified attendance. Minutes are scheduled duration, not actual call duration. Rescheduled is counted once per booking. Dates use the booking current start. No guest contact information is returned.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Existing team ID, or null for personal insights. |
+| `query` | InsightQuery | Yes | Inclusive local dates and optional booking/host filters. |

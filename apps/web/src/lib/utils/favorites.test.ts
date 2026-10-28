@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { describe, expect, it, vi } from 'vitest';
 import { favoriteBlockName, favoriteSplitContent } from './favorites';
@@ -38,12 +39,10 @@ describe('foreign-entity favorites', () => {
       type: 'component',
       id: 'reviews',
       entryMetadata: {
-        route: {
-          matches: [
-            { id: 'view-reviews', params: {} },
-            { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
-          ],
-        },
+        route: paneRoute(
+          { id: 'view-reviews', params: {} },
+          { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } }
+        ),
       },
     });
   });

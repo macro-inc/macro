@@ -4,11 +4,11 @@ import type { CalendarEventFormController } from '@app/features/calendar/compone
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { formatLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import { formatLocalDate } from '@core/util/local-date';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button, cn } from '@ui';
 import {
@@ -220,15 +220,14 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? createCalendarOccurrenceQueryRange(window.start, window.end)
       : undefined;
   });
-  const { sourceById } = useCalendarSources();
-  const occurrenceData = useCalendarOccurrenceData({ range, sourceById });
-  const availableExistingEvents = createMemo(() =>
-    occurrenceData.occurrencesQuery.isPlaceholderData
-      ? []
-      : occurrenceData.visibleEvents()
-  );
+  const { sourceById, sourcesReady } = useCalendarSources();
+  const occurrenceData = useCalendarOccurrenceData({
+    range,
+    sourceById,
+    sourcesReady,
+  });
   const existingEvents = createMemo(() =>
-    availableExistingEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
+    occurrenceData.visibleEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
   );
   const previewEvents = createMemo(() => {
     const event = previewEvent();
@@ -307,7 +306,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        class="rounded-lg px-2"
+                        class="px-2"
                         onClick={goToEvent}
                       >
                         <CalendarIcon class="size-3.5" />
@@ -315,19 +314,19 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                       </Button>
                     </Show>
                     <Button
+                      aria-label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      tooltip={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       variant="ghost"
                       size="icon-sm"
-                      class="rounded-lg"
-                      label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('previous')}
                     >
                       <CaretLeftIcon class="size-4" />
                     </Button>
                     <Button
+                      aria-label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
+                      tooltip={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       variant="ghost"
                       size="icon-sm"
-                      class="rounded-lg"
-                      label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('next')}
                     >
                       <CaretRightIcon class="size-4" />

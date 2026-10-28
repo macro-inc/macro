@@ -1,7 +1,6 @@
+import ResetIcon from '@icon/system/regular/arrow-clockwise.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
 import { Telemetry } from '@macro-inc/observability';
-
-import ResetIcon from '@phosphor/arrow-clockwise.svg';
-import HomeIcon from '@phosphor/house.svg';
 import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
 
@@ -41,14 +40,14 @@ export function FatalError(props: FatalErrorProps) {
 
             <div class="flex flex-row gap-3 justify-center">
               <Button
-                variant="accent"
+                variant="secondary"
                 onClick={() => {
                   window.location.href = window.location.origin + '/app';
                 }}
               >
                 <HomeIcon class="size-4" /> Home
               </Button>
-              <Button variant="outline" onClick={props.reset}>
+              <Button variant="secondary" onClick={props.reset}>
                 <ResetIcon class="size-4" /> Try Again
               </Button>
             </div>

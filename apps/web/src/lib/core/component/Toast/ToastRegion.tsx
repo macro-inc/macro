@@ -1,4 +1,7 @@
+import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
+import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
+import { Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 export function ToastRegion() {
@@ -6,33 +9,42 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card.
+        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress sits nearest the corner.
       */}
-      <div class="fixed bottom-2 right-2 m-0 p-2 sm:p-4 list-none outline-none pointer-events-none z-toast-region flex flex-col items-end gap-2">
+      <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
+          class="macro-toast-region"
+          regionId="reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="right"
+        >
+          <Toast.List class="macro-toast-list" />
+        </Toast.Region>
+        <Toast.Region
+          class="macro-toast-region"
           regionId="prompt-region"
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
           swipeDirection="right"
         >
-          <Toast.List class="flex flex-col gap-2" />
+          <Toast.List class="macro-toast-list" />
         </Toast.Region>
         <Toast.Region
+          class="macro-toast-region"
           regionId="toast-region"
-          duration={Infinity}
-          pauseOnInteraction={false}
+          limit={3}
+          duration={4500}
+          pauseOnInteraction
           swipeDirection="right"
         >
-          <Toast.List class="flex flex-col gap-2" />
+          <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
-        <Toast.Region
-          regionId="stable-toast"
-          duration={Infinity}
-          swipeDirection="right"
-        >
-          <Toast.List class="flex flex-col gap-2" />
-        </Toast.Region>
+        <Show when={!isMobile()}>
+          <UploadProgressIndicator />
+        </Show>
       </div>
 
       {/*
@@ -43,28 +55,46 @@ export function ToastRegion() {
         queued until it is answered.
       */}
       <div
-        class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-2"
+        class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5"
         style={{
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
       >
         <Toast.Region
+          class="macro-toast-region"
+          regionId="mobile-reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="left"
+        >
+          <Toast.List class="macro-toast-list" />
+        </Toast.Region>
+        <Toast.Region
+          class="macro-toast-region"
           regionId="mobile-prompt-region"
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
           swipeDirection="left"
         >
-          <Toast.List class="flex flex-col gap-2" />
+          <Toast.List class="macro-toast-list" />
         </Toast.Region>
         <Toast.Region
+          class="macro-toast-region"
           regionId="mobile-toast-region"
-          duration={Infinity}
-          pauseOnInteraction={false}
+          limit={1}
+          duration={4500}
+          pauseOnInteraction
           swipeDirection="left"
         >
-          <Toast.List class="flex flex-col gap-2" />
+          <Toast.List class="macro-toast-list" />
         </Toast.Region>
+        <Show when={isMobile()}>
+          <div class="flex justify-center">
+            <UploadProgressIndicator />
+          </div>
+        </Show>
       </div>
     </Portal>
   );

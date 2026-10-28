@@ -1,5 +1,7 @@
 //! Bounded-to-allowlist metadata lookup for search.
 
+use entity_registry::BotFacts;
+
 use crate::{
     domain::{
         error::Result,
@@ -88,7 +90,7 @@ async fn search_metadata(
     .collect()
 }
 
-impl AgentSessionSearchMetadataRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> AgentSessionSearchMetadataRepo for PgAgentSessionRepo<B> {
     async fn search_metadata(&self, ids: &[uuid::Uuid]) -> Result<Vec<AgentSessionSearchMetadata>> {
         Ok(search_metadata(&self.pool, ids)
             .await

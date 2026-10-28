@@ -16,7 +16,7 @@
 use std::future::Future;
 use std::marker::PhantomData;
 
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -33,6 +33,9 @@ struct ActivityConsumerGroup;
 
 impl GroupName for ActivityConsumerGroup {
     const GROUP_NAME: &'static str = "activity-materializer";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 /// Consumes activity-bearing topics and writes activities through the repo.

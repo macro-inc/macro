@@ -1,14 +1,20 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
-import { getDisplayName, tryMacroId } from '@core/user';
+import { useUserId } from '@core/context/user';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createMemo, type JSX, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useProjectIdentityQuery } from '../../projects/queries/project-identity';
 import { entityTypeToItemType } from '../utils';
+import { usePropertyUserDisplay } from './usePropertyUserDisplay';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
@@ -17,6 +23,8 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'CHAT',
   'CHANNEL',
   'THREAD',
+  'COMPANY',
+  'CONTACT',
 ] as const;
 
 type PreviewableEntityType = (typeof PREVIEWABLE_ENTITY_TYPES)[number];
@@ -31,10 +39,14 @@ const isPreviewable = (
 type PropertyEntityDisplayResult = {
   /** Resolved display name for the entity */
   name: Accessor<string>;
+  /** Native project identity, available only after an authorized read. */
+  nativeProjectId: Accessor<string | undefined>;
   /** Icon JSX element for the entity */
   icon: Accessor<JSX.Element>;
   /** Whether preview data is still loading */
   isLoading: Accessor<boolean>;
+  /** Whether the current preview confirms access to the referenced entity. */
+  hasPreviewAccess: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
   /** URL params for navigation (e.g., message ID for threads) */
@@ -52,7 +64,7 @@ type PropertyEntityDisplayResult = {
  */
 export function usePropertyEntityDisplay(
   entityId: Accessor<string>,
-  entityType: Accessor<EntityType>,
+  entityType: Accessor<EntityType | undefined>,
   options?: {
     /** Custom fallback icon for unknown entity types (null to show nothing) */
     fallbackIcon?: JSX.Element | null;
@@ -60,12 +72,27 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
-  const previewType = () => entityTypeToItemType(entityType());
-
+  const projectsFlag = createMemo(() =>
+    entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
+  );
+  // Until Projects is enabled, a project stays the generic "Project" label.
+  const projectSource = createMemo(() => {
+    if (!projectsFlag()?.().enabled) return;
+    return untrack(() => {
+      const userId = useUserId();
+      return useProjectIdentityQuery(entityId, userId);
+    });
+  });
+  const nativeProjectId = () => {
+    const source = projectSource();
+    return source && !source.isError && !source.isPending
+      ? source.data?.id
+      : undefined;
+  };
   const previewSource = createMemo(() => {
     const eType = entityType();
-    const pType = previewType();
     if (isPreviewable(eType)) {
+      const pType = entityTypeToItemType(eType);
       return untrack(
         () =>
           useItemPreview(() => ({
@@ -78,6 +105,10 @@ export function usePropertyEntityDisplay(
   // Keep subscription ownership separate from its value: a live result must
   // not dispose and reacquire the preview that produced it.
   const preview = () => previewSource()?.();
+  const hasPreviewAccess = () => {
+    const item = preview();
+    return !!item && isAccessiblePreviewItem(item);
+  };
 
   const channelNameSource = createMemo(() => {
     const eType = entityType();
@@ -87,15 +118,13 @@ export function usePropertyEntityDisplay(
   });
   const channelName = () => channelNameSource()?.();
 
-  const userNameWrapper = () => {
-    const eType = entityType();
-    if (eType === 'USER') {
-      return () => getDisplayName(tryMacroId(entityId()));
-    }
-  };
-  const userName = createMemo(() => userNameWrapper()?.() ?? '');
+  const user = usePropertyUserDisplay(() =>
+    entityType() === 'USER' ? entityId() : ''
+  );
 
   const isLoading = createMemo(() => {
+    if (entityType() === 'INITIATIVE')
+      return projectSource()?.isPending ?? false;
     if (!isPreviewable(entityType())) return false;
     const previewItem = preview();
     return !previewItem || previewItem.loading;
@@ -103,22 +132,34 @@ export function usePropertyEntityDisplay(
 
   const name = createMemo(() =>
     match(entityType())
-      .with('USER', () => userName())
+      .with('INITIATIVE', () => {
+        const source = projectSource();
+        if (!source) return 'Project';
+        if (source.isPending) return 'Loading...';
+        return (!source.isError && source.data?.name) || 'Project unavailable';
+      })
+      .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
-      .with('COMPANY', () => entityId())
       .otherwise(() => {
         const item = preview();
         if (!item || item.loading) return 'Loading...';
         if (isAccessiblePreviewItem(item)) {
           return item.name;
         }
-        return `Unknown ${entityType().toLowerCase()}`;
+        return `Unknown ${entityType()?.toLowerCase() ?? 'entity'}`;
       })
   );
 
-  const icon = createMemo(() =>
+  // Built on first read: a caller that draws its own icon pays nothing.
+  const icon = createLazyMemo(() =>
     match(entityType())
-      .with('USER', () => <UserIcon id={entityId()} size="sm" />)
+      .when(
+        (type) => type === 'INITIATIVE' && projectSource(),
+        () => <ProjectIcon class="size-4" />
+      )
+      .with('USER', () => (
+        <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
+      ))
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {
@@ -133,8 +174,9 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
       .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
       .with('COMPANY', () => (
-        <CoreEntityIcon targetType="organization" size="xs" />
+        <CoreEntityIcon targetType="crm_company" size="xs" />
       ))
+      .with('CONTACT', () => <CoreEntityIcon targetType="contact" size="xs" />)
       .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {
@@ -151,6 +193,8 @@ export function usePropertyEntityDisplay(
       .with('PROJECT', () => 'project')
       .with('TASK', () => 'task')
       .with('THREAD', () => 'email')
+      .with('COMPANY', () => 'company')
+      .with('CONTACT', () => 'contact')
       .with('DOCUMENT', () => {
         const item = preview();
         if (!item || !isAccessiblePreviewItem(item)) {
@@ -179,7 +223,9 @@ export function usePropertyEntityDisplay(
     name,
     icon,
     isLoading,
+    hasPreviewAccess,
     blockOrFileType,
+    nativeProjectId,
     linkParams,
   };
 }

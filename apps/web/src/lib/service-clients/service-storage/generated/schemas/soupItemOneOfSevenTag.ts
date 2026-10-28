@@ -10,5 +10,5 @@ export type SoupItemOneOfSevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfSevenTag = {
-  emailThread: 'emailThread',
+  initiative: 'initiative',
 } as const;

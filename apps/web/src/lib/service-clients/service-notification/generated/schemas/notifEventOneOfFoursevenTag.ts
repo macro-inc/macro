@@ -10,5 +10,5 @@ export type NotifEventOneOfFoursevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfFoursevenTag = {
-  agent_session_waiting_for_input: 'agent_session_waiting_for_input',
+  github_review_requested: 'github_review_requested',
 } as const;

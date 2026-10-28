@@ -18,9 +18,29 @@ fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
 
+fn prepare_dependencies(stage: &Stage) -> Result<()> {
+    let mut prepare = Command::new("bun");
+    prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    stage.run("Preparing frontend dependencies", &mut prepare)
+}
+
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
+}
+
+/// Browser-facing origin for development redirects and integration callbacks.
+pub fn https_origin(instance: &Instance) -> Result<String> {
+    Ok(format!(
+        "https://{}:{}",
+        super::tls::hostname()?,
+        instance.port(Port::Proxy)
+    ))
+}
+
+/// Browser-facing development URL, using the machine certificate and proxy.
+pub fn https_url(instance: &Instance) -> Result<String> {
+    Ok(format!("{}/app/", https_origin(instance)?))
 }
 
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the
@@ -50,6 +70,7 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
 /// where DEV is already true). Headless `stack up` sets the same origin env.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    prepare_dependencies(stage)?;
     let dist = {
         let mut cmd = Command::new("bun");
         cmd.current_dir(app_dir())
@@ -101,18 +122,18 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(
-    instance: &Instance,
-    mode: Mode,
-    traces_enabled: bool,
-    enable_onboarding: bool,
-) -> Vec<(String, String)> {
+fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Result<Vec<(String, String)>> {
     let mut env = vec![
         (
             "PORT".to_string(),
             instance.port(Port::Frontend).to_string(),
         ),
         ("VITE_LOCAL_SERVERS".to_string(), "ALL".to_string()),
+        ("MACRO_LOCAL_HOSTNAME".to_string(), super::tls::hostname()?),
+        (
+            "NODE_EXTRA_CA_CERTS".to_string(),
+            proxy::ca_pem().display().to_string(),
+        ),
         (
             "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
             "same-origin".to_string(),
@@ -149,24 +170,56 @@ fn dev_env(
         "VITE_ENABLE_BROWSER_OTEL".to_string(),
         traces_enabled.to_string(),
     ));
-    // Existing override: always set so the app's DEV_MODE default (on) does
-    // not win. `just run_local --enable-onboarding` is the opt-in.
-    env.push((
-        "VITE_ENABLE_ONBOARDING_V4".to_string(),
-        enable_onboarding.to_string(),
-    ));
-    env
+    Ok(env)
 }
 
 /// Poll the backend (auth health, through the proxy) until ready.
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
+    let cacert = proxy::ca_pem();
     let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS --cacert '{cacert}' --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1",
+        cacert = cacert.display()
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
     stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
+}
+
+/// A listening Vite port does not prove the containerized proxy can reach it.
+/// Verify the browser's route before announcing that the stack is ready.
+fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--retry",
+        "8",
+        "--retry-connrefused",
+        "--retry-delay",
+        "1",
+        "--retry-max-time",
+        "45",
+        "--max-time",
+        "5",
+        "--output",
+        "/dev/null",
+        "--cacert",
+    ])
+    .arg(proxy::ca_pem())
+    .arg(format!("{}/app/", proxy::url(instance)));
+    stage
+        .run("Checking frontend through HTTPS proxy", &mut cmd)
+        .with_context(|| {
+            format!(
+                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
+                 firewall access to host.docker.internal:{} (Vite's port). \
+                 Direct Vite URL: {}",
+                instance.port(Port::Frontend),
+                url(instance)
+            )
+        })
 }
 
 /// A running frontend dev server plus its captured output, so an unexpected
@@ -257,7 +310,6 @@ pub fn start(
     instance: &Instance,
     mode: Mode,
     traces_enabled: bool,
-    enable_onboarding: bool,
 ) -> Result<Option<Frontend>> {
     if mode.spec().wait_backend_before_frontend {
         wait_backend_ready(stage, instance)?;
@@ -286,12 +338,7 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    let mut prepare = Command::new("bash");
-    prepare.current_dir(app_dir()).args([
-        "-lc",
-        "just ensure-cache-wasm && just ensure-agent-fold-wasm",
-    ]);
-    stage.run("Preparing frontend dependencies", &mut prepare)?;
+    prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
     // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
@@ -310,10 +357,11 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding) {
+    for (k, v) in dev_env(instance, mode, traces_enabled)? {
         cmd.env(k, v);
     }
     let process = spawn(stage, &mut cmd, port)?;
+    wait_frontend_proxy_ready(stage, instance)?;
     Ok(Some(Frontend {
         process,
         command: cmd,

@@ -2,14 +2,15 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import {
   createBulkMoveToProjectDssEntityMutation,
   type EntityData,
 } from '@entity';
-import FolderIcon from '@phosphor/folder.svg';
-import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import FolderPlusIcon from '@icon/system/regular/folder-plus.svg?component-solid';
+import CloseIcon from '@icon/system/regular/x.svg?component-solid';
 import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { ActionDialogShell, Button, Input } from '@ui';
@@ -479,7 +480,7 @@ export const BulkMoveToProjectView = (props: {
                 });
               } else if (e.key === 'Enter') {
                 e.preventDefault();
-                void finishEditing();
+                fireAndForget(finishEditing(), 'bulk-move-to-project');
               }
             }}
             class="mb-2"
@@ -590,7 +591,7 @@ export const BulkMoveToProjectView = (props: {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       e.stopPropagation();
-                      submitNewFolder();
+                      fireAndForget(submitNewFolder(), 'bulk-move-to-project');
                     } else if (e.key === 'Escape') {
                       e.preventDefault();
                       e.stopPropagation();
@@ -601,8 +602,8 @@ export const BulkMoveToProjectView = (props: {
                 />
                 <Button
                   size="sm"
-                  variant="outline"
-                  class="rounded-xs shrink-0"
+                  variant="secondary"
+                  class="shrink-0"
                   disabled={!newFolderName().trim() || isSavingFolder()}
                   onClick={submitNewFolder}
                 >
@@ -615,7 +616,7 @@ export const BulkMoveToProjectView = (props: {
                   tooltip="Cancel"
                   onClick={cancelCreatingFolder}
                 >
-                  <CloseIcon />
+                  <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </Show>
@@ -628,8 +629,8 @@ export const BulkMoveToProjectView = (props: {
         </Button>
         <Button
           type="button"
-          variant="strong"
-          onClick={() => void finishEditing()}
+          variant="secondary"
+          onClick={() => fireAndForget(finishEditing(), 'bulk-move-to-project')}
           disabled={!selectedProject()}
         >
           Move

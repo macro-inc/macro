@@ -685,6 +685,19 @@ export class DocumentEditor {
     return this.insertMention(blockId, at, { kind: 'pr', ...entity });
   }
 
+  public mentionBookingLink(
+    blockId: NodeId,
+    at: number,
+    entity: {
+      profileId: string;
+      url: string;
+      slug?: string;
+      label?: string;
+    }
+  ): Ref {
+    return this.insertMention(blockId, at, { kind: 'booking_link', ...entity });
+  }
+
   public mentionTag(
     blockId: NodeId,
     at: number,

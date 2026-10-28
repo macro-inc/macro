@@ -1,3 +1,4 @@
+import type { MessageParent } from '@service-storage/messages';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageData } from '../../Message';
 import { createChannelMessageActions } from '../create-channel-message-actions';
@@ -30,6 +31,8 @@ function buildMessage(overrides?: Partial<ActionMessage>): ActionMessage {
 function buildHarness(input?: {
   userId?: string | undefined;
   channelId?: string;
+  parentType?: MessageParent['type'];
+  canModerate?: boolean;
   onReply?: Parameters<typeof createChannelMessageActions>[0]['onReply'];
   onEdit?: Parameters<typeof createChannelMessageActions>[0]['onEdit'];
   effects?: Parameters<typeof createChannelMessageActions>[0]['effects'];
@@ -40,10 +43,11 @@ function buildHarness(input?: {
 
   const getMessageActions = createChannelMessageActions({
     parent: () => ({
-      type: 'channel',
+      type: input?.parentType ?? 'channel',
       id: (() => input?.channelId ?? 'channel-1')(),
     }),
     userId: () => input?.userId,
+    canModerate: () => input?.canModerate ?? false,
     deleteMessage,
     addReaction,
     removeReaction,
@@ -61,7 +65,28 @@ function buildHarness(input?: {
 }
 
 describe('createChannelMessageActions', () => {
-  it('uses the live message from the reaction context when toggling', () => {
+  it.each([
+    ['channel', false, true],
+    ['call', false, false],
+    ['document', false, false],
+    ['document', true, true],
+  ] as const)(
+    'matches bot deletion permissions for %s (moderator: %s)',
+    (parentType, canModerate, canDelete) => {
+      const harness = buildHarness({
+        userId: 'user-1',
+        parentType,
+        canModerate,
+      });
+      const actions = harness.getMessageActions(
+        buildMessage({ sender_id: 'bot|agent-1' })
+      );
+
+      expect(!!actions.onDelete).toBe(canDelete);
+    }
+  );
+
+  it('uses the live message from the reaction context when toggling', async () => {
     const harness = buildHarness({ userId: 'user-1' });
     const staleMessage = buildMessage({ reactions: [] });
     const liveMessage = buildMessage({
@@ -69,13 +94,13 @@ describe('createChannelMessageActions', () => {
     });
     const actions = harness.getMessageActions(staleMessage);
 
-    actions.onReact?.({ message: liveMessage, emoji: '👍' });
+    await actions.onReact?.({ message: liveMessage, emoji: '👍' });
 
     expect(harness.removeReaction).toHaveBeenCalledTimes(1);
     expect(harness.addReaction).not.toHaveBeenCalled();
   });
 
-  it('preserves bound thread context when reacting to a thread reply', () => {
+  it('preserves bound thread context when reacting to a thread reply', async () => {
     const harness = buildHarness({ userId: 'user-1' });
     const boundReply = buildMessage({
       id: 'reply-1',
@@ -89,7 +114,7 @@ describe('createChannelMessageActions', () => {
     });
     const actions = harness.getMessageActions(boundReply);
 
-    actions.onReact?.({ message: liveReply, emoji: '👍' });
+    await actions.onReact?.({ message: liveReply, emoji: '👍' });
 
     expect(harness.addReaction).toHaveBeenCalledTimes(1);
     expect(harness.addReaction).toHaveBeenCalledWith({
@@ -102,7 +127,7 @@ describe('createChannelMessageActions', () => {
     });
   });
 
-  it('exposes reply action for thread replies', () => {
+  it('exposes reply action for thread replies', async () => {
     const onReply = vi.fn();
     const harness = buildHarness({ userId: 'user-1', onReply });
     const reply = buildMessage({
@@ -111,7 +136,7 @@ describe('createChannelMessageActions', () => {
     });
     const actions = harness.getMessageActions(reply);
 
-    actions.onReply?.({ message: reply });
+    await actions.onReply?.({ message: reply });
 
     expect(onReply).toHaveBeenCalledWith({ message: reply });
   });

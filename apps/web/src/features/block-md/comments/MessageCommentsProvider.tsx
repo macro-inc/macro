@@ -20,6 +20,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useParamNavigationCount } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
+import { onElementConnect } from '@core/util/onElementConnect';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
 import {
@@ -535,6 +536,10 @@ export const MessageCommentsProvider: VoidComponent<{
     const commentId = target.messageId() ?? undefined;
     if (!commentId) return;
     if (!commentState.commentMarksInitialized) return;
+    // Marks are published during Lexical initialization, before its initial
+    // selection and layout have settled. Keep the navigation pending until
+    // the editor is ready to honor it.
+    if (!state.editor.md.locationReady) return;
 
     const commentThreads = commentThreadsData() ?? [];
     const targetThread = commentThreads.find(
@@ -554,14 +559,17 @@ export const MessageCommentsProvider: VoidComponent<{
     const comment =
       commentsStore.get[commentId] ?? commentsStore.get[target.rootId() ?? ''];
     if (!comment) return;
-    setHighlightedId(commentId);
     const mark = marks[comment.anchorId];
-    if (mark) {
-      const firstEl = Object.values(mark.markNodes)[0];
-      firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    activeCommentThreadSignal.set(comment.threadId);
-    handledNavigation = navigation;
+    const firstEl = Object.values(mark?.markNodes ?? {}).find(
+      (element) => element !== undefined
+    );
+    if (!firstEl) return;
+    onElementConnect(firstEl, () => {
+      handledNavigation = navigation;
+      setHighlightedId(commentId);
+      firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      activeCommentThreadSignal.set(comment.threadId);
+    });
   });
 
   autoRegister(

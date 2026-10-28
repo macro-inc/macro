@@ -125,10 +125,15 @@ where
             let repo = self.memory_repo.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();
+            let deferred = self.tools.deferred.clone();
             let prompt: Box<dyn std::fmt::Display + Send + Sync> =
                 Box::new(self.tools.prompt.to_string());
             tokio::spawn(async move {
-                let tools = ToolSetWithPrompt { toolset, prompt };
+                let tools = ToolSetWithPrompt {
+                    toolset,
+                    prompt,
+                    deferred,
+                };
                 let svc = MemoryServiceImpl::new(repo, tool_context, tools);
                 match svc.generate_memory(user.clone(), previous_memory).await {
                     Ok(_) => tracing::info!(%user, "memory generated"),
@@ -166,8 +171,9 @@ where
 
         let agent_loop =
             AgentLoop::new(self.tool_context.recorder.clone()).with_model(GENERATION_MODEL);
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
-            self.tools.toolset.clone() as _;
+        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
+            ai_tools::DeferredToolSet::new(self.tools.toolset.clone(), self.tools.deferred.clone()),
+        );
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user.clone());
         // Carry the feature on the context so tool-spawned subagents attribute to it.
         let mut tool_context = self.tool_context.clone();

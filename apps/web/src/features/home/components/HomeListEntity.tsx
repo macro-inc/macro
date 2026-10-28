@@ -1,15 +1,20 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
+import { entityIsMuted } from '@entity/utils/notification';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
 import { getNotificationAgentSender } from '@notifications/notification-sender';
+import { getCalendarJoinRequestNotification } from '@notifications/row-notification';
 import type { UnifiedNotification } from '@notifications/types';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
@@ -29,7 +34,13 @@ export function HomeListEntity(props: HomeListEntityProps) {
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
     getDocumentCommentNotification(props.entity);
+  // A calendar event someone asked to join says who asked, like a comment.
+  const joinRequestNotification = () =>
+    getCalendarJoinRequestNotification(props.entity);
   const unread = () => unreadFilterFn(props.entity);
+  const notificationSource = useGlobalNotificationSource();
+  const muted = () =>
+    entityIsMuted(notificationSource.mutedEntities(), props.entity);
 
   return (
     <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
@@ -61,6 +72,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     <ChatTeardropIcon class="size-4" />
                   </ViewSidebar.Icon>
                 </Match>
+                <Match when={joinRequestNotification()}>
+                  <ViewSidebar.Icon>
+                    <UserPlusIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                </Match>
               </Switch>
               <span
                 class={cn(
@@ -86,9 +102,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                       />
                     )}
                   </Match>
-                  <Match when={commentNotification()}>
+                  <Match
+                    when={commentNotification() ?? joinRequestNotification()}
+                  >
                     {(notification) => (
-                      <HomeCommentTitle
+                      <HomeNotificationTitle
                         entity={props.entity}
                         notification={notification()}
                       />
@@ -96,6 +114,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   </Match>
                 </Switch>
               </span>
+              <ChannelMutedIndicator muted={muted()} class="size-3.5" />
               <span
                 data-home-timestamp
                 class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"
@@ -140,17 +159,29 @@ function HomeThreadTitle(
     const entity = props.entity;
     if (entity.type !== 'channel_thread') return undefined;
     const notification = entity.notifications?.()?.[0];
-    if (
-      notification?.notification_metadata?.tag === 'channel_message_reply' &&
-      notification.sender_id
-    ) {
-      return { id: notification.sender_id };
+    if (notification) {
+      // The row's scoped notifications also include document mentions and
+      // reactions; none should fall back to the thread's original author.
+      const content = notification.notification_metadata.content;
+      return {
+        id: notification.sender_id,
+        displayName:
+          'senderDisplayName' in content
+            ? content.senderDisplayName
+            : undefined,
+        details: undefined,
+      };
     }
-    return { id: entity.senderId, details: entity.sender };
+    return {
+      id: entity.senderId,
+      displayName: undefined,
+      details: entity.sender,
+    };
   };
   const senderLabel = () => {
     const value = sender();
     if (!value) return 'Someone';
+    if (!value.id) return value.displayName?.trim() || 'Someone';
     if (value.id === currentUserId()) return 'You';
     return (
       getBotDisplayName(value.id, value.details) ||
@@ -175,7 +206,7 @@ function HomeThreadTitle(
   );
 }
 
-function HomeCommentTitle(props: {
+function HomeNotificationTitle(props: {
   entity: HomeListEntityProps['entity'];
   notification: UnifiedNotification;
 }) {
@@ -193,6 +224,7 @@ function HomeCommentTitle(props: {
     match(props.notification.notification_metadata.tag)
       .with('mentioned_in_document_comment', () => ' mentioned you on ')
       .with('replied_to_document_comment_thread', () => ' replied on ')
+      .with('calendar_event_join_request', () => ' asked to join ')
       .otherwise(() => ' commented on ');
   return (
     <span class="flex min-w-0 items-center">

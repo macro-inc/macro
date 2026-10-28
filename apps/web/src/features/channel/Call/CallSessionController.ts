@@ -1,8 +1,9 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import type { CallTokenResponse } from '@service-call/client';
 import type { NativeCallState } from './native-call-state';
 import {
   endCallKitCall,
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
   startNativeCallKitOutgoingCall,
   syncNativeCallStateAfterLeave,
 } from './use-callkit';
@@ -32,6 +33,10 @@ export type CallSessionConnectMetadata = {
   channelTitle?: string | null;
   microphoneEnabled?: boolean;
   cameraEnabled?: boolean;
+  microphoneDeviceId?: string;
+  cameraDeviceId?: string;
+  speakerDeviceId?: string;
+  backgroundEffect?: BackgroundEffect;
   /** Session-owned tracks: reuse without prompting again, or stop if unused. */
   localTracks?: CallPrejoinTracks;
   /** Public meeting pages use the browser media controls on every platform. */
@@ -55,7 +60,7 @@ export function createCallSessionController(
   options: CallSessionControllerOptions
 ): CallSessionController {
   const browser = createJsLivekitSessionController(options);
-  if (isNativeIosCallKitEnabled()) {
+  if (isNativeCallEnabled()) {
     if (!options.nativeCall) {
       throw new Error(
         'Native call state is required for iOS CallKit call sessions'

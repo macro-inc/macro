@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET warnings = array_append(warnings, $3)\n               WHERE job_id = $1 AND slack_channel_id = $2 AND NOT ($3 = ANY(warnings))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "597cb5e7c59b50d224cf1588235a833d782e6bb4185c949757584d790e0fe56d"
+}

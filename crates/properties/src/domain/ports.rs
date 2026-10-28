@@ -4,6 +4,7 @@
 //! Implementations live in the outbound module.
 
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::EntityType as AccessEntityType;
@@ -92,6 +93,43 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         options: Vec<PropertyOption>,
     ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
 
+    /// Create a definition owned by a database, outside the shared user/team namespace.
+    /// The calling database domain service owns authorization and column-type policy.
+    fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// A definition a user may bind as a column of `database_id`: a system
+    /// one, their own, one of their teams', or one the database owns.
+    /// `None` for anything else, including a missing definition.
+    fn get_bindable_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// The definitions among `property_definition_ids` a user may change:
+    /// their own, or one of their teams'. Never a system one, nor one a
+    /// database owns, whose changes are that database's to authorize.
+    fn get_editable_property_definition_ids(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Definitions by id with their options, database-owned ones included.
+    /// Missing ids are skipped; authorization is the caller's.
+    fn get_property_definitions_with_options(
+        &self,
+        property_definition_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
     /// Delete a property definition and all associated data (cascades).
     /// A no-op if the definition doesn't exist.
     fn delete_property_definition(
@@ -111,6 +149,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
+
+    /// Read options for requested system, caller-owned, or caller-team definitions.
+    /// Missing or inaccessible definitions are omitted; visible definitions with no options remain.
+    fn get_visible_property_options_batch<'a>(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err>> + Send;
 
     /// Create a new property option.
     fn create_property_option(
@@ -223,6 +270,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
+
+    /// Append entity references atomically while preserving current references.
+    /// Duplicates are ignored and the snapshot captures the locked previous value.
+    fn add_entity_property_references(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        references: Vec<EntityReference>,
     ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
@@ -458,4 +515,16 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Initiative-owned sharing operations required when assigning a project.
+/// The implementation keeps grants on the initiative and its description in
+/// sync while leaving the owning initiative service in charge of sharing side effects.
+pub trait InitiativeAssigneeService: std::fmt::Debug + Send + Sync + 'static {
+    /// Grant assignees edit access, preserving existing grants when cleared.
+    fn grant_assignees<'a>(
+        &'a self,
+        access: &'a EditReceipt,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), super::error::PropertiesErr>> + Send + 'a>>;
 }

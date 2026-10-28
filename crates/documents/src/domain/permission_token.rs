@@ -1,9 +1,13 @@
 //! Helpers for issuing document permission tokens (signed JWTs) used by the
 //! sync service to authorize document access.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::DocumentError;
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -50,6 +54,25 @@ pub fn encode_permission_token(
         },
         jwt_secret,
     )?)
+}
+
+/// Sign a document permission token for `principal`.
+///
+/// A bot principal is the token's actor. A team bot acts for no user, so its
+/// token carries no user id.
+pub fn encode_principal_permission_token(
+    principal: &CreationPrincipal,
+    document_id: String,
+    access_level: AccessLevel,
+    jwt_secret: &str,
+) -> Result<DocumentPermissionToken, DocumentError> {
+    encode_permission_token(
+        principal.user().map(|user| user.as_ref().to_string()),
+        document_id,
+        access_level,
+        jwt_secret,
+        principal.bot().map(|bot| bot.into_storage_id().to_string()),
+    )
 }
 
 /// Read claims from a token minted by [`encode_permission_token`].

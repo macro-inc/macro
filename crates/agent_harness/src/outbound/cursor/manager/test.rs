@@ -7,6 +7,7 @@ use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_session::domain::coding_preferences::CodingPreferences;
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
     AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
@@ -68,6 +69,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the manager never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,
@@ -95,8 +100,10 @@ impl AgentSessionRepo for StubSessions {
                 .as_ref()
                 .map(|_| "https://github.com/macro-inc/macro".into()),
             pull_request_url: None,
+            task_id: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -110,6 +117,8 @@ impl AgentSessionRepo for StubSessions {
             status: SessionStatus::NoMessages,
             created_at: chrono::Utc::now(),
             modified_at: chrono::Utc::now(),
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
     }
 
@@ -152,8 +161,32 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never sets models")
     }
 
+    async fn set_origin(
+        &self,
+        _id: AgentSessionId,
+        _source: agent_session::domain::model::SessionSource,
+        _visibility: agent_session::domain::model::SessionVisibility,
+    ) -> SessionResult<()> {
+        unimplemented!("the manager never records origins")
+    }
+
     async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
         unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_turn_prompter(
+        &self,
+        _id: AgentSessionId,
+        _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn turn_prompter(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Option<agent_session::domain::model::TurnPrompter>> {
+        unimplemented!("this adapter does not dispatch turns")
     }
 
     async fn set_repo_url(
@@ -176,7 +209,28 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
+    }
+
+    async fn is_current_conversation_session(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        unimplemented!("archiving sessions is the harness service's job")
+    }
+
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn generated_name(&self, _id: AgentSessionId) -> SessionResult<Option<String>> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn replace_generated_name(
+        &self,
+        _id: AgentSessionId,
+        _current: &str,
+        _name: &str,
+    ) -> SessionResult<bool> {
         unimplemented!("naming sessions is the session actor's job")
     }
 
@@ -197,6 +251,21 @@ impl AgentSessionRepo for StubSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> SessionResult<CodingPreferences> {
+        unimplemented!("coding preferences are read when a session opens")
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _preferences: CodingPreferences,
+    ) -> SessionResult<()> {
+        unimplemented!("coding preferences are read when a session opens")
     }
 
     async fn list_queued_actions(
@@ -430,25 +499,28 @@ impl CursorApiKeys for UnavailableKeys {
     }
 }
 
-/// A user who reaches no repository through the GitHub App: the chooser
-/// short-circuits on an empty listing, so these tests drive the whole spawn
+/// A user who reaches one repository through the GitHub App: the chooser
+/// short-circuits on a single candidate, so these tests drive the whole spawn
 /// path without a model call.
-struct NoRepositories;
+struct OneRepository;
 
 #[async_trait::async_trait]
-impl ReachableRepositories for NoRepositories {
+impl ReachableRepositories for OneRepository {
     async fn for_user(
         &self,
         _user: &MacroUserIdStr<'_>,
     ) -> Result<Vec<crate::domain::model::ReachableRepository>> {
-        Ok(Vec::new())
+        Ok(vec![crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".into(),
+            default_branch: Some("main".into()),
+        }])
     }
 }
 
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+) -> CursorContainerManager<StubSessions, StubKeys, OneRepository, NoArtifactStore> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
@@ -456,12 +528,12 @@ fn manager_with_keys<Keys: CursorApiKeys>(
     base_url: String,
     sessions: StubSessions,
     keys: Keys,
-) -> CursorContainerManager<StubSessions, Keys, NoRepositories, NoArtifactStore> {
+) -> CursorContainerManager<StubSessions, Keys, OneRepository, NoArtifactStore> {
     CursorContainerManager::with_memory_journal(
         keys,
         base_url,
         sessions,
-        Arc::new(NoRepositories),
+        Arc::new(OneRepository),
         NoArtifactStore,
     )
 }
@@ -840,6 +912,48 @@ fn a_pipe_is_not_idle_while_a_command_is_pending() {
     assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
 }
 
+/// The warning for a pipe kept open past its deadline: silent for the first
+/// half hour a turn holds it, then once per half hour after, and re-armed
+/// as soon as the pipe is either free or active again.
+#[test]
+fn a_pipe_held_open_past_its_deadline_warns_once_per_interval() {
+    let minute = std::time::Duration::from_secs(60);
+    let armed = HELD_OPEN_WARNING_INTERVAL;
+
+    // Idle but not yet past the deadline, or past it and free: nothing to say.
+    assert_eq!(held_open_warning(minute, true, armed), (false, armed));
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, false, armed),
+        (false, armed)
+    );
+
+    // Held past the deadline, but for less than the interval: not yet.
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, true, armed),
+        (false, armed)
+    );
+    assert_eq!(
+        held_open_warning(armed - minute, true, armed),
+        (false, armed)
+    );
+
+    // The interval reached: warn, and wait a whole interval for the next.
+    let (warn, next) = held_open_warning(armed, true, armed);
+    assert!(warn);
+    assert_eq!(next, armed * 2);
+    assert_eq!(
+        held_open_warning(armed + minute, true, next),
+        (false, next),
+        "the same stretch does not warn on every tick"
+    );
+    let (warn, next) = held_open_warning(armed * 2, true, next);
+    assert!(warn);
+    assert_eq!(next, armed * 3);
+
+    // Activity resumed: the threshold is re-armed for the next stretch.
+    assert_eq!(held_open_warning(minute, true, next), (false, armed));
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]
@@ -1145,53 +1259,53 @@ async fn resume_delivered_session(
 }
 
 /// A run driven from cursor.com while the Macro session sits idle: the mirror
-/// captures it silently and asks the host to reload. The host's standard
-/// `initialize` + `session/load` then shows both runs, a repeated load shows
-/// exactly the same, and the mirror asks for nothing more.
+/// streams it to the host as it happens, the way a turn streams, and
+/// checkpoints it without asking for a reload. Every frame is traffic on the
+/// pipe, so the idle reaper sees the run as the activity it is. A later
+/// load shows both runs, and the mirror finds nothing more.
 #[tokio::test]
-async fn an_idle_foreign_run_is_recovered_through_a_client_load() {
+async fn an_idle_foreign_run_streams_live_to_the_host() {
     let (base_url, _, _) = fake_cursor_api().await;
     let (sender, mut receiver, before) = resume_delivered_session(base_url, "bc-idle").await;
     assert_eq!(count(&before, "/method", "_session/turn_complete"), 1);
 
-    let idle = collect_until(&mut receiver, |message| message == "reload_required").await;
-    assert_eq!(
-        idle.len(),
-        1,
-        "an idle mirror asks for a reload and publishes no frames: {idle:?}"
+    let live = collect_until(&mut receiver, |message| {
+        message.pointer("/params/_meta/macroCursorRunCheckpoint")
+            == Some(&serde_json::json!("run-foreign"))
+    })
+    .await;
+    assert!(
+        !live.iter().any(|message| message == "reload_required"),
+        "a streamed run needs no reload: {live:?}"
     );
-
-    let recovered = reload(&sender, &mut receiver, 3).await;
     assert_eq!(
-        count(&recovered, "/method", "_session/turn_complete"),
+        count(&live, "/params/update/sessionUpdate", "user_message_chunk"),
+        1,
+        "the cursor.com prompt streams with its run: {live:?}"
+    );
+    assert_eq!(count(&live, "/method", "_session/turn_complete"), 1);
+
+    let loaded = reload(&sender, &mut receiver, 3).await;
+    assert_eq!(
+        count(&loaded, "/method", "_session/turn_complete"),
         2,
-        "both runs are history: {recovered:?}"
+        "both runs are history: {loaded:?}"
     );
     assert_eq!(
         count(
-            &recovered,
+            &loaded,
             "/params/update/sessionUpdate",
             "user_message_chunk"
         ),
         2
     );
-    assert!(
-        recovered.len() > before.len(),
-        "history grows, it is not replaced"
-    );
 
-    let again = reload(&sender, &mut receiver, 5).await;
-    assert_eq!(
-        again, recovered,
-        "a repeated load replays the same history once"
-    );
-
-    // Two further mirror ticks pass without another reload: what was loaded
-    // is checkpointed, not rediscovered.
+    // Two further mirror ticks pass quietly: the streamed run is
+    // checkpointed, not rediscovered.
     let quiet = tokio::time::timeout(std::time::Duration::from_millis(2500), receiver.recv()).await;
     assert!(
         quiet.is_err(),
-        "nothing more may arrive after recovery, got {quiet:?}"
+        "nothing more may arrive after the run, got {quiet:?}"
     );
 }
 

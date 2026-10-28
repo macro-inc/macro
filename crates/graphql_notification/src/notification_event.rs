@@ -1,17 +1,37 @@
 //! Typed GraphQL output models for realtime notification event metadata.
 
+mod external_chat;
+use external_chat::GraphqlExternalChatMessageMetadata;
+
+/// Schema-only stub for released clients; remove after 2026-11-30.
+mod whatsapp_group_stub;
+use whatsapp_group_stub::GraphqlWhatsappGroupMessageMetadata;
+
+/// Project discussion notification metadata.
+mod initiative_discussion;
+pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
+
+/// CRM company and contact discussion notification metadata.
+mod crm_discussion;
+pub use crm_discussion::GraphqlCrmDiscussionMetadata;
+
+/// Request to join a channel-shared calendar event notification metadata.
+mod calendar_join_request;
+pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
+
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, DocumentMentionMetadata,
-    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
-    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InviteToTeamMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
-    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -560,6 +580,44 @@ impl GraphqlChannelMessageSendMetadata {
     /// Whether the message has attachments.
     async fn has_attachments(&self) -> bool {
         self.0.has_attachments
+    }
+
+    /// Channel metadata.
+    #[graphql(flatten)]
+    async fn channel(&self) -> GraphqlChannelNotificationCommon {
+        GraphqlChannelNotificationCommon(self.0.common.clone())
+    }
+
+    /// Sender profile-picture URL.
+    async fn sender_profile_picture_url(&self) -> Option<&str> {
+        self.0.sender_profile_picture_url.as_deref()
+    }
+}
+
+/// GraphQL wrapper for channel message reaction metadata.
+pub struct GraphqlChannelMessageReactionMetadata(ChannelMessageReactionMetadata);
+
+/// Metadata for a reaction to a channel message.
+#[Object]
+impl GraphqlChannelMessageReactionMetadata {
+    /// Reacted-to message identifier.
+    async fn message_id(&self) -> &str {
+        &self.0.message_id
+    }
+
+    /// Root thread identifier when the message is a reply.
+    async fn thread_id(&self) -> Option<&str> {
+        self.0.thread_id.as_deref()
+    }
+
+    /// Reacted-to message content.
+    async fn message_content(&self) -> &str {
+        &self.0.message_content
+    }
+
+    /// Emoji added by the reactor.
+    async fn emoji(&self) -> &str {
+        &self.0.emoji
     }
 
     /// Channel metadata.
@@ -1187,6 +1245,12 @@ impl GraphqlAgentSessionMentionedMetadata {
 /// Typed GraphQL union containing every supported notification event payload.
 #[derive(Union)]
 pub enum GraphqlNotifEvent {
+    /// A new live external chat message.
+    ExternalChatMessage(GraphqlExternalChatMessageMetadata),
+    /// Shared access workflow.
+    EntityAccessGranted(GraphqlEntityAccessGrantedMetadata),
+    /// Shared access workflow.
+    EntityAccessRequested(GraphqlEntityAccessRequestedMetadata),
     /// Channel mention metadata.
     ChannelMention(GraphqlChannelMentionMetadata),
     /// Document mention metadata.
@@ -1197,10 +1261,16 @@ pub enum GraphqlNotifEvent {
     RepliedToDocumentCommentThread(GraphqlRepliedToDocumentCommentThreadMetadata),
     /// Document comment metadata.
     CommentedOnDocument(GraphqlCommentedOnDocumentMetadata),
+    /// Project discussion metadata.
+    InitiativeDiscussion(GraphqlInitiativeDiscussionMetadata),
+    /// CRM company or contact discussion metadata.
+    CrmDiscussion(GraphqlCrmDiscussionMetadata),
     /// Channel invitation metadata.
     ChannelInvite(GraphqlChannelInviteMetadata),
     /// Channel message metadata.
     ChannelMessageSend(GraphqlChannelMessageSendMetadata),
+    /// Channel message reaction metadata.
+    ChannelMessageReaction(GraphqlChannelMessageReactionMetadata),
     /// Channel reply metadata.
     ChannelMessageReply(GraphqlChannelReplyMetadata),
     /// Started-call metadata.
@@ -1237,13 +1307,26 @@ pub enum GraphqlNotifEvent {
     AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
     /// Agent session mention metadata.
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
+    /// Calendar event join request metadata.
+    CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Schema-only stub for released clients. Never returned.
+    WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
     fn from(value: NotifEvent) -> Self {
         match value {
+            NotifEvent::ExternalChatMessage(metadata) => {
+                Self::ExternalChatMessage(GraphqlExternalChatMessageMetadata(metadata))
+            }
             NotifEvent::ChannelMention(metadata) => {
                 Self::ChannelMention(GraphqlChannelMentionMetadata(metadata))
+            }
+            NotifEvent::EntityAccessRequested(metadata) => {
+                Self::EntityAccessRequested(GraphqlEntityAccessRequestedMetadata(metadata))
+            }
+            NotifEvent::EntityAccessGranted(metadata) => {
+                Self::EntityAccessGranted(GraphqlEntityAccessGrantedMetadata(metadata))
             }
             NotifEvent::DocumentMention(metadata) => {
                 Self::DocumentMention(GraphqlDocumentMentionMetadata(metadata))
@@ -1259,11 +1342,21 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::CommentedOnDocument(metadata) => {
                 Self::CommentedOnDocument(GraphqlCommentedOnDocumentMetadata(metadata))
             }
+            NotifEvent::InitiativeDiscussion(metadata) => {
+                Self::InitiativeDiscussion(metadata.into())
+            }
+            NotifEvent::CrmDiscussion(metadata) => Self::CrmDiscussion(metadata.into()),
+            NotifEvent::CalendarEventJoinRequest(metadata) => {
+                Self::CalendarEventJoinRequest(metadata.into())
+            }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))
             }
             NotifEvent::ChannelMessageSend(metadata) => {
                 Self::ChannelMessageSend(GraphqlChannelMessageSendMetadata(metadata))
+            }
+            NotifEvent::ChannelMessageReaction(metadata) => {
+                Self::ChannelMessageReaction(GraphqlChannelMessageReactionMetadata(metadata))
             }
             NotifEvent::ChannelMessageReply(metadata) => {
                 Self::ChannelMessageReply(GraphqlChannelReplyMetadata(metadata))
@@ -1315,6 +1408,70 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::AgentSessionMentioned(metadata) => {
                 Self::AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata(metadata))
             }
+        }
+    }
+}
+
+/// Shared entity access notification metadata.
+pub struct GraphqlEntityAccessRequestedMetadata(model_notifications::EntityAccessRequestedMetadata);
+
+/// Metadata for a request to view, comment on, or edit a shared item.
+#[Object]
+impl GraphqlEntityAccessRequestedMetadata {
+    /// Stable access request id.
+    async fn request_id(&self) -> ID {
+        ID(self.0.request_id.to_string())
+    }
+    /// Request revision.
+    async fn revision(&self) -> i32 {
+        self.0.revision
+    }
+    /// Entity display name.
+    async fn entity_name(&self) -> &str {
+        &self.0.entity_name
+    }
+    /// Document file extension, when applicable.
+    async fn file_type(&self) -> Option<&str> {
+        self.0.file_type.as_deref()
+    }
+    /// Requested or granted access.
+    async fn access_level(&self) -> &str {
+        match self.0.access_level {
+            model_notifications::RequestedAccessLevel::View => "view",
+            model_notifications::RequestedAccessLevel::Comment => "comment",
+            model_notifications::RequestedAccessLevel::Edit => "edit",
+        }
+    }
+}
+
+/// Shared entity access notification metadata.
+pub struct GraphqlEntityAccessGrantedMetadata(model_notifications::EntityAccessGrantedMetadata);
+
+/// Metadata for an approved access request and its granted permission.
+#[Object]
+impl GraphqlEntityAccessGrantedMetadata {
+    /// Stable access request id.
+    async fn request_id(&self) -> ID {
+        ID(self.0.request_id.to_string())
+    }
+    /// Request revision.
+    async fn revision(&self) -> i32 {
+        self.0.revision
+    }
+    /// Entity display name.
+    async fn entity_name(&self) -> &str {
+        &self.0.entity_name
+    }
+    /// Document file extension, when applicable.
+    async fn file_type(&self) -> Option<&str> {
+        self.0.file_type.as_deref()
+    }
+    /// Requested or granted access.
+    async fn access_level(&self) -> &str {
+        match self.0.access_level {
+            model_notifications::RequestedAccessLevel::View => "view",
+            model_notifications::RequestedAccessLevel::Comment => "comment",
+            model_notifications::RequestedAccessLevel::Edit => "edit",
         }
     }
 }

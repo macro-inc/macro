@@ -1,13 +1,16 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import CreateIcon from '@phosphor/note-pencil.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import type { Placement } from '@floating-ui/dom';
+import CreateIcon from '@icon/system/regular/note-pencil.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createSignal,
   For,
@@ -16,6 +19,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { APP_TOUR } from './tour';
 
 export type SidebarCreateMenuProps = {
   /** Only read by the built-in `row` variant, for its tooltip. */
@@ -31,12 +35,14 @@ export type SidebarCreateMenuProps = {
    */
   trigger?: ValidComponent;
   onMenuOpenChange?: (open: boolean) => void;
+  placement?: Placement;
 };
 
 export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const blocks = useCreateMenuBlocks();
+  let selectedAction: (() => void) | undefined;
 
   const isSlim = () => props.isSlim?.() ?? false;
 
@@ -47,6 +53,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     setOpen(nextOpen);
     props.onMenuOpenChange?.(nextOpen);
     if (nextOpen) {
+      selectedAction = undefined;
       setActiveScope(CREATE_MENU_COMMAND_SCOPE);
     } else {
       activateClosestDOMScope();
@@ -83,17 +90,18 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
     )
       return false;
 
+    selectedAction = () => matchingBlock.keyDownHandler(context.event);
     setOpen(false);
-    matchingBlock.keyDownHandler?.(context.event);
     activateClosestDOMScope();
     return true;
   });
 
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
     <Dropdown
       open={open()}
       onOpenChange={handleOpenChange}
-      placement="right-start"
+      placement={props.placement ?? 'right-start'}
       gutter={8}
     >
       <Show
@@ -103,13 +111,17 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                aria-label={t('create.create')}
+                tooltip={{
+                  content: t('create.create'),
+                  placement: 'right',
+                  disabled: !isSlim(),
+                  hotkey: TOKENS.global.createCommand,
+                }}
+                ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
-                tooltipPlacement="right"
-                tooltipDisabled={!isSlim()}
-                label="Create"
-                hotkey={TOKENS.global.createCommand}
                 onMouseDown={(e: MouseEvent) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
@@ -119,7 +131,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
                   <PlusIcon class="size-4" />
                 </div>
                 <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-                  Create
+                  {t('create.create')}
                 </span>
                 <Show when={open()}>
                   <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
@@ -133,25 +145,29 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              aria-label={t('create.create')}
+              tooltip={{
+                content: t('create.create'),
+                hotkey: TOKENS.global.createCommand,
+              }}
+              ref={createMenuTarget}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
-              depth={1}
-              class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
-              label="Create"
-              hotkey={TOKENS.global.createCommand}
+              class="size-[26px] bg-surface shadow-md shadow-drop-shadow"
               onMouseDown={(e: MouseEvent) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
               }}
             >
-              <CreateIcon />
+              <CreateIcon class="size-4 shrink-0" />
             </Dropdown.Trigger>
           </Show>
         }
       >
         {(trigger) => (
           <Dropdown.Trigger
+            ref={createMenuTarget}
             as={trigger()}
             // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
             // `as={Button}` and spreads props after them, so both leak into a
@@ -163,15 +179,24 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
         )}
       </Show>
 
-      <Dropdown.Content class="min-w-52">
+      <Dropdown.Content
+        class="min-w-52"
+        onCloseAutoFocus={(event) => {
+          if (!selectedAction) return;
+          event.preventDefault();
+          // Finish the menu's focus restoration before opening the composer.
+          queueMicrotask(selectedAction);
+          selectedAction = undefined;
+        }}
+      >
         <Dropdown.Group>
           <For each={blocks()}>
             {(block) => (
               <Dropdown.Item
                 class="min-h-9 gap-2 px-2.5"
                 onSelect={() => {
+                  selectedAction = () => block.keyDownHandler();
                   setOpen(false);
-                  block.keyDownHandler();
                 }}
               >
                 <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">

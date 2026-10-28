@@ -91,6 +91,9 @@ pub struct DocumentUpdatedMetadata {
 pub struct DocumentDeletedMetadata {
     /// The id of the deleted document.
     pub document_id: String,
+    /// Subtype captured before deletion, so consumers can distinguish tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
     /// The authenticated user who deleted the document; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
@@ -224,6 +227,13 @@ pub struct DocumentCopiedMetadata {
     /// The principal who owns the new copy.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner: Owner,
+    /// Who mechanically created the copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this copy belongs on, when different from the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// The name of the new document.
     pub document_name: String,
     /// File type of the document, when known.

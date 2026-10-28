@@ -4,7 +4,7 @@ on:
     types: [released]
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-production
   cancel-in-progress: false
 
 env:
@@ -12,6 +12,7 @@ env:
 
 jobs:
   deploy-cloud-storage:
+    if: github.event_name == 'release'
     name: Deploy Cloud Storage Services
     uses: ./.github/workflows/deploy_all_services.yml
     with:
@@ -44,7 +45,20 @@ jobs:
       environment: prod
     secrets: inherit
 
+  deploy-website:
+    if: github.event_name == 'release'
+    name: Deploy Website
+    # Also owns the macro.com CloudFront distribution in front of the web app.
+    uses: ./.github/workflows/deploy_website.yml
+    with:
+      environment: prod
+    secrets:
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
   build:
+    if: github.event_name == 'release'
     name: Build Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
@@ -69,6 +83,8 @@ jobs:
       - name: Build for Production
         working-directory: apps/web
         run: just build-prod
+        # MIN_NATIVE_BUILD_ANDROID / MIN_NATIVE_BUILD_IOS come from
+        # apps/web/min-native-build.json inside `just build-prod`.
         env:
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
           VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}

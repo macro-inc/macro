@@ -1,8 +1,15 @@
+import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
-import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
@@ -18,7 +25,10 @@ import {
 function ConfiguredSoupEntityActionDrawer() {
   const panel = useSplitPanelOrThrow();
   const drawerState = useSoupEntityActionDrawer();
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups } = createSoupEntityActions({
+    markDoneDelegate: () => drawerState?.entry()?.markDoneDelegate?.(),
+  });
+  const [projectTasks, setProjectTasks] = createSignal<string[]>();
 
   if (!drawerState) {
     console.warn('SoupEntityActionDrawer: no drawer state');
@@ -32,25 +42,42 @@ function ConfiguredSoupEntityActionDrawer() {
     const content = panel.handle.content();
     return buildActionGroups(entry.list, [entry.entity], {
       viewContext: entry.viewContext,
-      viewedProjectId: viewedProjectIdFromContent(content),
+      viewedProjectId:
+        entry.viewedProjectId ?? viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
+      createActionNavigationHandler: entry.createActionNavigationHandler,
+      openProjectPicker: () => {
+        const ids = [entry.entity.id];
+        drawerState.close();
+        setProjectTasks(ids);
+      },
     });
   };
 
   return (
-    <SoupEntityActionDrawer
-      entity={drawerState.entry()?.entity}
-      groups={groups()}
-      open={drawerState.isOpen()}
-      onOpenChange={(open) => {
-        if (!open) drawerState.close();
-      }}
-      beforeAction={(action, trigger) => {
-        if (action.id !== 'share') return;
+    <>
+      <SoupEntityActionDrawer
+        entity={drawerState.entry()?.entity}
+        groups={groups()}
+        open={drawerState.isOpen()}
+        onOpenChange={(open) => {
+          if (!open) drawerState.close();
+        }}
+        beforeAction={(action, trigger) => {
+          if (action.id !== 'share') return;
 
-        triggerFocusInput(getShareDrawerRecipientInput, trigger);
-      }}
-    />
+          triggerFocusInput(getShareDrawerRecipientInput, trigger);
+        }}
+      />
+      <Show when={projectTasks()}>
+        {(ids) => (
+          <ProjectAssignmentDialog
+            taskIds={ids()}
+            onClose={() => setProjectTasks(undefined)}
+          />
+        )}
+      </Show>
+    </>
   );
 }
 

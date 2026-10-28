@@ -39,11 +39,16 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   static_file: 'STATIC_FILE',
   crm_company: 'CRM_COMPANY',
   crm_contact: 'CRM_CONTACT',
+  crm_pipeline: 'CRM_PIPELINE',
   reminder: 'REMINDER',
   skill: 'SKILL',
   agent_session: 'AGENT_SESSION',
   scheduled_action: 'SCHEDULED_ACTION',
   initiative: 'INITIATIVE',
+  database: 'DATABASE',
+  database_row: 'DATABASE_ROW',
+  form: 'FORM',
+  external_chat: 'EXTERNAL_CHAT',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -55,9 +60,13 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   CHAT: 'chat',
   CRM_COMPANY: 'crm_company',
   CRM_CONTACT: 'crm_contact',
+  CRM_PIPELINE: 'crm_pipeline',
+  DATABASE: 'database',
+  DATABASE_ROW: 'database_row',
   DOCUMENT: 'document',
   EMAIL_THREAD: 'email_thread',
   FOREIGN_ENTITY: 'foreign_entity',
+  FORM: 'form',
   INITIATIVE: 'initiative',
   PROJECT: 'project',
   REMINDER: 'reminder',
@@ -66,7 +75,12 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   STATIC_FILE: 'static_file',
   TEAM: 'team',
   USER: 'user',
-} satisfies Record<GraphqlEntityType, FavoriteEntityType>;
+  EXTERNAL_CHAT: 'external_chat',
+} satisfies Record<ReturnedGraphqlEntityType, FavoriteEntityType>;
+
+/** `WHATSAPP_GROUP` is a schema-only stub kept for released clients; the
+ * server never returns it. Remove with it after 2026-11-30. */
+type ReturnedGraphqlEntityType = Exclude<GraphqlEntityType, 'WHATSAPP_GROUP'>;
 
 /** Convert a REST favorite entity type into its GraphQL equivalent. */
 export function toGraphqlFavoriteEntityType(
@@ -78,7 +92,9 @@ export function toGraphqlFavoriteEntityType(
 /** Convert one GraphQL favorite into the shared favorites-list shape. */
 export function mapGraphqlFavorite(
   favorite: FavoriteFieldsFragment
-): Favorite & { id: string } {
+): (Favorite & { id: string }) | undefined {
+  const { entityType } = favorite;
+  if (entityType === 'WHATSAPP_GROUP') return undefined;
   return {
     // urql-solid reconciles lists by id. Preserve it so a mounted row's
     // preview/avatar subscriptions keep pointing at the same entity.
@@ -88,7 +104,7 @@ export function mapGraphqlFavorite(
     createdAt: favorite.createdAt,
     documentSubType: favorite.documentSubType,
     entityId: favorite.entityId,
-    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[favorite.entityType],
+    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[entityType],
     fileType: favorite.fileType,
     sortOrder: favorite.sortOrder,
   };
@@ -110,6 +126,58 @@ export type FavoritesCacheTarget = {
   variables: FavoritesQueryVariables;
   updateCachedList: boolean;
 };
+
+type FavoriteEffects = Extract<
+  SetFavoriteMutation['setFavorite']['result'],
+  { __typename: 'GraphqlMutationSuccess' }
+>['effects'];
+
+function favoriteSoupEffects(
+  args: SetFavoriteArgs,
+  favorite: boolean
+): FavoriteEffects {
+  const typenames = {
+    document: 'GraphqlSoupDocument',
+    project: 'GraphqlSoupProject',
+    reminder: undefined,
+    chat: 'GraphqlSoupChat',
+    channel: 'GraphqlSoupChannel',
+    channel_message: 'GraphqlSoupChannelMessage',
+    email_thread: 'GraphqlSoupEmailThread',
+    calendar_event: 'GraphqlSoupCalendarEvent',
+    call: 'GraphqlSoupCall',
+    crm_company: 'GraphqlSoupCrmCompany',
+    foreign_entity: 'GraphqlSoupForeignEntity',
+    agent_session: 'GraphqlSoupAgentSession',
+    user: undefined,
+    team: undefined,
+    static_file: undefined,
+    crm_contact: undefined,
+    crm_pipeline: undefined,
+    skill: undefined,
+    scheduled_action: undefined,
+    initiative: 'GraphqlSoupInitiative',
+    database: undefined,
+    database_row: undefined,
+    // Forms are not favoritable; the service refuses them.
+    form: undefined,
+    // Standalone groups have no Soup entity.
+    external_chat: undefined,
+  } as const satisfies Record<FavoriteEntityType, string | undefined>;
+  const typename = typenames[args.entityType];
+  return typename
+    ? [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: args.entityId,
+            isFavorited: favorite,
+          },
+        },
+      ]
+    : [];
+}
 
 /** Submit a durable optimistic GraphQL add/remove favorite mutation. */
 export function executeGraphqlSetFavoriteMutation(
@@ -141,7 +209,10 @@ export function executeGraphqlSetFavoriteMutation(
   const optimisticData: SetFavoriteMutation = {
     setFavorite: {
       __typename: 'SetFavoritePayload',
-      result: { __typename: 'GraphqlMutationSuccess' },
+      result: {
+        __typename: 'GraphqlMutationSuccess',
+        effects: favoriteSoupEffects(args, favorite),
+      },
       favorite: favorite ? optimisticFavorite : null,
     },
   };

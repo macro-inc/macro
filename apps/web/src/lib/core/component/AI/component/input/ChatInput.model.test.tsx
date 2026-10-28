@@ -33,6 +33,14 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
+// This suite exercises legacy chat model persistence, including the flag-off Soup input.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+vi.mock('@app/features/agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => null,
+}));
+
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
   useCanAutofocusSplitContent: () => false,
@@ -85,7 +93,13 @@ vi.mock('@core/signal/permissions', () => ({ useCanEdit: () => () => true }));
 vi.mock('@core/util/message-send-motion', () => ({ markMessageSent: vi.fn() }));
 vi.mock('@queries/auth', () => ({ invalidateUserQuota: vi.fn() }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({ withMentions: () => mocks.editor }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => mocks.editor,
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/signal/mention-attachment-callbacks', () => ({
   createMentionAttachmentCallbacks: () => ({}),
@@ -199,11 +213,14 @@ it('preserves a real soup composer selection when creating and opening its first
   });
   const composer = render(() => <SoupChatInput />);
   fireEvent.click(
-    screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
+    screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
   );
-  const dialog = await screen.findByRole('dialog', { name: 'Select model' });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Choose a model' });
+  fireEvent.input(
+    within(dialog).getByRole('textbox', { name: 'Search models' }),
+    { target: { value: 'GPT-5.6' } }
+  );
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-5.6' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(
     screen.getByRole('button', { name: 'Choose model, GPT-5.6' })
@@ -223,7 +240,7 @@ it('preserves a real soup composer selection when creating and opening its first
         {
           chat: {
             id: 'selected-first-chat',
-            model: Model.sonnet5,
+            model: Model.sonnet55,
             messages: [],
           },
         } as unknown as ChatData
@@ -304,23 +321,31 @@ it.each([true, false])(
         <ChatInput variant="default" editor={editor} onSend={onSend} />
       </ChatInputProvider>
     ));
-    const trigger = mobile
-      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
-      : screen.getByRole('button', { name: 'Sonnet 5' });
+    const trigger = screen.getByRole('button', {
+      name: 'Choose model, Sonnet 5.5',
+    });
     if (mobile) fireEvent.click(trigger);
     else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     if (mobile) {
       const dialog = await screen.findByRole('dialog', {
-        name: 'Select model',
+        name: 'Choose a model',
       });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
-      expect(screen.getByTestId('model').textContent).toBe(Model.gpt56);
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+      fireEvent.input(
+        within(dialog).getByRole('textbox', { name: 'Search models' }),
+        { target: { value: 'GPT-5.6' } }
+      );
+      fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-5.6' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     } else {
+      fireEvent.input(
+        await screen.findByRole('textbox', { name: 'Search models' }),
+        { target: { value: 'GPT-5.6' } }
+      );
       fireEvent.keyDown(
-        await screen.findByRole('menuitem', { name: 'GPT-5.6' }),
-        { key: 'Enter' }
+        screen.getByRole('menuitem', { name: /^GPT-5\.6 OpenAI$/ }),
+        {
+          key: 'Enter',
+        }
       );
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }

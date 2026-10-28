@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -12,19 +13,19 @@ import {
   forceSetTextContent,
   initializeEditorEmpty,
   isRectFlushWith,
-  trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createSkill } from '@core/util/create';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import SplitIcon from '@icon/system/regular/square-half.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { mergeRegister } from '@lexical/utils';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import SplitIcon from '@phosphor/square-half.svg';
-import XIcon from '@phosphor/x.svg';
-import { onElementConnect } from '@solid-primitives/lifecycle';
+import { Telemetry } from '@macro-inc/observability';
 import { Button, Hotkey, Scroll } from '@ui';
 import {
   $getRoot,
@@ -103,6 +104,7 @@ function ComposeSkillTitleEditor(props: {
     type: 'title',
     isInteractable: () => !props.disabled(),
   });
+  onCleanup(cleanup);
 
   initializeEditorEmpty(editor);
   forceSetTextContent(editor, props.value());
@@ -160,10 +162,6 @@ function ComposeSkillTitleEditor(props: {
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
     setRootConnected(true);
-    onCleanup(() => {
-      trimWhitespace(editor, { trailing: true });
-      cleanup();
-    });
   };
 
   return (
@@ -302,7 +300,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
 
     const documentId = await submitSkill();
     if (documentId && !props.onSuccess) {
-      showSkillCreatedToast(documentId);
+      await showSkillCreatedToast(documentId);
     }
   };
 
@@ -337,13 +335,16 @@ export function ComposeSkill(props: ComposeSkillProps) {
     scopeId: composeHotkeyScope,
     description: 'Create skill',
     keyDownHandler: () => {
-      handleCreateSkill();
+      handleCreateSkill().catch((error) =>
+        Telemetry.error(error, { surface: 'compose-skill' })
+      );
       return true;
     },
     runWithInputFocused: true,
   });
 
   const editorConfig = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .withMentions()
     .withEmojis()
     .withActions()
@@ -372,24 +373,26 @@ export function ComposeSkill(props: ComposeSkillProps) {
         <div class="flex-1 flex items-center">
           <Show when={splitPanel?.handle.isPopover()}>
             <Button
+              variant="ghost"
               onMouseDown={handleContinueInSplit}
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
               size="icon-sm"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
         <Show when={splitPanel?.handle.isPopover()}>
           <Button
+            variant="ghost"
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
             size="icon-sm"
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>
@@ -434,9 +437,8 @@ export function ComposeSkill(props: ComposeSkillProps) {
         <Button
           onClick={handleCreateSkill}
           disabled={title().trim().length === 0 || isCreating()}
-          variant={title().trim().length === 0 ? 'ghost' : 'accent'}
-          depth={3}
-          class="gap-3 rounded-lg border-0"
+          variant="secondary"
+          class="gap-3"
         >
           Create Skill
           <Hotkey shortcut="cmd+enter" theme="current" />

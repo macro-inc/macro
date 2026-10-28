@@ -15,7 +15,7 @@ mod test;
 /// Namespace's sccache setup mints a short-lived workspace credential. GitHub
 /// withholds repository secrets from fork PRs, but this runner-minted token is
 /// not a `secrets.*` value, so enforce the equivalent trust boundary here.
-const TRUSTED_NAMESPACE_SCCACHE_CONTEXT: &str = concat!(
+pub(crate) const TRUSTED_NAMESPACE_SCCACHE_CONTEXT: &str = concat!(
     "(github.event_name != 'pull_request' && ",
     "github.event_name != 'pull_request_target') || ",
     "github.event.pull_request.head.repo.full_name == github.repository"
@@ -93,16 +93,13 @@ pub fn setup_rust_light() -> Step<Use> {
     .add_with(("rust-cache", "false"))
 }
 
-/// [`setup_rust_light`] plus sccache, for jobs that actually compile something
-/// but do not need the Nix dev shell. Pair with
-/// [`configure_namespace_sccache`] to point the wrapper at the remote cache.
-pub fn setup_rust_sccache() -> Step<Use> {
-    uses_local(
-        "Setup Rust",
-        xtask_paths::repo_dir!(".github/actions/setup-rust"),
-    )
-    .add_with(("sccache", "true"))
-    .add_with(("rust-cache", "false"))
+/// Install Nix on a macOS runner. The Linux [`setup_nix`] action doesn't apply
+/// there, so Apple jobs (DMG signing, the iOS simulator preview) install it
+/// with the same script instead.
+pub fn install_nix_macos() -> Step<Run> {
+    Step::new("Install Nix")
+        .run(include_str!("scripts/install_nix_macos.sh"))
+        .shell("bash")
 }
 
 /// Install + initialise Nix on the runner. Namespace profiles don't ship Nix,
@@ -194,6 +191,13 @@ pub fn mount_cache_volume() -> Step<Use> {
         .add_with(("path", xtask_paths::runtime_path!("/nix").as_str()))
 }
 
+/// Mount only `path` from the profile's cache volume, without a framework
+/// mode. Unlike [`mount_cache_volume`] (`cache: rust` plus `/nix`, ~11 s on
+/// `linux-rust-ci`), a plain path mounts in under a second.
+pub fn mount_path_cache_volume(name: &str, path: RuntimePath<'_>) -> Step<Use> {
+    nscloud_cache_action(name).add_with(("path", path.as_str()))
+}
+
 /// The pinned `nscloud-cache-action`, shared by every mount helper below.
 /// `continue-on-error` because a cache volume is always a pure optimization — a
 /// failure just means cold state, never a wrong build.
@@ -233,14 +237,6 @@ pub fn mount_wasm_cache_volume() -> Step<Use> {
 pub fn configure_namespace_sccache(cache_name: &str) -> Step<Run> {
     namespace_sccache_step(cache_name)
         .if_condition(Expression::new(TRUSTED_NAMESPACE_SCCACHE_CONTEXT))
-}
-
-/// Configure Namespace's remote sccache in a trusted context when
-/// `additional_condition` is also true.
-pub fn configure_namespace_sccache_when(cache_name: &str, additional_condition: &str) -> Step<Run> {
-    namespace_sccache_step(cache_name).if_condition(Expression::new(format!(
-        "({TRUSTED_NAMESPACE_SCCACHE_CONTEXT}) && ({additional_condition})"
-    )))
 }
 
 fn namespace_sccache_step(cache_name: &str) -> Step<Run> {
@@ -297,6 +293,54 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
         })
 }
 
+/// [`mount_web_cache_volume`] plus Vitest's module cache, so the web `Test`
+/// job reuses transforms from earlier runs instead of redoing them all.
+pub fn mount_web_test_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                vars::VITEST_MODULE_CACHE_VOLUME_DIR,
+            ),
+        ))
+}
+
+/// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
+/// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
+/// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the
+/// worker build warm. Compiled objects use Namespace remote sccache.
+pub fn mount_web_build_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            ),
+        ))
+}
+
+/// [`mount_web_build_cache_volume`] plus [`vars::WASM_PKG_CACHE_DIR`], for the PR
+/// build that reuses unchanged wasm packages. Deploy builds always rebuild them.
+pub fn mount_web_build_check_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+                vars::WASM_PKG_CACHE_DIR,
+            ),
+        ))
+}
+
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
 /// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
 /// Requires [`setup_nix`] first.
@@ -306,6 +350,13 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/setup-reqs-web"),
     )
     .when(playwright, |step| step.add_with(("playwright", "true")))
+}
+
+/// Start the server before parallel compiler invocations can race to launch it.
+/// Keep this in a separate step after remote configuration so `GITHUB_ENV`
+/// has supplied the selected backend's credentials to the process.
+pub fn start_sccache_server() -> Step<Run> {
+    Step::new("Start sccache server").run("sccache --start-server")
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).
@@ -408,6 +459,13 @@ pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
 /// desktop builds that delegate entirely to Nix.
 pub fn mount_nix_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
+}
+
+/// macOS cache mounts are symlinks, which Nix does not support for `/nix`.
+/// Persist a file binary cache instead, leaving the live store to the installer.
+pub fn mount_macos_nix_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount macOS Nix binary cache")
+        .add_with(("path", "~/.cache/macro-desktop-nix"))
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.

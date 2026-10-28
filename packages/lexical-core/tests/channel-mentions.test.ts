@@ -6,6 +6,15 @@ function documentMention(id: string, blockName: string): string {
 }
 
 describe('extractChannelMentionsFromMarkdown', () => {
+  it('keeps an expanded database referenced and deduplicates its compact mention', () => {
+    const card =
+      '<m-document-card>{"documentId":"db-1","documentName":"Tasks","blockName":"database"}</m-document-card>';
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${card}\n\n${documentMention('db-1', 'database')}`
+      )
+    ).toEqual([{ entityType: 'database', entityId: 'db-1' }]);
+  });
   it('returns no mentions for plain text', () => {
     expect(extractChannelMentionsFromMarkdown('just some text')).toEqual([]);
   });
@@ -28,6 +37,7 @@ describe('extractChannelMentionsFromMarkdown', () => {
       ['call', 'call'],
       ['calendar', 'calendar_event'],
       ['automation', 'automation'],
+      ['routine', 'automation'],
       ['company', 'crm_company'],
       ['contact', 'crm_contact'],
     ];
@@ -37,6 +47,24 @@ describe('extractChannelMentionsFromMarkdown', () => {
         `block name ${blockName}`
       ).toEqual([{ entityType, entityId: 'id-1' }]);
     }
+  });
+
+  it('never sends a project mention as a channel reference', () => {
+    // A reference would share the project with the channel; nor is the
+    // initiative id a document.
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('project-1', 'initiative')} ${documentMention('doc-1', 'md')}`
+      )
+    ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
+  });
+
+  it('never sends a pipeline mention as a channel reference', () => {
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('pipeline-1', 'pipeline')} ${documentMention('doc-1', 'md')}`
+      )
+    ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
   });
 
   it('extracts user mentions and re-tags bot principals', () => {
@@ -55,6 +83,14 @@ describe('extractChannelMentionsFromMarkdown', () => {
   it('deduplicates repeated mentions', () => {
     const markdown = `${documentMention('doc-1', 'md')} twice ${documentMention('doc-1', 'md')}`;
     expect(extractChannelMentionsFromMarkdown(markdown)).toHaveLength(1);
+  });
+
+  it('deduplicates routines across current and saved block names', () => {
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('routine-1', 'routine')} ${documentMention('routine-1', 'automation')}`
+      )
+    ).toEqual([{ entityType: 'automation', entityId: 'routine-1' }]);
   });
 
   it('extracts mentions from content containing bare angle brackets', () => {

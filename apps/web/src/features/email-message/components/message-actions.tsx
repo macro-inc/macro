@@ -1,6 +1,7 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import { TOKENS } from '@core/hotkey/tokens';
+import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -32,22 +33,22 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
+          variant="ghost"
           size="icon-sm"
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          noTouchResize
+          class="size-6 p-0"
           onClick={onChangeReplyType('reply-all')}
-          tooltip="Reply"
+          tooltip={{ content: 'Reply', hotkey: TOKENS.email.reply }}
         >
           <ArrowBendUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
+          variant="ghost"
           size="icon-sm"
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          noTouchResize
+          class="size-6 p-0"
           onClick={onChangeReplyType('forward')}
-          tooltip="Forward"
+          tooltip={{ content: 'Forward', hotkey: TOKENS.email.forward }}
         >
           <ArrowBendUpRight class="size-3.5" />
         </Button>

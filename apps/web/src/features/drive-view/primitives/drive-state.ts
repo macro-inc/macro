@@ -11,6 +11,27 @@ import type {
 } from '../core/types';
 import type { DriveListState } from './drive-list';
 
+/** Mask disabled database and form filters without changing persisted route intent. */
+export function availableDriveState(
+  state: DriveState,
+  databasesEnabled: boolean,
+  formsEnabled: boolean
+): DriveState {
+  const masked = [
+    ...(databasesEnabled ? [] : ['database']),
+    ...(formsEnabled ? [] : ['form']),
+  ];
+  const types = state.facets.type;
+  if (!types?.some((id) => masked.includes(id))) return state;
+  return {
+    ...state,
+    facets: {
+      ...state.facets,
+      type: types.filter((id) => !masked.includes(id)),
+    },
+  };
+}
+
 /** Shared navigation and controls. Display derivations stay with their consumers. */
 export function createDriveState(options: {
   state: Accessor<DriveState>;
@@ -123,10 +144,10 @@ export function createDriveState(options: {
     setFavoritesOpen: (favoritesOpen: boolean) =>
       setState((current) => ({ ...current, favoritesOpen })),
 
+    setDatabasesOpen: (databasesOpen: boolean) =>
+      setState((current) => ({ ...current, databasesOpen })),
+
     setRootOpen: (rootOpen: boolean) =>
       setState((current) => ({ ...current, rootOpen })),
-
-    setTagsOpen: (tagsOpen: boolean) =>
-      setState((current) => ({ ...current, tagsOpen })),
   };
 }

@@ -105,3 +105,22 @@ async fn list_by_parent_with_non_uuid_parent_reads_empty(pool: PgPool) {
         .unwrap();
     assert!(listed.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn is_deleted_reads_soft_deleted_rows_only(pool: PgPool) {
+    let repo = PgCollabSurfaceRepo::new(pool);
+    let live = new_surface(EntityType::Channel, CHANNEL_1);
+    let deleted = new_surface(EntityType::Channel, CHANNEL_1);
+    repo.insert(&live).await.unwrap();
+    repo.insert(&deleted).await.unwrap();
+    repo.soft_delete(deleted.id).await.unwrap();
+
+    assert!(repo.is_deleted(deleted.id).await.unwrap());
+    assert!(!repo.is_deleted(live.id).await.unwrap());
+    assert!(
+        !repo
+            .is_deleted(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+    );
+}

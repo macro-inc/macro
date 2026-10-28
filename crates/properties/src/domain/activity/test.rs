@@ -88,6 +88,26 @@ fn unattributed_property_update_is_dropped() {
 }
 
 #[test]
+fn initiative_property_changes_keep_the_initiative_identity() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.entity_type = PropertyEntityType::Initiative;
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected initiative activity");
+    };
+    assert_eq!(activities[0].entity_type, ActivityEntityType::Initiative);
+    assert!(matches!(activities[0].action, Action::PropertyChanged(_)));
+}
+
+#[test]
+fn database_row_property_changes_have_no_activity() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.entity_type = PropertyEntityType::DatabaseRow;
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+    assert_eq!(event.event.ingest(event.event_id), Ingest::Ignore);
+}
+
+#[test]
 fn delegated_property_update_keeps_the_user_as_subject() {
     let mut metadata = update(None);
     metadata.actor = Some(
@@ -105,4 +125,59 @@ fn delegated_property_update_keeps_the_user_as_subject() {
         "bot|00000000-0000-0000-0000-000000005759"
     );
     assert_eq!(activities[0].subject_id, "macro|owner@example.com");
+}
+
+fn project(id: &str) -> Option<PropertyValue> {
+    Some(PropertyValue::EntityRef(vec![
+        models_properties::shared::EntityReference::new(id, PropertyEntityType::Initiative),
+    ]))
+}
+
+#[test]
+fn moving_a_task_between_projects_is_activity_on_the_task_and_both_projects() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.property_definition_id = SystemPropertyKey::PROJECT_UUID;
+    metadata.previous_value = project("project-from");
+    metadata.value = project("project-to");
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    assert_eq!(activities.len(), 3);
+    assert_eq!(activities[0].entity_type, ActivityEntityType::Document);
+    assert!(matches!(activities[0].action, Action::PropertyChanged(_)));
+    assert_eq!(activities[1].entity_type, ActivityEntityType::Initiative);
+    assert_eq!(activities[1].entity_id, "project-from");
+    assert!(matches!(
+        &activities[1].action,
+        Action::TaskRemoved(change) if change.task_id == "task-1"
+    ));
+    assert_eq!(activities[2].entity_id, "project-to");
+    assert!(matches!(
+        &activities[2].action,
+        Action::TaskAdded(change) if change.task_id == "task-1"
+    ));
+    for activity in &activities {
+        assert_eq!(activity.actor.as_ref(), "macro|seamus@example.com");
+    }
+}
+
+#[test]
+fn unchanged_or_unattributed_project_saves_record_no_membership_activity() {
+    let mut unchanged = update(Some(user("macro|seamus@example.com")));
+    unchanged.property_definition_id = SystemPropertyKey::PROJECT_UUID;
+    unchanged.previous_value = project("project");
+    unchanged.value = project("project");
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(unchanged));
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    assert_eq!(activities.len(), 1);
+
+    let mut unattributed = update(None);
+    unattributed.property_definition_id = SystemPropertyKey::PROJECT_UUID;
+    unattributed.value = project("project");
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(unattributed));
+    assert!(matches!(event.event.ingest(event.event_id), Ingest::Ignore));
 }

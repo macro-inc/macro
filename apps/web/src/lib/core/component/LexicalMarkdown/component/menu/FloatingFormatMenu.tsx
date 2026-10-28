@@ -8,27 +8,27 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
-import CaretDown from '@phosphor/caret-down.svg';
-import TextCode from '@phosphor/code.svg';
-import CodeBlock from '@phosphor/code-block.svg';
-import DotsThreeLarge from '@phosphor/dots-three.svg';
-import BrokenLinkIcon from '@phosphor/link-break.svg';
-import LinkIcon from '@phosphor/link-simple.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import TextHighlight from '@phosphor/paint-roller.svg';
-import Quote from '@phosphor/quotes.svg';
-import TextBold from '@phosphor/text-b.svg';
-import TextH1 from '@phosphor/text-h-one.svg';
-import TextH3 from '@phosphor/text-h-three.svg';
-import TextH2 from '@phosphor/text-h-two.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextStriketrough from '@phosphor/text-strikethrough.svg';
-import TextSub from '@phosphor/text-subscript.svg';
-import TextSuper from '@phosphor/text-superscript.svg';
-import TextT from '@phosphor/text-t.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import TextCode from '@icon/system/regular/code.svg';
+import CodeBlock from '@icon/system/regular/code-block.svg';
+import DotsThreeLarge from '@icon/system/regular/dots-three.svg';
+import BrokenLinkIcon from '@icon/system/regular/link-break.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import TextHighlight from '@icon/system/regular/paint-roller.svg';
+import Quote from '@icon/system/regular/quotes.svg';
+import TextBold from '@icon/system/regular/text-b.svg';
+import TextH1 from '@icon/system/regular/text-h-one.svg';
+import TextH3 from '@icon/system/regular/text-h-three.svg';
+import TextH2 from '@icon/system/regular/text-h-two.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextStriketrough from '@icon/system/regular/text-strikethrough.svg';
+import TextSub from '@icon/system/regular/text-subscript.svg';
+import TextSuper from '@icon/system/regular/text-superscript.svg';
+import TextT from '@icon/system/regular/text-t.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
 import { Button, Dropdown, SingleSelectCheck, Toolbar } from '@ui';
 import {
   COMMAND_PRIORITY_HIGH,
@@ -266,12 +266,13 @@ export function FloatingFormatMenu(props: {
 
   const InlineButton = (buttonProps: { item: InlineOption }) => (
     <Button
-      label={buttonProps.item.label}
-      shortcut={buttonProps.item.shortcut}
+      aria-label={buttonProps.item.label}
+      tooltip={{
+        content: buttonProps.item.label,
+        shortcut: buttonProps.item.shortcut,
+      }}
       size="icon-sm"
-      class="rounded-md"
-      depth={3}
-      variant={selection()?.[buttonProps.item.format] ? 'accent' : 'ghost'}
+      variant={selection()?.[buttonProps.item.format] ? 'primary' : 'ghost'}
       onPointerDown={(e: PointerEvent) => e.preventDefault()}
       onClick={(e: MouseEvent | KeyboardEvent) => {
         e.preventDefault();
@@ -291,12 +292,10 @@ export function FloatingFormatMenu(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
-          class="rounded-md"
-          depth={3}
           tooltip="More formatting"
           tabIndex={-1}
         >
-          <DotsThreeLarge />
+          <DotsThreeLarge class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content onCloseAutoFocus={refocusEditor}>
           <Dropdown.Group>
@@ -326,8 +325,7 @@ export function FloatingFormatMenu(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          class="gap-1 rounded-md"
-          depth={3}
+          class="gap-1"
           tooltip="Text style"
           tabIndex={-1}
         >
@@ -376,6 +374,7 @@ export function FloatingFormatMenu(props: {
             reactiveOnContainer: editor.getRootElement(),
             useBlockBoundary: true,
             moveWithSelection: true,
+            clipToVisible: true,
           }}
         >
           <Toolbar>
@@ -386,8 +385,6 @@ export function FloatingFormatMenu(props: {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
-                depth={3}
                 onPointerDown={(e: PointerEvent) => e.preventDefault()}
                 onClick={handleLink}
                 tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}

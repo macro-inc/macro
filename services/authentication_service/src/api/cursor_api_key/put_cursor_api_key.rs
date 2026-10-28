@@ -13,7 +13,7 @@ use crate::api::context::{ApiContext, AuthorizationService};
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PutCursorApiKeyRequest {
-    /// A `crsr_…` Cursor API key.
+    /// A Cursor API key: `grok_…`, or `crsr_…` for older keys.
     pub api_key: String,
 }
 

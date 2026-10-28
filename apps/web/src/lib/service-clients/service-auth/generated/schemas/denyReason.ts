@@ -13,6 +13,7 @@ export type DenyReason = (typeof DenyReason)[keyof typeof DenyReason];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DenyReason = {
   allowance_exhausted: 'allowance_exhausted',
+  free_allowance_exhausted: 'free_allowance_exhausted',
   overage_limit_reached: 'overage_limit_reached',
   overage_payment_failed: 'overage_payment_failed',
 } as const;

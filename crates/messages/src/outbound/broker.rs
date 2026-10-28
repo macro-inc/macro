@@ -15,6 +15,7 @@ mod test;
 /// Lifecycle events for the common message service, one per committed fact.
 /// Reactions and typing never reach the topic.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum MessageTopicEvent {
     /// A user or bot posted a root or reply.

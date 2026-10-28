@@ -8,7 +8,10 @@ use std::num::NonZeroUsize;
 
 use agent_session::domain::turn_state::backfill_turn_states;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use clap::Parser;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use sqlx::postgres::PgPoolOptions;
 
 #[derive(Parser)]
@@ -28,7 +31,14 @@ async fn main() -> anyhow::Result<()> {
         .max_connections(1)
         .connect(&args.database_url)
         .await?;
-    let result = backfill_turn_states(&PgAgentSessionRepo::new(pool), args.limit).await?;
+    let result = backfill_turn_states(
+        &PgAgentSessionRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool))),
+        ),
+        args.limit,
+    )
+    .await?;
     println!(
         "examined={} projected={}",
         result.examined, result.projected

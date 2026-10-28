@@ -13,6 +13,7 @@ pub(crate) mod get_permissions;
 pub(crate) mod get_resolved_message;
 pub(crate) mod get_web_citations;
 pub(crate) mod insert_chat;
+pub(crate) mod owner_team_link_share;
 pub(crate) mod patch_chat;
 pub(crate) mod permanently_delete_chat;
 pub(crate) mod revert_delete_chat;

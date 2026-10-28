@@ -105,11 +105,11 @@ function extractTimestamp(
 
 function calculateTimeScore(
   timestamp: DateValue | null,
-  config: FreshSortConfigWithDefaults
+  config: FreshSortConfigWithDefaults,
+  now: Date
 ): number {
   if (!timestamp) return 0;
 
-  const now = new Date();
   const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
   const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
 
@@ -213,6 +213,7 @@ function freshSort<T>(
       ? Math.max(...filterNoInfResults.map((r) => r.score))
       : 1;
 
+  const now = new Date();
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
     const timestampInfo = getTimestamp(result.original);
     const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
@@ -220,7 +221,8 @@ function freshSort<T>(
       maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(timestampInfo, finalConfig.useViewedAt),
-      finalConfig
+      finalConfig,
+      now
     );
 
     const textForBrevity = result.string || '';

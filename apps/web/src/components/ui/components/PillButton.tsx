@@ -24,10 +24,10 @@ export function PillButton(props: PillButtonProps) {
   const subtle = () => props.tone === 'subtle';
   return (
     <Button
-      variant={subtle() ? 'outline' : 'cta'}
+      variant={subtle() ? 'secondary' : 'primary'}
       size="md"
       class={cn(
-        'rounded-full py-1',
+        'py-1',
         subtle() ? 'px-2.5' : props.icon ? 'pl-3 pr-4' : 'px-4',
         props.class
       )}

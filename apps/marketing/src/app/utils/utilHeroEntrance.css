@@ -1,0 +1,48 @@
+/* The headline comes into focus first; the supporting content and product
+   follow. Backwards fill hides each part during its delay, even in static HTML.
+   Only the small text layers blur; the large preview uses opacity alone. */
+@media (min-width: 700px) and (prefers-reduced-motion: no-preference) {
+  [data-hero-entrance]:not([data-hero-entered]) {
+    animation: home-hero-reveal 1000ms cubic-bezier(0.25, 0.1, 0.25, 1)
+      var(--hero-delay, 0ms) backwards;
+  }
+
+  [data-hero-entrance='title'] {
+    --hero-delay: 0ms;
+    --hero-blur: 10px;
+  }
+
+  [data-hero-entrance='copy'] {
+    --hero-delay: 80ms;
+    --hero-blur: 4px;
+  }
+
+  [data-hero-entrance='actions'] {
+    --hero-delay: 160ms;
+    --hero-blur: 2px;
+  }
+
+  [data-hero-entrance='preview']:not([data-hero-entered]),
+  [data-hero-entrance='backdrop']:not([data-hero-entered]) {
+    animation-name: home-hero-surface;
+    --hero-delay: 240ms;
+  }
+
+  [data-hero-entrance]:focus-within {
+    animation: none;
+  }
+
+  @keyframes home-hero-reveal {
+    from { opacity: 0; filter: blur(var(--hero-blur)); }
+    to { opacity: 1; filter: blur(0); }
+  }
+
+  @keyframes home-hero-surface {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+@media print {
+  [data-hero-entrance] { animation: none !important; }
+}

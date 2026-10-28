@@ -10,5 +10,5 @@ export type NotifEventOneOfOnesevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnesevenTag = {
-  call_started: 'call_started',
+  crm_discussion: 'crm_discussion',
 } as const;

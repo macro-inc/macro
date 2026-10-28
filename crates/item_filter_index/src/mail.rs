@@ -28,6 +28,7 @@ pub fn compile(
     let unsupported = || LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("email"));
     if !matches!(view, "ALL" | "INBOX" | "DRAFTS" | "SENT")
         || ast.properties_filter.is_some()
+        || ast.favorites_only == Some(true)
         || ast.email_filter.crm_scope.is_some()
         || links.len() > 100
     {

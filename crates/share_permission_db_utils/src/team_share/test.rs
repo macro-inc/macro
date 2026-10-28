@@ -198,6 +198,45 @@ async fn legacy_session_facts_stay_valid_after_permission_initialization(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("team_share"))
 )]
+async fn database_without_permissions_is_shared_once_its_permission_exists(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let entity =
+        EntityType::Database.with_entity_string("20000000-0000-0000-0000-000000000011".to_string());
+    let mut tx = pool.begin().await?;
+    sqlx::query!("INSERT INTO databases (id) VALUES ('20000000-0000-0000-0000-000000000011')")
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!("INSERT INTO database_entities (database_id, name, user_id) VALUES ('20000000-0000-0000-0000-000000000011', 'Database', 'macro|owner@example.com')")
+        .execute(tx.as_mut())
+        .await?;
+    let facts = load_facts(&mut tx, &entity).await?;
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    let authorized = command(&facts, Some(AccessLevel::Edit));
+
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ('database')"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!("UPDATE database_entities SET share_permission_id = 'database' WHERE database_id = '20000000-0000-0000-0000-000000000011'")
+        .execute(tx.as_mut())
+        .await?;
+    apply(&mut tx, &authorized).await?;
+    assert_eq!(
+        load_facts(&mut tx, &entity).await?.current,
+        Some(TeamShareGrant {
+            team_id: Uuid::parse_str("10000000-0000-0000-0000-000000000001")?,
+            level: TeamShareLevel::Edit,
+        })
+    );
+
+    apply_comment_view_and_clear(&mut tx, &entity).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
 async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_calls(
     pool: PgPool,
 ) -> rootcause::Result<()> {
@@ -279,9 +318,7 @@ async fn initialize_call_grants_view_to_creator_team_or_nothing(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("team_share"))
 )]
-async fn initialize_grants_comment_to_owner_team_for_initiative(
-    pool: PgPool,
-) -> rootcause::Result<()> {
+async fn initialize_explicit_task_grants_edit_to_owner_team(pool: PgPool) -> rootcause::Result<()> {
     let entity = initiative();
     let uuid = Uuid::parse_str(&entity.entity_id)?;
     let mut tx = pool.begin().await?;
@@ -300,13 +337,13 @@ async fn initialize_grants_comment_to_owner_team_for_initiative(
         facts.current,
         Some(TeamShareGrant {
             team_id,
-            level: TeamShareLevel::Comment,
+            level: TeamShareLevel::Edit,
         })
     );
     assert_eq!(facts.revision, 1);
     assert_eq!(
         direct_team_rows(&mut tx, &uuid, EntityType::Initiative, team_id).await?,
-        vec![AccessLevel::Comment]
+        vec![AccessLevel::Edit]
     );
     Ok(())
 }

@@ -114,11 +114,6 @@ export function useEntitiesForProperty(
       return emails().map(threadMapper);
     }
 
-    // For COMPANY type, return empty (not in quickAccess)
-    if (entityType === 'COMPANY') {
-      return [];
-    }
-
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
     const converted: CombinedEntity[] = [];
@@ -130,13 +125,8 @@ export function useEntitiesForProperty(
         converted.push(userToEntity(augmentedUser));
       } else {
         const entity = quickAccessItemToEntity(item);
-        // Filter by specific entity type if needed
-        if (entityType) {
-          const type = getEntityType(entity);
-          if (type === entityType) {
-            converted.push(entity);
-          }
-        } else {
+        const type = getEntityType(entity);
+        if (type && (!entityType || type === entityType)) {
           converted.push(entity);
         }
       }

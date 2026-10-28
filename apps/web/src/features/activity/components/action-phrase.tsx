@@ -18,6 +18,7 @@ export function ActionPhrase(props: {
   count?: number;
   propertyDefinition?: PropertyDefinitionDomain;
   capitalize?: boolean;
+  propertyValueLabel?: (raw: unknown) => string | undefined;
 }) {
   return (
     <Show
@@ -33,6 +34,7 @@ export function ActionPhrase(props: {
           action={change()}
           definition={props.propertyDefinition}
           capitalize={props.capitalize}
+          valueLabel={props.propertyValueLabel}
         />
       )}
     </Show>

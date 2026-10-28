@@ -1,11 +1,14 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import {
   EMAIL_DIGEST_NOTIFICATION_TYPE,
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
+import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { queryReadyGate } from '@queries/gate';
 import {
   useNotificationTypePreferencesQuery,
@@ -15,8 +18,9 @@ import {
   useMutedEntitiesQuery,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
+import { type as osType } from '@tauri-apps/plugin-os';
 import { ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, getOwner, Show } from 'solid-js';
 import { MutedItemRow } from './MutedItemRow';
 import {
   SettingsCard,
@@ -26,8 +30,10 @@ import {
 } from './primitives';
 
 export function Notifications() {
+  const dialogOwner = getOwner();
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
+  const [pushPending, setPushPending] = createSignal(false);
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const setTypeEnabled = useSetNotificationTypeEnabledMutation();
   const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
@@ -45,8 +51,33 @@ export function Notifications() {
         ? preferencesQuery.data.disabled_types
         : []
     );
+  const snoozedEntities = () =>
+    mutedEntities().filter((item) => item.snoozed_until);
+  const permanentlyMutedEntities = () =>
+    mutedEntities().filter((item) => !item.snoozed_until);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
+
+  const togglePush = async (enabled: boolean) => {
+    if (!platformSettings.isSupported || pushPending()) return;
+    setPushPending(true);
+    try {
+      analytics.track('notifications_toggled');
+      await platformSettings.toggle(enabled);
+      if (enabled && !platformSettings.isEnabled()) {
+        toast.failure(
+          isTauri() && osType() === 'macos'
+            ? 'Open System Settings → Notifications → Macro and turn on Allow notifications.'
+            : 'Allow notification permissions, then try again.'
+        );
+      }
+    } catch (error) {
+      console.error('Could not update notification permission', error);
+      toast.failure('Could not update notifications. Try again.');
+    } finally {
+      setPushPending(false);
+    }
+  };
 
   const toggleType = async (type: string, enabled: boolean) => {
     try {
@@ -98,11 +129,13 @@ export function Notifications() {
               <SettingsRow label={pushLabel} description={pushDescription}>
                 <ToggleSwitch
                   size="md"
+                  label={pushLabel}
+                  labelClass="sr-only"
                   checked={settings().isEnabled()}
-                  onChange={(enabled) => {
-                    analytics.track('notifications_toggled');
-                    void settings().toggle(enabled);
-                  }}
+                  disabled={pushPending()}
+                  onChange={(enabled) =>
+                    fireAndForget(togglePush(enabled), 'notification-settings')
+                  }
                 />
               </SettingsRow>
             )}
@@ -148,12 +181,70 @@ export function Notifications() {
       </For>
 
       <SettingsSection
+        title="Snoozed items"
+        description="Notifications pause until the time you choose. Items stay visible in your inbox."
+      >
+        <SettingsCard>
+          <Show when={mutedEntitiesQuery.isError}>
+            <SettingsRow label="Could not load snoozed items">
+              <button
+                type="button"
+                onClick={() =>
+                  fireAndForget(
+                    mutedEntitiesQuery.refetch(),
+                    'notification-settings'
+                  )
+                }
+              >
+                Retry
+              </button>
+            </SettingsRow>
+          </Show>
+          <Show
+            when={
+              !mutedEntitiesQuery.isError && queryReadyGate(mutedEntitiesQuery)
+            }
+            fallback={
+              !mutedEntitiesQuery.isError && (
+                <SettingsRow label="Loading snoozed items…" />
+              )
+            }
+          >
+            <Show
+              when={snoozedEntities().length > 0}
+              fallback={
+                <SettingsRow
+                  label="Nothing snoozed"
+                  description="Right-click an item or use the command menu and choose Snooze notifications."
+                />
+              }
+            >
+              <For each={snoozedEntities()}>
+                {(item) => (
+                  <MutedItemRow
+                    item={item}
+                    onUnmute={() =>
+                      fireAndForget(unmuteEntity(item), 'notification-settings')
+                    }
+                    onSnooze={() =>
+                      openSnoozeNotifications([item], { owner: dialogOwner })
+                    }
+                    pending={unmuteItem.isPending}
+                  />
+                )}
+              </For>
+            </Show>
+          </Show>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection
         title="Muted items"
         description="These items will not send you notifications."
       >
         <SettingsCard>
           <Show
-            when={mutedEntities().length > 0}
+            when={permanentlyMutedEntities().length > 0}
             fallback={
               <SettingsRow
                 label="Nothing muted"
@@ -161,11 +252,17 @@ export function Notifications() {
               />
             }
           >
-            <For each={mutedEntities()}>
+            <For each={permanentlyMutedEntities()}>
               {(item) => (
                 <MutedItemRow
                   item={item}
-                  onUnmute={() => void unmuteEntity(item)}
+                  onUnmute={() =>
+                    fireAndForget(unmuteEntity(item), 'notification-settings')
+                  }
+                  onSnooze={() =>
+                    openSnoozeNotifications([item], { owner: dialogOwner })
+                  }
+                  pending={unmuteItem.isPending}
                 />
               )}
             </For>

@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   joinRequested: false,
 }));
 
+const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => analytics,
+}));
 vi.mock('@channel/Channel/ChannelSurface', () => ({
   ChannelSurface: (props: {
     targetRequest?: ChannelTargetRequest;
@@ -64,7 +68,7 @@ vi.mock('@channel/Calls/ChannelCallsTab', () => ({
   ChannelCallsTab: () => null,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
-  ChannelTopIcon: () => null,
+  ChannelTitleIcon: () => null,
 }));
 vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
   ChannelParticipantsTab: () => null,
@@ -72,22 +76,14 @@ vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalBlockOrchestrator: () => orchestrator,
 }));
-vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
-  () => ({
-    createPriorityCollapseController: () => ({
-      setRow: vi.fn(),
-      collapser: undefined,
-    }),
-    PriorityCollapseOverflowSensor: mocks.pass,
-  })
-);
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useRegisterPriorityCollapseItem: () => () => false,
+  useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
-vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => null }));
+vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({
+  useChannel: () => () => undefined,
+  useChannelCanCall: () => () => true,
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',
 }));
@@ -126,12 +122,35 @@ const messageRequests = () =>
   );
 
 beforeEach(() => {
+  analytics.track.mockClear();
   mocks.requests.length = 0;
   mocks.joinRequested = false;
 });
 afterEach(cleanup);
 
 describe('channel detail navigation', () => {
+  it('counts one open per channel shown', async () => {
+    const view = render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+    await navigate({ message: 'message-1' });
+
+    expect(analytics.track.mock.calls).toEqual([
+      ['open_entity', { entityType: 'channel', entityId: CHANNEL_ID }],
+    ]);
+    view.unmount();
+  });
+
+  it('measures tab content against the height left after channel chrome', () => {
+    const view = render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+
+    const content = view.container.querySelector('[data-channel-tab-content]');
+    expect(content?.classList.contains('min-h-0')).toBe(true);
+    expect(content?.classList.contains('flex-1')).toBe(true);
+  });
+
   it('navigates the surface for every message link click, including a repeat', async () => {
     render(() => (
       <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>

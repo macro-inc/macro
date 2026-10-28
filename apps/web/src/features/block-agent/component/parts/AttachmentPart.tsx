@@ -1,8 +1,8 @@
 /**
  * A file the user attached to their prompt. Images and videos render as the
  * channel composer's media thumbnails and open the same lightbox; anything
- * else is a chip that opens the file. The fold hands over a URL, never bytes,
- * so this is a plain fetch from the static file service.
+ * else is a chip that opens the file. Images may refer to a static file, a
+ * pasted public URL, or an inline data URL.
  */
 
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
@@ -12,7 +12,11 @@ import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { staticFileSizedUrl } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileReferenceEndpoint,
+  staticFileSizedUrl,
+} from '@core/constant/servers';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 
@@ -60,7 +64,11 @@ function imageSrc(uri: string): string {
   if (uri.startsWith('data:')) return uri;
   try {
     const url = new URL(uri);
-    if (url.pathname.includes('/file/') && url.search === '') {
+    if (
+      (uri.startsWith(staticFileIdEndpoint('')) ||
+        uri.startsWith(staticFileReferenceEndpoint(''))) &&
+      url.search === ''
+    ) {
       return staticFileSizedUrl(uri, 'medium');
     }
   } catch {

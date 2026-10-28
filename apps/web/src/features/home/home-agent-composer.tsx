@@ -6,32 +6,45 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createEffect, createSignal } from 'solid-js';
+import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
+import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
-import { modeForKind } from '../agents-view/core/agent-kind';
-import { kindForBot } from '../agents-view/core/roster';
-import { agentsRouteId } from '../agents-view/core/route';
+import { buildAgentPrompt } from '@app/features/agents-view/queries/composer-prompt';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  createPersistedComposerDraft,
+  HOME_CONVERSATION_DRAFT_KEY,
+} from '../agents-view/primitives/composer-draft';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
 import {
   NewChatPage,
   type StartConversation,
 } from '../agents-view/views/NewChatPage';
-import { buildHomeAgentPrompt } from './queries/home-agent-prompt';
+import { useHomeView } from './home-view-context';
 
-/** Home supplies suggestions and navigation to the same composer used by Agents. */
+/** Home supplies suggestions and its detail pane to the same composer used by Agents. */
 export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const panel = useSplitPanelOrThrow();
+  const home = useHomeView();
   const input = useChatInputContext();
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
-  const [draft, setDraft] = createSignal('');
+  useWarmAgentSessionQuery(userId);
+  const { draft, setDraft } = createPersistedComposerDraft(
+    HOME_CONVERSATION_DRAFT_KEY,
+    userId
+  );
   let focus: (() => void) | undefined;
   let draftVersion = 0;
+  onCleanup(() => {
+    // A suggestion started on a previous visit must not overwrite saved text.
+    draftVersion++;
+  });
   const applySuggestion = async (content: string) => {
     const version = ++draftVersion;
     try {
-      const prompt = await buildHomeAgentPrompt({
+      const prompt = await buildAgentPrompt({
         content,
         attachments: input.attachments.attached(),
       });
@@ -53,7 +66,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     const requested = input.pendingDraft();
     if (requested == null) return;
     input.setPendingDraft(null);
-    void applySuggestion(requested);
+    fireAndForget(applySuggestion(requested), 'home');
   });
   registerHotkey({
     hotkey: 'enter',
@@ -66,17 +79,15 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       return true;
     },
   });
+  // The session opens in Home's detail pane rather than Agents; its row joins
+  // the Home list once the create answers.
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession({ ...conversation, userId: userId() });
-    panel.handle.replace({
-      next: {
-        type: 'component',
-        id: agentsRouteId({
-          mode: modeForKind(kindForBot(conversation.botId, roster.roster())),
-          conversation: { type: 'agent_session', id },
-        }),
-      },
+    const id = startPendingSession({
+      ...conversation,
+      userId: userId(),
+      submitSurface: 'home',
     });
+    home.openPreview({ type: 'agent_session', id });
   };
   return (
     <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">

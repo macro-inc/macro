@@ -1,10 +1,10 @@
 //! Toolset inbound adapter for skills.
 //!
-//! Exposes the skill search and listing tools (`SearchSkills`, `ListSkills`)
-//! to AI agents. Skills are markdown documents (sub type `skill`) whose
-//! content is read with the existing document toolset (`ReadContent`).
+//! Exposes skill discovery and reading to every agent harness through
+//! `SearchSkills`, `ListSkills`, and `ReadSkill`.
 
 mod list_skills;
+mod read_skill;
 mod search_skills;
 
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use ai_toolset::AsyncToolCollection;
 use crate::domain::ports::SkillService;
 
 pub use list_skills::{ListSkills, ListSkillsResponse};
+pub use read_skill::{ReadSkill, ReadSkillResponse};
 pub use search_skills::{SearchSkills, SearchSkillsResponse, SkillSearchResult};
 
 /// Service context for skill AI tools.
@@ -44,4 +45,5 @@ pub fn skill_toolset<Svc: SkillService>() -> AsyncToolCollection<SkillToolContex
     AsyncToolCollection::new()
         .add_tool::<SearchSkills, SkillToolContext<Svc>>()
         .add_tool::<ListSkills, SkillToolContext<Svc>>()
+        .add_tool::<ReadSkill, SkillToolContext<Svc>>()
 }

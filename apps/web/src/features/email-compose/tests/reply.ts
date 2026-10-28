@@ -1,6 +1,7 @@
 import { createMemo, createRoot } from 'solid-js';
 import { message } from '../../email-message/tests/messages';
 import type { EmailComposeContext } from '../context/compose-capabilities';
+import type { EmailReplySession } from '../context/email-form-inputs';
 import { createEmailFormState } from '../primitives/email-form-state';
 import {
   createReplyComposer,
@@ -14,9 +15,16 @@ export function mountReplyComposer(
   replyingTo = () => message('parent'),
   callbacks: Pick<
     ReplyComposerOptions,
-    'draft' | 'sideEffectOnSend' | 'onMarkDone'
+    | 'draft'
+    | 'preloadedHtml'
+    | 'sideEffectOnSend'
+    | 'onMarkDone'
+    | 'setShowReply'
   > = {},
-  thread: { inboxVisible?: boolean } = {}
+  thread: {
+    inboxVisible?: boolean;
+    replyRequest?: EmailReplySession['replyRequest'];
+  } = {}
 ) {
   return createRoot((dispose) => {
     const editor = createEmailEditor('Ready to send');
@@ -27,7 +35,10 @@ export function mountReplyComposer(
         inboxes: composeContext.accounts.inboxes,
       },
       { type: 'replying_to', messageId: parent.db_id },
-      { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
+      {
+        getMessageById: () => parent,
+        getDraftForMessageReply: () => callbacks.draft,
+      }
     );
     const state = createReplyComposer(
       {
@@ -46,7 +57,10 @@ export function mountReplyComposer(
           isPersonalReply: () => false,
           onDraftRemoved() {},
           exitToThread: () => false,
-          replyRequest: { replyType: () => undefined, clear() {} },
+          replyRequest: thread.replyRequest ?? {
+            replyType: () => undefined,
+            clear() {},
+          },
         },
       },
       () => editor,
@@ -56,6 +70,7 @@ export function mountReplyComposer(
     state.onContentChange('Ready to send');
     return {
       ...state,
+      editor,
       sendActionDisabled: createMemo(state.sendActionDisabled),
       dispose,
       edit(text: string) {

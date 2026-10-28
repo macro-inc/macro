@@ -182,6 +182,8 @@ async fn process_docx(
                 to_bucket: document_storage_bucket.to_string(),
                 from_key: from_key.clone(),
                 to_key: to_key.clone(),
+                from_file_type: None,
+                to_file_type: None,
             }));
         }
 

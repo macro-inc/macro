@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT totals.event_id AS \"event_id!\"\n            FROM (\n                SELECT\n                    requested.event_id,\n                    requested.ord,\n                    (sum(count(occurrence.event_id)) OVER (ORDER BY requested.ord))::bigint AS running\n                FROM unnest($1::uuid[]) WITH ORDINALITY AS requested(event_id, ord)\n                LEFT JOIN calendar_event_occurrences occurrence\n                    ON occurrence.event_id = requested.event_id\n                   AND NOT occurrence.is_cancelled\n                GROUP BY requested.event_id, requested.ord\n            ) totals\n            WHERE totals.ord = 1 OR totals.running <= $2::bigint\n            ORDER BY totals.ord\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c5af5b736c7193501447485280aa38b2bf3ff8aab9c763811e32826d00c58dee"
+}

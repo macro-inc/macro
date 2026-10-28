@@ -429,45 +429,50 @@ impl IsEmpty for CalendarEventFilters {
     }
 }
 
-/// Filters for reminders.
+/// Filters for initiatives.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-pub struct ReminderFilters {
-    /// Opt this query into reminders at all. Reminders are off by default —
-    /// see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
-    /// specific `ids` or `entities` also opts in.
+pub struct InitiativeFilters {
+    /// Opt this query into initiatives at all. Initiatives are off by
+    /// default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+    /// Asking for specific `initiative_ids` or `owners` also opts in.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include: bool,
-    /// Reminder ids to filter by. Empty to include all of the caller's reminders.
+    /// Initiative ids to filter by. Empty to include all accessible initiatives.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub ids: Vec<String>,
-    /// Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+    pub initiative_ids: Vec<String>,
+    /// Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+    /// owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub entities: Vec<String>,
-    /// Filter on whether the owner has marked the reminder done. `None` returns
-    /// both.
+    pub owners: Vec<String>,
+    /// Case-insensitive name substring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub completed: Option<bool>,
-    /// Filter on whether the reminder's next run has come due, i.e. it has
-    /// fired and is awaiting its owner. `None` returns both.
-    ///
-    /// Evaluated server-side against the database clock rather than a
-    /// timestamp supplied by the caller: a timestamp would land in the query
-    /// cache key and change on every render.
+    pub name: Option<String>,
+    /// Inclusive upper due-date bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fired: Option<bool>,
+    pub due_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive lower due-date bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_after: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl IsEmpty for ReminderFilters {
+impl IsEmpty for InitiativeFilters {
     fn is_empty(&self) -> bool {
-        let ReminderFilters {
+        let InitiativeFilters {
             include,
-            ids,
-            entities,
-            completed,
-            fired,
+            initiative_ids,
+            owners,
+            name,
+            due_before,
+            due_after,
         } = self;
-        !include && ids.is_empty() && entities.is_empty() && completed.is_none() && fired.is_none()
+        !include
+            && initiative_ids.is_empty()
+            && owners.is_empty()
+            && name.is_none()
+            && due_before.is_none()
+            && due_after.is_none()
     }
 }
 
@@ -769,6 +774,9 @@ pub enum TagFilterMode {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// the bundled [CalendarEventFilters]
     #[serde(default)]
     pub calendar_event_filters: CalendarEventFilters,
@@ -799,9 +807,9 @@ pub struct EntityFilters {
     /// the bundled [ForeignEntityFilters]
     #[serde(default)]
     pub foreign_entity_filters: ForeignEntityFilters,
-    /// the bundled [ReminderFilters]
+    /// Initiative filters. Initiatives are opt-in.
     #[serde(default)]
-    pub reminder_filters: ReminderFilters,
+    pub initiative_filters: InitiativeFilters,
     /// the bundled [AgentSessionFilters]
     #[serde(default)]
     pub agent_session_filters: AgentSessionFilters,
@@ -822,6 +830,7 @@ pub struct EntityFilters {
 impl IsEmpty for EntityFilters {
     fn is_empty(&self) -> bool {
         let EntityFilters {
+            favorites_only,
             calendar_event_filters,
             project_filters,
             document_filters,
@@ -832,14 +841,15 @@ impl IsEmpty for EntityFilters {
             email_filters,
             crm_company_filters,
             foreign_entity_filters,
-            reminder_filters,
             agent_session_filters,
+            initiative_filters,
             property_filters,
             tag_option_ids,
             // Mode is a modifier on tag_option_ids, not a filter by itself.
             tag_filter_mode: _,
         } = self;
-        calendar_event_filters.is_empty()
+        favorites_only != &Some(true)
+            && calendar_event_filters.is_empty()
             && project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
@@ -849,8 +859,8 @@ impl IsEmpty for EntityFilters {
             && email_filters.is_empty()
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
-            && reminder_filters.is_empty()
             && agent_session_filters.is_empty()
+            && initiative_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
             && tag_option_ids.is_empty()
     }

@@ -1,0 +1,43 @@
+import type { AgentSession } from './agent-sessions/agent-session';
+import type { CalendarEvent } from './calendar/event';
+import type { CallRecord } from './calls/call-record';
+import type { Channel } from './channels/channel';
+import type { Message } from './channels/message';
+import type { Chat } from './chats/chat';
+import type { Company } from './crm/company';
+import type { Contact } from './crm/contact';
+import type { CrmPipeline } from './crm/pipeline';
+import type { Database } from './databases/database';
+import type { DatabaseRow } from './databases/row';
+import type { Document } from './documents/document';
+import type { EmailThread } from './email/thread';
+import type { ForeignEntity } from './foreign/foreign-entity';
+import type { Form } from './forms/form';
+import type { Initiative } from './initiatives/initiative';
+import type { Project } from './projects/project';
+import type { Routine } from './routines/routine';
+import type { Team } from './teams/team';
+import type { User } from './users/user';
+
+/** Typed entity references accepted by cross-resource APIs. */
+export type EntityReference =
+  | { type: 'user'; entity: User }
+  | { type: 'team'; entity: Team }
+  | { type: 'document'; entity: Document }
+  | { type: 'chat'; entity: Chat }
+  | { type: 'channel'; entity: Channel }
+  | { type: 'channel_message'; entity: Message }
+  | { type: 'project'; entity: Project }
+  | { type: 'email_thread'; entity: EmailThread }
+  | { type: 'calendar_event'; entity: CalendarEvent }
+  | { type: 'call'; entity: CallRecord }
+  | { type: 'foreign_entity'; entity: ForeignEntity }
+  | { type: 'crm_company'; entity: Company }
+  | { type: 'crm_contact'; entity: Contact }
+  | { type: 'crm_pipeline'; entity: CrmPipeline }
+  | { type: 'agent_session'; entity: AgentSession }
+  | { type: 'scheduled_action'; entity: Routine }
+  | { type: 'initiative'; entity: Initiative }
+  | { type: 'database'; entity: Database }
+  | { type: 'database_row'; entity: DatabaseRow }
+  | { type: 'form'; entity: Form };

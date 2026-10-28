@@ -1,0 +1,45 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="270" fill="none"/>
+  <defs>
+    <linearGradient id="aie-cover-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="oklch(from var(--a0) calc(l + 0.06) calc(c * 0.9) h)"/>
+      <stop offset="52%" stop-color="oklch(from var(--a0) calc(l + 0.01) calc(c * 0.9) h)"/>
+      <stop offset="100%" stop-color="oklch(from var(--a0) calc(l - 0.04) calc(c * 0.9) h)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The document tree the agents edit -->
+  <rect x="96" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#aie-cover-sheen)" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M148,96 v46"/>
+    <path d="M148,110 h16 M148,124 h26 M148,138 h16"/>
+    <circle cx="148" cy="96" r="4" fill="url(#aie-cover-sheen)" stroke="none"/>
+    <circle cx="170" cy="110" r="4" fill="url(#aie-cover-sheen)" stroke="none"/>
+    <circle cx="180" cy="124" r="4" fill="url(#aie-cover-sheen)" stroke="none"/>
+    <circle cx="170" cy="138" r="4" fill="url(#aie-cover-sheen)" stroke="none"/>
+  </g>
+  <text x="166" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Node tree</text>
+
+  <path d="M254,120 H298 M290,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- A team of small writer agents -->
+  <rect x="310" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#aie-cover-sheen)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="380" cy="94" r="10"/>
+    <circle cx="354" cy="140" r="10"/>
+    <circle cx="406" cy="140" r="10"/>
+    <path d="M374,103 L360,131 M386,103 L400,131 M364,140 h32"/>
+  </g>
+  <text x="380" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Agent team</text>
+
+  <path d="M468,120 H512 M504,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Streamed as CRDT edits with a named cursor -->
+  <rect x="524" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#aie-cover-sheen)" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M570,100 h34 M570,116 h48 M570,132 h20"/>
+    <path d="M600,124 v24"/>
+  </g>
+  <rect x="600" y="120" width="34" height="14" rx="4" fill="url(#aie-cover-sheen)"/>
+  <text x="594" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Live edits</text>
+</svg>

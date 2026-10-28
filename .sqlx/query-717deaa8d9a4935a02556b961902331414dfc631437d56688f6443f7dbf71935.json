@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT session_id FROM agent_conversation_sessions WHERE channel_id = $1 AND bot_id = $2 AND is_current",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "717deaa8d9a4935a02556b961902331414dfc631437d56688f6443f7dbf71935"
+}

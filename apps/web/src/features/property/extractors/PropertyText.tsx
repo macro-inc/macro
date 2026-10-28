@@ -1,12 +1,16 @@
-import { getDisplayNameParts, tryMacroId } from '@core/user';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
+import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
 import type { Property } from '../types';
 import {
   formatBoolean,
   formatDate,
   formatNumber,
   formatPropertyValue,
+  formatTimeRange,
 } from '../utils/formatting';
 import {
   getEntityValues,
@@ -15,6 +19,7 @@ import {
   hasValue,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -29,6 +34,8 @@ type Props = {
   class?: string;
   /** Override the rendered text (overrides default extraction). */
   text?: string;
+  /** Resolve a single linked item to its name instead of showing "1 item". */
+  resolveSingleEntity?: boolean;
 };
 
 /**
@@ -39,6 +46,7 @@ type Props = {
  * - NUMBER: formatted number
  * - BOOLEAN: "True"/"False"
  * - DATE: formatted date
+ * - DATE_RANGE: formatted range of days
  * - SELECT_*: first option's display label
  * - ENTITY+USER (single): user's first name
  * - ENTITY+USER (multi): "N people"
@@ -57,10 +65,51 @@ export function PropertyText(props: Props) {
     return entities.length === 1 ? entities[0].entity_id : undefined;
   };
 
+  const singleEntity = () => {
+    if (!props.resolveSingleEntity || props.text !== undefined) return;
+    if (!isEntityProperty(props.property)) return;
+    if (props.property.specificEntityType === 'USER') return;
+    const entities = getEntityValues(props.property);
+    return entities.length === 1 ? entities[0] : undefined;
+  };
+
   return (
     <Show
       keyed
-      when={userId()}
+      when={singleEntity()}
+      fallback={<PropertyTextValue {...props} userId={userId()} />}
+    >
+      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+    </Show>
+  );
+}
+
+function EntityPropertyText(props: {
+  entity: EntityReference;
+  class?: string;
+}) {
+  const { name, icon } = usePropertyEntityDisplay(
+    () => props.entity.entity_id,
+    () => props.entity.entity_type
+  );
+  return (
+    <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>
+      <span
+        aria-hidden="true"
+        class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+      >
+        {icon()}
+      </span>
+      <span class="truncate">{name()}</span>
+    </span>
+  );
+}
+
+function PropertyTextValue(props: Props & { userId?: string }) {
+  return (
+    <Show
+      keyed
+      when={props.userId}
       fallback={
         <PrimitivePropertyText
           property={props.property}
@@ -97,12 +146,7 @@ function UserPropertyText(props: {
   fallback?: JSX.Element;
   class?: string;
 }) {
-  const text = () => {
-    const parts = getDisplayNameParts(tryMacroId(props.id), {
-      emailFallback: 'local-part',
-    });
-    return parts.firstName || parts.fullName;
-  };
+  const { shortName: text } = usePropertyUserDisplay(() => props.id);
 
   return (
     <Show when={text()} fallback={props.fallback ?? null}>
@@ -121,6 +165,8 @@ function extractText(property: Property): string {
     return property.value === null ? '' : formatBoolean(property.value);
   if (isDateProperty(property))
     return property.value === null ? '' : formatDate(property.value);
+  if (isDateRangeProperty(property))
+    return property.value === null ? '' : formatTimeRange(property.value);
 
   if (isSelectProperty(property)) {
     const first = getSelectValues(property)[0];
@@ -131,6 +177,9 @@ function extractText(property: Property): string {
     const entities = getEntityValues(property);
     if (entities.length === 0) return '';
     if (property.specificEntityType === 'USER') {
+      if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
+        return `${entities.length} assignees`;
+      }
       return entities.length === 2 ? '2 people' : `${entities.length} people`;
     }
     return entities.length === 1 ? '1 item' : `${entities.length} items`;

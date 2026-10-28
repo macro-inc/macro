@@ -8,6 +8,12 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import {
+  homeChannelRoute,
+  homeDocumentRoute,
+  homePreviewRoute,
+  homeSplitRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   type PreviewBlockTarget,
@@ -17,6 +23,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -43,12 +50,6 @@ import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { isHomeDocumentType } from './home-route-schema';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
-import {
-  homeChannelRoute,
-  homeDocumentRoute,
-  homePreviewRoute,
-  homeSplitRoute,
-} from './route';
 import type {
   HomeGroupBy,
   HomeTab,
@@ -71,14 +72,17 @@ export type HomeViewContext = {
   calendarOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
-  openPreview: (entity: PreviewSelection) => boolean;
+  openPreview: (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => boolean;
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
 };
 
-function defaultGroupBy(tab: HomeTab): HomeGroupBy {
-  return tab === 'reminders' ? 'none' : 'date';
+function defaultGroupBy(): HomeGroupBy {
+  return 'date';
 }
 
 export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
@@ -96,11 +100,11 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<HomeViewState>({
       tab: initialTab,
       search: initial.search ?? '',
-      groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
+      groupBy: initial.groupBy ?? defaultGroupBy(),
       facets: normalizeHomeFacets(initial.facets),
     }),
     createHomeViewPersistence({
@@ -111,6 +115,8 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     })
   );
 
+  const state = persistedState;
+
   createEffect(
     on(
       () => tabSearch.tab,
@@ -119,7 +125,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
         setState(
           produce((draft) => {
             draft.tab = tab;
-            draft.groupBy = defaultGroupBy(tab);
+            draft.groupBy = defaultGroupBy();
           })
         );
       }
@@ -158,22 +164,34 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
               params: { documentType: blockType, documentId: previewId },
             }
           : { route: homePreviewRoute, params };
-    navigate(target, { replace, search: withTab(search) });
+    fireAndForget(
+      navigate(target, { replace, search: withTab(search) }),
+      'home-view'
+    );
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
-  const closePreview = () =>
-    navigate(
-      { route: homeSplitRoute, params: {} },
-      { search: withTab(homeDetailSearch()) }
+  const closePreview = () => {
+    fireAndForget(
+      navigate(
+        { route: homeSplitRoute, params: {} },
+        { search: withTab(homeDetailSearch()) }
+      ),
+      'home-view'
     );
+  };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
-  const openPreview = (entity: PreviewSelection) => {
+  const openPreview = (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => {
     if (entity.type === 'calendar_event') {
-      return openCalendarEvent(entity);
+      return openCalendarEvent(entity, options);
     }
-    const target = previewBlockTarget(entity);
+    return openPreviewTarget(previewBlockTarget(entity));
+  };
+  const openPreviewTarget = (target: PreviewBlockTarget) => {
     if (!selectPreview.canSelect(target)) return false;
     const current = previewTarget();
     if (
@@ -195,9 +213,12 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       if (selectPreview(target)) return;
       if (previous) navigateTarget(previous, true);
       else
-        navigate(
-          { route: homeSplitRoute, params: {} },
-          { replace: true, search: withTab(homeDetailSearch()) }
+        fireAndForget(
+          navigate(
+            { route: homeSplitRoute, params: {} },
+            { replace: true, search: withTab(homeDetailSearch()) }
+          ),
+          'home-view'
         );
     })
   );
@@ -207,7 +228,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     setState(
       produce((draft) => {
         draft.tab = tab;
-        draft.groupBy = defaultGroupBy(tab);
+        draft.groupBy = defaultGroupBy();
       })
     );
     closePreview();

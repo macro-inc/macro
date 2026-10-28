@@ -5,9 +5,14 @@ import { onCleanup } from 'solid-js';
 export type UseViewTabHotkeysOptions<TTab extends string> = {
   scopeId: string;
   ids: () => readonly TTab[];
+  /** Tabs that Tab and Shift+Tab cycle through; defaults to `ids`. */
+  sequentialIds?: () => readonly TTab[];
   activeId: () => TTab;
   setActiveId: (id: TTab) => void;
   enabled?: () => boolean;
+  shouldHandleSequentialKeyEvent?: (
+    event: KeyboardEvent | undefined
+  ) => boolean;
 };
 
 /** Registers numeric and sequential navigation for a view's tabs. */
@@ -36,8 +41,10 @@ export function useViewTabHotkeys<TTab extends string>(
     }).withGroup(group);
   });
 
+  const sequentialIds = () => options.sequentialIds?.() ?? options.ids();
+
   const move = (offset: 1 | -1) => {
-    const ids = options.ids();
+    const ids = sequentialIds();
     if (ids.length < 2) return false;
 
     const currentIndex = ids.indexOf(options.activeId());
@@ -59,8 +66,11 @@ export function useViewTabHotkeys<TTab extends string>(
     hotkeyToken: TOKENS.soup.tabs.next,
     scopeId: options.scopeId,
     description: 'Next tab',
-    condition: () => isEnabled() && options.ids().length > 1,
-    keyDownHandler: () => move(1),
+    condition: () => isEnabled() && sequentialIds().length > 1,
+    keyDownHandler: (event) =>
+      options.shouldHandleSequentialKeyEvent?.(event) === false
+        ? false
+        : move(1),
   }).withGroup(group);
 
   registerHotkey({
@@ -68,8 +78,11 @@ export function useViewTabHotkeys<TTab extends string>(
     hotkeyToken: TOKENS.soup.tabs.prev,
     scopeId: options.scopeId,
     description: 'Previous tab',
-    condition: () => isEnabled() && options.ids().length > 1,
-    keyDownHandler: () => move(-1),
+    condition: () => isEnabled() && sequentialIds().length > 1,
+    keyDownHandler: (event) =>
+      options.shouldHandleSequentialKeyEvent?.(event) === false
+        ? false
+        : move(-1),
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

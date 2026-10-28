@@ -5,6 +5,7 @@
  * property record referenced by soup query results.
  */
 
+import { timeRangeToInstants } from '@app/features/database/core/cell-date-range';
 import type {
   Property,
   PropertyApiValues,
@@ -54,6 +55,15 @@ export function apiValuesToGraphqlPropertyValue(
             dateValue: apiValues.value.toISOString(),
           }
         : null;
+    case 'DATE_RANGE': {
+      if (apiValues.value == null) return null;
+      const { start, end } = timeRangeToInstants(apiValues.value);
+      return {
+        __typename: 'GraphqlDateRangePropertyValue',
+        rangeStart: start,
+        rangeEnd: end,
+      };
+    }
     case 'SELECT_STRING':
     case 'SELECT_NUMBER':
       return apiValues.values != null && apiValues.values.length > 0
@@ -94,50 +104,93 @@ export function apiValuesToGraphqlPropertyValue(
  * assignment carrying `value`.
  */
 function optimisticPropertyRecord(
-  property: Property,
-  value: GraphqlPropertyValue | null
+  property: Property | PropertyDefinitionDomain,
+  value: GraphqlPropertyValue | null,
+  id: string
 ): SoupPropertyFieldsFragment {
   return {
-    id: property.propertyId,
-    propertyDefinitionId: property.propertyDefinitionId,
+    id,
+    propertyDefinitionId: isInstantiatedProperty(property)
+      ? property.propertyDefinitionId
+      : property.id,
     displayName: property.displayName,
     dataType: property.valueType,
     isMultiSelect: property.isMultiSelect,
     specificEntityType: property.specificEntityType ?? null,
-    isSystem: property.isSystemProperty ?? false,
+    isSystem: isInstantiatedProperty(property)
+      ? (property.isSystemProperty ?? false)
+      : property.isSystem,
     isMetadata: property.isMetadata ?? false,
     value,
   };
 }
 
+const TEMPORARY_PROPERTY_PREFIX = 'optimistic-property:';
+
+/** Temporary assignments must retain a response-derived parent-list recipe. */
+export function isTemporaryGraphqlProperty(id: string): boolean {
+  return id.startsWith(TEMPORARY_PROPERTY_PREFIX);
+}
+
+function isPersistedAssignmentId(id: string, definitionId: string): boolean {
+  return (
+    id !== definitionId &&
+    !id.startsWith('pending:') &&
+    !isTemporaryGraphqlProperty(id)
+  );
+}
+
+type PropertyTarget = { entityType: string; entityId: string };
+
+function optimisticPropertyId(
+  property: Property | PropertyDefinitionDomain,
+  target?: PropertyTarget,
+  assignmentId?: string
+): string | undefined {
+  const definitionId = isInstantiatedProperty(property)
+    ? property.propertyDefinitionId
+    : property.id;
+  const id =
+    assignmentId ??
+    (isInstantiatedProperty(property) ? property.propertyId : undefined);
+  if (id && isPersistedAssignmentId(id, definitionId)) return id;
+  return target
+    ? `${TEMPORARY_PROPERTY_PREFIX}${target.entityType}:${target.entityId}:${definitionId}`
+    : undefined;
+}
+
 /**
- * Complete optimistic mutation payload for an existing property
- * assignment, or `undefined` when none can be built safely:
- * uninstantiated definitions have no assignment id until the server
- * responds, and inventing one would corrupt the normalized cache.
+ * New assignments use a target-scoped temporary ID, never a shared definition
+ * ID. Callers supplying a target must also install a response-derived list
+ * recipe, so commit replaces the temporary link with the server's assignment.
  */
 export function buildOptimisticSetEntityProperty(
   property: Property | PropertyDefinitionDomain,
-  apiValues: PropertyApiValues
+  apiValues: PropertyApiValues,
+  target?: PropertyTarget
 ): SoupPropertyFieldsFragment | undefined {
-  if (!isInstantiatedProperty(property)) return undefined;
+  const id = optimisticPropertyId(property, target);
+  if (!id) return undefined;
   return optimisticPropertyRecord(
     property,
-    apiValuesToGraphqlPropertyValue(apiValues)
+    apiValuesToGraphqlPropertyValue(apiValues),
+    id
   );
 }
 
 /**
- * Optimistic payload for a multi-select property reaching `optionIds`, or
- * `undefined` when the entity has no assignment for the definition yet (the
- * first tag from a set): that record's id is only known once the server
- * responds, so the write waits for the commit instead of inventing one.
+ * Optimistic payload for a multi-select property reaching `optionIds`.
+ * First assignments use the same target-scoped identity and require the same
+ * response-derived parent link as a full-value property save.
  */
 export function buildOptimisticEntityPropertyOptions(
   property: Property | PropertyDefinitionDomain,
-  optionIds: readonly string[]
+  optionIds: readonly string[],
+  assignmentId?: string,
+  target?: PropertyTarget
 ): SoupPropertyFieldsFragment | undefined {
-  if (!isInstantiatedProperty(property)) return undefined;
+  const id = optimisticPropertyId(property, target, assignmentId);
+  if (!id) return undefined;
   return optimisticPropertyRecord(
     property,
     optionIds.length > 0
@@ -145,6 +198,7 @@ export function buildOptimisticEntityPropertyOptions(
           __typename: 'GraphqlSelectOptionPropertyValue',
           optionIds: [...optionIds],
         }
-      : null
+      : null,
+    id
   );
 }

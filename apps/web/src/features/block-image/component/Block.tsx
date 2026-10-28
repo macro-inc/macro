@@ -30,7 +30,7 @@ export default function BlockImage() {
   return (
     <DocumentBlockContainer>
       <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
-        <SidePanel.Layout defaultOpen={false}>
+        <SidePanel.Layout defaultOpen={false} floating>
           <FileSidePanelSections />
           <div class="flex size-full min-w-0 flex-col overflow-hidden">
             <TopBar />

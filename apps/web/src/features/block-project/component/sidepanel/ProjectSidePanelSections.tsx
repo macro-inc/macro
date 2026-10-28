@@ -4,9 +4,11 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { useProjectDataQuery } from '@queries/storage/project-data';
 import { Suspense } from 'solid-js';
 
 export function ProjectSidePanelSections() {
@@ -16,20 +18,11 @@ export function ProjectSidePanelSections() {
 
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      <SidePanel.Footer>
         <Suspense fallback={<SidePanel.Loading />}>
-          <EntityPropertiesSection
-            entityId={projectId}
-            entityType="PROJECT"
-            canEdit={canEdit()}
-            documentName={projectName()}
-            includeMetadata
-            propertyFilter={(property) => property.isMetadata === true}
-            showAddProperty={false}
-            showTags={false}
-          />
+          <ProjectMetadata projectId={projectId} />
         </Suspense>
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <EntityTagsSection
         entityId={projectId}
         entityType="PROJECT"
@@ -59,5 +52,16 @@ export function ProjectSidePanelSections() {
         order={40}
       />
     </>
+  );
+}
+
+function ProjectMetadata(props: { projectId: string }) {
+  const query = useProjectDataQuery(() => props.projectId);
+  return (
+    <EntityMetadata
+      ownerId={query.data?.userId}
+      createdAt={query.data?.createdAt}
+      updatedAt={query.data?.updatedAt}
+    />
   );
 }

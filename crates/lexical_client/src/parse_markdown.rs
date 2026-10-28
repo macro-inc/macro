@@ -4,6 +4,7 @@ mod test;
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 use messages::domain::models::MessageParent;
+use trigger_context::TriggerContext;
 
 use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
@@ -130,6 +131,20 @@ struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
 }
 
+/// A static image to serialize through Lexical's image node and markdown transformer.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMarkdownRequest<'a> {
+    /// Static file capability identifier.
+    pub static_file_id: &'a str,
+    /// Permanent image URL.
+    pub url: &'a str,
+    /// Intrinsic pixel width.
+    pub width: u32,
+    /// Intrinsic pixel height.
+    pub height: u32,
+}
+
 /// The Magic Chip embedded in an agent-session announcement, in the shape the
 /// lexical service `/agent-announcement` endpoint validates.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -171,7 +186,8 @@ pub struct AgentAnnouncementReplyTarget {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    reply_target: &'a AgentAnnouncementReplyTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -223,6 +239,67 @@ pub enum AgentChatReplyBody {
         /// The prose, as channel markdown.
         markdown: String,
     },
+    /// The reply's segments in order: passages as written, and the steps
+    /// between them as a node viewers of the session see live.
+    Segments {
+        /// Passages and steps, in the order the agent produced them.
+        segments: Vec<AgentReplySegment>,
+        /// Show the spinner after the segments: the turn is still running.
+        pending: bool,
+        /// A closing line the harness wrote: stopped, failed, said nothing.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        footer: Option<String>,
+    },
+}
+
+/// One segment of an agent's reply, as a channel message shows it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentReplySegment {
+    /// A passage, posted as written.
+    Prose {
+        /// The passage, as channel markdown.
+        markdown: String,
+    },
+    /// The steps between two passages.
+    Activity {
+        /// The turn whose reply this is.
+        turn: u32,
+        /// The segment's index within the reply.
+        segment: u32,
+        /// The steps as the session's fold worded them.
+        rows: Vec<AgentActivityRow>,
+        /// Whether the segment can still gain steps.
+        sealed: bool,
+    },
+}
+
+/// One step of an agent's work, for the activity node's snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct AgentActivityRow {
+    /// The tool call's id.
+    pub id: String,
+    /// What happened, as a verb phrase.
+    pub label: String,
+    /// What it happened to, when safe to show.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// Where it got to.
+    pub status: AgentActivityStatus,
+}
+
+/// Where one step of an agent's work got to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentActivityStatus {
+    /// Started and not finished.
+    Running,
+    /// Finished successfully.
+    Completed,
+    /// Finished unsuccessfully.
+    Failed,
+    /// Still running when its turn ended.
+    Interrupted,
 }
 
 /// A chat agent's thread message in one of its states.
@@ -232,6 +309,10 @@ pub struct AgentChatReply {
     /// Session the message speaks for; linked ahead of the body.
     pub session_id: String,
     pub body: AgentChatReplyBody,
+    /// Whether to lead with the session link. Absent means yes; a private
+    /// conversation's messages are the session and repeat no link.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -240,119 +321,23 @@ struct AgentChatReplyRequest<'a> {
     chat_reply: &'a AgentChatReply,
 }
 
-/// A message included as context for an agent prompt.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentContextMessage<'a> {
-    /// Message id.
-    pub id: String,
-    /// Sender identifier as the message service represents it.
-    pub sender_id: &'a str,
-    /// Readable name of the sender.
-    pub author: &'a str,
-    /// Markdown content of the message.
-    pub content: &'a str,
-    /// RFC 3339 time the message was posted.
-    pub posted_at: String,
-}
-
-/// Messages of one discussion included as context, oldest first.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentContextThread<'a> {
-    /// Root message of the discussion.
-    pub root_id: String,
-    /// Live messages, the root first when it is included.
-    pub messages: Vec<AgentContextMessage<'a>>,
-    /// Whether some messages of the discussion were left out.
-    pub messages_omitted: bool,
-}
-
-/// What an agent prompt answers.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum AgentContextReplyTarget<'a> {
-    /// The author quote-replied to one message.
-    Quote {
-        /// The quoted message.
-        message_id: String,
-        /// The discussion holding the quoted message.
-        thread_id: String,
-        /// The one-line preview the quote renders.
-        preview: &'a str,
-        /// The quoted message in full, when it could be read.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<AgentContextMessage<'a>>,
-    },
-    /// The prompt was posted as a reply in a discussion.
-    Thread {
-        /// Root of that discussion.
-        thread_id: String,
-    },
-    /// The prompt was posted at the top level of a channel.
-    None,
-}
-
-/// The conversation an agent prompt was posted in.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentContext<'a> {
-    /// The document location of the comment thread, when it has one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub anchor: Option<AgentContextAnchor<'a>>,
-    /// What the prompt answers.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_target: Option<AgentContextReplyTarget<'a>>,
-    /// The prompting message, marked where it appears in the context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_message_id: Option<String>,
-    /// The discussion the prompt was posted in, through the prompt.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thread: Option<AgentContextThread<'a>>,
-    /// Other channel activity, grouped by discussion, oldest first.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub channel: Vec<AgentContextThread<'a>>,
-}
-
-/// The document location of the comment thread an agent prompt was posted in.
+/// A person an agent session acts for or hears from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum AgentContextAnchor<'a> {
-    /// A comment mark in a markdown document.
-    Markdown {
-        /// Lexical mark the comment is attached to.
-        mark_id: &'a str,
-        /// The marked text when the comment was posted, when it was captured.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        marked_text: Option<&'a str>,
-        /// The text the mark covers in the document now, when it was resolved.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        current_marked_text: Option<&'a str>,
-        /// The passage around the mark now, when it was resolved.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        surrounding_text: Option<&'a str>,
-    },
-    /// A highlight on a PDF.
-    PdfHighlight {
-        /// Highlight annotation the comment is attached to.
-        anchor_id: &'a str,
-        /// The text the highlight covers, when it carries any.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        marked_text: Option<&'a str>,
-    },
-    /// A point pinned on a PDF page, which covers no text.
-    PdfPin {
-        /// Pin annotation the comment is attached to.
-        anchor_id: &'a str,
-    },
+pub struct AgentContextPerson<'a> {
+    /// Their Macro user id.
+    pub id: &'a str,
+    /// How a reader names them.
+    pub name: &'a str,
+}
+
+/// Whose access an agent session runs with, and who sent the prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextPeople<'a> {
+    /// The session's owner.
+    pub owner: AgentContextPerson<'a>,
+    /// The prompt's sender; absent when a bot sent it on nobody's behalf.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender: Option<AgentContextPerson<'a>>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -360,9 +345,11 @@ pub enum AgentContextAnchor<'a> {
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    parent: Option<&'a MessageParent>,
+    instructions: Option<&'a str>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    context: Option<&'a AgentContext<'a>>,
+    people: Option<&'a AgentContextPeople<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trigger: Option<&'a TriggerContext>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -464,7 +451,7 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
-async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
+pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     if response.status() == reqwest::StatusCode::OK {
         return Ok(response);
     }
@@ -603,13 +590,29 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
+    /// Compose dimension-preserving channel markup from a real Lexical image node.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
+        let response = check_response(
+            self.client
+                .post(format!("{}/image-markdown", self.url))
+                .json(image)
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
     /// Composes the channel message announcing an agent session — a structured
     /// reply target above the session's Magic Chip — via the lexical service,
     /// so the markdown is built from real Lexical nodes.
     #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        reply_target: &AgentAnnouncementReplyTarget,
+        reply_target: Option<&AgentAnnouncementReplyTarget>,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
@@ -666,15 +669,16 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Sanitizes an agent prompt and optionally composes it with the
-    /// conversation it was posted in via the lexical service, so internal
-    /// nodes and escaping are handled by Lexical rather than by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, context), err)]
+    /// Sanitizes an agent prompt and optionally composes it with why the
+    /// agent was called via the lexical service, so internal nodes and
+    /// escaping are handled by Lexical rather than by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, trigger), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
-        parent: Option<&MessageParent>,
-        context: Option<&AgentContext<'_>>,
+        instructions: Option<&str>,
+        people: Option<&AgentContextPeople<'_>>,
+        trigger: Option<&TriggerContext>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
         let response = check_response(
@@ -682,8 +686,9 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
-                    parent,
-                    context,
+                    instructions,
+                    people,
+                    trigger,
                 })
                 .send()
                 .await?,
@@ -715,7 +720,9 @@ impl LexicalClient {
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let response = check_response(self.client.get(url).send().await?).await?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = check_response(self.client.get(url).headers(headers).send().await?).await?;
         response.json().await.context("unexpected response")
     }
 }

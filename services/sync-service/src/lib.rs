@@ -9,14 +9,15 @@ mod durable_object;
 mod error;
 mod generated;
 pub mod keepalive;
+mod lexical_service;
 mod metrics;
 mod mutex;
 mod secrets;
+mod socket;
 mod state;
 mod storage;
 mod tags;
 mod timeout;
-mod websocket;
 
 use tracing_subscriber::{
     EnvFilter, fmt::time::UtcTime, layer::SubscriberExt, util::SubscriberInitExt,

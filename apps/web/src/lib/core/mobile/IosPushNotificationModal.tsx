@@ -45,7 +45,7 @@ export function IosPushNotificationModal() {
                   Later
                 </button>
                 <Button
-                  variant="accent"
+                  variant="secondary"
                   size="sm"
                   class="text-sm"
                   onClick={async () => {

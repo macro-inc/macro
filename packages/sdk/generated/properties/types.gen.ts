@@ -152,7 +152,16 @@ export type CreatePropertyScope = 'user' | 'team';
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+
+/**
+ * A span of time from `start` to `end`, both included. The end is never
+ * before the start: a range that would end earlier does not deserialize.
+ */
+export type DateRange = {
+    end: string;
+    start: string;
+};
 
 /**
  * Request to provision (get-or-create) the caller's tag set for a scope.
@@ -273,7 +282,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * Query parameters for listing properties
@@ -322,6 +331,8 @@ export type PropertyDataType = {
 } | {
     type: 'date';
 } | {
+    type: 'date_range';
+} | {
     type: 'number';
 } | {
     type: 'string';
@@ -361,7 +372,7 @@ export type PropertyDefinition = {
      */
     is_system: boolean;
     owner: PropertyOwner;
-    specific_entity_type?: null | EntityType;
+    specific_entity_type: null | EntityType;
     updated_at: string;
 };
 
@@ -411,7 +422,7 @@ export type PropertyDefinitionWithOptionsResponse = {
  * A selectable option for select-type properties (service representation).
  */
 export type PropertyOption = {
-    color?: string | null;
+    color: string | null;
     created_at: string;
     display_order: number;
     id: string;
@@ -449,7 +460,7 @@ export type PropertyOptionValue = {
 };
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner = {
     scope: 'user';
@@ -457,6 +468,9 @@ export type PropertyOwner = {
 } | {
     scope: 'team';
     team_id: string;
+} | {
+    database_id: string;
+    scope: 'database';
 } | {
     scope: 'system';
 };
@@ -473,7 +487,7 @@ export type PropertyScope = 'user' | 'team' | 'system' | 'all';
  * here; task classification is resolved by the properties domain from the
  * document subtype.
  */
-export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'THREAD' | 'USER';
+export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'THREAD' | 'USER';
 
 /**
  * Canonical reference to an entity receiving properties.
@@ -523,6 +537,13 @@ export type PropertyValue = {
      * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
      */
     value: string;
+} | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
 } | {
     type: 'SelectOption';
     /**
@@ -581,6 +602,9 @@ export type SetPropertyValue = {
 } | {
     type: 'date';
     value: string;
+} | {
+    type: 'date_range';
+    value: DateRange;
 } | {
     type: 'number';
     value: number;

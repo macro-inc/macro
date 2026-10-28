@@ -7,6 +7,7 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
 import type { EditorType } from '@macro-inc/lexical-core';
@@ -15,6 +16,7 @@ import type { Accessor } from 'solid-js';
 
 type CreateConfiguredDiscussionMarkdownEditorOptions = {
   namespace: string;
+  resolveAppLink?: MentionLinkResolver;
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
@@ -30,6 +32,8 @@ export function createConfiguredDiscussionMarkdownEditor(
 ) {
   const editor = buildConfig(options.type ?? 'chat');
   editor.namespace(options.namespace);
+  if (options.resolveAppLink)
+    editor.withAppLinkResolver(options.resolveAppLink);
 
   if (options.enableMentions !== false) {
     // Intentionally no `block: 'channel'` — discussions live inside docs/tasks,

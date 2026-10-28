@@ -47,6 +47,56 @@ fn new_option(display_order: i32, value: PropertyOptionValue) -> PropertyOption 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
+async fn option_batches_filter_requested_ids_and_caller_visibility(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let personal = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let empty = Uuid::parse_str("88888888-8888-8888-8888-888888888888")?;
+    let foreign = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
+    let system = repo.list_property_definitions(None, None, true).await?[0].id;
+    let missing = Uuid::new_v4();
+    let ids = [priority, personal, empty, foreign, system, missing];
+
+    let options = repo
+        .get_visible_property_options_batch(&ids, &user_1(), Some(team_1()))
+        .await?;
+    assert_eq!(options.len(), 4);
+    assert_eq!(options[&personal].len(), 2);
+    assert!(options[&empty].is_empty());
+    assert!(options.contains_key(&system));
+    assert!(!options.contains_key(&foreign));
+    assert!(!options.contains_key(&missing));
+    assert_eq!(
+        options[&priority]
+            .iter()
+            .map(|option| option.display_order)
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2, 3]
+    );
+    assert_eq!(
+        options[&priority][0].value,
+        PropertyOptionValue::String("Low".into())
+    );
+
+    let outsider_options = repo
+        .get_visible_property_options_batch(&ids, &user_2(), None)
+        .await?;
+    assert_eq!(outsider_options.len(), 1);
+    assert!(outsider_options.contains_key(&system));
+    assert!(
+        repo.get_visible_property_options_batch(&[], &user_1(), Some(team_1()))
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
 async fn list_property_definitions_by_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
@@ -487,5 +537,175 @@ async fn get_caller_tag_definitions_with_options(pool: Pool<Postgres>) -> anyhow
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].definition.id, user2_tags);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_database_property_definition_preserves_type_and_isolates_ownership(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let database_id = macro_uuid::generate_uuid_v7();
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database_id)
+        .execute(&pool)
+        .await?;
+    let repo = PropertiesPgRepo::new(pool);
+    for (data_type, specific_entity_type) in [
+        (DataType::String, None),
+        (DataType::Number, None),
+        (DataType::Entity, Some(EntityType::User)),
+    ] {
+        // Database definitions may reuse a label across different table placements.
+        let definition = repo
+            .create_database_property_definition(
+                database_id,
+                "Status",
+                data_type,
+                false,
+                specific_entity_type,
+            )
+            .await?;
+        assert_eq!(definition.owner.database_id(), Some(database_id));
+        assert_eq!(definition.id.get_version_num(), 7);
+        assert_eq!(definition.display_name, "Status");
+        assert_eq!(definition.data_type, data_type);
+        assert_eq!(definition.specific_entity_type, specific_entity_type);
+        assert!(!definition.is_multi_select);
+        assert!(!definition.is_system);
+        assert!(!definition.is_metadata);
+        assert!(repo.get_property_definition(definition.id).await?.is_none());
+        assert!(repo.get_property_options(definition.id).await?.is_empty());
+    }
+    let shared = repo
+        .list_property_definitions(None, Some(&user_1()), false)
+        .await?;
+    assert_eq!(shared.len(), 2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_database_property_definition_rejects_missing_database(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let result = repo
+        .create_database_property_definition(
+            macro_uuid::generate_uuid_v7(),
+            "Missing database",
+            DataType::String,
+            false,
+            None,
+        )
+        .await;
+    assert!(result.is_err());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn a_database_binds_system_own_team_and_its_own_definitions_only(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let database_id = Uuid::now_v7();
+    let other_database_id = Uuid::now_v7();
+    for id in [database_id, other_database_id] {
+        sqlx::query!("INSERT INTO databases (id) VALUES ($1)", id,)
+            .execute(&pool)
+            .await?;
+    }
+    let repo = PropertiesPgRepo::new(pool);
+    let own_column = repo
+        .create_database_property_definition(database_id, "Seat", DataType::String, false, None)
+        .await?;
+    let other_column = repo
+        .create_database_property_definition(
+            other_database_id,
+            "Seat",
+            DataType::String,
+            false,
+            None,
+        )
+        .await?;
+    let system = repo.list_property_definitions(None, None, true).await?[0].id;
+    let team_priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let personal = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let other_team = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
+
+    let bindable = |id: Uuid| {
+        let repo = repo.clone();
+        async move {
+            repo.get_bindable_property_definition(id, "macro|user1@test.com", database_id)
+                .await
+                .map(|definition| definition.map(|definition| definition.id))
+        }
+    };
+    assert_eq!(bindable(system).await?, Some(system));
+    assert_eq!(bindable(team_priority).await?, Some(team_priority));
+    assert_eq!(bindable(personal).await?, Some(personal));
+    assert_eq!(bindable(own_column.id).await?, Some(own_column.id));
+    assert_eq!(bindable(other_team).await?, None);
+    assert_eq!(bindable(other_column.id).await?, None);
+    assert_eq!(bindable(Uuid::new_v4()).await?, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn definitions_by_id_include_database_owned_ones_with_their_options(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let database_id = Uuid::now_v7();
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database_id,)
+        .execute(&pool)
+        .await?;
+    let repo = PropertiesPgRepo::new(pool);
+    let column = repo
+        .create_database_property_definition(
+            database_id,
+            "RSVP",
+            DataType::SelectString,
+            false,
+            None,
+        )
+        .await?;
+    repo.create_property_option(
+        column.id,
+        0,
+        PropertyOptionValue::String("Going".into()),
+        None,
+    )
+    .await?;
+    let team_priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let missing = Uuid::new_v4();
+
+    let mut definitions = repo
+        .get_property_definitions_with_options(&[column.id, team_priority, missing])
+        .await?;
+    definitions.sort_by_key(|definition| definition.definition.display_name.clone());
+
+    assert_eq!(definitions.len(), 2);
+    assert_eq!(definitions[0].definition.id, column.id);
+    assert_eq!(definitions[0].definition.display_name, "RSVP");
+    assert_eq!(
+        definitions[0]
+            .property_options
+            .iter()
+            .map(|option| option.value.clone())
+            .collect::<Vec<_>>(),
+        vec![PropertyOptionValue::String("Going".into())]
+    );
+    assert_eq!(definitions[1].definition.id, team_priority);
+    assert_eq!(definitions[1].property_options.len(), 4);
+    assert!(
+        repo.get_property_definitions_with_options(&[])
+            .await?
+            .is_empty()
+    );
     Ok(())
 }

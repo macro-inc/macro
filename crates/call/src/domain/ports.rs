@@ -18,13 +18,14 @@ use notification::domain::models::apple::VoipPushPayload;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
-    EditCallRecordRequest, EditCallTranscriptRequest,
+    CallPeople, CallRecordPage, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
+    EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
-    Meeting, MeetingInvitePermissions, MeetingToken, UpdateMeetingRequest,
+    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
+    MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -33,7 +34,8 @@ use super::models::{
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
+    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -41,6 +43,31 @@ use super::models::{
 pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Persist an owner-bound room reservation and discard expired reservation metadata.
+    fn insert_meeting_preparation(
+        &self,
+        actor: &str,
+        preparation: &MeetingPreparation,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Atomically bind a live, unused reservation owned by actor to their new meeting.
+    fn claim_meeting_preparation(
+        &self,
+        id: &Uuid,
+        actor: &str,
+        meeting_id: &Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Delete only unused reservations owned by actor; a claimed room cannot be cancelled.
+    fn cancel_meeting_preparation(
+        &self,
+        id: &Uuid,
+        actor: &str,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+    /// Find a claimed, unexpired room that has never been activated as a call.
+    fn get_meeting_preparation(
+        &self,
+        meeting_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<MeetingPreparation>, CallError>> + Send;
 
     /// Persist a standalone invitation or reuse an invitation pinned to a channel call.
     fn create_meeting(
@@ -175,7 +202,7 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
 
-    /// Commit authenticated link participation and grant view access to this call only.
+    /// Commit authenticated link participation and grant comment access to this call only, enabling chat.
     fn add_meeting_participant<'a>(
         &self,
         call_id: &Uuid,
@@ -212,6 +239,14 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<CallParticipant>, Self::Err>> + Send;
 
+    /// The people on an archived call: its Macro participants, the owner of
+    /// its meeting link, and the invitees of the calendar event carrying that
+    /// link.
+    fn get_call_record_people(
+        &self,
+        call_record_id: &Uuid,
+    ) -> impl Future<Output = Result<CallPeople, Self::Err>> + Send;
+
     /// Get the count of active attendees in a call: Macro participants plus
     /// non-account guests. Archival on room-empty keys off this reaching 0.
     fn get_participant_count(
@@ -236,6 +271,21 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Record that a user declined an active call. Idempotent: declining the
+    /// same call twice keeps the first decline.
+    fn record_decline<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Check if a user has declined an active call on any of their devices.
+    fn has_declined(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Delete a call record (when the call ends).
     fn delete_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -245,6 +295,15 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Attach a recording started asynchronously. Persists on the active call,
+    /// or its archived record if the call ended during startup. Returns whether
+    /// it was attached to an active call; otherwise the caller must stop egress.
+    fn attach_meeting_recording(
+        &self,
+        call_id: &Uuid,
+        egress_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Load the canonical team-share facts (persisted creator, the creator's
     /// team, current explicit grant, revision) the owner policy authorizes
@@ -378,12 +437,14 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Fetch visible active and archived records, without transcripts. Status
     /// reflects the user's participation and current channel membership.
     /// Standalone calls require an individual user grant, never a group grant.
-    /// Apply `filter`, order by start time descending, and return at most `limit`.
+    /// Apply `filter`, order descending by `page`'s sort timestamp and call id,
+    /// seek past `page.after`, and return at most `limit`.
     fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
         limit: u32,
         filter: &LiteralTree<CallLiteral>,
+        page: CallRecordPage,
     ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
 
     /// Resolve the display name for a single channel.
@@ -628,8 +689,20 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Create a new RTC room with the given name.
     fn create_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Delete an RTC room.
+    /// Reserve an empty room for setup, expiring automatically without participants.
+    fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Delete an RTC room. Deleting a room that no longer exists succeeds.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Every RTC room that currently exists.
+    fn list_rooms(&self) -> impl Future<Output = anyhow::Result<Vec<RtcRoom>>> + Send;
+
+    /// Read connected identities and names without joining the room.
+    fn list_meeting_participants(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<MeetingRtcParticipant>>>> + Send;
 
     /// Generate an access token for a participant to join a room.
     fn generate_token<'a>(
@@ -703,6 +776,17 @@ pub trait CallRtcClient: Send + Sync + 'static {
 /// Service interface for call operations.
 #[cfg_attr(test, mockall::automock)]
 pub trait CallService: Send + Sync + 'static {
+    /// Reserve an empty room without creating a call, recording, or inviting anyone.
+    fn prepare_meeting<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<MeetingPreparation, CallError>> + Send;
+    /// Cancel only the actor's unused preparation; safe against concurrent activation.
+    fn cancel_meeting_preparation<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
     /// Create an invitation without starting media.
     fn create_meeting<'a>(
         &self,
@@ -766,6 +850,13 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         token: MeetingToken,
     ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Preview connected people using the invitation; channel links require sign-in.
+    fn get_meeting_participants<'a>(
+        &self,
+        token: MeetingToken,
+        actor: Option<MacroUserIdStr<'a>>,
+    ) -> impl Future<Output = Result<MeetingParticipants, CallError>> + Send;
+
     /// Join using an authenticated Macro identity.
     fn join_meeting<'a>(
         &self,
@@ -798,6 +889,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Backstop for missed `participant_left` webhooks: marks participants
     /// and guests no longer connected to their RTC room as left, and archives
     /// calls that leaves empty. One call's failure does not stop the rest.
+    /// Then deletes RTC rooms that stale tokens recreated for archived calls.
     fn reconcile_stale_calls(&self) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List all active calls in channels the user is an active member of,
@@ -821,6 +913,31 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Decline a specific active call for this user without joining it.
+    ///
+    /// Records the decline and notifies the user's other connected clients
+    /// (`call_declined`) so they stop ringing; the call itself keeps going
+    /// for everyone else. Bound to `call_id` so a stale ring for a replaced
+    /// call cannot decline the channel's newer active call. Returns
+    /// [`CallError::NotFound`] when that call is no longer active.
+    fn decline_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Decline a ringing call from a native client, authenticated like
+    /// [`Self::get_ring_status`] with the RTC access token from its VoIP push
+    /// payload. Has the same effect as [`Self::decline_call`] for the token's
+    /// identity. Returns [`CallError::Auth`] when the token is invalid or
+    /// carries no room grant, and [`CallError::NotFound`] when the room's
+    /// active call is not the one being declined.
+    fn decline_ring(
+        &self,
+        call_id: &Uuid,
+        bearer_token: &str,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Report the per-user ring status for a call. The caller authenticates
     /// with the RTC access token delivered in its VoIP push payload; the
@@ -952,6 +1069,27 @@ pub trait CallRecordQueryService: Send + Sync + 'static {
         &self,
         req: GetCallRecordsRequest,
     ) -> impl Future<Output = Result<Vec<CallRecord>, CallError>> + Send;
+
+    /// The people on an archived call record: its Macro participants, the
+    /// owner of its meeting link, and the invitees of the calendar event
+    /// carrying that link. Empty when the record does not exist.
+    fn get_call_record_people(
+        &self,
+        call_record_id: Uuid,
+    ) -> impl Future<Output = Result<CallPeople, CallError>> + Send;
+}
+
+/// Read-only port for one call record under its reader's access, for services
+/// that react to calls rather than manage them.
+pub trait CallRecordReader: Send + Sync + 'static {
+    /// The record the receipt authorizes, with its participants, guests and
+    /// transcript, and its channel named as the receipt's user sees it. The
+    /// receipt must be for `EntityType::Call`, keyed by the call's UUID.
+    /// Returns [`CallError::NotFound`] once the record is gone.
+    fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 }
 
 /// No-op implementation of [`CallRecordQueryService`] for services
@@ -965,6 +1103,11 @@ impl CallRecordQueryService for NoOpCallRecordQueryService {
         _req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
         Ok(Vec::new())
+    }
+
+    /// Always returns no people.
+    async fn get_call_record_people(&self, _call_record_id: Uuid) -> Result<CallPeople, CallError> {
+        Ok(CallPeople::default())
     }
 }
 

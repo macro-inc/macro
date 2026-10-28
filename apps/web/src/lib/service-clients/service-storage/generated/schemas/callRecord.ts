@@ -15,6 +15,8 @@ import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordRoomName } from './callRecordRoomName';
+import type { CallRecordSourceProperty } from './callRecordSourceProperty';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTeamShareAccessLevel } from './callRecordTeamShareAccessLevel';
@@ -59,12 +61,13 @@ this value when present, falling back to `started_at` otherwise. */
   recordingStartedAt?: CallRecordRecordingStartedAt;
   /** Presigned URL for the call recording, if available. */
   recordingUrl?: CallRecordRecordingUrl;
-  /** The RTC room name. */
-  roomName: string;
+  /** The RTC room name. `None` for imported calls, which never had a room. */
+  roomName?: CallRecordRoomName;
   /** Whether the call is shared with the creator's team. While the call is
 live this is the pending toggle applied at archive; afterwards it
 mirrors `team_share_access_level`. */
   shareWithTeam: boolean;
+  source?: CallRecordSourceProperty;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
   status?: CallRecordStatus;
@@ -75,4 +78,8 @@ once summarization has run; active calls always return `None`. */
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
   userAccessLevel?: CallRecordUserAccessLevel;
+  /** Whether the authenticated viewer has declined this call on any device.
+Set on the single-record read so clients that missed `call_declined`
+can still stop ringing via reconciliation; `false` in list contexts. */
+  viewerHasDeclined?: boolean;
 }

@@ -16,7 +16,9 @@ async function sendMessage(page: Page, channelId: string, text: string) {
   const sent = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' &&
-      response.url().endsWith(`/channels/${channelId}/message`)
+      new URL(response.url()).pathname.endsWith(
+        `/messages/channel/${channelId}`
+      )
   );
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   expect((await sent).ok()).toBe(true);
@@ -80,7 +82,9 @@ test('stays pinned throughout consecutive sends and server acknowledgements', as
     const sent = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
-        response.url().endsWith(`/channels/${channelId}/message`)
+        new URL(response.url()).pathname.endsWith(
+          `/messages/channel/${channelId}`
+        )
     );
     await input.press('Enter');
     expect((await sent).ok()).toBe(true);
@@ -159,7 +163,9 @@ for (const viewport of [
         const sent = page.waitForResponse(
           (response) =>
             response.request().method() === 'POST' &&
-            response.url().endsWith(`/channels/${channelId}/message`)
+            new URL(response.url()).pathname.endsWith(
+              `/messages/channel/${channelId}`
+            )
         );
         await page
           .getByRole('button', { name: 'Send message', exact: true })

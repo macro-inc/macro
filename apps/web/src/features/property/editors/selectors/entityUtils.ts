@@ -10,15 +10,18 @@ import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
+  CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
+  InitiativeEntity,
   ProjectEntity,
   TaskEntity,
 } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 export type EntityTypeItemMap = {
   USER: UserItem;
@@ -28,10 +31,14 @@ export type EntityTypeItemMap = {
   CHAT: EntityItem<ChatEntity>;
   TASK: EntityItem<TaskEntity>;
   THREAD: EntityItem<EmailEntity>;
-  COMPANY: never;
+  COMPANY: EntityItem<CrmCompanyEntity>;
+  CONTACT: EntityItem<CrmContactEntity>;
+  INITIATIVE: EntityItem<InitiativeEntity>;
   // Call records aren't entity-reference targets in quickAccess.
   CALL_RECORD: never;
   CALENDAR_EVENT: never;
+  // Database rows aren't entity-reference targets in quickAccess.
+  DATABASE_ROW: never;
 };
 
 /**
@@ -46,10 +53,13 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('CHAT', () => ['chat'] as const)
     .with('TASK', () => ['task'] as const)
     .with('THREAD', () => ['email'] as const) // Note: emails aren't in quickAccess yet, handled separately
-    .with('COMPANY', () => [] as const) // Companies aren't in quickAccess
+    .with('INITIATIVE', () => ['initiative'] as const)
+    .with('COMPANY', () => ['crm_company'] as const)
+    .with('CONTACT', () => ['crm_contact'] as const)
     .with('CALL_RECORD', () => [] as const) // Call records aren't in quickAccess
     .with('CALENDAR_EVENT', () => [] as const) // Calendar events aren't in quickAccess
-    .exhaustive();
+    .with('DATABASE_ROW', () => [] as const) // Database rows aren't in quickAccess
+    .exhaustive(() => [] as const);
   return buckets;
 }
 
@@ -132,34 +142,50 @@ export function getEntitySearchText(entity: CombinedEntity): string {
     if (name === email) return `${email} | ${email}`;
     return `${name} | ${email}`;
   }
+  if (entity.data.type === 'crm_contact') {
+    return `${entity.data.name} | ${entity.data.email}`;
+  }
 
   return entity.data.name ?? '';
 }
 
-/** Gets the EntityType string for an entity */
-export function getEntityType(entity: CombinedEntity): EntityType {
+/**
+ * The properties-service entity type for an entity, or `undefined` when the
+ * properties service can't reference it.
+ */
+export function getEntityType(entity: CombinedEntity): EntityType | undefined {
   if (entity.kind === 'user') {
     return 'USER';
   }
 
-  const data = entity.data;
-  switch (data.type) {
-    case 'channel':
-      return 'CHANNEL';
-    case 'document':
-      if (data.subType?.type === 'task') {
-        return 'TASK';
-      }
-      return 'DOCUMENT';
-    case 'chat':
-      return 'CHAT';
-    case 'project':
-      return 'PROJECT';
-    case 'email':
-      return 'THREAD';
-    default:
-      return (data as EntityData).type.toUpperCase() as EntityType;
-  }
+  return match<EntityData, EntityType | undefined>(entity.data)
+    .with({ type: 'channel' }, () => 'CHANNEL')
+    .with({ type: 'document' }, (data) =>
+      data.subType?.type === 'task' ? 'TASK' : 'DOCUMENT'
+    )
+    .with({ type: 'chat' }, () => 'CHAT')
+    .with({ type: 'project' }, () => 'PROJECT')
+    .with({ type: 'email' }, () => 'THREAD')
+    .with({ type: 'crm_company' }, () => 'COMPANY')
+    .with({ type: 'crm_contact' }, () => 'CONTACT')
+    .with({ type: 'initiative' }, () => 'INITIATIVE')
+    .with({ type: 'call' }, () => 'CALL_RECORD')
+    .with({ type: 'calendar_event' }, () => 'CALENDAR_EVENT')
+    .with(
+      {
+        type: P.union(
+          'agent_session',
+          'channel_message',
+          'channel_thread',
+          'database',
+          'form',
+          'routine',
+          'foreign'
+        ),
+      },
+      () => undefined
+    )
+    .exhaustive(() => undefined);
 }
 
 /** Check if entity is a channel */

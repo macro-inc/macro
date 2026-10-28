@@ -84,6 +84,10 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
             resources::CODEX_OAUTH_KMS_ALIAS,
             "ChatGPT OAuth envelope encryption key (local)",
         ),
+        (
+            resources::WHATSAPP_SESSION_KMS_ALIAS,
+            "WhatsApp session data key encryption key (local)",
+        ),
     ] {
         if existing
             .aliases()
@@ -123,6 +127,19 @@ async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {
             request = request.attributes(aws_sdk_sqs::types::QueueAttributeName::FifoQueue, "true");
         }
         ignore_exists(request.send().await.map(|_| ()), &format!("queue {name}"))?;
+    }
+    // Update existing queues too; do not rely on CreateQueue accepting changed attributes.
+    for queue in resources::QUEUES {
+        let attributes = queue.attributes();
+        if attributes.is_empty() {
+            continue;
+        }
+        sqs.set_queue_attributes()
+            .queue_url(resources::queue_url(queue.name))
+            .set_attributes(Some(attributes))
+            .send()
+            .await
+            .with_context(|| format!("setting attributes on {}", queue.name))?;
     }
     Ok(())
 }

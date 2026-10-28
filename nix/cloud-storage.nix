@@ -53,12 +53,24 @@
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
       # `.sh` is required so `include_str!` of
-      # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
-      assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
+      # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
+      # `.ttf` and `.xml` for the fonts and preset shape definitions that
+      # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
+      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
+      # for the Deno bootstrap and bundled public SDK/Handlebars runtime;
+      # `.proto` for the protobuf files the `whatsmeow_proto` and
+      # `whatsmeow_signal` build scripts compile.
+      assetFilter =
+        path: _type:
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+      # Rust local HTTP clients embed only the public proxy CA, never its keys.
+      localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
         (sqlxFilter path type)
+        || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
@@ -117,7 +129,11 @@
           let
             rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
           in
-          (rel == ".sqlx")
+          (rel == "infra")
+          || (rel == "infra/local")
+          || (rel == "infra/local/certs")
+          || (localCaFilter path type)
+          || (rel == ".sqlx")
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
@@ -217,7 +233,9 @@
           doCheck = false;
           doInstallCargoArtifacts = true;
           cargoExtraArgs = "--locked --all-features --workspace --lib --exclude sync_service";
-          RUSTFLAGS = "-Dwarnings" + pkgs.lib.optionalString isLinux " -C link-arg=-fuse-ld=mold";
+          # Keep RUSTFLAGS identical to cargoArtifacts: any difference changes
+          # cargo's fingerprint and recompiles every dependency in this layer.
+          # The clippy checks enforce `-D warnings`.
           RUSTDOCFLAGS = "-Dwarnings";
         }
       );
@@ -296,7 +314,7 @@
             "--all-features"
             "--bin document_storage_service_openapi"
             "--bin properties_service_openapi"
-            "--bin document_cognition_service_openapi"
+            "--bin agent_harness_cognition_openapi"
             "--bin authentication_service_openapi"
             "--bin notification_service_openapi"
             "--bin static_file_service_openapi"
@@ -307,7 +325,6 @@
             "--bin email_service_openapi"
             "--bin search_service_openapi"
             "--bin scheduled_action_openapi"
-            "--bin document_cognition_service_models"
             "--bin gen_tool_schemas"
           ];
         }
@@ -346,11 +363,6 @@
           binaries = [ "agent_harness_service" ];
         }
         {
-          serviceName = "agent-schedule-service";
-          packageName = "scheduled_action";
-          binaries = [ "service" ];
-        }
-        {
           serviceName = "authentication-service";
           packageName = "authentication_service";
           binaries = [ "authentication_service" ];
@@ -376,14 +388,14 @@
           binaries = [ "convert_service" ];
         }
         {
-          serviceName = "document-cognition-service";
-          packageName = "document_cognition_service";
-          binaries = [ "document_cognition_service" ];
-        }
-        {
           serviceName = "document-storage-service";
           packageName = "document_storage_service";
           binaries = [ "document_storage_service" ];
+        }
+        {
+          serviceName = "slack-import-worker";
+          packageName = "slack_import_worker";
+          binaries = [ "slack_import_worker" ];
         }
         {
           serviceName = "email-service";
@@ -397,11 +409,6 @@
           serviceName = "image-proxy-service";
           packageName = "image_proxy_service";
           binaries = [ "image_proxy_service" ];
-        }
-        {
-          serviceName = "mcp-server";
-          packageName = "mcp_service";
-          binaries = [ "mcp_service" ];
         }
         {
           serviceName = "notification-service";
@@ -422,6 +429,11 @@
           serviceName = "unfurl-service";
           packageName = "unfurl_service";
           binaries = [ "unfurl_service" ];
+        }
+        {
+          serviceName = "whatsapp-session-service";
+          packageName = "whatsapp_session_service";
+          binaries = [ "whatsapp_session_service" ];
         }
       ];
 
@@ -514,6 +526,27 @@
         }) deployServiceBinaryDefinitions
       );
 
+      # DSS and its worker are separate Cargo packages with separate pruned
+      # source closures, but CI hands both binaries to the same Pulumi stack.
+      # Bundle only the deploy output; local-stack-binaries keeps the worker
+      # opt-in by continuing to use the unbundled deployServiceBinaryPackages.
+      documentStorageDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.document-storage-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-document-storage-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-document-storage-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-slack-import-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
+
       localStackBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
           name = "local-stack-binaries-${def.serviceName}";
@@ -523,18 +556,16 @@
 
       localStackDeployServiceNames = [
         "agent-harness-service"
-        "agent-schedule-service"
         "calendar-service"
         "connection-gateway"
         "contacts-service"
-        "document-cognition-service"
         "document-storage-service"
         "email-service"
         "image-proxy-service"
-        "mcp-server"
         "notification-service"
         "static-file-service"
         "unfurl-service"
+        "whatsapp-session-service"
       ];
 
       localStackBinaries = pkgs.buildEnv {
@@ -562,8 +593,15 @@
       callRecordingPreviewFfmpegLayer =
         let
           ffmpegVersion = "7.0.2";
+          # johnvansickle.com is the upstream but has had multi-hour outages.
+          # The GitHub copies are byte-identical (the hash enforces it) and
+          # pinned to commits; fetchurl tries each URL in order.
           ffmpegArchive = pkgs.fetchurl {
-            url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-${ffmpegVersion}-amd64-static.tar.xz";
+            urls = [
+              "https://raw.githubusercontent.com/1871847400/mikufans/95396855e335ba04b6fb300a5a688a1ac753ffea/docker/backend/ffmpeg-${ffmpegVersion}-amd64-static.tar.xz"
+              "https://raw.githubusercontent.com/DAIRO-HY/DairoMusicSearch/e49a8c67aaa4ed1cd4e0d655052ee2d65c1aef8e/document/docker/ffmpeg-${ffmpegVersion}-amd64-static.tar.xz"
+              "https://johnvansickle.com/ffmpeg/releases/ffmpeg-${ffmpegVersion}-amd64-static.tar.xz"
+            ];
             hash = "sha256-q9qNd86DCRQfg6uO3wWWg0CHxSRn9rrfN2pqKkyHz2c=";
           };
         in
@@ -877,7 +915,9 @@
           cargo-nextest
           cargo-expand
           binaryen
-          wasm-bindgen-cli
+          # Match Cargo.lock so parallel wasm-pack builds do not race to
+          # install a replacement CLI into their shared cache.
+          wasm-bindgen-cli_0_2_126
           wasm-pack
           pkg-config
           bacon
@@ -899,6 +939,8 @@
           doppler
           biome
           jq
+          prek
+          gitleaks
           # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
           # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
           # stripe-cli
@@ -915,6 +957,14 @@
     in
     {
       checks = {
+        code-execution-assets = pkgs.runCommand "cloud-storage-code-execution-assets" { } ''
+          for source in ${src} ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}; do
+            for asset in bootstrap.mjs sdk.mjs handlebars.mjs; do
+              test -s "$source/crates/code_execution/src/outbound/deno/$asset"
+            done
+          done
+          touch $out
+        '';
         fmt = craneLib.cargoFmt {
           inherit src;
           pname = "cloud-storage";
@@ -946,7 +996,7 @@
             crateToDir = {
               document_storage_service = "service-storage";
               properties_service = "service-properties";
-              document_cognition_service = "service-cognition";
+              agent_harness_cognition = "service-cognition";
               authentication_service = "service-auth";
               notification_service = "service-notification";
               static_file_service = "service-static-files";
@@ -992,6 +1042,9 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // {
+        deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+      }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
         local-stack-binaries = localStackBinaries;
@@ -1025,7 +1078,29 @@
               # entries while switching compilers, breaking aws-lc and librdkafka.
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
-              shellHook = pkgs.lib.optionalString isLinux ''
+              shellHook = ''
+                if command -v prek >/dev/null 2>&1; then
+                  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+                  if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
+                    # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
+                    # unset it only for this install so we do not overwrite the
+                    # dispatcher; git still runs our hook via that dispatcher.
+                    hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
+                    cursor_hooks=""
+                    if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
+                      cursor_hooks="$hooks_path"
+                      git -C "$repo_root" config --local --unset-all core.hooksPath || true
+                    fi
+                    if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
+                      echo "warning: prek hook install failed" >&2
+                    fi
+                    if [ -n "$cursor_hooks" ]; then
+                      git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
+                    fi
+                  fi
+                fi
+              ''
+              + pkgs.lib.optionalString isLinux ''
                 target_dir="''${CARGO_TARGET_DIR:-target}"
                 current_cc="$(type -P "''${CC:-cc}" || true)"
                 if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then

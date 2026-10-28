@@ -22,15 +22,64 @@ use model_owner::Owner;
 use super::*;
 use crate::domain::engine::AgentIdentity;
 use crate::outbound::log_frames::LogFrameSource;
-use crate::testing::ScriptedEngine;
+use crate::testing::{ScriptedEngine, TestAdmission, disabled_admission};
 use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::{
     NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
 };
 
+mod summary;
+
 /// Instructions long enough to be unmistakable in an assertion, and shaped
 /// like something a real session would carry.
 const INSTRUCTIONS: &str = "Answer in one sentence. Never open a pull request.";
+
+#[tokio::test]
+async fn a_failed_history_read_never_creates_an_empty_conversation() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct RecoverableFrames(Arc<AtomicBool>);
+    impl FrameSource for RecoverableFrames {
+        fn frames(
+            &self,
+            _: AgentSessionId,
+        ) -> futures::future::BoxFuture<
+            '_,
+            agent_session::domain::error::Result<Vec<agent_session::domain::model::Message>>,
+        > {
+            Box::pin(async move {
+                if self.0.load(Ordering::SeqCst) {
+                    Err(agent_session::domain::error::AgentSessionError::Unknown(
+                        anyhow::anyhow!("history unavailable"),
+                    ))
+                } else {
+                    Ok(Vec::new())
+                }
+            })
+        }
+    }
+    let failed = Arc::new(AtomicBool::new(true));
+    let engine = Arc::new(ScriptedEngine::new(Vec::new()));
+    let manager = InMemAgentManager::new(
+        engine.clone(),
+        Arc::new(RecoverableFrames(failed.clone())),
+        Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let id = AgentSessionId::new();
+    assert!(
+        manager
+            .attach(facts(id), Some("token".to_owned()))
+            .await
+            .is_err()
+    );
+    assert!(!manager.store.contains_key(&id));
+    assert!(!manager.live.contains_key(&id));
+    assert_eq!(manager.session_token(id), None);
+    assert!(engine.requests().is_empty());
+    failed.store(false, Ordering::SeqCst);
+    assert!(manager.attach(facts(id), None).await.is_ok());
+    assert!(manager.store.contains_key(&id));
+}
 
 /// Attach `transport`, waiting out the previous one's disconnect.
 ///
@@ -46,7 +95,10 @@ async fn attach_retrying(
 ) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let transport = manager.attach(facts.clone(), None).await;
+        let transport = manager
+            .attach(facts.clone(), None)
+            .await
+            .expect("history should restore");
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -64,6 +116,34 @@ async fn attach_retrying(
     }
 }
 
+/// Compare the original prose while retaining the actual invocation envelope in
+/// ScriptedEngine's capture. Protocol tests assert its current action ID.
+fn without_invocation_context(message: &str) -> &str {
+    let Some((prose, suffix)) = message.rsplit_once("<m-agent-context>") else {
+        return message;
+    };
+    let Some(json) = suffix.strip_suffix("</m-agent-context>") else {
+        return message;
+    };
+    let Ok(context) = serde_json::from_str::<serde_json::Value>(json) else {
+        return message;
+    };
+    let Some(invocation) = context["text"]
+        .as_str()
+        .and_then(|text| text.strip_prefix("<invocation turn_id=\""))
+    else {
+        return message;
+    };
+    let Some((turn, _)) = invocation.split_once('"') else {
+        return message;
+    };
+    if context["version"] == 1 && turn.parse::<macro_uuid::Uuid>().is_ok() {
+        prose
+    } else {
+        message
+    }
+}
+
 /// Block until the engine has been asked to run the turn answering `prompt`.
 ///
 /// The prompt returns as soon as the session machine has written the frame,
@@ -72,10 +152,11 @@ async fn attach_retrying(
 async fn await_turns(engine: &ScriptedEngine, prompt: &str) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let seen = engine
-            .requests()
-            .iter()
-            .any(|turn| turn.messages.iter().any(|message| message == prompt));
+        let seen = engine.requests().iter().any(|turn| {
+            turn.messages
+                .iter()
+                .any(|message| without_invocation_context(message) == prompt)
+        });
         if seen {
             return;
         }
@@ -96,6 +177,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
         engine,
         Arc::new(LogFrameSource::new(repo.clone())),
         Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
     )
 }
 
@@ -103,7 +185,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
         id,
         owner: Owner::User(owner()),
-        model: "test-model".to_owned(),
+        model: "anthropic/claude-sonnet-5-5".to_owned(),
         identity: None,
         instructions: None,
         acp_session_id: None,
@@ -121,6 +203,7 @@ fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFac
 fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
     SessionFacts {
         identity: Some(AgentIdentity {
+            bot: BotId::TEST_A,
             name: name.to_owned(),
             handle: handle.to_owned(),
         }),
@@ -140,7 +223,7 @@ async fn logged_frames(repo: &InMemoryAgentSessionRepo, id: AgentSessionId) -> V
                     agent_runtime_protocol::domain::schema::v0::ToServerMessage::Acp(acp) => &acp.0,
                     _ => return "system-event".to_owned(),
                 },
-                Message::ToRuntime(message) => match message {
+                Message::ToRuntime(message) | Message::Notification(message) => match message {
                     agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage::Acp(acp) => {
                         &acp.0
                     }
@@ -168,13 +251,14 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
-            model: "test-model".to_owned(),
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
             harness: "macro-inmem".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -192,7 +276,11 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
             "streamed reply".to_owned(),
         )])),
     );
-    let transport = manager.attach(facts(id), None).await;
+    let manager = manager.with_admission(disabled_admission());
+    let transport = manager
+        .attach(facts(id), None)
+        .await
+        .expect("history should restore");
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -249,7 +337,10 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     // disconnect-then-resume order the harness's deliver path drives.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let transport = manager.attach(facts(id), None).await;
+        let transport = manager
+            .attach(facts(id), None)
+            .await
+            .expect("history should restore");
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -289,6 +380,104 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     }
 }
 
+#[tokio::test]
+async fn manager_admission_rejects_turns_without_wedging_the_session() {
+    use ai_billing::domain::{AiAdmissionError, DenyReason};
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .unwrap();
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let denial = AiAdmissionError::Denied(DenyReason::AllowanceExhausted);
+    let admission = Arc::new(TestAdmission::new(Err(denial)));
+    let manager = manager(&repo, engine.clone()).with_admission(admission.clone());
+    let transport = manager.attach(facts(id), None).await.unwrap();
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .unwrap();
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            // Development commands are disabled, so this is provider-backed text.
+            AgentAction::prompt("/ask unavailable"),
+            AgentActionId::mint(),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if logged_frames(&repo, id)
+                .await
+                .iter()
+                .any(|frame| frame.contains(denial.code()))
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the runtime must return its sanitized denial");
+    assert!(engine.requests().is_empty());
+    assert!(manager.store.get(&id).unwrap().history.is_empty());
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        vec![(owner().to_string(), ai_usage::AiFeature::AgentSession)]
+    );
+
+    // A second prompt must run on the same connection: a rejection is not a
+    // disconnect and must release the session machine's pending turn.
+    *admission.result.lock().unwrap() = Ok(());
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("retry"),
+            AgentActionId::mint(),
+        )
+        .await
+        .unwrap();
+    await_turns(&engine, "retry").await;
+    assert_eq!(
+        engine.requests()[0]
+            .messages
+            .iter()
+            .map(|text| without_invocation_context(text).to_owned())
+            .collect::<Vec<_>>(),
+        ["retry"]
+    );
+}
+
 /// A "restart": the second manager shares nothing with the first but the
 /// durable repo, the way a new process would. The resumed turn must carry
 /// the first turn's conversation, rebuilt from the frame log.
@@ -308,13 +497,14 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
-            model: "test-model".to_owned(),
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
             harness: "macro-inmem".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -332,7 +522,10 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
             "streamed reply".to_owned(),
         )])),
     );
-    let transport = before.attach(facts(id), None).await;
+    let transport = before
+        .attach(facts(id), None)
+        .await
+        .expect("history should restore");
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -381,7 +574,8 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
                 },
                 None,
             )
-            .await;
+            .await
+            .expect("history should restore");
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -422,7 +616,11 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     // The rebuilt context: the first turn's prompt and reply, then the new
     // prompt - not just the new prompt.
     assert_eq!(
-        engine.requests()[0].messages,
+        engine.requests()[0]
+            .messages
+            .iter()
+            .map(|text| without_invocation_context(text).to_owned())
+            .collect::<Vec<_>>(),
         vec![
             "hello agent".to_owned(),
             "streamed reply".to_owned(),
@@ -455,13 +653,14 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
-            model: "test-model".to_owned(),
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
             harness: "macro-inmem".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -530,13 +729,14 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
-            model: "test-model".to_owned(),
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
             harness: "macro-inmem".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -552,7 +752,10 @@ async fn a_session_without_instructions_hands_the_engine_none() {
         "acknowledged".to_owned(),
     )]));
     let manager = manager(&repo, Arc::clone(&engine));
-    let transport = manager.attach(facts(id), None).await;
+    let transport = manager
+        .attach(facts(id), None)
+        .await
+        .expect("history should restore");
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -590,13 +793,14 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
-            model: "test-model".to_owned(),
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
             harness: "macro-inmem".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -662,13 +866,98 @@ async fn the_manager_remembers_the_egress_token_from_spawn_until_teardown() {
 
     let _spawned = manager
         .attach(facts(id), Some("session-token".to_owned()))
-        .await;
+        .await
+        .expect("history should restore");
     assert_eq!(manager.session_token(id).as_deref(), Some("session-token"));
 
     // A resume passes nothing and keeps what spawn stored.
-    let _resumed = manager.attach(facts(id), None).await;
+    let _resumed = manager
+        .attach(facts(id), None)
+        .await
+        .expect("history should restore");
     assert_eq!(manager.session_token(id).as_deref(), Some("session-token"));
 
     manager.teardown(id);
     assert_eq!(manager.session_token(id), None);
+}
+
+/// Teardown is what ends the session, so it also drops the MCP sessions the
+/// egress token was holding. A connector that pools them learns the token.
+#[tokio::test]
+async fn teardown_releases_pooled_mcp_sessions_for_the_egress_token() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let mcp = Arc::new(RecordingRelease {
+        released: std::sync::Mutex::new(Vec::new()),
+    });
+    let manager = InMemAgentManager::new(
+        Arc::new(ScriptedEngine::new(Vec::new())),
+        Arc::new(LogFrameSource::new(repo.clone())),
+        mcp.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let id = AgentSessionId::new();
+    let _spawned = manager
+        .attach(facts(id), Some("session-token".to_owned()))
+        .await
+        .expect("history should restore");
+
+    manager.teardown(id);
+
+    assert_eq!(
+        mcp.released.lock().expect("lock").as_slice(),
+        ["session-token"]
+    );
+}
+
+/// A resume that rotates the credential leaves the old token unaccepted, so
+/// the MCP sessions pooled under it are released; the same token again is
+/// still in use and keeps them.
+#[tokio::test]
+async fn attaching_with_a_new_token_releases_the_replaced_one() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let mcp = Arc::new(RecordingRelease {
+        released: std::sync::Mutex::new(Vec::new()),
+    });
+    let manager = InMemAgentManager::new(
+        Arc::new(ScriptedEngine::new(Vec::new())),
+        Arc::new(LogFrameSource::new(repo.clone())),
+        mcp.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let id = AgentSessionId::new();
+    let _spawned = manager
+        .attach(facts(id), Some("spawned".to_owned()))
+        .await
+        .expect("history should restore");
+    let _same = manager
+        .attach(facts(id), Some("spawned".to_owned()))
+        .await
+        .expect("history should restore");
+    assert!(mcp.released.lock().expect("lock").is_empty());
+
+    let _rotated = manager
+        .attach(facts(id), Some("rotated".to_owned()))
+        .await
+        .expect("history should restore");
+
+    assert_eq!(manager.session_token(id).as_deref(), Some("rotated"));
+    assert_eq!(mcp.released.lock().expect("lock").as_slice(), ["spawned"]);
+}
+
+/// Records [`McpToolConnector::release`] so teardown can be seen doing it.
+struct RecordingRelease {
+    released: std::sync::Mutex<Vec<String>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for RecordingRelease {
+    async fn connect(
+        &self,
+        _servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        None
+    }
+
+    fn release(&self, token: &str) {
+        self.released.lock().expect("lock").push(token.to_owned());
+    }
 }

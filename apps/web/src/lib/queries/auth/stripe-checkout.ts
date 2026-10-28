@@ -1,5 +1,29 @@
+import { throwOnErr } from '@core/util/result';
+import { authServiceClient } from '@service-auth/client';
 import { stripeServiceClient } from '@service-stripe/client';
-import { useMutation } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryClient } from '../client';
+import { authKeys } from './keys';
+
+function trialEligibilityQueryOptions(enabled: boolean) {
+  return {
+    queryKey: authKeys.trialEligibility.queryKey,
+    queryFn: () => throwOnErr(() => authServiceClient.getTrialEligibility()),
+    enabled,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    throwOnError: false,
+    retry: 1,
+  };
+}
+
+/** Confirm introductory eligibility before advertising or requesting a trial. */
+export function useTrialEligibilityQuery(options?: { enabled: () => boolean }) {
+  return useQuery(() =>
+    trialEligibilityQueryOptions(options?.enabled() ?? true)
+  );
+}
 
 /** The arguments the Stripe client's v2 checkout accepts. */
 export type CreateCheckoutSessionArgs = NonNullable<
@@ -20,5 +44,22 @@ export function useCreateCheckoutSessionMutation() {
       }
       return url;
     },
+    onError: () => {
+      // The rejected offer is no longer confirmed. Clear it before refetching,
+      // and never retry an advertised trial as an immediate charge.
+      queryClient.resetQueries({
+        queryKey: authKeys.trialEligibility.queryKey,
+      });
+    },
+  }));
+}
+
+/** Open Stripe's hosted payment-method management, returning to the calling settings page. */
+export function useCreateBillingPortalMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: { returnUrl: string }) =>
+      await throwOnErr(
+        async () => await authServiceClient.createPortalSession(args)
+      ),
   }));
 }

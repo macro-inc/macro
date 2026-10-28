@@ -16,9 +16,17 @@ export type EventName = (typeof EventName)[keyof typeof EventName];
 export const EventName = {
   documentcreated: 'document.created',
   documentupdated: 'document.updated',
+  documentdeleted: 'document.deleted',
+  taskcreated: 'task.created',
+  taskstatus_changed: 'task.status_changed',
+  taskpriority_changed: 'task.priority_changed',
+  taskproperty_changed: 'task.property_changed',
+  emailmessage_received: 'email.message_received',
   channelcreated: 'channel.created',
   channelmessage_posted: 'channel.message_posted',
   channelmentioned: 'channel.mentioned',
   channelmessage_patched: 'channel.message_patched',
   channelmessage_attachment_created: 'channel.message_attachment_created',
+  callstarted: 'call.started',
+  callended: 'call.ended',
 } as const;

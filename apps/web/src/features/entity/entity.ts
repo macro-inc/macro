@@ -5,10 +5,8 @@ import { Root } from './core/Root';
 import { Slot } from './core/Slot';
 import { EntityEmailParticipants } from './extractors/entity-email-participants';
 import { EntityIcon } from './extractors/entity-icon';
-import { EntityOwner } from './extractors/entity-owner';
 import { EntityTimestamp } from './extractors/entity-timestamp';
 import { EntityTitle } from './extractors/entity-title';
-// Notification components
 import {
   MobileNotificationStackRows,
   NotificationContent,
@@ -36,7 +34,6 @@ export const Entity = {
   Title: EntityTitle,
   Timestamp: EntityTimestamp,
   EmailParticipants: EntityEmailParticipants,
-  Owner: EntityOwner,
   Search: {
     ContentHits: ContentHits,
   },

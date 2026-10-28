@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH members AS (\n                SELECT teammate.user_id\n                FROM team_user viewer JOIN team_user teammate ON teammate.team_id = viewer.team_id\n                WHERE viewer.user_id = $1 AND teammate.user_id <> $1\n                UNION SELECT $1::text WHERE $2\n            ), visible_accounts AS MATERIALIZED (\n                SELECT members.user_id, account.id AS account_id\n                FROM members JOIN calendar_accounts account ON account.owner_id = members.user_id\n                WHERE account.sync_status <> 'disabled'\n                UNION\n                SELECT members.user_id, account.id AS account_id\n                FROM members\n                JOIN macro_user_links link ON link.primary_macro_id = members.user_id\n                JOIN calendar_accounts account ON account.email_link_id = link.link_id\n                WHERE account.sync_status <> 'disabled'\n            )\n            SELECT members.user_id AS \"user_id!\",\n                COALESCE(policy.sharing, 'busy_only') AS \"sharing!\",\n                COALESCE(bool_and(\n                    account.sync_status IN ('ready', 'syncing') AND account.last_sync_error IS NULL\n                    AND COALESCE(account.last_synced_at > now() - interval '15 minutes', false)\n                    AND calendar.last_sync_error IS NULL\n                    AND COALESCE(calendar.materialized_starts_at <= $3 AND calendar.materialized_ends_at >= $4\n                        AND calendar.materialized_start_date <= $5 AND calendar.materialized_end_date >= $6, false)\n                    AND calendar.synced_at IS NOT NULL AND calendar.snapshot_normalization_version >= 1\n                    AND NOT EXISTS (\n                        SELECT 1 FROM calendar_event_sources pending_source\n                        WHERE pending_source.calendar_id = calendar.id\n                          AND (pending_source.provider_access_role IS NULL\n                            OR pending_source.provider_access_role IS DISTINCT FROM calendar.access_role)\n                    )\n                ), false) AS \"ready!\"\n            FROM members LEFT JOIN calendar_team_sharing policy ON policy.user_id = members.user_id\n            LEFT JOIN visible_accounts visible ON visible.user_id = members.user_id\n            LEFT JOIN calendar_accounts account ON account.id = visible.account_id\n            LEFT JOIN calendars calendar ON calendar.account_id = account.id AND NOT calendar.is_deleted\n            GROUP BY members.user_id, policy.sharing\n            ORDER BY members.user_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sharing!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "ready!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "26f0041032093a4f2feb8b03220d11a3a22170973971724deb216fd7a03c144d"
+}

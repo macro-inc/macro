@@ -1,12 +1,10 @@
+import { isTransientRequestError } from '@core/util/request-error';
 import type { CombinedError } from '@urql/core';
 
-/** Keep uncertain writes queued; application errors require explicit server opt-in. */
+/** Retry transport failures; application errors always release the queue head. */
 export function shouldRetryGraphqlMutation(error: CombinedError): boolean {
   if (error.graphQLErrors.length > 0) {
-    return error.graphQLErrors.every(
-      (error) => error.extensions.retryable === true
-    );
+    return false;
   }
-  const status = error.response?.status;
-  return error.networkError != null && (status == null || status >= 500);
+  return isTransientRequestError(error);
 }

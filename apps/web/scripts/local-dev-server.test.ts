@@ -17,6 +17,7 @@ describe('localDevServer', () => {
     const target = 'http://localhost:20109';
     const config = localDevServer({
       MACRO_LOCAL_BACKEND_PROXY: target,
+      MACRO_LOCAL_HOSTNAME: 'Coworker-Dev',
       MACRO_LOCAL_BACKEND_ROUTES:
         '/auth,/connection-gateway,/websocket,/sync,/ai-editing,/i,/static-file',
     });
@@ -49,9 +50,15 @@ describe('localDevServer', () => {
       ).toBe(false);
     }
     for (const options of Object.values(config.proxy ?? {})) {
-      expect(options).toEqual({ target, ws: true, xfwd: true });
+      expect(options).toEqual({
+        target,
+        ws: true,
+        xfwd: true,
+        changeOrigin: true,
+      });
     }
     expect(config.hmr).toBeUndefined();
+    expect(config.allowedHosts).toEqual(['coworker-dev']);
   });
 
   it('rejects missing or malformed routing metadata instead of proxying everything', () => {

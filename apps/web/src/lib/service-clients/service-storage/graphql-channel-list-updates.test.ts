@@ -1,11 +1,12 @@
-import {
-  optimisticContextOf,
-  withOptimisticMutationDisposition,
-} from '@graphql-cache/exchange/optimistic';
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import type { Client, Operation } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../queries/channel/notification-refresh';
 import { registerGraphqlSoupRevalidations } from '../../queries/soup/graphql/active-queries';
 import {
   ChannelListSoupDocument,
@@ -46,12 +47,21 @@ function setup() {
       },
     ])
   );
-  const handler = createChannelListUpdatesHandler({ query } as unknown as Pick<
-    Client,
-    'query'
-  >);
+  const client = { query } as unknown as Client;
+  const coordinator = channelNotificationRefresh(client);
+  cleanup.push(
+    coordinator.register(
+      {
+        document: ChannelListSoupDocument,
+        variables: { input: { initial: { limit: 100 } } },
+      },
+      { enabled: true, fetching: false, filtered: true, notificationIds: [] }
+    )
+  );
+  cleanup.push(() => disposeChannelNotificationRefresh(client));
+  const handler = createChannelListUpdatesHandler(client);
   cleanup.push(handler.dispose);
-  return { handler, query };
+  return { handler, query, client, coordinator };
 }
 
 const deleted: GraphqlNotificationPatch = {
@@ -63,8 +73,10 @@ const deleted: GraphqlNotificationPatch = {
 const newNotification: GraphqlNotificationPatch = {
   __typename: 'GraphqlNewNotification',
   notification: {
+    __typename: 'GraphqlNotification',
     id: 'new',
     entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
     entityId: 'channel',
     eventType: 'channel_message_send',
     state: 'UNSEEN',
@@ -88,7 +100,7 @@ const newNotification: GraphqlNotificationPatch = {
 };
 
 function setupCached() {
-  const { query } = setup();
+  const { query, client, coordinator } = setup();
   const writeResult = {
     revision: parseCacheRevision('1'),
     revisionAdvanced: true,
@@ -106,11 +118,11 @@ function setupCached() {
     ),
   };
   const handler = createChannelListUpdatesHandler(
-    { query } as unknown as Client,
+    client,
     host as unknown as CacheHost
   );
   cleanup.push(handler.dispose);
-  return { handler, query, host, writeResult };
+  return { handler, query, host, writeResult, coordinator };
 }
 
 describe('channel unread edge revalidation', () => {
@@ -119,17 +131,18 @@ describe('channel unread edge revalidation', () => {
     await handler.onPatch(newNotification);
     expect(host.writeQuery).toHaveBeenCalledOnce();
     expect(query).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(299);
+    await vi.advanceTimersByTimeAsync(99);
     expect(query).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(query).toHaveBeenCalledOnce();
   });
 
-  it('falls back immediately if a local cache write fails', async () => {
+  it('reconciles even if a local cache write fails', async () => {
     const { handler, query, host } = setupCached();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     host.writeQuery.mockRejectedValue(new Error('cache unavailable'));
     await handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(100);
     expect(query).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledOnce();
   });
@@ -161,14 +174,21 @@ describe('channel unread edge revalidation', () => {
     expect(host.writeQuery).not.toHaveBeenCalled();
     expect(query).not.toHaveBeenCalled();
   });
-  it('refreshes channel dots and the Chat badge immediately on a new notification', async () => {
-    const { handler, query } = setup();
+  it('batches refreshes for channel dots and the Chat badge', async () => {
+    const { handler, query, coordinator } = setup();
+    cleanup.push(
+      coordinator.register(
+        { document: ChannelUnreadPresenceDocument, variables: { input: {} } },
+        { enabled: true, fetching: false, filtered: true, notificationIds: [] }
+      )
+    );
     cleanup.push(
       registerGraphqlSoupRevalidations(() => [
         { document: ChannelUnreadPresenceDocument, variables: { input: {} } },
       ])
     );
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(100);
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls.map(([document]) => document)).toEqual([
       ChannelListSoupDocument,
@@ -178,12 +198,13 @@ describe('channel unread edge revalidation', () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it('replaces a pending debounce with an immediate new-notification refresh', async () => {
+  it('coalesces new notifications with pending deletions', async () => {
     const { handler, query } = setup();
-    handler.onPatch(deleted);
-    await vi.advanceTimersByTimeAsync(100);
+    await handler.onPatch(deleted);
+    await vi.advanceTimersByTimeAsync(50);
     expect(query).not.toHaveBeenCalled();
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(50);
     expect(query).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
@@ -196,13 +217,14 @@ describe('channel unread edge revalidation', () => {
       finish = () => resolve({ data: {} });
     });
     query.mockImplementationOnce(() => ({ toPromise: () => pending }));
-    handler.onPatch(newNotification);
-    handler.onPatch(newNotification);
-    handler.onPatch(deleted);
+    await handler.onPatch(newNotification);
+    await vi.advanceTimersByTimeAsync(100);
+    await handler.onPatch(newNotification);
+    await handler.onPatch(deleted);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
     finish?.();
-    await vi.advanceTimersByTimeAsync(299);
+    await vi.advanceTimersByTimeAsync(99);
     expect(query).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
     expect(query).toHaveBeenCalledTimes(2);
@@ -211,7 +233,7 @@ describe('channel unread edge revalidation', () => {
   it('keeps new-notification refreshes deferred while hidden', async () => {
     const { handler, query } = setup();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
-    handler.onPatch(newNotification);
+    await handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).not.toHaveBeenCalled();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -220,7 +242,7 @@ describe('channel unread edge revalidation', () => {
     expect(query).toHaveBeenCalledOnce();
   });
 
-  it('persists bounded revalidations with queued notification writes', async () => {
+  it('passes bounded revalidations to the local resolver for queued notification writes', async () => {
     const { query } = setup();
     const mutation = vi.fn((_document, _variables, context) => ({
       toPromise: async () =>
@@ -241,18 +263,18 @@ describe('channel unread edge revalidation', () => {
         operation: 'MARK_SEEN',
       }
     );
-    const context = optimisticContextOf({
-      context: mutation.mock.calls[0][2],
-    } as Operation);
-    expect(context?.revalidations).toHaveLength(1);
-    expect(context?.revalidations[0].operationName).toBe('ChannelListSoup');
-    expect(context?.revalidations[0].query).toMatch(/limit:\s*1/);
+    expect(mutation.mock.calls[0][2].optimisticMutation.revalidations).toEqual([
+      {
+        document: ChannelListSoupDocument,
+        variables: { input: { initial: { limit: 100 } } },
+      },
+    ]);
     expect(query).not.toHaveBeenCalled();
   });
   it('coalesces updates into bounded-query refreshes, never full history', async () => {
     const { handler, query } = setup();
-    handler.onPatch(deleted);
-    handler.onPatch(deleted);
+    await handler.onPatch(deleted);
+    await handler.onPatch(deleted);
     handler.reconnect();
     await vi.advanceTimersByTimeAsync(301);
     expect(query).toHaveBeenCalledOnce();
@@ -263,10 +285,10 @@ describe('channel unread edge revalidation', () => {
     ]);
   });
 
-  it('defers hidden-tab work and cancels scheduled work on disposal', async () => {
-    const { handler, query } = setup();
+  it('defers hidden-tab work and cancels scheduled work on client disposal', async () => {
+    const { handler, query, client } = setup();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
-    handler.onPatch(deleted);
+    await handler.onPatch(deleted);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).not.toHaveBeenCalled();
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -275,6 +297,7 @@ describe('channel unread edge revalidation', () => {
     expect(query).toHaveBeenCalledOnce();
     handler.reconnect();
     handler.dispose();
+    disposeChannelNotificationRefresh(client);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
   });

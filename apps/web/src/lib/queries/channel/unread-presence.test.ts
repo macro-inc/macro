@@ -4,14 +4,20 @@ import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { makeSubject, pipe, subscribe } from 'wonka';
 import {
+  getActiveGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
+import {
   getChannelListRevalidations,
   revalidateChannelLists,
 } from '../soup/graphql/channel-list-revalidation';
 import { createChannelUnreadQuery } from './unread-presence';
 
 const clientMock = vi.hoisted(() => vi.fn());
+const cache = vi.hoisted(() => ({ host: false }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: clientMock,
+  hasGraphqlCacheHost: () => cache.host,
 }));
 
 function setup() {
@@ -91,6 +97,7 @@ describe('channel unread presence query', () => {
   });
 
   it('shares bounded notification revalidation and unregisters on disposal', async () => {
+    const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     const f = setup();
     try {
       f.setEnabled(true);
@@ -103,14 +110,50 @@ describe('channel unread presence query', () => {
         typeof f.client,
         'query'
       >);
-      expect(query).toHaveBeenCalledWith(
+      expect(query).not.toHaveBeenCalled();
+      const ownQuery = vi.spyOn(f.client, 'query');
+      await revalidateChannelLists(f.client);
+      await vi.waitFor(() => expect(ownQuery).toHaveBeenCalledOnce());
+      expect(ownQuery).toHaveBeenCalledWith(
         ChannelUnreadPresenceDocument,
         { input: { initial: { limit: 500 } } },
         { requestPolicy: 'network-only' }
       );
+      f.respond('SEEN');
+      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
     } finally {
+      visible.mockRestore();
       f.dispose();
     }
     expect(getChannelListRevalidations()).toHaveLength(0);
+  });
+
+  it('counts as kept current by the cache, which writes its witness states', async () => {
+    const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    const f = setup();
+    try {
+      f.setEnabled(true);
+      await vi.waitFor(() =>
+        expect(f.operations.filter((op) => op.kind === 'query')).toHaveLength(1)
+      );
+      f.respond('UNSEEN');
+      const unmaintained = () =>
+        getActiveGraphqlSoupRevalidations(undefined, {
+          unmaintainedOnly: true,
+        });
+
+      cache.host = false;
+      expect(unmaintained()).toHaveLength(1);
+
+      cache.host = true;
+      expect(unmaintained()).toHaveLength(0);
+      const reads = f.operations.length;
+      await refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true });
+      expect(f.operations).toHaveLength(reads);
+    } finally {
+      cache.host = false;
+      visible.mockRestore();
+      f.dispose();
+    }
   });
 });

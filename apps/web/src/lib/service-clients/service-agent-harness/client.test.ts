@@ -4,6 +4,7 @@ import { agentHarnessServiceClient } from './client';
 
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'agent-harness': 'https://harness.example.com' },
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example.com' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken: vi.fn() }));
 
@@ -19,7 +20,7 @@ function errorHandler() {
 
 describe('session request errors', () => {
   it('explains repository access failures on create', async () => {
-    agentHarnessServiceClient.create({});
+    await agentHarnessServiceClient.create({});
     const error = await errorHandler()(
       new Response('repository is not available to this user', { status: 403 })
     );
@@ -27,7 +28,7 @@ describe('session request errors', () => {
   });
 
   it('preserves the service reason when a control request is rejected', async () => {
-    agentHarnessServiceClient.control('session-1', {
+    await agentHarnessServiceClient.control('session-1', {
       type: 'setModel',
       model: 'missing',
     });
@@ -38,7 +39,7 @@ describe('session request errors', () => {
   });
 
   it('does not display an HTML proxy error as a service message', async () => {
-    agentHarnessServiceClient.create({});
+    await agentHarnessServiceClient.create({});
     const error = await errorHandler()(
       new Response('<html>upstream failure</html>', {
         status: 502,
@@ -50,16 +51,16 @@ describe('session request errors', () => {
 });
 
 describe('repository listing', () => {
-  it("asks the harness for the caller's repositories", () => {
-    agentHarnessServiceClient.listRepositories();
+  it("asks the harness for the caller's repositories", async () => {
+    await agentHarnessServiceClient.listRepositories();
     expect(fetchWithToken).toHaveBeenCalledWith(
       'https://harness.example.com/agent-repositories',
       { method: 'GET' }
     );
   });
 
-  it("asks the harness for one repository's branches", () => {
-    agentHarnessServiceClient.listRepositoryBranches(
+  it("asks the harness for one repository's branches", async () => {
+    await agentHarnessServiceClient.listRepositoryBranches(
       'https://github.com/macro-inc/macro'
     );
     expect(fetchWithToken).toHaveBeenCalledWith(

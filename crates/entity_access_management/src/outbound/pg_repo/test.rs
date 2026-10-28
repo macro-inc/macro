@@ -16,6 +16,66 @@ const GRANDCHILD_PROJECT_ID: Uuid = Uuid::from_u128(0x33333333_3333_3333_3333_33
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
+async fn propagation_waits_for_revocation_before_reading_project_grants(pool: Pool<Postgres>) {
+    let propagation_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    sqlx::query!("SET lock_timeout = '100ms'")
+        .execute(&propagation_pool)
+        .await
+        .unwrap();
+    let repo = PgRepository::new(propagation_pool.clone());
+    let document_id = Uuid::from_u128(0x44444444_4444_4444_4444_444444444444);
+
+    let mut revocation = pool.begin().await.unwrap();
+    entity_access_db_utils::team_share::acquire_guard(&mut revocation)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND entity_type = 'project' AND source_type = 'user' AND source_id = 'macro|testuser@test.com'",
+        ROOT_PROJECT_ID,
+    )
+    .execute(revocation.as_mut())
+    .await
+    .unwrap();
+
+    // Another transaction can still see the old grant, but propagation must
+    // wait for the revocation's guard instead of copying that stale snapshot.
+    let error = repo
+        .add_entity_to_project(&document_id, EntityType::Document, &ROOT_PROJECT_ID)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, sqlx::Error::Database(error) if error.code().as_deref() == Some("55P03"))
+    );
+
+    revocation.commit().await.unwrap();
+    repo.add_entity_to_project(&document_id, EntityType::Document, &ROOT_PROJECT_ID)
+        .await
+        .unwrap();
+    let grants = sqlx::query!(
+        "SELECT source_id FROM entity_access WHERE entity_id = $1 AND entity_type = 'document' ORDER BY source_id",
+        document_id,
+    )
+    .fetch_all(&propagation_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        grants
+            .into_iter()
+            .map(|row| row.source_id)
+            .collect::<Vec<_>>(),
+        vec!["team-one"]
+    );
+    propagation_pool.close().await;
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
+)]
 async fn walk_up_from_grandchild_returns_all_ancestors(pool: Pool<Postgres>) {
     let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
@@ -384,6 +444,71 @@ async fn add_entity_to_project_inserts_access_for_all_ancestor_shares(pool: Pool
     assert_eq!(
         uc.granted_from_project_id.as_deref(),
         Some("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("bot_owned_child_project_test_data")
+    )
+)]
+async fn add_bot_owned_child_project_keeps_its_owner_grants_and_inherits_the_parents(
+    pool: Pool<Postgres>,
+) {
+    let repo = PgRepository::new(pool.clone());
+    let parent = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let child = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+
+    repo.add_entity_to_project(&child, EntityType::Project, &parent)
+        .await
+        .unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id,
+            access_level::text AS "access_level!", granted_from_project_id
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'project'
+        ORDER BY source_type::text, source_id, granted_from_project_id NULLS FIRST
+        "#,
+        child,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let parent_id = parent.to_string();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (
+                row.source_type.as_str(),
+                row.source_id.as_str(),
+                row.access_level.as_str(),
+                row.granted_from_project_id.as_deref(),
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "bot",
+                "bot|00000000-0000-0000-0000-00000000b07a",
+                "owner",
+                None
+            ),
+            (
+                "team",
+                "b2222222-2222-2222-2222-222222222222",
+                "comment",
+                Some(parent_id.as_str()),
+            ),
+            ("user", "macro|owner@test.com", "owner", None),
+            (
+                "user",
+                "macro|owner@test.com",
+                "owner",
+                Some(parent_id.as_str())
+            ),
+        ]
     );
 }
 

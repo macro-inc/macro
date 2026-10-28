@@ -2,16 +2,22 @@ use super::{
     ChannelToolContext, ReadChannelMessageContext, ReadChannelMessages, ReadChannelThread,
     channel_mutation_error, channel_name,
     create_channel::{CreateChannel, NewChannelType},
+    delete_channel_message::DeleteChannelMessage,
+    edit_channel_message::EditChannelMessage,
     manage_channel_participants::{ManageChannelParticipants, ParticipantAction},
+    open_direct_message::OpenDirectMessage,
     parse_participants,
+    react_to_channel_message::{ReactToChannelMessage, ReactionAction},
     rename_channel::RenameChannel,
     send_channel_message::SendChannelMessage,
+    share_with_channel::{ChannelShareEntityType, ShareWithChannel},
 };
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, PostMessageRequest, PostMessageResponse,
-        RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+        GetOrCreatePrivateRequest, PatchChannelRequest, ReferenceShareOutcome,
+        ReferenceShareResult, ReferencedShareItem, RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -28,9 +34,12 @@ use entity_access::domain::{
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use uuid::Uuid;
 
@@ -41,13 +50,89 @@ type PostedSharedMessage = (
     messages::domain::models::PostMessage,
 );
 
+type MessageWriteReceipt = EntityAccessReceipt<messages::domain::service::MessageWrite>;
+type RecordedPatch = (
+    MessageWriteReceipt,
+    Uuid,
+    messages::domain::ports::MessagePatch,
+);
+type RecordedReaction = (MessageWriteReceipt, Uuid, String, bool);
+
 #[derive(Clone, Default)]
 struct RecordingMessages {
     posts: Arc<Mutex<Vec<PostedSharedMessage>>>,
+    /// Author of the message `get` returns; the requesting user when unset.
+    stored_sender: Option<Sender>,
+    patches: Arc<Mutex<Vec<RecordedPatch>>>,
+    deletes: Arc<Mutex<Vec<(MessageWriteReceipt, Uuid)>>>,
+    reacts: Arc<Mutex<Vec<RecordedReaction>>>,
+    /// Error every mutation returns instead of succeeding.
+    mutation_error: Option<fn() -> messages::domain::ports::MessageError>,
+    /// Root messages every timeline read returns.
+    timeline: Vec<messages::domain::models::MessageListItem>,
+}
+
+impl RecordingMessages {
+    fn stored_message(
+        &self,
+        channel_id: &str,
+        id: Uuid,
+        reactions: Vec<messages::domain::models::CountedReaction>,
+    ) -> messages::domain::models::Message {
+        messages::domain::models::Message {
+            id,
+            parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
+            thread_id: None,
+            sender_id: self
+                .stored_sender
+                .clone()
+                .unwrap_or_else(|| Sender::new_from_user(user_id())),
+            guest_name: None,
+            imported_author: None,
+            bot_profile: None,
+            mentions: vec![],
+            triggered_by: None,
+            content: "stored".to_string(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            edited_at: None,
+            deleted_at: None,
+            attachments: vec![],
+            reactions,
+        }
+    }
+
+    fn mutation_result(
+        &self,
+        access: &MessageWriteReceipt,
+        id: Uuid,
+        reactions: Vec<messages::domain::models::CountedReaction>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        match self.mutation_error {
+            Some(error) => Err(error()),
+            None => Ok(self.stored_message(&access.entity().entity_id, id, reactions)),
+        }
+    }
+}
+
+fn is_bot_receipt(access: &MessageWriteReceipt) -> bool {
+    matches!(
+        access.auth(),
+        entity_access::domain::models::EntityAccessAuth::Bot(_)
+    )
 }
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageCommands for RecordingMessages {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("channel tools do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -67,6 +152,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             parent,
             thread_id: input.thread_id,
             sender_id: sender,
+            guest_name: None,
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
@@ -86,29 +172,43 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
     }
     async fn patch(
         &self,
-        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
-        _: Uuid,
-        _: messages::domain::ports::MessagePatch,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        id: Uuid,
+        patch: messages::domain::ports::MessagePatch,
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
-        unimplemented!()
+        let result = self.mutation_result(&access, id, vec![]);
+        self.patches.lock().unwrap().push((access, id, patch));
+        result
     }
     async fn delete(
         &self,
-        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
-        _: Uuid,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        id: Uuid,
         _: Option<String>,
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
-        unimplemented!()
+        let result = self.mutation_result(&access, id, vec![]);
+        self.deletes.lock().unwrap().push((access, id));
+        result
     }
     async fn react(
         &self,
-        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
-        _: Uuid,
-        _: String,
-        _: bool,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        id: Uuid,
+        emoji: String,
+        add: bool,
         _: Option<String>,
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
-        unimplemented!()
+        let reactions = if add {
+            vec![messages::domain::models::CountedReaction {
+                emoji: emoji.clone(),
+                users: vec![TEST_USER_ID.to_string()],
+            }]
+        } else {
+            vec![]
+        };
+        let result = self.mutation_result(&access, id, reactions);
+        self.reacts.lock().unwrap().push((access, id, emoji, add));
+        result
     }
     async fn typing(
         &self,
@@ -137,6 +237,69 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
     }
 }
 
+#[async_trait::async_trait]
+impl messages::domain::api::MessageReader for RecordingMessages {
+    async fn get(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageView>,
+        id: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        Ok(self.stored_message(&access.entity().entity_id, id, vec![]))
+    }
+    async fn get_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn timeline(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: messages::domain::ports::MessageTimelineQuery,
+    ) -> Result<messages::domain::ports::MessagePage, messages::domain::ports::MessageError> {
+        Ok(messages::domain::ports::MessagePage {
+            items: self.timeline.clone(),
+            next_cursor: None,
+            previous_cursor: None,
+        })
+    }
+    async fn timeline_entries(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: messages::domain::ports::MessageTimelineQuery,
+    ) -> Result<messages::domain::ports::MessageTimelinePage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn preceding(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: u16,
+    ) -> Result<Vec<messages::domain::models::Message>, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn resolve_legacy(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: i64,
+        _: bool,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn parent_of(
+        &self,
+        _: Uuid,
+    ) -> Result<
+        Option<messages::domain::models::MessageParent>,
+        messages::domain::ports::MessageError,
+    > {
+        unimplemented!("read path unused by mutation tools")
+    }
+}
+
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid macro user id")
 }
@@ -149,10 +312,11 @@ type CreatedChannelCall = (
 type PatchChannelCall = (Sender, Uuid, PatchChannelRequest);
 type AddParticipantsCall = (Sender, Uuid, AddParticipantsRequest);
 type RemoveParticipantsCall = (Sender, Uuid, RemoveParticipantsRequest);
-type PostMessageCall = (Sender, Uuid, PostMessageRequest);
 
 #[derive(Clone, Default)]
 struct ToolTestChannelService {
+    dms: Arc<Mutex<Vec<(Sender, GetOrCreateDmRequest)>>>,
+    group_dms: Arc<Mutex<Vec<(Sender, GetOrCreatePrivateRequest)>>>,
     created: Arc<Mutex<Option<CreatedChannelCall>>>,
     created_id: Option<Uuid>,
     create_error: Option<String>,
@@ -160,8 +324,11 @@ struct ToolTestChannelService {
     patch_error: Option<String>,
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
-    posts: Arc<Mutex<Vec<PostMessageCall>>>,
     metadata_name: Option<String>,
+    shares: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Vec<ReferencedShareItem>)>>>,
+    deny_share: bool,
+    user_names: HashMap<MacroUserIdStr<'static>, String>,
+    fail_user_names: bool,
 }
 
 impl ToolTestChannelService {
@@ -182,29 +349,39 @@ impl ToolTestChannelService {
 }
 
 impl ChannelService for ToolTestChannelService {
+    async fn get_or_create_dm(
+        &self,
+        actor: Sender,
+        req: GetOrCreateDmRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        self.dms.lock().expect("dm lock").push((actor, req));
+        Ok(GetOrCreateChannelResponse {
+            channel_id: self.created_id.unwrap_or_else(Uuid::new_v4).to_string(),
+            action: GetOrCreateAction::Get,
+        })
+    }
+
+    async fn get_or_create_private(
+        &self,
+        actor: Sender,
+        req: GetOrCreatePrivateRequest,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        self.group_dms
+            .lock()
+            .expect("group dm lock")
+            .push((actor, req));
+        Ok(GetOrCreateChannelResponse {
+            channel_id: self.created_id.unwrap_or_else(Uuid::new_v4).to_string(),
+            action: GetOrCreateAction::Create,
+        })
+    }
+
     async fn set_channel_picture(
         &self,
-        _access: entity_access::domain::models::EntityAccessReceipt<
-            entity_access::domain::models::AdminParticipantRole,
-        >,
+        _access: crate::domain::ports::ChannelPictureAccess,
         _picture_id: Option<uuid::Uuid>,
     ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
         unimplemented!("picture mutation is not used by this fixture")
-    }
-
-    async fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
-        _direction: crate::domain::models::MessagePageDirection,
-        _limit: u16,
-        _filters: &crate::domain::models::ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
     }
 
     async fn get_channel_attachments(
@@ -244,6 +421,25 @@ impl ChannelService for ToolTestChannelService {
         })
     }
 
+    async fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, crate::domain::ports::ChannelMessagesErr>
+    {
+        if self.fail_user_names {
+            return Err(crate::domain::ports::ChannelMessagesErr::Repo(
+                anyhow::anyhow!("names unavailable"),
+            ));
+        }
+        Ok(user_ids
+            .into_iter()
+            .filter_map(|user_id| {
+                let name = self.user_names.get(&user_id)?.clone();
+                Some((user_id, name))
+            })
+            .collect())
+    }
+
     async fn get_attachment_references(
         &self,
         _entity_type: String,
@@ -253,27 +449,6 @@ impl ChannelService for ToolTestChannelService {
         Vec<crate::domain::models::AttachmentEntityReference>,
         crate::domain::ports::ChannelMessagesErr,
     > {
-        unimplemented!("read path unused by mutation tools")
-    }
-
-    async fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
-    }
-
-    async fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> Result<Vec<crate::domain::models::ThreadReply>, crate::domain::ports::ChannelMessagesErr>
-    {
         unimplemented!("read path unused by mutation tools")
     }
 
@@ -318,22 +493,6 @@ impl ChannelService for ToolTestChannelService {
         Ok(())
     }
 
-    async fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> Result<PostMessageResponse, ChannelMutationErr> {
-        self.posts
-            .lock()
-            .expect("post lock")
-            .push((actor, channel_id, req));
-        Ok(PostMessageResponse {
-            id: Uuid::new_v4().to_string(),
-            nonce: None,
-        })
-    }
-
     async fn add_participants(
         &self,
         actor: Sender,
@@ -358,6 +517,31 @@ impl ChannelService for ToolTestChannelService {
             .expect("remove lock")
             .push((actor, channel_id, req));
         Ok(())
+    }
+
+    async fn share_referenced_items_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let results = items
+            .iter()
+            .map(|item| ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: if self.deny_share {
+                    ReferenceShareOutcome::NotPermitted
+                } else {
+                    ReferenceShareOutcome::Shared
+                },
+            })
+            .collect();
+        self.shares
+            .lock()
+            .expect("share lock")
+            .push((actor, channel_id, items));
+        Ok(results)
     }
 }
 
@@ -566,6 +750,117 @@ fn rename_channel_schema_is_valid() {
     assert_eq!(validated.name, "RenameChannel");
     assert!(validated.description.contains("participant"));
     assert!(!validated.description.to_lowercase().contains("admin"));
+}
+
+#[test]
+fn share_with_channel_schema_is_valid() {
+    let result = generate_validated_input_schema::<ShareWithChannel>();
+    assert!(result.is_ok(), "{result:?}");
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "ShareWithChannel");
+    assert!(validated.description.contains("entity-access"));
+    assert!(validated.description.contains("calendar_event"));
+}
+
+#[test]
+fn share_with_channel_accepts_a_calendar_chip_alias() {
+    let channel_id = Uuid::now_v7();
+    let entity_id = Uuid::now_v7();
+    let parsed: ShareWithChannel = serde_json::from_value(serde_json::json!({
+        "channelId": channel_id,
+        "entityId": entity_id,
+        "entityType": "calendar",
+    }))
+    .expect("calendar alias");
+    assert_eq!(parsed.entity_type, ChannelShareEntityType::CalendarEvent);
+    assert_eq!(parsed.entity_id, entity_id.to_string());
+}
+
+#[tokio::test]
+async fn share_with_channel_grants_the_item_for_a_member() {
+    let channel_id = Uuid::now_v7();
+    let entity_id = Uuid::now_v7();
+    let service = ToolTestChannelService::default();
+    let shares = service.shares.clone();
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = ShareWithChannel {
+        channel_id,
+        entity_id: format!("  {entity_id}  "),
+        entity_type: ChannelShareEntityType::CalendarEvent,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("member can share");
+
+    assert_eq!(response.channel_id, channel_id);
+    assert_eq!(response.entity_id, entity_id.to_string());
+    assert_eq!(
+        response.summary,
+        "Shared with the current members of the channel."
+    );
+    let (actor, shared_channel, items) = shares.lock().expect("share lock").pop().expect("shared");
+    assert_eq!(actor, user_id());
+    assert_eq!(shared_channel, channel_id);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].entity_id(), entity_id.to_string());
+    assert_eq!(
+        items[0].entity_type(),
+        crate::domain::models::ReferencedShareItemType::CalendarEvent
+    );
+}
+
+#[tokio::test]
+async fn share_with_channel_rejects_non_members() {
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService::default(),
+        ToolTestAccessService {
+            receipt_error: Some(ReceiptFail::Unauthorized),
+            ..ToolTestAccessService::default()
+        },
+    );
+
+    let error = ShareWithChannel {
+        channel_id: Uuid::now_v7(),
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: ChannelShareEntityType::Document,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("non-member");
+
+    assert_eq!(
+        error.description,
+        "user is not a member of the requested channel"
+    );
+}
+
+#[tokio::test]
+async fn share_with_channel_reports_when_the_user_cannot_share() {
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService {
+            deny_share: true,
+            ..ToolTestChannelService::default()
+        },
+        ToolTestAccessService::default(),
+    );
+
+    let error = ShareWithChannel {
+        channel_id: Uuid::now_v7(),
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: ChannelShareEntityType::CalendarEvent,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("not permitted");
+
+    assert!(error.description.contains("own calendar"));
 }
 
 #[test]
@@ -937,6 +1232,7 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
         content: "hello".to_string(),
         channel_id,
         thread_id: None,
+        attachments: vec![],
     };
 
     tool.call(
@@ -985,6 +1281,76 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     );
     assert_eq!(default_input.content, "hello");
     assert_eq!(bot_of(custom_access), Some(BotId::TEST_A));
+}
+
+#[tokio::test]
+async fn send_channel_message_maps_attachments_to_message_references() {
+    let video_id = Uuid::new_v4().to_string();
+    let document_id = Uuid::new_v4().to_string();
+    let messages = RecordingMessages::default();
+    let posts = messages.posts.clone();
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "",
+        "channel_id": Uuid::new_v4(),
+        "attachments": [
+            { "id": video_id, "kind": "video", "width": 1920, "height": 1080 },
+            { "id": format!(" {document_id} "), "kind": "document", "width": 10, "height": 10 },
+        ],
+    }))
+    .expect("attachments deserialize");
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            Arc::new(messages),
+            ToolTestChannelService::default(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post attachments");
+
+    let posts = posts.lock().expect("post lock");
+    let [(_, input)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_eq!(
+        input.attachments,
+        vec![
+            messages::domain::models::NewAttachment {
+                entity_type: "static/video".to_string(),
+                entity_id: video_id,
+                width: Some(1920),
+                height: Some(1080),
+            },
+            messages::domain::models::NewAttachment {
+                entity_type: "document".to_string(),
+                entity_id: document_id,
+                width: None,
+                height: None,
+            },
+        ]
+    );
+}
+
+#[test]
+fn send_channel_message_without_attachments_still_deserializes() {
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "hello",
+        "channel_id": Uuid::new_v4(),
+    }))
+    .expect("attachments are optional");
+    assert!(tool.attachments.is_empty());
+}
+
+#[test]
+fn send_channel_message_schema_is_valid() {
+    generate_validated_input_schema::<SendChannelMessage>().expect("valid schema");
+}
+
+#[test]
+fn create_channel_media_upload_schema_is_valid() {
+    generate_validated_input_schema::<super::CreateChannelMediaUpload>().expect("valid schema");
 }
 
 #[tokio::test]
@@ -1106,4 +1472,497 @@ async fn manage_participants_distinguishes_missing_channels() {
     .expect_err("missing channel");
 
     assert_eq!(error.description, "channel not found");
+}
+
+fn message_tool_context(messages: RecordingMessages) -> ServiceContext<ToolChannelContext> {
+    ServiceContext(ChannelToolContext::new(
+        Arc::new(messages),
+        ToolTestChannelService::default(),
+        ToolTestAccessService::default(),
+    ))
+}
+
+type ToolChannelContext = ChannelToolContext<ToolTestChannelService, ToolTestAccessService>;
+
+#[test]
+fn message_mutation_schemas_are_valid() {
+    for (name, result) in [
+        (
+            "EditChannelMessage",
+            generate_validated_input_schema::<EditChannelMessage>(),
+        ),
+        (
+            "DeleteChannelMessage",
+            generate_validated_input_schema::<DeleteChannelMessage>(),
+        ),
+        (
+            "ReactToChannelMessage",
+            generate_validated_input_schema::<ReactToChannelMessage>(),
+        ),
+        (
+            "OpenDirectMessage",
+            generate_validated_input_schema::<OpenDirectMessage>(),
+        ),
+    ] {
+        let validated = result.unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        assert_eq!(validated.name, name);
+    }
+}
+
+#[tokio::test]
+async fn edit_channel_message_edits_the_users_own_message_as_the_user() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let messages = RecordingMessages::default();
+    let patches = messages.patches.clone();
+
+    EditChannelMessage {
+        channel_id,
+        message_id,
+        content: "fixed typo".to_string(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("author can edit");
+
+    let patches = patches.lock().unwrap();
+    let [(access, id, patch)] = patches.as_slice() else {
+        panic!("expected one patch, got {}", patches.len());
+    };
+    assert!(!is_bot_receipt(access));
+    assert_eq!(access.entity().entity_id, channel_id.to_string());
+    assert_eq!(*id, message_id);
+    assert_eq!(patch.content.as_deref(), Some("fixed typo"));
+    assert!(patch.mentions.is_none(), "edits keep the stored mentions");
+}
+
+#[tokio::test]
+async fn edit_channel_message_edits_the_assistants_message_as_the_bot() {
+    let messages = RecordingMessages {
+        stored_sender: Some(Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+        ..RecordingMessages::default()
+    };
+    let patches = messages.patches.clone();
+
+    EditChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        content: "corrected".to_string(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("the assistant can edit its own message");
+
+    let patches = patches.lock().unwrap();
+    assert!(is_bot_receipt(&patches[0].0));
+}
+
+#[tokio::test]
+async fn edit_channel_message_rejects_empty_content_before_any_access_check() {
+    let messages = RecordingMessages::default();
+    let patches = messages.patches.clone();
+
+    let error = EditChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        content: "   ".to_string(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect_err("empty edits are refused");
+
+    assert!(error.description.contains("DeleteChannelMessage"));
+    assert!(patches.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn edit_channel_message_explains_a_forbidden_edit() {
+    let messages = RecordingMessages {
+        stored_sender: Some(Sender::new_from_user(
+            MacroUserIdStr::try_from("macro|someone-else@example.com".to_string()).unwrap(),
+        )),
+        mutation_error: Some(|| messages::domain::ports::MessageError::Forbidden),
+        ..RecordingMessages::default()
+    };
+
+    let error = EditChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        content: "rewrite".to_string(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect_err("only the author can edit");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+}
+
+#[tokio::test]
+async fn delete_channel_message_deletes_as_the_author() {
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let messages = RecordingMessages::default();
+    let deletes = messages.deletes.clone();
+
+    DeleteChannelMessage {
+        channel_id,
+        message_id,
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("author can delete");
+
+    let deletes = deletes.lock().unwrap();
+    let [(access, id)] = deletes.as_slice() else {
+        panic!("expected one delete, got {}", deletes.len());
+    };
+    assert!(!is_bot_receipt(access));
+    assert_eq!(*id, message_id);
+}
+
+#[tokio::test]
+async fn delete_channel_message_requires_membership() {
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService::default(),
+        ToolTestAccessService {
+            receipt_error: Some(ReceiptFail::Unauthorized),
+            ..ToolTestAccessService::default()
+        },
+    );
+
+    let error = DeleteChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("non-members cannot delete");
+
+    assert!(error.description.contains("not a member"));
+}
+
+#[tokio::test]
+async fn react_to_channel_message_reacts_as_the_user() {
+    let message_id = Uuid::new_v4();
+    let messages = RecordingMessages {
+        stored_sender: Some(Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+        ..RecordingMessages::default()
+    };
+    let reacts = messages.reacts.clone();
+
+    let response = ReactToChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id,
+        emoji: " 👍 ".to_string(),
+        action: ReactionAction::Add,
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("members can react");
+
+    assert_eq!(response.emoji, "👍");
+    assert_eq!(response.count, 1);
+    let reacts = reacts.lock().unwrap();
+    let [(access, id, emoji, add)] = reacts.as_slice() else {
+        panic!("expected one reaction, got {}", reacts.len());
+    };
+    assert!(!is_bot_receipt(access), "reactions belong to the user");
+    assert_eq!(*id, message_id);
+    assert_eq!(emoji, "👍");
+    assert!(*add);
+}
+
+#[tokio::test]
+async fn react_to_channel_message_removes_a_reaction() {
+    let messages = RecordingMessages::default();
+    let reacts = messages.reacts.clone();
+
+    let response = ReactToChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        emoji: "🎉".to_string(),
+        action: ReactionAction::Remove,
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("members can remove their reaction");
+
+    assert_eq!(response.count, 0);
+    assert!(!reacts.lock().unwrap()[0].3);
+}
+
+#[tokio::test]
+async fn react_to_channel_message_rejects_shortcodes() {
+    let messages = RecordingMessages::default();
+    let reacts = messages.reacts.clone();
+
+    let error = ReactToChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        emoji: ":thumbsup:".to_string(),
+        action: ReactionAction::Add,
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect_err("shortcodes are not emoji");
+
+    assert!(error.description.contains("shortcode"));
+    assert!(reacts.lock().unwrap().is_empty());
+}
+
+#[test]
+fn react_to_channel_message_defaults_to_adding() {
+    let tool: ReactToChannelMessage = serde_json::from_value(serde_json::json!({
+        "channelId": Uuid::nil(),
+        "messageId": Uuid::nil(),
+        "emoji": "👍",
+    }))
+    .expect("valid input");
+    assert_eq!(tool.action, ReactionAction::Add);
+}
+
+#[tokio::test]
+async fn open_direct_message_opens_a_one_to_one_dm_as_the_user() {
+    let channel_id = Uuid::new_v4();
+    let service = ToolTestChannelService {
+        created_id: Some(channel_id),
+        ..ToolTestChannelService::default()
+    };
+    let dms = service.dms.clone();
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = OpenDirectMessage {
+        participants: vec!["Teammate@Example.com".to_string(), TEST_USER_ID.to_string()],
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("dm opens");
+
+    assert_eq!(response.channel_id, channel_id);
+    assert!(!response.created);
+    assert_eq!(response.participants, vec!["macro|teammate@example.com"]);
+    let dms = dms.lock().unwrap();
+    let [(actor, request)] = dms.as_slice() else {
+        panic!("expected one dm, got {}", dms.len());
+    };
+    assert_eq!(actor.as_user(), Some(&user_id()));
+    assert_eq!(
+        request.recipient_id.as_user().map(|id| id.as_ref()),
+        Some("macro|teammate@example.com"),
+    );
+}
+
+#[tokio::test]
+async fn open_direct_message_opens_a_group_dm_for_several_people() {
+    let service = ToolTestChannelService::default();
+    let group_dms = service.group_dms.clone();
+    let dms = service.dms.clone();
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = OpenDirectMessage {
+        participants: vec!["a@example.com".to_string(), "b@example.com".to_string()],
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("group dm opens");
+
+    assert!(response.created);
+    assert!(dms.lock().unwrap().is_empty());
+    let group_dms = group_dms.lock().unwrap();
+    assert_eq!(group_dms[0].1.recipients.len(), 2);
+}
+
+#[tokio::test]
+async fn open_direct_message_needs_someone_besides_the_user() {
+    let error = OpenDirectMessage {
+        participants: vec![TEST_USER_ID.to_string()],
+    }
+    .call(
+        message_tool_context(RecordingMessages::default()),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect_err("a dm with only the user is refused");
+
+    assert!(error.description.contains("other than the user"));
+}
+
+fn channel_message(
+    channel_id: Uuid,
+    sender: Sender,
+    preview: Vec<messages::domain::models::Message>,
+) -> messages::domain::models::MessageListItem {
+    let message = RecordingMessages::default().stored_message(
+        &channel_id.to_string(),
+        Uuid::now_v7(),
+        vec![],
+    );
+    let message = messages::domain::models::Message {
+        sender_id: sender,
+        ..message
+    };
+    messages::domain::models::MessageListItem {
+        state: messages::domain::models::ThreadState {
+            root_id: message.id,
+            user_id: message.sender_id.as_ref().into(),
+            created_at: message.created_at,
+            updated_at: message.created_at,
+            resolved: false,
+            deleted_at: None,
+            anchor: None,
+        },
+        thread: messages::domain::models::MessageThreadPreview {
+            reply_count: preview.len() as i64,
+            latest_reply_at: None,
+            preview,
+        },
+        message,
+    }
+}
+
+fn person(email: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(format!("macro|{email}")).expect("valid macro user id")
+}
+
+fn read_latest(channel_id: Uuid) -> ReadChannelMessages {
+    serde_json::from_value(serde_json::json!({
+        "channelId": channel_id,
+        "windowType": "latest",
+    }))
+    .expect("valid read")
+}
+
+#[tokio::test]
+async fn read_channel_messages_names_each_sender_as_the_app_does() {
+    let channel_id = Uuid::now_v7();
+    let mut reply = RecordingMessages::default().stored_message(
+        &channel_id.to_string(),
+        Uuid::now_v7(),
+        vec![],
+    );
+    reply.sender_id = Sender::new_from_user(person("gab@macro.com"));
+    let mut bot_message = channel_message(
+        channel_id,
+        Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        vec![],
+    );
+    bot_message.message.bot_profile = Some(messages::domain::models::BotSenderProfile {
+        name: "Release bot".to_string(),
+        avatar_url: None,
+    });
+    // Newest first, as the timeline returns roots.
+    let messages = RecordingMessages {
+        timeline: vec![
+            bot_message,
+            channel_message(
+                channel_id,
+                Sender::new_from_user(person("no-name@macro.com")),
+                vec![],
+            ),
+            channel_message(
+                channel_id,
+                Sender::new_from_user(person("gab@macro.com")),
+                vec![reply],
+            ),
+        ],
+        ..Default::default()
+    };
+    let service = ToolTestChannelService {
+        user_names: HashMap::from([(person("gab@macro.com"), "Pine Martin".to_string())]),
+        ..Default::default()
+    };
+    let context = ChannelToolContext::new(
+        Arc::new(messages),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = read_latest(channel_id)
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("read");
+
+    let json = serde_json::to_value(&response).expect("serializable");
+    let named = &json["messages"][0];
+    assert_eq!(named["senderId"], "macro|gab@macro.com");
+    assert_eq!(named["senderName"], "Pine Martin");
+    assert_eq!(
+        named["thread"]["preview"][0]["senderName"], "Pine Martin",
+        "a preview reply names its sender too"
+    );
+    let unnamed = &json["messages"][1];
+    assert_eq!(unnamed["senderId"], "macro|no-name@macro.com");
+    assert!(
+        unnamed.get("senderName").is_none(),
+        "a person without a profile name is known by the id alone"
+    );
+    assert_eq!(json["messages"][2]["senderName"], "Release bot");
+}
+
+#[tokio::test]
+async fn read_channel_messages_reads_without_names_when_the_lookup_fails() {
+    let channel_id = Uuid::now_v7();
+    let messages = RecordingMessages {
+        timeline: vec![channel_message(
+            channel_id,
+            Sender::new_from_user(person("gab@macro.com")),
+            vec![],
+        )],
+        ..Default::default()
+    };
+    let service = ToolTestChannelService {
+        user_names: HashMap::from([(person("gab@macro.com"), "Pine Martin".to_string())]),
+        fail_user_names: true,
+        ..Default::default()
+    };
+    let context = ChannelToolContext::new(
+        Arc::new(messages),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = read_latest(channel_id)
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("a failed name lookup does not fail the read");
+
+    assert_eq!(response.messages.len(), 1);
+    assert_eq!(response.messages[0].sender_name, None);
 }

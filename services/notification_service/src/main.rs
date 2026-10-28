@@ -349,6 +349,9 @@ pub async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(
         ApiContext {
+            item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
+                ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
+            ),
             internal_api_key: config.internal_api_key.clone(),
             db,
             sns_client: Arc::new(sns_client),

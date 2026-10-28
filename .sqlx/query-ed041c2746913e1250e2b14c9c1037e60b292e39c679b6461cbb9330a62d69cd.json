@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET review_id = CASE WHEN status = 'running' THEN $3 ELSE review_id END,\n                review_session_id = CASE WHEN status = 'running' THEN $4\n                                         ELSE COALESCE(review_session_id, $4) END\n            WHERE user_id = $1 AND source = $2 AND status IN ('running', 'ready')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed041c2746913e1250e2b14c9c1037e60b292e39c679b6461cbb9330a62d69cd"
+}

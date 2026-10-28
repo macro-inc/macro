@@ -1,6 +1,8 @@
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
 } from '@app/features/calendar/types';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type JSX, Show } from 'solid-js';
@@ -17,7 +19,7 @@ vi.mock('@ui', () => ({
     <button onClick={props.onClick}>{props.children}</button>
   ),
 }));
-vi.mock('./EventRsvpScopeDialog', () => ({
+vi.mock('../../calendar/components/EventRsvpScopeDialog', () => ({
   EventRsvpScopeDialog: (props: {
     open: boolean;
     scope: string;
@@ -44,6 +46,8 @@ const event: CalendarEvent = {
   recurrenceId: 'instance',
   isCancelled: false,
   isReadOnly: false,
+  guestPolicy: DEFAULT_GUEST_POLICY,
+  viewerCan: { ...NO_VIEWER_CAPABILITIES, rsvp: true },
   sourceCalendarIds: [],
   recurrenceLines: ['RRULE:FREQ=WEEKLY'],
   title: 'Team meeting',
@@ -72,13 +76,17 @@ describe('event RSVP confirmation', () => {
     fireEvent.click(screen.getByText('Maybe'));
     expect(screen.getByText('this_event')).toBeTruthy();
     fireEvent.click(screen.getByText('Save response'));
-    expect(mutate).toHaveBeenCalledExactlyOnceWith({
-      eventId: 'event',
-      response: 'tentative',
-      scope: 'this_event',
-      recurrenceId: 'instance',
-      occurrenceKey: '2026-09-11',
-    });
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      {
+        eventId: 'event',
+        response: 'tentative',
+        respondingEmail: 'self@example.com',
+        scope: 'this_event',
+        recurrenceId: 'instance',
+        occurrenceKey: '2026-09-11',
+      },
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
     expect(screen.queryByRole('dialog')).toBeNull();
   });
   it('applies a confirmed series response without occurrence identifiers', () => {
@@ -86,13 +94,17 @@ describe('event RSVP confirmation', () => {
     fireEvent.click(screen.getByText('No'));
     fireEvent.click(screen.getByText('All events'));
     fireEvent.click(screen.getByText('Save response'));
-    expect(mutate).toHaveBeenCalledExactlyOnceWith({
-      eventId: 'event',
-      response: 'declined',
-      scope: 'all',
-      recurrenceId: undefined,
-      occurrenceKey: undefined,
-    });
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(
+      {
+        eventId: 'event',
+        response: 'declined',
+        respondingEmail: 'self@example.com',
+        scope: 'all',
+        recurrenceId: undefined,
+        occurrenceKey: undefined,
+      },
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
   });
   it('submits non-recurring events without opening a scope prompt', () => {
     render(() => (
@@ -103,5 +115,18 @@ describe('event RSVP confirmation', () => {
     fireEvent.click(screen.getByText('Yes'));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(mutate).toHaveBeenCalledOnce();
+  });
+  it('offers no answer on a snapshot of a shared event', () => {
+    render(() => (
+      <EventRsvpSection
+        event={{
+          ...event,
+          isSnapshot: true,
+          viewerCan: NO_VIEWER_CAPABILITIES,
+        }}
+      />
+    ));
+    expect(screen.queryByText('Going?')).toBeNull();
+    expect(screen.queryByText('Yes')).toBeNull();
   });
 });

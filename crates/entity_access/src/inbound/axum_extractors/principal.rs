@@ -1,7 +1,10 @@
 //! Shared capability minting for authenticated entity-message adapters.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
-    models::{AccessError, EntityAccessReceipt, EntityType, RequiredPermission},
+    models::{AccessError, BotAccessScope, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 use macro_authorization::MacroAuthorization;
@@ -41,4 +44,30 @@ pub async fn principal_entity_access_receipt<T: RequiredPermission>(
             Err(AccessError::Unauthorized)
         }
     }
+}
+
+/// Mint a new message's sender capability, retaining signed agent attribution.
+/// Use the caller capability above for reads, edits, deletes, and reactions.
+pub async fn message_sender_entity_access_receipt<T: RequiredPermission>(
+    service: &impl EntityAccessService,
+    principal: &MacroAuthorization,
+    entity_id: &str,
+    entity_type: EntityType,
+) -> Result<EntityAccessReceipt<T>, AccessError> {
+    if let MacroAuthorization::User(user) = principal
+        && let Some(agent_id) = user.agent_id
+    {
+        return service
+            .generate_bot_entity_access_receipt::<T>(
+                agent_id,
+                BotAccessScope::User {
+                    user_id: user.macro_user_id.clone(),
+                    user_org_id: user.user_context.organization_id.map(i64::from),
+                },
+                entity_id,
+                entity_type,
+            )
+            .await;
+    }
+    principal_entity_access_receipt(service, principal, entity_id, entity_type).await
 }

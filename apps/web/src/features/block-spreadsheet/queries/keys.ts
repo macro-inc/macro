@@ -5,7 +5,3 @@ export const uploadedWorkbookKeys = createQueryKeys('uploadedWorkbook', {
     queryKey: [id, version, fileType],
   }),
 });
-
-export const spreadsheetCommentKeys = createQueryKeys('spreadsheetComments', {
-  document: (id: string) => [id],
-});

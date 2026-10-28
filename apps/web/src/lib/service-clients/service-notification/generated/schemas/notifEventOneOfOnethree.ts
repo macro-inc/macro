@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
+import type { EntityAccessGrantedMetadata } from './entityAccessGrantedMetadata';
 import type { NotifEventOneOfOnethreeTag } from './notifEventOneOfOnethreeTag';
 
 /**
- * A user sent a message in a channel.
+ * An owner granted requested access.
  */
 export type NotifEventOneOfOnethree = {
-  /** A user sent a message in a channel. */
-  content: ChannelMessageSendMetadata;
+  /** An owner granted requested access. */
+  content: EntityAccessGrantedMetadata;
   tag: NotifEventOneOfOnethreeTag;
 };

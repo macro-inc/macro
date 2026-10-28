@@ -18,7 +18,9 @@ beforeAll(async () => {
     module_or_path: readFileSync(new URL('agent_fold_bg.wasm', path)),
   });
   Stream = wasm.FoldStream;
-}, 300_000);
+  // CI compiles the release WASM from scratch on every run, which takes 3–6
+  // minutes depending on the runner.
+}, 600_000);
 
 it('decodes durable DTOs, reconciles overlap, and folds a batch like a stream', () => {
   const session = '00000000-0000-0000-0000-00000000000a';
@@ -79,7 +81,7 @@ it('decodes durable DTOs, reconciles overlap, and folds a batch like a stream', 
 it('preserves replacement events and later updates within one durable batch', () => {
   const session = '00000000-0000-0000-0000-00000000000a';
   const rows = readFileSync(
-    new URL('../../../crates/agent_fold/fixtures/load_replacement.jsonl', import.meta.url),
+    new URL('../../../crates/folds/agent_fold/fixtures/load_replacement.jsonl', import.meta.url),
     'utf8'
   ).trim().split('\n').map((line, index) => ({
     ...JSON.parse(line),

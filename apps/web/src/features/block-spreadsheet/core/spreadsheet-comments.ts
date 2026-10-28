@@ -1,5 +1,3 @@
-import { positionFromAddress } from './grid-selection';
-
 export const SPREADSHEET_COMMENT_PARAMS = { commentId: 'comment_id' } as const;
 
 export type SpreadsheetCommentAnchor = {
@@ -8,16 +6,14 @@ export type SpreadsheetCommentAnchor = {
   range: string;
 };
 
-/** Stored on the existing document annotation thread, never in cell contents. */
 export function spreadsheetCommentAnchor(
-  metadata: unknown
+  value: unknown
 ): SpreadsheetCommentAnchor | undefined {
-  if (!metadata || typeof metadata !== 'object' || !('spreadsheet' in metadata))
-    return;
-  const value = metadata.spreadsheet;
   if (
     !value ||
     typeof value !== 'object' ||
+    !('type' in value) ||
+    value.type !== 'spreadsheet' ||
     !('sheetId' in value) ||
     !('sheetName' in value) ||
     !('range' in value)
@@ -33,10 +29,7 @@ export function spreadsheetCommentAnchor(
   const addresses = value.range.split(':');
   if (
     addresses.length > 2 ||
-    !addresses.every(
-      (address) =>
-        /^[A-Z]+[1-9]\d*$/.test(address) && positionFromAddress(address)
-    )
+    !addresses.every((address) => /^[A-Z]+[1-9]\d*$/.test(address))
   )
     return;
   return {

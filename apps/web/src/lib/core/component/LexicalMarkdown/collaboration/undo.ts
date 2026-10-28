@@ -4,6 +4,9 @@
  */
 
 import { mergeRegister } from '@lexical/utils';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { COLLABORATION_TAG } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { EditorState, LexicalEditor } from 'lexical';
 import {
   $isRangeSelection,
@@ -17,7 +20,6 @@ import {
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
-import { type LoroDoc, UndoManager } from 'loro-crdt';
 
 type MergeAction = 0 | 1 | 2;
 const HISTORY_MERGE = 0;
@@ -202,18 +204,18 @@ function isTextNodeUnchanged(
  * Uses lexical's history merge semantics, but with Loro's undo manager
  *
  * @param editor - Lexical editor instance
- * @param loroDoc - Loro's CRDT document
+ * @param loroManager - Manager of Loro's CRDT document
  * @param delay - Delay between merges
  * @param maxUndoSteps - Maximum number of undo steps
  * @returns - Cleanup function
  */
 export function registerLoroHistory(
   editor: LexicalEditor,
-  loroDoc: LoroDoc,
+  loroManager: LoroManager,
   delay: number,
   maxUndoSteps: number = 100
 ): () => void {
-  const undoManager = new UndoManager(loroDoc, {
+  const undoManager = loroManager.createUndoManager({
     mergeInterval: delay,
     maxUndoSteps,
     excludeOriginPrefixes: ['history-'],
@@ -362,6 +364,41 @@ export function registerLoroHistory(
     editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());
   };
 
+  /**
+   * Runs one undo or redo in a trace. `editor.history.loro` covers Loro's undo
+   * manager and the mirror reading its result; `editor.history.apply` lasts
+   * until the reconciled editor update commits.
+   */
+  const traceHistoryStep = (
+    name: 'editor.undo' | 'editor.redo',
+    step: () => boolean
+  ) => {
+    const span = Telemetry.span(name);
+    span.setAttr('document.id', loroManager.documentId);
+    span.setAttr('editor.node_count', editor.getEditorState()._nodeMap.size);
+    const loroSpan = span.span('editor.history.loro');
+    const applied = loroSpan.run(step);
+    loroSpan.end();
+    span.setAttr('history.applied', applied);
+    if (!applied) {
+      span.end();
+      return;
+    }
+    const applySpan = span.span('editor.history.apply');
+    const unregisterApplied = editor.registerUpdateListener(
+      ({ tags, dirtyElements, dirtyLeaves }) => {
+        if (!tags.has(COLLABORATION_TAG)) return;
+        unregisterApplied();
+        applySpan.setAttr(
+          'editor.dirty_node_count',
+          dirtyElements.size + dirtyLeaves.size
+        );
+        applySpan.end();
+        span.end();
+      }
+    );
+  };
+
   const unregister = mergeRegister(
     editor.registerCommand(
       UNDO_COMMAND,
@@ -372,7 +409,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
 
-        undoManager.undo();
+        traceHistoryStep('editor.undo', () => undoManager.undo());
 
         editor.dispatchCommand(CAN_UNDO_COMMAND, undoManager.canUndo());
         editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());
@@ -392,7 +429,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
 
-        undoManager.redo();
+        traceHistoryStep('editor.redo', () => undoManager.redo());
 
         editor.dispatchCommand(CAN_UNDO_COMMAND, undoManager.canUndo());
         editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());

@@ -249,6 +249,57 @@ async fn returns_highest_link_or_explicit_access_level(pool: PgPool) -> anyhow::
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_owner_grant_returns_owner(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    let document_id =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("edit"))
+            .await?;
+    insert_document_entity_access(&pool, document_id, OWNER_WITHOUT_TEAM, AccessLevel::Owner)
+        .await?;
+    let source_ids = SourceIds(vec![OWNER_WITHOUT_TEAM.to_string()]);
+
+    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+
+    assert_eq!(access, Some(AccessLevel::Owner));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn link_share_above_direct_grant_wins(pool: PgPool) -> anyhow::Result<()> {
+    const REQUESTER: &str = "macro|requester@team.test";
+
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    let document_id =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("edit"))
+            .await?;
+    insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::View).await?;
+    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
+
+    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+
+    assert_eq!(access, Some(AccessLevel::Edit));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_sources_owner_grant_is_ignored(pool: PgPool) -> anyhow::Result<()> {
+    const REQUESTER: &str = "macro|requester@team.test";
+
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    let document_id =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("view"))
+            .await?;
+    insert_document_entity_access(&pool, document_id, OWNER_WITHOUT_TEAM, AccessLevel::Owner)
+        .await?;
+    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
+
+    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+
+    assert_eq!(access, Some(AccessLevel::View));
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Email-attachment documents: access inherited from the linked thread
 // (inbox owner, macro_user_links delegation, or a thread-level grant)

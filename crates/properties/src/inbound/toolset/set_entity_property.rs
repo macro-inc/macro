@@ -9,7 +9,7 @@ use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
-use models_properties::shared::EntityReference;
+use models_properties::shared::{DateRange, EndsBeforeStart, EntityReference};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -24,10 +24,20 @@ pub struct ToolEntityRef {
     pub entity_id: String,
 }
 
+/// A date range as the tool takes it.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct ToolDateRange {
+    /// Where the range starts.
+    pub start: DateTime<Utc>,
+    /// Where the range ends; not before the start.
+    pub end: DateTime<Utc>,
+}
+
 /// How to determine which value field is active, based on the property data type from
 /// GetEntityProperties. The AI must set the matching field:
 ///  - boolean → boolean_value
 ///  - date → date_value
+///  - date_range → date_range_value
 ///  - number → number_value
 ///  - string → string_value
 ///  - select_string/select_number (single) → option_id
@@ -39,12 +49,12 @@ pub struct ToolEntityRef {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SetEntityProperty",
-    description = "Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
+    description = "Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
 
 For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
 
 Tasks always have these system properties (use these property_definition_id values directly):
-- Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com'.
+- Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com' for people or 'bot|<agent UUID>' for agents. Adding an agent starts its session and replies in the task discussion.
 - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
 - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
 - Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601.
@@ -52,11 +62,18 @@ Tasks always have these system properties (use these property_definition_id valu
 - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
 - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
 
+A task can belong to one project:
+- Project (00000001-0000-0000-0000-000000000014): entity, single. Use entity_ref with entity_type='initiative' and the project UUID; send no value field to remove the task from its project. Setting it requires edit access to the task and the project, and the project's agents are assigned to the task.
+
 CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties:
-- Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
+- Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids. This is the company's own Stage, not a deal's stage in a CRM pipeline: move pipeline deals with UpdatePipelineEntries.
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
 Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+
+Any entity (task, document, call, ...) can be associated with CRM records through these system properties:
+- Companies (00000001-0000-0000-0000-00000000000c): entity, multi. Use entity_refs with entity_type='company' and the company UUID.
+- Contacts (00000001-0000-0000-0000-000000000013): entity, multi. Use entity_refs with entity_type='contact' and the contact UUID.
 
 For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options."
 )]
@@ -80,6 +97,12 @@ pub struct SetEntityProperty {
     #[schemars(description = "For date properties (ISO 8601 date-time).")]
     #[serde(default)]
     pub date_value: Option<DateTime<Utc>>,
+
+    #[schemars(
+        description = "For date_range properties: the start and end (ISO 8601 date-times); the end may not come before the start."
+    )]
+    #[serde(default)]
+    pub date_range_value: Option<ToolDateRange>,
 
     #[schemars(description = "For number properties.")]
     #[serde(default)]
@@ -131,38 +154,44 @@ pub struct SetEntityProperty {
 }
 
 impl SetEntityProperty {
-    fn to_set_property_value(&self) -> Option<SetPropertyValue> {
+    /// The value to set, `None` to clear it, or why the value is invalid.
+    fn to_set_property_value(&self) -> Result<Option<SetPropertyValue>, EndsBeforeStart> {
         if let Some(v) = self.boolean_value {
-            return Some(SetPropertyValue::Boolean { value: v });
+            return Ok(Some(SetPropertyValue::Boolean { value: v }));
         }
         if let Some(v) = self.date_value {
-            return Some(SetPropertyValue::Date { value: v });
+            return Ok(Some(SetPropertyValue::Date { value: v }));
+        }
+        if let Some(v) = &self.date_range_value {
+            return Ok(Some(SetPropertyValue::DateRange {
+                value: DateRange::new(v.start, v.end)?,
+            }));
         }
         if let Some(v) = self.number_value {
-            return Some(SetPropertyValue::Number { value: v });
+            return Ok(Some(SetPropertyValue::Number { value: v }));
         }
         if let Some(v) = &self.string_value {
-            return Some(SetPropertyValue::String { value: v.clone() });
+            return Ok(Some(SetPropertyValue::String { value: v.clone() }));
         }
         if let Some(v) = self.option_id {
-            return Some(SetPropertyValue::SelectOption { option_id: v });
+            return Ok(Some(SetPropertyValue::SelectOption { option_id: v }));
         }
         if let Some(v) = &self.option_ids {
-            return Some(SetPropertyValue::MultiSelectOption {
+            return Ok(Some(SetPropertyValue::MultiSelectOption {
                 option_ids: v.clone(),
-            });
+            }));
         }
         if let Some(v) = &self.entity_ref {
-            return Some(SetPropertyValue::EntityReference {
+            return Ok(Some(SetPropertyValue::EntityReference {
                 reference: EntityReference {
                     entity_type: EntityType::from(v.entity_type),
                     entity_id: v.entity_id.clone(),
                     specific_message_id: None,
                 },
-            });
+            }));
         }
         if let Some(v) = &self.entity_refs {
-            return Some(SetPropertyValue::MultiEntityReference {
+            return Ok(Some(SetPropertyValue::MultiEntityReference {
                 references: v
                     .iter()
                     .map(|r| EntityReference {
@@ -171,15 +200,15 @@ impl SetEntityProperty {
                         specific_message_id: None,
                     })
                     .collect(),
-            });
+            }));
         }
         if let Some(v) = &self.link_url {
-            return Some(SetPropertyValue::Link { url: v.clone() });
+            return Ok(Some(SetPropertyValue::Link { url: v.clone() }));
         }
         if let Some(v) = &self.link_urls {
-            return Some(SetPropertyValue::MultiLink { urls: v.clone() });
+            return Ok(Some(SetPropertyValue::MultiLink { urls: v.clone() }));
         }
-        None
+        Ok(None)
     }
 }
 
@@ -220,7 +249,10 @@ where
         tracing::info!("Set entity property");
 
         let entity_type = model_entity::EntityType::from(self.entity_type);
-        let set_value = self.to_set_property_value();
+        let set_value = self.to_set_property_value().map_err(|e| ToolCallError {
+            description: e.to_string(),
+            internal_error: e.into(),
+        })?;
 
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context

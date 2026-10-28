@@ -8,6 +8,7 @@ import type { MacroClient } from '../utils/client';
 import { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
+import { hydrateMessageEvent } from './hydrate/message';
 import type {
   DeliveryHeaders,
   EventHandler,
@@ -51,6 +52,9 @@ function hydrate(
     .with({ event_type: P.string.startsWith('channel.') }, (channelEvent) =>
       hydrateChannelEvent(client, channelEvent),
     )
+    .with({ event_type: P.string.startsWith('message.') }, (messageEvent) =>
+      hydrateMessageEvent(client, messageEvent),
+    )
     .with(
       { event_type: P.string.startsWith('agent_session.') },
       (agentSessionEvent) =>
@@ -87,25 +91,24 @@ export class MacroEvents {
   }
 
   /**
-   * Subscribe to @-mentions of the authenticated caller: `channel.mentioned`
+   * Subscribe to @-mentions of the authenticated caller: `message.mentioned`
    * deliveries whose mentioned entity is this bot (bot auth) or this user
-   * (user auth).
+   * (user auth), in channels and in document comments alike.
    *
-   * `channel.mentioned` deliveries cover every mention in channels the
-   * stream's (or webhook's) workspace can access (its `ids` filter, like all
-   * channel events, holds channel ids); picking out "me" happens here,
-   * client-side. The caller's identity is resolved lazily (once) on the first
-   * delivery.
+   * `message.mentioned` deliveries cover every mention the stream's (or
+   * webhook's) workspace can access (its `ids` filter holds channel or
+   * document ids); picking out "me" happens here, client-side. The caller's
+   * identity is resolved lazily (once) on the first delivery.
    *
    * For SSE, register this handler before {@link listen} so the derived
-   * filters include `channel.mentioned`. For persisted webhooks, register the
+   * filters include `message.mentioned`. For persisted webhooks, register the
    * webhook separately, e.g. `macro.webhooks.create({ filters: [{ events:
-   * ['channel.mentioned'] }], … })`.
+   * ['message.mentioned'] }], … })`.
    *
    * @returns An unsubscribe function.
    */
-  onSelfMention(handler: EventHandler<'channel.mentioned'>): () => void {
-    return this.on('channel.mentioned', async (event) => {
+  onSelfMention(handler: EventHandler<'message.mentioned'>): () => void {
+    return this.on('message.mentioned', async (event) => {
       // Principals embed emails for users; emails are case-insensitive.
       const mentioned = event.metadata.mentioned.entity_id.toLowerCase();
       if (mentioned !== (await this.client.myPrincipalId()).toLowerCase()) {

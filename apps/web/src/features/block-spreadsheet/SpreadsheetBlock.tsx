@@ -9,9 +9,18 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import {
+  createParamsState,
+  ParamsProvider,
+} from '@core/component/ParamsProvider';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -19,15 +28,24 @@ import {
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
-import { blockMetadataSignal } from '@core/signal/load';
+import { isMobile } from '@core/mobile/isMobile';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockElementSignal } from '@core/signal/blockElement';
+import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import { onMount, Show } from 'solid-js';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import FileCsv from '@icon/system/regular/file-csv.svg';
+import FileXls from '@icon/system/regular/file-xls.svg';
+import { Badge } from '@ui';
+import { onCleanup, onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
+import { clipboardTargetInScope } from './core/clipboard-scope';
 import type { SpreadsheetData } from './definition';
+import { createSpreadsheetDownload } from './primitives/create-spreadsheet-download';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
@@ -37,17 +55,23 @@ import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 
 export default function SpreadsheetBlock(props: { share?: string }) {
   const enabled = useSpreadsheetAccess();
+  const params = createParamsState();
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: params.navigate,
+  });
   return (
-    <Show
-      when={enabled()}
-      fallback={
-        <div class="p-6 text-ink-muted">
-          Spreadsheets are not enabled for this account.
-        </div>
-      }
-    >
-      <SpreadsheetBlockContent share={props.share} />
-    </Show>
+    <ParamsProvider state={params}>
+      <Show
+        when={enabled()}
+        fallback={
+          <div class="p-6 text-ink-muted">
+            Spreadsheets are not enabled for this account.
+          </div>
+        }
+      >
+        <SpreadsheetBlockContent share={props.share} />
+      </Show>
+    </ParamsProvider>
   );
 }
 
@@ -58,6 +82,20 @@ function SpreadsheetBlockContent(props: { share?: string }) {
   const canEdit = useCanEdit();
   const userId = useUserId();
   const permissions = useGetPermissions();
+  const splitPanel = useSplitPanel();
+  const blockElement = blockElementSignal.get;
+  const ownsClipboard = (event: ClipboardEvent) =>
+    !!splitPanel?.isPanelActive() &&
+    clipboardTargetInScope(event.target, {
+      block: blockElement(),
+      // An inline preview shares its host's panel with the host's own content.
+      panel: splitPanel.isInlinePreview
+        ? undefined
+        : (splitPanel.panelRef() ?? undefined),
+      chrome: Object.values(splitPanel.layoutRefs),
+    });
+  const canAutofocus = useCanAutofocusSplitContent();
+  const { navigatedFromJK } = useNavigatedFromJK();
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'spreadsheet',
@@ -75,12 +113,21 @@ function SpreadsheetBlockContent(props: { share?: string }) {
       | undefined;
     return value?.__block === 'spreadsheet' ? value : undefined;
   };
+  const sheetDownload = createSpreadsheetDownload();
 
   return (
     <DocumentBlockContainer>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <SplitHeaderLeft>
-          <BlockItemSplitLabel />
+          <BlockItemSplitLabel
+            trailingBadges={
+              <Show when={!isMobile()}>
+                <Badge variant="outline" size="xs">
+                  Beta
+                </Badge>
+              </Show>
+            }
+          />
         </SplitHeaderLeft>
         <SplitHeaderRight>
           <BlockLiveIndicators />
@@ -94,6 +141,23 @@ function SpreadsheetBlockContent(props: { share?: string }) {
             { op: 'rename' },
             { op: 'copy' },
             { op: 'moveToProject' },
+            {
+              group: 'file',
+              label: 'Download',
+              icon: DownloadSimple,
+              children: [
+                {
+                  label: 'Download as Excel (.xlsx)',
+                  icon: FileXls,
+                  action: () => sheetDownload.download('xlsx'),
+                },
+                {
+                  label: 'Download as CSV',
+                  icon: FileCsv,
+                  action: () => sheetDownload.download('csv'),
+                },
+              ],
+            },
             { op: 'delete' },
           ]}
           tools={[
@@ -109,6 +173,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
         />
         <Show when={data()?.syncSource} keyed>
           {(syncSource) => {
+            onCleanup(sheetDownload.clear);
             const source = createSpreadsheetSession({
               documentId,
               userId: userId(),
@@ -152,11 +217,15 @@ function SpreadsheetBlockContent(props: { share?: string }) {
                 <SpreadsheetComments documentId={documentId} store={store}>
                   {(commentLocation, comments) => (
                     <SpreadsheetEditor
+                      documentId={documentId}
+                      autoFocus={canAutofocus && !navigatedFromJK()}
                       commentLocation={commentLocation()}
                       comments={comments}
+                      ownsClipboard={ownsClipboard}
                       mentions={spreadsheetMentions}
                       store={store}
                       name={name()}
+                      onDownloadReady={sheetDownload.register}
                       onExportXlsx={(bytes) =>
                         downloadFile(
                           new Blob([bytes.slice().buffer], {

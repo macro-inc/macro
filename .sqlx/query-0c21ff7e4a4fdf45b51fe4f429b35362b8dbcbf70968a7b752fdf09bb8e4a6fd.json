@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_job SET revision = revision + 1, updated_at = clock_timestamp() WHERE team_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c21ff7e4a4fdf45b51fe4f429b35362b8dbcbf70968a7b752fdf09bb8e4a6fd"
+}

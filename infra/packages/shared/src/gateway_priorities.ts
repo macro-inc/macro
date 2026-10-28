@@ -3,6 +3,9 @@
  * Add a member when a service migrates onto the gateway.
  */
 export enum GatewayService {
+  AGENT_COGNITION_PUBLIC_HOST = 'AGENT_COGNITION_PUBLIC_HOST',
+  AGENT_MCP_PUBLIC_HOST = 'AGENT_MCP_PUBLIC_HOST',
+  PREVIEW_GATEWAY = 'PREVIEW_GATEWAY',
   DOCUMENT_STORAGE_SERVICE = 'DOCUMENT_STORAGE_SERVICE',
   UNFURL_SERVICE = 'UNFURL_SERVICE',
   CONVERT_SERVICE = 'CONVERT_SERVICE',
@@ -19,6 +22,7 @@ export enum GatewayService {
   EMAIL_SERVICE = 'EMAIL_SERVICE',
   MCP_SERVER = 'MCP_SERVER',
   DOCUMENT_COGNITION_SERVICE = 'DOCUMENT_COGNITION_SERVICE',
+  LEXICAL_SERVICE = 'LEXICAL_SERVICE',
 }
 
 /**
@@ -31,6 +35,10 @@ type GatewayPriorityMap = { [K in GatewayService]: number };
  * Values on this listener must be unique. A missing key is a compile error.
  */
 export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
+  // Public host routing must precede path rules: cognition itself has /mcp paths.
+  [GatewayService.AGENT_COGNITION_PUBLIC_HOST]: 5,
+  [GatewayService.AGENT_MCP_PUBLIC_HOST]: 6,
+  [GatewayService.PREVIEW_GATEWAY]: 150,
   [GatewayService.DOCUMENT_STORAGE_SERVICE]: 10,
   [GatewayService.UNFURL_SERVICE]: 20,
   [GatewayService.NOTIFICATION_SERVICE]: 30,
@@ -46,6 +54,7 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.MCP_SERVER]: 130,
   [GatewayService.DOCUMENT_COGNITION_SERVICE]: 120,
   [GatewayService.CALENDAR_SERVICE]: 140,
+  [GatewayService.LEXICAL_SERVICE]: 160,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 

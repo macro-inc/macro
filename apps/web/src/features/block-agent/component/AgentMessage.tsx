@@ -18,9 +18,21 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  For,
+  Index,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
+import { useOptionalAgentSession } from '../context/AgentSessionContext';
+import { useOpenPromptOrigin } from '../open-prompt-origin';
 import { isControlMessage } from '../state/control-message';
+import { isNotificationMessage } from '../state/notification-message';
+import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
@@ -31,13 +43,15 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
+import { PromptFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import type { ToolUsePart } from './parts/shared';
+import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
+import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
 /**
@@ -56,12 +70,29 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
+  const session = useOptionalAgentSession();
   // Match accessors keep a part's renderer mounted when a streamed snapshot
   // replaces the object, preserving disclosures while updating their contents.
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
-        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+        {(part) => (
+          <TextPart
+            text={part().text}
+            inFlight={props.inFlight}
+            hideIncompleteXml={props.message.author.kind === 'agent'}
+            observeRender={
+              props.message.author.kind === 'agent'
+                ? (element) =>
+                    session?.observeRenderedText?.(
+                      props.message.agentSessionId,
+                      props.message.turn,
+                      element
+                    )
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={props.part.kind === 'attachment' && props.part}>
         {(part) => <AttachmentPart part={part()} />}
@@ -88,12 +119,16 @@ function AgentMessagePart(props: {
               messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
               partIndex: props.index,
               inFlight: props.inFlight,
+              followedBy: toolUsedAfter(props.message.parts, props.index),
             }}
           />
         )}
       </Match>
       <Match when={props.part.kind === 'permission' && props.part}>
         {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'tool_approval' && props.part}>
+        {(part) => <ToolApprovalPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'plan' && props.part}>
         {(part) => <PlanPart part={part()} />}
@@ -181,6 +216,7 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       { kind: 'text' },
       { kind: 'thought' },
       { kind: 'permission' },
+      { kind: 'tool_approval' },
       { kind: 'elicitation' },
       () => false
     )
@@ -227,18 +263,26 @@ function promptAuthorName(
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
  * rounded, filled surface shared with production chat. A prompt another
- * participant sent carries their name above the bubble.
+ * participant sent carries their name above the bubble; under it, when it was
+ * posted and, when the harness delivered it from elsewhere, where from.
  */
 function UserMessage(props: { message: FoldedMessage }) {
   const userId = useUserId();
   const authorName = () => promptAuthorName(props.message.author, userId());
+  const openOrigin = useOpenPromptOrigin();
+  // Memoized: reading the origin parses the context's XML.
+  const origin = createMemo(() => {
+    const first = props.message.parts.find((part) => part.kind === 'text');
+    const context =
+      first?.kind === 'text' ? agentContextText(first.text) : undefined;
+    return context === undefined ? undefined : promptOrigin(context);
+  });
 
   return (
     <div
-      class="flex w-full flex-col items-end gap-0.5 transition-opacity"
+      class="flex w-full flex-col items-end gap-0.5"
       // Still on the wire: the fold shows the prompt before the log confirms
-      // it, and the confirmation clears this in place.
-      classList={{ 'opacity-60': props.message.pending }}
+      // it. It reads as sent at once - dimming it made the wait feel longer.
       aria-busy={props.message.pending || undefined}
       ref={(el) =>
         messageSendMotion(el, () =>
@@ -267,6 +311,20 @@ function UserMessage(props: { message: FoldedMessage }) {
           )}
         </For>
       </UserMessageBubble>
+      <Show when={origin() || props.message.postedAt}>
+        <PromptFooter
+          origin={origin()}
+          postedAt={props.message.postedAt ?? undefined}
+          onOpen={
+            origin()?.destination
+              ? (options) => {
+                  const destination = origin()?.destination;
+                  if (destination) openOrigin(destination, options);
+                }
+              : undefined
+          }
+        />
+      </Show>
     </div>
   );
 }
@@ -281,9 +339,14 @@ export function Message(props: {
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
   return (
+    // A control and an event notification are both user-authored by the
+    // fold's account and neither is a prompt: they take the full-width
+    // treatment, where the notification renders as its own card.
     <Show
       when={
-        props.message.author.kind === 'user' && !isControlMessage(props.message)
+        props.message.author.kind === 'user' &&
+        !isControlMessage(props.message) &&
+        !isNotificationMessage(props.message)
       }
       fallback={
         <div class="flex flex-col gap-1 min-w-0">
@@ -333,7 +396,7 @@ export function Message(props: {
                 when={failed().notice}
                 fallback={
                   <ActionLine
-                    label={`${TURN_FAILED_LABEL} — ${failed().message}`}
+                    label={TURN_FAILED_LABEL}
                     detail={failed().message}
                     failed
                   />

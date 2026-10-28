@@ -1,3 +1,4 @@
+import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
 import { assert } from 'vitest';
@@ -16,14 +17,17 @@ export const sleep = (millis) => new Promise(resolve => setTimeout(resolve, mill
 
 async function migrateDatabase(mf: Miniflare) {
   const db = await mf.getD1Database("USER_PEER_MAPPING");
-  const migration = fs.readFileSync("database/user-peer-mapping/migrations/0001_add_users.sql", "utf8");
-  const statements = migration
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
+  const migrationsDir = "database/user-peer-mapping/migrations";
+  for (const file of fs.readdirSync(migrationsDir).sort()) {
+    const migration = fs.readFileSync(`${migrationsDir}/${file}`, "utf8");
+    const statements = migration
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
 
-  for (const statement of statements) {
-    await db.prepare(statement).run();
+    for (const statement of statements) {
+      await db.prepare(statement).run();
+    }
   }
 }
 
@@ -32,6 +36,7 @@ export async function setupMiniflare(
     persistPath?: string;
     migrate?: boolean;
     dssUrl?: string;
+    lexicalServiceUrl?: string;
     fetchMock?: MiniflareOptions['fetchMock'];
   } = {},
 ) {
@@ -72,6 +77,9 @@ export async function setupMiniflare(
       SPS_URL: "http://localhost:8092",
       local:true,
       ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
+      ...(options.lexicalServiceUrl
+        ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, LEXICAL_SERVICE_AUTH_KEY: "lexical-key" }
+        : {}),
     },
     compatibilityDate: '2025-03-05'
   });
@@ -161,7 +169,7 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
   const registrationMessage = FromPeer.fromPeerRegisterId({ peerid: loroDoc.peerId }).encode();
 
 
-  connection.getWebSocket().send(registrationMessage);
+  connection.send(registrationMessage);
 
   return {
     doc: loroDoc,
@@ -210,11 +218,15 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
 }
 
 export function createTestWebSocket(ws: WebSocket) {
-  const messages: ArrayBuffer[] = [];
-  const waiters: ((message: ArrayBuffer) => void)[] = [];
+  const reassembler = new Reassembler();
+  const messages: (ArrayBuffer | string)[] = [];
+  const waiters: ((message: ArrayBuffer | string) => void)[] = [];
 
   ws.addEventListener('message', (event) => {
-    const message = event.data as ArrayBuffer;
+    const message = typeof event.data === 'string'
+      ? event.data
+      : reassembler.push(new Uint8Array(event.data as ArrayBuffer))?.buffer;
+    if (message === undefined) return;
 
     if (waiters.length > 0) {
       const resolve = waiters.shift()!;
@@ -230,7 +242,7 @@ export function createTestWebSocket(ws: WebSocket) {
         return messages.shift()!;
       }
 
-      return new Promise<ArrayBuffer>((resolve, reject) => {
+      return new Promise<ArrayBuffer | string>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           const index = waiters.indexOf(wrappedResolve);
           if (index !== -1) {
@@ -243,7 +255,7 @@ export function createTestWebSocket(ws: WebSocket) {
           );
         }, timeout);
 
-        const wrappedResolve = (message: ArrayBuffer) => {
+        const wrappedResolve = (message: ArrayBuffer | string) => {
           clearTimeout(timeoutId);
           resolve(message);
         };
@@ -253,7 +265,11 @@ export function createTestWebSocket(ws: WebSocket) {
     },
 
     send(message: string | ArrayBuffer | Uint8Array): void {
-      ws.send(message instanceof Uint8Array ? new Uint8Array(message) : message);
+      if (typeof message === 'string') {
+        ws.send(message);
+        return;
+      }
+      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
     },
 
     getWebSocket() {

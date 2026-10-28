@@ -1,10 +1,12 @@
 use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod historical;
 mod timeline;
 
 #[cfg(test)]
@@ -14,6 +16,8 @@ mod test;
 #[derive(Clone)]
 pub struct PgMessageRepository {
     pool: PgPool,
+    initiatives: Option<std::sync::Arc<dyn initiative::domain::lookup::InitiativeReader>>,
+    crm: Option<std::sync::Arc<dyn CrmParentReader>>,
 }
 
 #[derive(Deserialize)]
@@ -23,6 +27,7 @@ struct StoredMessage {
     parent_entity_id: String,
     thread_id: Option<Uuid>,
     sender_id: String,
+    guest_name: Option<String>,
     imported_author: Option<String>,
     triggered_by_user_id: Option<String>,
     content: String,
@@ -36,7 +41,12 @@ fn database_error(error: sqlx::Error) -> MessageError {
     if let sqlx::Error::Database(ref error) = error {
         match error.code().as_deref() {
             Some("23503") => return MessageError::NotFound,
-            Some("23505") if error.constraint() == Some("comms_messages_pkey") => {
+            Some("23505")
+                if matches!(
+                    error.constraint(),
+                    Some("comms_messages_pkey" | "comms_messages_client_message_id_key")
+                ) =>
+            {
                 return MessageError::Conflict;
             }
             Some("23505") => {
@@ -51,14 +61,6 @@ fn database_error(error: sqlx::Error) -> MessageError {
     MessageError::Repository(rootcause::Report::new(error).into())
 }
 
-/// Legacy channel column kept in step with the parent until the last PR of the stack.
-fn channel_column(parent: &MessageParent) -> Option<Uuid> {
-    match parent {
-        MessageParent::Channel(id) => Some(*id),
-        MessageParent::Document(_) => None,
-    }
-}
-
 /// Email references arrive under several editor aliases; store the canonical one.
 fn stored_attachment_type(entity_type: &str) -> &str {
     match MessageReferenceKind::parse(entity_type) {
@@ -70,7 +72,38 @@ fn stored_attachment_type(entity_type: &str) -> &str {
 impl PgMessageRepository {
     /// Create a repository using the shared MacroDB pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            initiatives: None,
+            crm: None,
+        }
+    }
+
+    /// Supply the owning initiative identity service for initiative discussions.
+    /// Unconfigured compositions reject initiative operations.
+    pub fn with_initiatives(
+        mut self,
+        initiatives: impl initiative::domain::lookup::InitiativeReader,
+    ) -> Self {
+        self.initiatives = Some(std::sync::Arc::new(initiatives));
+        self
+    }
+
+    /// Supply the owning CRM identity service for company and contact discussions.
+    /// Unconfigured compositions reject CRM operations.
+    pub fn with_crm(mut self, crm: impl CrmParentReader) -> Self {
+        self.crm = Some(std::sync::Arc::new(crm));
+        self
+    }
+
+    async fn crm_parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
+        let Some(crm) = &self.crm else {
+            return Ok(false);
+        };
+        crm.read_crm_parent(parent)
+            .await
+            .map(|value| value.is_some())
+            .map_err(MessageError::Repository)
     }
 
     /// Fill in what each PDF highlight anchor covers. The highlight owns its
@@ -225,6 +258,7 @@ impl PgMessageRepository {
                         .try_into()
                         .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?,
                     imported_author: r.imported_author.map(|name| ImportedAuthor { name }),
+                    guest_name: r.guest_name,
                     triggered_by: r.triggered_by_user_id,
                     content: if deleted { String::new() } else { r.content },
                     created_at: r.created_at,
@@ -262,7 +296,6 @@ impl PgMessageRepository {
 
     async fn replace_references(
         tx: &mut Transaction<'_, Postgres>,
-        parent: &MessageParent,
         id: Uuid,
         actor: &str,
         mentions: &[SimpleMention],
@@ -317,9 +350,9 @@ impl PgMessageRepository {
             .map_err(database_error)?;
             for (entity_type, attachment) in added {
                 sqlx::query!(
-                    r#"INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
-                    macro_uuid::generate_uuid_v7(), id, channel_column(parent), entity_type, attachment.entity_id,
+                    r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height)
+                       VALUES ($1, $2, $3, $4, $5, $6)"#,
+                    macro_uuid::generate_uuid_v7(), id, entity_type, attachment.entity_id,
                     attachment.width, attachment.height,
                 ).execute(&mut **tx).await.map_err(database_error)?;
             }
@@ -384,7 +417,7 @@ impl PgMessageRepository {
             Some(NewThreadAnchor::PdfHighlight { anchor_id }) => {
                 let changed = sqlx::query!(
                     r#"UPDATE "PdfHighlightAnchor" SET root_id = $1
-                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL AND "threadId" IS NULL
+                    WHERE uuid = $2 AND "documentId" = $3 AND root_id IS NULL
                         AND "deletedAt" IS NULL"#,
                     root_id,
                     anchor_id,
@@ -414,7 +447,12 @@ impl PgMessageRepository {
                     anchor_id, command.parent.entity_id(), command.actor.as_ref(), root_id, page,
                     x_pct, y_pct, width_pct, height_pct).execute(&mut **tx).await.map_err(database_error)?;
             }
-            Some(NewThreadAnchor::Markdown { .. }) | None => {}
+            Some(
+                NewThreadAnchor::Markdown { .. }
+                | NewThreadAnchor::Spreadsheet { .. }
+                | NewThreadAnchor::Fig { .. },
+            )
+            | None => {}
         }
         Ok(())
     }
@@ -515,11 +553,33 @@ impl MessageRepository for PgMessageRepository {
         self.hydrate(rows).await
     }
 
+    async fn document_file_type(&self, document_id: &str) -> Result<Option<String>, MessageError> {
+        sqlx::query_scalar!(
+            r#"SELECT "fileType" FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL"#,
+            document_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(Option::flatten)
+        .map_err(database_error)
+    }
+
     async fn parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
         let exists = match parent {
+            MessageParent::Initiative(id) => {
+                let Some(initiatives) = &self.initiatives else { return Ok(false); };
+                return initiatives.read_basic(initiative::domain::models::InitiativeId::from_uuid(*id))
+                    .await.map(|value| value.is_some())
+                    .map_err(|error| MessageError::Repository(rootcause::report!(error).into()));
+            }
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                return self.crm_parent_exists(parent).await;
+            }
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
+                .fetch_one(&self.pool).await,
+            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
         exists.map_err(database_error)
@@ -532,6 +592,27 @@ impl MessageRepository for PgMessageRepository {
             id,
             parent.entity_type(),
             parent.entity_id(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(self.hydrate(rows).await?.pop())
+    }
+
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        let rows = sqlx::query_scalar!(
+            r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+               WHERE client_message_id = $1 AND parent_entity_type = $2
+                   AND parent_entity_id = $3 AND sender_id = $4"#,
+            client_message_id,
+            parent.entity_type(),
+            parent.entity_id(),
+            actor.as_ref(),
         )
         .fetch_all(&self.pool)
         .await
@@ -594,12 +675,49 @@ impl MessageRepository for PgMessageRepository {
         self.read_timeline(parent, query).await
     }
 
-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
-        let id = command
+    async fn create(&self, mut command: CreateMessage) -> Result<Message, MessageError> {
+        let mut id = command
             .input
             .id
             .unwrap_or_else(macro_uuid::generate_uuid_v7);
         let mut tx = self.pool.begin().await.map_err(database_error)?;
+        if let Some(root_id) = command.canonical_root_id {
+            // Serialize the first writers, and coordinate with parent cleanup. A
+            // racing first send becomes a reply rather than failing or losing text.
+            sqlx::query_scalar!(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text AS lock",
+                root_id.to_string(),
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(database_error)?;
+            let parent_exists = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#,
+                root_id,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(database_error)?;
+            if !parent_exists {
+                return Err(MessageError::NotFound);
+            }
+            let thread_exists = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM comms_message_threads
+                    WHERE root_id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3) AS "exists!""#,
+                root_id,
+                command.parent.entity_type(),
+                command.parent.entity_id(),
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(database_error)?;
+            if thread_exists {
+                command.input.thread_id = Some(root_id);
+            } else {
+                id = root_id;
+                command.input.thread_id = None;
+            }
+        }
         if let Some(root_id) = command.input.thread_id {
             // Replies attach to a live root of the same parent. The composite FK
             // only checks parent identity at commit and nothing stops a reply from
@@ -622,17 +740,18 @@ impl MessageRepository for PgMessageRepository {
             }
         }
         sqlx::query!(
-            r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, channel_id, thread_id,
-                    sender_id, triggered_by_user_id, content)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+            r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
+                    sender_id, triggered_by_user_id, content, client_message_id, guest_name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
-            channel_column(&command.parent),
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
             command.input.content,
+            command.canonical_root_id.and(command.input.id),
+            command.guest_name,
         )
         .execute(&mut *tx)
         .await
@@ -643,7 +762,6 @@ impl MessageRepository for PgMessageRepository {
         }
         Self::replace_references(
             &mut tx,
-            &command.parent,
             id,
             command.actor.as_ref(),
             &command.input.mentions,
@@ -677,7 +795,6 @@ impl MessageRepository for PgMessageRepository {
         .map_err(database_error)?;
         Self::replace_references(
             &mut tx,
-            parent,
             id,
             &actor,
             &command.mentions,
@@ -706,12 +823,12 @@ impl MessageRepository for PgMessageRepository {
         user: &str,
         emoji: &str,
         add: bool,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<ReactionResult, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
-        if add {
+        let result = if add {
             sqlx::query!("INSERT INTO comms_reactions(message_id, user_id, emoji) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", id, user, emoji)
-                .execute(&mut *tx).await.map_err(database_error)?;
+                .execute(&mut *tx).await.map_err(database_error)?
         } else {
             sqlx::query!(
                 "DELETE FROM comms_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
@@ -721,11 +838,14 @@ impl MessageRepository for PgMessageRepository {
             )
             .execute(&mut *tx)
             .await
-            .map_err(database_error)?;
-        }
+            .map_err(database_error)?
+        };
         let message = Self::require_message_in(&mut tx, parent, id).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(ReactionResult {
+            message,
+            changed: result.rows_affected() > 0,
+        })
     }
 
     async fn patch_thread(
@@ -744,6 +864,22 @@ impl MessageRepository for PgMessageRepository {
     ) -> Result<ThreadState, MessageError> {
         self.set_thread(parent, root, ThreadPatch::default(), true)
             .await
+    }
+
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        let row = sqlx::query!(
+            "SELECT parent_entity_type, parent_entity_id FROM comms_messages
+             WHERE id = $1 AND deleted_at IS NULL",
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        row.map(|row| {
+            MessageParent::parse(&row.parent_entity_type, &row.parent_entity_id)
+                .map_err(|_| MessageError::Invalid("stored message has an invalid parent"))
+        })
+        .transpose()
     }
 
     async fn resolve_legacy(

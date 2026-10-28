@@ -52,9 +52,13 @@ function cloneReminders(
   };
 }
 
+type CompatibleCalendarEvent = CreateCalendarEvent & {
+  addGoogleMeet?: boolean;
+};
+
 /** Convert deferred calendar-tool arguments into values understood by EventForm. */
 export function createCalendarEventToEditorInitialValues(
-  event: CreateCalendarEvent
+  event: CompatibleCalendarEvent
 ): EventEditorInitialValues {
   const isOutOfOffice = event.eventType === 'out_of_office';
   const common = {
@@ -66,9 +70,11 @@ export function createCalendarEventToEditorInitialValues(
       .join(', '),
     location: event.location ?? '',
     description: event.description ?? '',
-    conference: event.addGoogleMeet
-      ? ('google_meet' as const)
-      : ('none' as const),
+    conference: event.addMacroCall
+      ? ('macro' as const)
+      : (event.addConference ?? event.addGoogleMeet)
+        ? ('google_meet' as const)
+        : ('none' as const),
     reminders: cloneReminders(event.reminders),
     eventType: isOutOfOffice ? ('out_of_office' as const) : undefined,
     outOfOffice: isOutOfOffice
@@ -80,6 +86,7 @@ export function createCalendarEventToEditorInitialValues(
           declineMessage: event.outOfOffice?.declineMessage ?? '',
         }
       : undefined,
+    guestPolicy: event.guestPolicy ?? undefined,
   };
 
   if (event.time.kind === 'allDay') {
@@ -141,16 +148,22 @@ function attendees(
   });
 }
 
-/** Merge editable EventForm values back into the deferred tool arguments. */
+/**
+ * Merge editable EventForm values back into the deferred tool arguments.
+ * `sendGuestPolicy` is whether guest permissions may be sent: the rollout
+ * is on and the chosen calendar has them (Outlook calendars do not).
+ */
 export function editorSubmitValuesToCreateCalendarEvent(
   values: EventEditorSubmitValues,
-  original: CreateCalendarEvent
+  original: CompatibleCalendarEvent,
+  sendGuestPolicy: boolean
 ): CreateCalendarEvent {
   // A create's submit values carry `outOfOffice` exactly while the editor kind
   // is out of office, so its presence decides the tool's event type.
   const outOfOffice = values.outOfOffice;
+  const { addGoogleMeet, ...normalized } = original;
   return {
-    ...original,
+    ...normalized,
     title: values.title,
     time: toolTime(values.time, original.time),
     description: values.description || undefined,
@@ -158,11 +171,14 @@ export function editorSubmitValuesToCreateCalendarEvent(
     attendees: attendees(values.guestEmails, original.attendees),
     recurrenceLines: values.recurrenceLines ?? original.recurrenceLines ?? [],
     calendarId: values.calendarId,
-    addGoogleMeet: outOfOffice
-      ? false
-      : values.conference === undefined
-        ? original.addGoogleMeet
-        : values.conference === 'google_meet',
+    // `conferenceChoice` is the user's current pick, including the
+    // client-recognized Macro call the provider-level `conference` never
+    // carries; an out-of-office event takes no conferencing at all.
+    addMacroCall: !outOfOffice && values.conferenceChoice === 'macro',
+    addConference:
+      !outOfOffice &&
+      (values.conferenceChoice === 'google_meet' ||
+        values.conferenceChoice === 'microsoft_teams'),
     reminders: cloneReminders(values.reminders ?? original.reminders),
     eventType: outOfOffice
       ? 'out_of_office'
@@ -180,5 +196,9 @@ export function editorSubmitValuesToCreateCalendarEvent(
             : {}),
         }
       : undefined,
+    guestPolicy:
+      outOfOffice || !sendGuestPolicy
+        ? undefined
+        : (values.guestPolicy ?? original.guestPolicy),
   };
 }

@@ -1,0 +1,24 @@
+id: tsx-tabs-not-in-action-group
+language: tsx
+severity: error
+message: Tabs never sit inside a HeaderActionGroup or ButtonGroup; islands hold actions.
+note: |-
+  Rule FE-61 in .agents/rules/web/design-system.md. View tabs go left of the
+  header controls as their own pills. An island frames related actions only.
+files:
+  - apps/web/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  has:
+    field: name
+    regex: ^(Tabs|TabSelector)(\.|$)
+  inside:
+    kind: jsx_element
+    stopBy: end
+    has:
+      kind: jsx_opening_element
+      has:
+        field: name
+        regex: ^(HeaderActionGroup|ButtonGroup)$

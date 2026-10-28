@@ -278,7 +278,7 @@ pub struct TaskSpec {
     /// Assignee user keys. Defaults to the owner.
     #[serde(default)]
     pub assignees: Vec<String>,
-    /// Grant the owner's team comment access, like the app's
+    /// Grant the owner's team edit access, like the app's
     /// share-with-team toggle on tasks.
     #[serde(default)]
     pub share_with_team: bool,

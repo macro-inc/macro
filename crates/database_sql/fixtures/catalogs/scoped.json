@@ -1,0 +1,321 @@
+{
+  "catalog": {
+    "tables": [
+      {
+        "columns": [
+          {
+            "id": "01990000-0000-7000-8000-000000de0001",
+            "kind": {
+              "kind": "text"
+            },
+            "name": "Deal name",
+            "placement": "01990000-0000-7000-8000-000000c0c001"
+          },
+          {
+            "id": "01990000-0000-7000-8000-000000de0002",
+            "kind": {
+              "kind": "select",
+              "multi": false,
+              "options": [
+                {
+                  "id": "01990000-0000-7000-8000-0000000e0002",
+                  "label": "Lead"
+                },
+                {
+                  "id": "01990000-0000-7000-8000-0000000e0001",
+                  "label": "Won"
+                }
+              ]
+            },
+            "name": "Stage",
+            "placement": "01990000-0000-7000-8000-000000c0c002"
+          },
+          {
+            "id": "01990000-0000-7000-8000-000000de0003",
+            "kind": {
+              "kind": "select",
+              "multi": true,
+              "options": [
+                {
+                  "id": "01990000-0000-7000-8000-0000000e0003",
+                  "label": "2"
+                },
+                {
+                  "id": "01990000-0000-7000-8000-0000000e0004",
+                  "label": "2.5"
+                }
+              ]
+            },
+            "name": "Tier",
+            "placement": "01990000-0000-7000-8000-000000c0c003"
+          },
+          {
+            "id": "01990000-0000-7000-8000-000000de0004",
+            "kind": {
+              "kind": "entity",
+              "multi": true,
+              "target": "DATABASE_ROW"
+            },
+            "name": "Contact",
+            "placement": "01990000-0000-7000-8000-000000c0c004"
+          }
+        ],
+        "database": "CRM",
+        "databaseId": "01990000-0000-7000-8000-0000000cdb01",
+        "id": "01990000-0000-7000-8000-0000000c7a01",
+        "name": "Deals",
+        "source": "database"
+      },
+      {
+        "columns": [
+          {
+            "id": "01990000-0000-7000-8000-000000de0005",
+            "kind": {
+              "kind": "link"
+            },
+            "name": "Email",
+            "placement": "01990000-0000-7000-8000-000000c0c005"
+          },
+          {
+            "id": "01990000-0000-7000-8000-000000de0006",
+            "kind": {
+              "kind": "entity",
+              "multi": false,
+              "target": "USER"
+            },
+            "name": "Owner",
+            "placement": "01990000-0000-7000-8000-000000c0c006"
+          }
+        ],
+        "database": "CRM",
+        "databaseId": "01990000-0000-7000-8000-0000000cdb01",
+        "id": "01990000-0000-7000-8000-0000000c7a02",
+        "name": "Contacts",
+        "source": "database"
+      },
+      {
+        "columns": [
+          {
+            "id": "01990000-0000-7000-8000-000000de0005",
+            "kind": {
+              "kind": "link"
+            },
+            "name": "Email",
+            "placement": "01990000-0000-7000-8000-000000c0c005"
+          },
+          {
+            "id": "01990000-0000-7000-8000-000000de0006",
+            "kind": {
+              "kind": "entity",
+              "multi": false,
+              "target": "USER"
+            },
+            "name": "Owner",
+            "placement": "01990000-0000-7000-8000-000000c0c006"
+          }
+        ],
+        "database": "crm",
+        "databaseId": "01990000-0000-7000-8000-0000000cdb02",
+        "id": "01990000-0000-7000-8000-0000000c7a04",
+        "name": "Leads",
+        "source": "database"
+      }
+    ]
+  },
+  "schema": {
+    "databases": [
+      {
+        "id": "01990000-0000-7000-8000-0000000cdb01",
+        "name": "CRM",
+        "tables": [
+          {
+            "columns": [
+              {
+                "definition": "01990000-0000-7000-8000-000000de0001",
+                "id": "01990000-0000-7000-8000-000000c0c001",
+                "name": "Deal name",
+                "options": [],
+                "property": {
+                  "dataType": "STRING",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0002",
+                "id": "01990000-0000-7000-8000-000000c0c002",
+                "name": "Stage",
+                "options": [
+                  {
+                    "id": "01990000-0000-7000-8000-0000000e0001",
+                    "order": 1,
+                    "value": {
+                      "type": "string",
+                      "value": "Won"
+                    }
+                  },
+                  {
+                    "id": "01990000-0000-7000-8000-0000000e0002",
+                    "order": 0,
+                    "value": {
+                      "type": "string",
+                      "value": "Lead"
+                    }
+                  }
+                ],
+                "property": {
+                  "dataType": "SELECT_STRING",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0003",
+                "id": "01990000-0000-7000-8000-000000c0c003",
+                "name": "Tier",
+                "options": [
+                  {
+                    "id": "01990000-0000-7000-8000-0000000e0003",
+                    "order": 0,
+                    "value": {
+                      "type": "number",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "id": "01990000-0000-7000-8000-0000000e0004",
+                    "order": 1,
+                    "value": {
+                      "type": "number",
+                      "value": 2.5
+                    }
+                  }
+                ],
+                "property": {
+                  "dataType": "SELECT_NUMBER",
+                  "entityType": null,
+                  "multi": true,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0004",
+                "id": "01990000-0000-7000-8000-000000c0c004",
+                "name": "Contact",
+                "options": [],
+                "property": {
+                  "dataType": "ENTITY",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": true
+                }
+              }
+            ],
+            "id": "01990000-0000-7000-8000-0000000c7a01",
+            "name": "Deals"
+          },
+          {
+            "columns": [
+              {
+                "definition": "01990000-0000-7000-8000-000000de0005",
+                "id": "01990000-0000-7000-8000-000000c0c005",
+                "name": "Email",
+                "options": [],
+                "property": {
+                  "dataType": "LINK",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0006",
+                "id": "01990000-0000-7000-8000-000000c0c006",
+                "name": "Owner",
+                "options": [],
+                "property": {
+                  "dataType": "ENTITY",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              }
+            ],
+            "id": "01990000-0000-7000-8000-0000000c7a02",
+            "name": "Contacts"
+          }
+        ]
+      },
+      {
+        "id": "01990000-0000-7000-8000-0000000cdb02",
+        "name": "crm",
+        "tables": [
+          {
+            "columns": [
+              {
+                "definition": "01990000-0000-7000-8000-000000de0005",
+                "id": "01990000-0000-7000-8000-000000c0c005",
+                "name": "Email",
+                "options": [],
+                "property": {
+                  "dataType": "LINK",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0006",
+                "id": "01990000-0000-7000-8000-000000c0c006",
+                "name": "Owner",
+                "options": [],
+                "property": {
+                  "dataType": "ENTITY",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              }
+            ],
+            "id": "01990000-0000-7000-8000-0000000c7a03",
+            "name": "contacts"
+          },
+          {
+            "columns": [
+              {
+                "definition": "01990000-0000-7000-8000-000000de0005",
+                "id": "01990000-0000-7000-8000-000000c0c005",
+                "name": "Email",
+                "options": [],
+                "property": {
+                  "dataType": "LINK",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              },
+              {
+                "definition": "01990000-0000-7000-8000-000000de0006",
+                "id": "01990000-0000-7000-8000-000000c0c006",
+                "name": "Owner",
+                "options": [],
+                "property": {
+                  "dataType": "ENTITY",
+                  "entityType": null,
+                  "multi": false,
+                  "relation": false
+                }
+              }
+            ],
+            "id": "01990000-0000-7000-8000-0000000c7a04",
+            "name": "Leads"
+          }
+        ]
+      }
+    ],
+    "platform": []
+  },
+  "scope": "01990000-0000-7000-8000-0000000cdb01"
+}

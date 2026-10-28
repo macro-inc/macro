@@ -61,7 +61,8 @@ type SetTagOptionIdsForDefinition = (
 
 function usePersistTagSelection(
   entityId: string,
-  entityType: EntityType
+  entityType: EntityType,
+  assignmentIdForDefinition: (definitionId: string) => string | undefined
 ): PersistTagSelection {
   const mutation = useBulkUpdateEntityPropertyOptionsMutation(entityId);
 
@@ -71,6 +72,7 @@ function usePersistTagSelection(
       entityType,
       properties: updates.map((update) => ({
         property: definitionDomain(update.definition),
+        assignmentId: assignmentIdForDefinition(update.definition.id),
         currentOptionIds: update.currentOptionIds,
         nextOptionIds: update.nextOptionIds,
       })),
@@ -82,8 +84,8 @@ function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   persistTagSelection: PersistTagSelection,
   tagSets: Accessor<TagSetResponse[]>,
-  // Optimistic overlay for sources a mutation cannot write through (query
-  // results, and soup rows whose property record does not exist yet).
+  // Pending selections cover sources outside the mutation's normalized cache
+  // and edits waiting for their turn in the per-entity mutation scope.
   // Undefined for local sources, which are set synchronously.
   inFlightOptionIdsForDefinition?: (
     definitionId: string
@@ -275,11 +277,17 @@ export function useDocTags(entityId: string, entityType: EntityType) {
       ? property.value
       : [];
   };
-  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const persistTagSelection = usePersistTagSelection(
+    entityId,
+    entityType,
+    (definitionId) =>
+      properties().find((prop) => prop.propertyDefinitionId === definitionId)
+        ?.propertyId
+  );
   const tagsQuery = useTagsQuery();
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
-  // The properties query isn't optimistically written, so surface in-flight
-  // bulk updates as the optimistic value until the refetch lands.
+  // Cover REST readers and serialized pending edits. GraphQL assignments,
+  // including first tags, also update directly in the normalized cache.
   const inFlightOptionIdsForDefinition =
     useInFlightEntityPropertyOptions(entityId);
 
@@ -295,11 +303,9 @@ export function useDocTags(entityId: string, entityType: EntityType) {
  * Doc-tags backed by an entity's already-loaded soup properties instead of a
  * per-entity fetch. List rows use this so tags render with no extra requests.
  *
- * Mutations patch the soup cache optimistically, but only where the entity has
- * a property record to patch: the first tag from a set has no assignment id
- * until the server answers. The in-flight overlay covers that gap (and any
- * transport whose cache this row does not read from), so a picked tag always
- * shows immediately.
+ * Mutations update the normalized entity, including new tag assignments. The
+ * in-flight overlay also covers serialized pending edits and any transport
+ * whose cache this row does not read from.
  */
 export function useSoupDocTags(
   entityId: string,
@@ -313,7 +319,12 @@ export function useSoupDocTags(
     const value = property?.value;
     return value?.type === 'SelectOption' ? value.value : [];
   };
-  const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const persistTagSelection = usePersistTagSelection(
+    entityId,
+    entityType,
+    (definitionId) =>
+      properties()?.find((prop) => prop.definition.id === definitionId)?.id
+  );
   const tagSets = useTagSets();
   const inFlightOptionIdsForDefinition =
     useInFlightEntityPropertyOptions(entityId);

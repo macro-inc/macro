@@ -95,7 +95,10 @@ pub trait ContentTypeExt {
 
 impl ContentTypeExt for ContentType {
     fn is_image(&self) -> bool {
-        self.mime_type().starts_with("image/")
+        // Photoshop documents carry an `image/` media type, but they are
+        // layered design files that image pipelines cannot decode.
+        !matches!(self, ContentType::Psd | ContentType::Psb)
+            && self.mime_type().starts_with("image/")
     }
 
     fn is_text_content(&self) -> bool {

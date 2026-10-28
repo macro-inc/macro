@@ -65,18 +65,28 @@ impl Client {
 }
 
 impl Client {
-    pub(crate) async fn post<I, O>(&self, path: &str, request: I) -> Result<O, AnthropicError>
-    where
-        I: Serialize + std::fmt::Debug,
-        O: DeserializeOwned,
-    {
-        let response = self
+    /// Execute once and expose the response before SDK parsing so trusted tool
+    /// adapters can retain usage on HTTP and result-parsing failures.
+    pub(crate) async fn post_response<I: Serialize>(
+        &self,
+        path: &str,
+        request: I,
+    ) -> Result<reqwest::Response, AnthropicError> {
+        Ok(self
             .http_client
             .post(format!("{}{}", self.config.api_base, path))
             .headers(self.config.headers.clone())
             .json(&request)
             .send()
-            .await?;
+            .await?)
+    }
+
+    pub(crate) async fn post<I, O>(&self, path: &str, request: I) -> Result<O, AnthropicError>
+    where
+        I: Serialize + std::fmt::Debug,
+        O: DeserializeOwned,
+    {
+        let response = self.post_response(path, request).await?;
 
         let status = response.status();
         let body = response.text().await.map_err(AnthropicError::Reqwest)?;

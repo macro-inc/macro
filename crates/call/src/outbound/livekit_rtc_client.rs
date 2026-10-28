@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use chrono::DateTime;
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
@@ -23,7 +24,7 @@ use notification::domain::models::apple::VoipPushPayload;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
-    CallError, CallWebhookEvent, EgressS3Config, VerifiedRingToken, VoipPushPayloadRequest,
+    CallError, CallWebhookEvent, EgressS3Config, RtcRoom, VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::CallRtcClient;
 
@@ -125,6 +126,19 @@ fn build_room_composite_egress_request(
 
 impl CallRtcClient for LivekitRtcClient {
     #[tracing::instrument(err, skip(self))]
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.room_client
+            .create_room(
+                room_name,
+                CreateRoomOptions {
+                    empty_timeout: 300,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        Ok(())
+    }
+    #[tracing::instrument(err, skip(self))]
     async fn create_room(&self, room_name: &str) -> anyhow::Result<()> {
         self.room_client
             .create_room(
@@ -140,8 +154,29 @@ impl CallRtcClient for LivekitRtcClient {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_room(&self, room_name: &str) -> anyhow::Result<()> {
-        self.room_client.delete_room(room_name).await?;
-        Ok(())
+        ignore_not_found(self.room_client.delete_room(room_name).await)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_rooms(&self) -> anyhow::Result<Vec<RtcRoom>> {
+        let rooms = self.room_client.list_rooms(Vec::new()).await?;
+        Ok(rooms
+            .into_iter()
+            .filter_map(|room| {
+                let Some(created_at) = DateTime::from_timestamp(room.creation_time, 0) else {
+                    tracing::warn!(
+                        room_name = room.name,
+                        creation_time = room.creation_time,
+                        "skipping RTC room with an unrepresentable creation time"
+                    );
+                    return None;
+                };
+                Some(RtcRoom {
+                    name: room.name,
+                    created_at,
+                })
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -191,7 +226,7 @@ impl CallRtcClient for LivekitRtcClient {
 
     #[tracing::instrument(err, skip(self))]
     async fn remove_guest(&self, room_name: &str, guest_id: GuestId) -> anyhow::Result<()> {
-        interpret_remove_participant_result(
+        ignore_not_found(
             self.room_client
                 .remove_participant(room_name, &guest_id.to_string())
                 .await,
@@ -261,7 +296,7 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<()> {
-        interpret_remove_participant_result(
+        ignore_not_found(
             self.room_client
                 .remove_participant(room_name, participant_identity.as_ref())
                 .await,
@@ -269,20 +304,41 @@ impl CallRtcClient for LivekitRtcClient {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn list_participant_identities(
+    async fn list_meeting_participants(
         &self,
         room_name: &str,
-    ) -> anyhow::Result<Option<Vec<String>>> {
+    ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
         match self.room_client.list_participants(room_name).await {
             Ok(participants) => Ok(Some(
                 participants
                     .into_iter()
-                    .map(|participant| participant.identity)
+                    .map(
+                        |participant| crate::domain::meetings::MeetingRtcParticipant {
+                            identity: participant.identity,
+                            name: participant.name,
+                        },
+                    )
                     .collect(),
             )),
             Err(error) if is_not_found(&error) => Ok(None),
             Err(error) => Err(error.into()),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(self
+            .list_meeting_participants(room_name)
+            .await?
+            .map(|participants| {
+                participants
+                    .into_iter()
+                    .map(|participant| participant.identity)
+                    .collect()
+            }))
     }
 
     #[tracing::instrument(err, skip(self, s3_config))]
@@ -391,7 +447,8 @@ impl CallRtcClient for LivekitRtcClient {
     }
 }
 
-fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
+/// Treat a room or participant that is already gone as removed.
+fn ignore_not_found(result: Result<(), ServiceError>) -> anyhow::Result<()> {
     match result {
         Ok(()) => Ok(()),
         Err(error) if is_not_found(&error) => Ok(()),

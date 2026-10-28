@@ -168,6 +168,7 @@ export const CommandMenuShell = Object.assign(CommandMenuShellRoot, {
 });
 
 export function CommandMenuList<T>(props: {
+  id?: string;
   items: readonly T[];
   selectedIndex: number;
   scrollSelectedIntoView?: boolean;
@@ -218,6 +219,7 @@ export function CommandMenuList<T>(props: {
 
   return (
     <div
+      id={props.id}
       ref={listRef}
       role="listbox"
       class={cn(
@@ -234,6 +236,8 @@ export function CommandMenuList<T>(props: {
             {props.beforeItem?.(item, index())}
             <CommandMenuListItem
               as="div"
+              role="option"
+              aria-selected={isSelected(index())}
               id={itemId(item, index())}
               selected={isSelected(index())}
               disabled={props.itemDisabled?.(item, index())}
@@ -250,10 +254,35 @@ export function CommandMenuList<T>(props: {
   );
 }
 
+type CommandInputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
+  as?: 'input';
+};
+type CommandTextareaProps = JSX.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  as: 'textarea';
+};
+
+export function CommandMenuSearchInput(props: CommandInputProps): JSX.Element;
 export function CommandMenuSearchInput(
-  props: JSX.InputHTMLAttributes<HTMLInputElement>
+  props: CommandTextareaProps
+): JSX.Element;
+export function CommandMenuSearchInput(
+  props: CommandInputProps | CommandTextareaProps
 ) {
-  const [local, rest] = splitProps(props, ['class']);
+  if (props.as === 'textarea') {
+    const [local, rest] = splitProps(props, ['as', 'class']);
+    return (
+      <textarea
+        rows={1}
+        class={cn(
+          'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
+          'field-sizing-content max-h-80 resize-none',
+          local.class
+        )}
+        {...rest}
+      />
+    );
+  }
+  const [local, rest] = splitProps(props, ['as', 'class']);
 
   return (
     <input
@@ -269,6 +298,8 @@ export function CommandMenuSearchInput(
 export function CommandMenuListItem(
   props: ParentProps<{
     id?: string;
+    role?: JSX.HTMLAttributes<HTMLElement>['role'];
+    'aria-selected'?: boolean;
     as?: 'button' | 'div';
     class?: string;
     selected?: boolean;
@@ -282,6 +313,8 @@ export function CommandMenuListItem(
       component={props.as ?? 'button'}
       type={props.as === 'div' ? undefined : 'button'}
       id={props.id}
+      role={props.role}
+      aria-selected={props['aria-selected']}
       disabled={props.as === 'div' ? undefined : props.disabled}
       aria-disabled={props.disabled || undefined}
       class={cn(

@@ -19,6 +19,14 @@ pub const JWT_SIGNING_KEY_ID: &str = "d7d09513-a3f5-401c-9685-34ab6c552453";
 /// The HS256 secret. `macro_auth` reads this as `JWT_SECRET_KEY`.
 pub const JWT_SECRET: &str = "super-secret-jwt-signing-key-for-local-development-only";
 
+/// Public fixture key for local Macro API tokens, including CRM settings calls.
+pub const MACRO_API_TOKEN_PUBLIC_KEY: &str =
+    include_str!("identity/macro-api-token.local.public.pem");
+
+/// Local-only fixture signing key. Never use this identity in a deployed environment.
+pub const MACRO_API_TOKEN_PRIVATE_KEY: &str =
+    include_str!("identity/macro-api-token.local.private.pem");
+
 /// The populate-JWT lambda id (the unlicensed local variant).
 pub const POPULATE_JWT_LAMBDA_ID: &str = "a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f";
 
@@ -77,10 +85,9 @@ pub const INTERNAL_AUTH_KEY: &str = "local";
 
 /// Localhost OAuth redirect URI for a service published on `port`.
 ///
-/// FusionAuth's kickstart authorizes both authentication_service and
-/// document_cognition_service this way so a named instance's host port cannot
-/// drift from the registered callback. Auth-service also reads the auth-port
-/// variant as `FUSIONAUTH_OAUTH_REDIRECT_URI`.
+/// FusionAuth's kickstart authorizes authentication_service at the instance's
+/// auth port. Agent MCP callbacks instead use the instance's HTTPS proxy.
+/// Auth-service reads this value as `FUSIONAUTH_OAUTH_REDIRECT_URI`.
 pub fn oauth_redirect_uri(port: u16) -> String {
     format!("http://localhost:{port}/oauth/redirect")
 }

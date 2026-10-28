@@ -1,0 +1,35 @@
+<svg id="fig-stack" xmlns="http://www.w3.org/2000/svg" viewBox="445 300 660 940">
+  <style>
+    #fig-stack .line, #fig-stack .dash { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: .9px; vector-effect: non-scaling-stroke; }
+    #fig-stack .detail { opacity: .5; }
+    #fig-stack .dash { opacity: .5; stroke-dasharray: 2.5 2.5; }
+    #fig-stack .face { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, var(--b0) 89%); stroke: currentColor; stroke-linejoin: round; stroke-width: .9px; vector-effect: non-scaling-stroke; }
+    #fig-stack .shadow { fill: color-mix(in srgb, currentColor 12%, var(--b0)); opacity: .5; }
+  </style>
+  <!-- The plates carry their own shading, so each `plate-*` group can be moved
+       as a unit. The two `axis-*` runs stay put: the plates travel along them. -->
+  <g id="axis-lower">
+    <line class="line" x1="775.6" y1="710" x2="775.6" y2="716"/>
+    <line class="dash" x1="775.6" y1="728.2" x2="775.6" y2="1206.2"/>
+    <line class="line" x1="775.6" y1="1212.3" x2="775.6" y2="1218.3"/>
+  </g>
+  <g id="plate-bottom">
+    <path class="face" d="M610.6 906.4c-9.3 5.4-20.7 12-30 17.3v15.6c62.6 36.1 125.6 72.5 188.2 108.6h13c62.6-36.1 125.6-72.5 188.2-108.6v-15.6c-9.4-5.4-20.9-12-30.2-17.4"/>
+    <path class="shadow" d="M610.6 906.4c-9.3 5.4-20.7 12-30 17.3v15.6c62.6 36.1 125.6 72.5 188.2 108.6h13c62.6-36.1 125.6-72.5 188.2-108.6v-15.6c-9.4-5.4-20.9-12-30.2-17.4"/>
+  </g>
+  <g id="plate-middle">
+    <path class="face" d="M572.1 821.6c-11.9 6.9-25.6 14.8-37.4 21.6v19.3c77.4 44.7 155.1 89.5 232.5 134.2h16.1c77.4-44.7 155.1-89.5 232.5-134.2v-19.3c-11.8-6.8-25.4-14.7-37.3-21.5"/>
+    <path class="shadow" d="M572.1 821.6c-11.9 6.9-25.6 14.8-37.4 21.6v19.3c77.4 44.7 155.1 89.5 232.5 134.2h16.1c77.4-44.7 155.1-89.5 232.5-134.2v-19.3c-11.8-6.8-25.4-14.7-37.3-21.5"/>
+  </g>
+  <g id="plate-top">
+    <path class="face" d="M765 933h20.7c99.6-57.5 199.5-115.2 299.1-172.7v-24.8c-99.6-57.5-199.5-115.2-299.1-172.7H765c-99.6 57.5-199.5 115.2-299.1 172.7v24.8C565.5 817.8 665.4 875.5 765 933"/>
+    <polygon class="shadow" points="785.6 933 785.6 868.2 1035.5 723.3 1084.7 751.3 1084.7 760.3 785.6 933"/>
+    <path class="line detail" d="M544.2 703.1c80.6-46.5 150.5-87.1 231.1-133.6 80.6 46.5 150.8 87.1 231.4 133.6"/>
+    <path class="line detail" d="M1006.7 715.5c-80.6 46.5-150.8 87.1-231.4 133.6-80.6-46.5-150.5-87.7-231.1-134.2"/>
+  </g>
+  <g id="axis-upper">
+    <line class="line" x1="775.6" y1="329.4" x2="775.6" y2="335.4"/>
+    <line class="dash" x1="775.6" y1="347.3" x2="775.6" y2="698.1"/>
+    <line class="line" x1="775.6" y1="704" x2="775.6" y2="710"/>
+  </g>
+</svg>

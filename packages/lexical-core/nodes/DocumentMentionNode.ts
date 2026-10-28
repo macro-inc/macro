@@ -50,6 +50,8 @@ export class DocumentMentionNode extends DecoratorNode<
   __collapsed: boolean;
   __channelType: string | undefined;
   __createdAt: number | undefined;
+  __cachedDecoratorSignature?: string;
+  __cachedDecoratorComponent?: DecoratorComponent<DocumentMentionDecoratorProps>;
 
   static getType() {
     return 'document-mention';
@@ -64,7 +66,7 @@ export class DocumentMentionNode extends DecoratorNode<
   }
 
   static clone(node: DocumentMentionNode) {
-    return new DocumentMentionNode(
+    const clone = new DocumentMentionNode(
       node.__documentId,
       node.__documentName,
       node.__blockName,
@@ -75,6 +77,9 @@ export class DocumentMentionNode extends DecoratorNode<
       node.__createdAt,
       node.__key
     );
+    clone.__cachedDecoratorSignature = node.__cachedDecoratorSignature;
+    clone.__cachedDecoratorComponent = node.__cachedDecoratorComponent;
+    return clone;
   }
 
   constructor(
@@ -310,23 +315,26 @@ export class DocumentMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator =
+    const componentProps = this.exportComponentProps();
+    const signature = JSON.stringify(componentProps);
+    if (
+      this.__cachedDecoratorComponent &&
+      this.__cachedDecoratorSignature === signature
+    )
+      return this.__cachedDecoratorComponent;
+
+    const Component =
       getDecorator<DocumentMentionDecoratorProps>(DocumentMentionNode);
-    if (decorator) {
-      return () =>
-        decorator({
-          documentId: this.__documentId,
-          documentName: this.__documentName,
-          blockName: this.__blockName,
-          blockParams: this.__blockParams,
-          mentionUuid: this.__mentionUuid,
-          collapsed: this.__collapsed,
-          channelType: this.__channelType,
-          createdAt: this.__createdAt,
-          key: this.getKey(),
-          theme: config.theme,
-        });
-    }
+    if (!Component) return undefined;
+
+    this.__cachedDecoratorSignature = signature;
+    this.__cachedDecoratorComponent = () =>
+      Component({
+        ...componentProps,
+        key: this.getKey(),
+        theme: config.theme,
+      });
+    return this.__cachedDecoratorComponent;
   }
 }
 

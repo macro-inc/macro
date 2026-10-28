@@ -20,7 +20,8 @@
 //! work is invisible to it, and its edits land on a Cursor-side branch.
 //!
 //! Environment:
-//! - `CURSOR_API_KEY` (required): a `crsr_…` user or service-account key.
+//! - `CURSOR_API_KEY` (required): a `grok_…` (or older `crsr_…`) user or
+//!   service-account key.
 //! - `CURSOR_REF`: starting ref for new agents (default `main`).
 //! - `CURSOR_MODEL`: model id (default: server default).
 //! - `CURSOR_API_BASE`: API base url (default `https://api.cursor.com`).

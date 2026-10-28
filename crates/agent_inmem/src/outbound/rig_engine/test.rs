@@ -1,33 +1,200 @@
 use super::*;
 use crate::domain::engine::AgentIdentity;
+use agent_session::domain::model::AgentSessionId;
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
+use async_trait::async_trait;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::sync::Mutex;
+
+#[tokio::test]
+async fn a_runtime_panic_is_reported_as_failure_instead_of_an_empty_success() {
+    let (parts, mut receiver) = mpsc::channel(2);
+    forward_turn_result(async { panic!("provider initialization failed") }, &parts).await;
+    drop(parts);
+    let error = receiver.recv().await.unwrap().unwrap_err();
+    assert!(error.to_string().contains("runtime ended unexpectedly"));
+    assert!(receiver.recv().await.is_none());
+}
+
+#[tokio::test]
+async fn a_failure_after_partial_output_is_still_forwarded_to_the_consumer() {
+    let (parts, mut receiver) = mpsc::channel(2);
+    forward_turn_result(
+        async {
+            parts
+                .send(Ok(StreamPart::Content("Partial answer".into())))
+                .await
+                .unwrap();
+            Err(AgentError::Other(anyhow::anyhow!("provider unavailable")))
+        },
+        &parts,
+    )
+    .await;
+    assert!(matches!(
+        receiver.recv().await.unwrap(),
+        Ok(StreamPart::Content(_))
+    ));
+    assert_eq!(
+        receiver.recv().await.unwrap().unwrap_err().to_string(),
+        "provider unavailable"
+    );
+}
 
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-fn has_ask_user(supports_user_input: bool) -> bool {
-    let tools = tools_for(AiHost::AgentSession);
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    tools_for_turn(base_tools, supports_user_input)
-        .request_schemas()
-        .expect("tool schemas should be valid")
-        .iter()
-        .any(|schema| schema.name == "AskUser")
+#[path = "test/tool_mode.rs"]
+mod tool_mode;
+
+#[test]
+fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
+    let tools = NativeTools::new();
+    let supported = tools.for_turn(true);
+    let unsupported = tools.for_turn(false);
+
+    assert!(supported.tools.contains_key("AskUser"));
+    assert!(!unsupported.tools.contains_key("AskUser"));
+    assert!(Arc::ptr_eq(&supported, &tools.for_turn(true)));
+    assert!(Arc::ptr_eq(&unsupported, &tools.for_turn(false)));
+    assert_eq!(
+        supported
+            .tools
+            .keys()
+            .filter(|name| name.as_str() != "AskUser")
+            .collect::<Vec<_>>(),
+        unsupported.tools.keys().collect::<Vec<_>>()
+    );
+    for tools in [supported, unsupported] {
+        for name in ["SendEmail", "CreateCalendarEvent"] {
+            assert!(tools.user_tools.contains_key(name));
+        }
+    }
 }
 
 #[test]
-fn ask_user_is_only_advertised_when_the_client_supports_it() {
-    assert!(has_ask_user(true));
-    assert!(!has_ask_user(false));
+fn reduced_definitions_keep_user_input_and_user_tool_review() {
+    let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    assert!(tools.for_turn(true).tools.contains_key("AskUser"));
+    assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
+    for supports_input in [true, false] {
+        let selected = tools.for_turn(supports_input);
+        for name in ["SendEmail", "CreateCalendarEvent"] {
+            assert!(selected.user_tools.contains_key(name));
+        }
+        for name in ["ContentSearch", "NameSearch", "ListEntities"] {
+            assert!(selected.tools.contains_key(name));
+        }
+        assert!(!selected.tools.contains_key("ReadChat"));
+    }
+    for name in ["ContentSearch", "NameSearch", "ListEntities"] {
+        assert!(tools.tool_names.contains(name));
+        assert!(!tools.deferred.iter().any(|tool| tool.name == name));
+    }
+    assert!(!tools.tool_names.contains("ReadChat"));
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "ReadTurnContext", description = "Read this call's context.")]
+#[serde(deny_unknown_fields)]
+struct ReadTurnContext {}
+
+impl ToolAnnotated for ReadTurnContext {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read context");
+}
+
+#[async_trait]
+impl AsyncTool<String> for ReadTurnContext {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        context: ServiceContext<String>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Ok(serde_json::json!({
+            "context": context.0,
+            "user": request.user_id.to_string(),
+        }))
+    }
+}
+
+struct RecordingGate {
+    refused: AgentSessionId,
+    calls: Mutex<Vec<AgentSessionId>>,
+}
+
+impl NativeToolGate for RecordingGate {
+    fn check<'a>(
+        &'a self,
+        session: AgentSessionId,
+        _tool: &'a str,
+        _arguments: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(session);
+            if session == self.refused {
+                NativeToolVerdict::Refuse("not approved".to_owned())
+            } else {
+                NativeToolVerdict::Run
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gate() {
+    let definitions: Arc<dyn AiToolSet<String> + Send + Sync> =
+        Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>());
+    let allowed = AgentSessionId::new();
+    let refused = AgentSessionId::new();
+    let gate = Arc::new(RecordingGate {
+        refused,
+        calls: Mutex::new(Vec::new()),
+    });
+    for (session, user, label) in [
+        (allowed, "macro|first@example.com", "first turn"),
+        (refused, "macro|second@example.com", "refused turn"),
+        (allowed, "macro|third@example.com", "third turn"),
+    ] {
+        let tools = GatedToolSet {
+            tools: Arc::clone(&definitions),
+            gate: gate.clone(),
+            session,
+            awaiting: Arc::default(),
+            reviewed_tools: Vec::new(),
+        };
+        let result = tools
+            .dispatch_tool_call(
+                label.to_owned(),
+                RequestContext::new(MacroUserIdStr::try_from(user.to_owned()).unwrap()),
+                "ReadTurnContext",
+                &serde_json::json!({"acting_as":"owner"}),
+            )
+            .await
+            .unwrap();
+        if session == refused {
+            assert_eq!(result.unwrap_err().description, "not approved");
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                serde_json::json!({"context": label, "user": user})
+            );
+        }
+    }
+    assert_eq!(*gate.calls.lock().unwrap(), vec![allowed, refused, allowed]);
 }
 
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None);
+    let session = AgentSessionId::new();
+    let prompt = system_prompt(&TOOLS, "", session, None, Some("be terse"), None).to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
-        "the session preamble comes first when the agent is unnamed"
+        "the session preamble comes first"
     );
     assert!(
         prompt.contains(&format!(
@@ -35,26 +202,33 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
         )),
         "the static Macro prompt sits immediately before session instructions"
     );
-    assert!(prompt.ends_with("\n<session_instructions>\nbe terse\n</session_instructions>"));
+    assert!(prompt.ends_with(&format!(
+        "\n<session_instructions>\nbe terse\n</session_instructions>\n<agent_session>\nThis \
+         conversation is agent session {session}. Once it grows long, its earlier part is \
+         summarized to keep it within your context. To find the exact words of anything said \
+         earlier, summarized or not, run ContentSearch with agentSessionIds \
+         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+    )));
 }
 
-/// A named agent is told who it is before anything else, even when it has
-/// no session instructions — otherwise "who are you" has nothing to go on.
+/// A named agent is told who it is before its instructions, even when it
+/// has no session instructions — otherwise "who are you" has nothing to go on.
 #[test]
-fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
+fn identity_opens_the_session_part_and_does_not_need_instructions() {
+    let session = AgentSessionId::new();
     let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, Some(&identity), None, None);
+    let prompt = system_prompt(&TOOLS, "", session, Some(&identity), None, None);
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
-        prompt.starts_with(&identity_section),
-        "identity is the first thing the model reads"
+        prompt.rest().starts_with(&format!("\n{identity_section}")),
+        "identity is the first thing the session's part says"
     );
-    assert!(prompt.contains(&prompt::agent_session::PROMPT.to_string()));
-    assert!(!prompt.contains("session_instructions"));
+    assert!(!prompt.to_string().contains("session_instructions"));
 }
 
 /// The order is the contract, not an accident: instructions qualify the
@@ -62,7 +236,16 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
 /// as an instruction.
 #[test]
 fn memory_follows_instructions_rather_than_preceding_them() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust"));
+    let session = AgentSessionId::new();
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        None,
+        Some("be terse"),
+        Some("prefers Rust"),
+    )
+    .to_string();
 
     let instructions = prompt
         .find("<session_instructions>")
@@ -73,11 +256,55 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     assert!(instructions < memory);
 }
 
+/// Sessions of every agent differ only after the static Macro prompt, so
+/// the part before it is cached once for all of them, and the turn's SDK
+/// documentation comes after everything the session repeats.
+#[test]
+fn sessions_share_everything_before_their_identity() {
+    let session = AgentSessionId::new();
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let first = system_prompt(
+        &TOOLS,
+        "<macro_sdk>documents</macro_sdk>",
+        session,
+        Some(&identity),
+        Some("task A"),
+        Some("prefers Rust"),
+    );
+    let second = system_prompt(&TOOLS, "", session, None, Some("task B"), None);
+
+    let shared = format!("{}{TOOLS}", prompt::agent_session::PROMPT);
+    assert_eq!(first.shared(), Some(shared.as_str()));
+    assert_eq!(second.shared(), Some(shared.as_str()));
+    let agent_session = format!(
+        "\n<agent_session>\nThis conversation is agent session {session}. Once it grows long, \
+         its earlier part is summarized to keep it within your context. To find the exact words \
+         of anything said earlier, summarized or not, run ContentSearch with agentSessionIds \
+         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+    );
+    assert_eq!(
+        first.rest(),
+        format!(
+            "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory><macro_sdk>documents</macro_sdk>",
+            prompt::agent_identity::render("Grunk", "grunk"),
+        )
+    );
+    assert_eq!(
+        second.rest(),
+        format!("\n<session_instructions>\ntask B\n</session_instructions>{agent_session}")
+    );
+}
+
 /// Absent instructions add no section at all, rather than an empty one the
 /// model would have to interpret.
 #[test]
 fn no_instructions_means_no_section() {
-    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust"));
+    let session = AgentSessionId::new();
+    let prompt = system_prompt(&TOOLS, "", session, None, None, Some("prefers Rust")).to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -87,7 +314,127 @@ fn no_instructions_means_no_section() {
 /// not become a blank delimited section.
 #[test]
 fn empty_instructions_add_no_section() {
-    let prompt = system_prompt(&TOOLS, None, Some(""), None);
+    let session = AgentSessionId::new();
+    let prompt = system_prompt(&TOOLS, "", session, None, Some(""), None).to_string();
 
     assert!(!prompt.contains("session_instructions"));
+}
+
+#[tokio::test]
+async fn opening_verdict_split_across_deltas_keeps_the_head_of_the_line() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    for delta in ["tr", "ue|Hi", " there", "!"] {
+        lines.send(delta.to_owned()).await.unwrap();
+    }
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(verdict, Some(opener::Verdict::Complete(head)) if head == "Hi"));
+    assert_eq!(receiver.recv().await.as_deref(), Some(" there"));
+}
+
+#[tokio::test]
+async fn opening_verdict_reads_false_as_an_opening_only() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    lines
+        .send("false| Let me check your calendar.".to_owned())
+        .await
+        .unwrap();
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(
+        verdict,
+        Some(opener::Verdict::Opening(head)) if head == "Let me check your calendar."
+    ));
+}
+
+#[tokio::test]
+async fn opening_verdict_skip_shows_nothing() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    for delta in ["sk", "ip|"] {
+        lines.send(delta.to_owned()).await.unwrap();
+    }
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(verdict, Some(opener::Verdict::Silent)));
+}
+
+#[tokio::test]
+async fn opening_without_a_verdict_is_dropped() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    lines
+        .send("Sure, let me look into it.".to_owned())
+        .await
+        .unwrap();
+    drop(lines);
+
+    assert!(opener::verdict(&mut receiver).await.is_none());
+}
+
+#[tokio::test]
+async fn a_summary_turns_closed_opener_has_no_verdict() {
+    // A summary turn races nothing: its opener is closed before it speaks.
+    let mut receiver = mpsc::channel::<String>(1).1;
+
+    assert!(opener::verdict(&mut receiver).await.is_none());
+}
+
+#[test]
+fn opening_transcript_leaves_out_the_hidden_agent_context() {
+    let messages = vec![agent::types::ChatMessage {
+        content: agent::types::ChatMessageContent::Text(
+            "<m-agent-context>{\"version\":1,\"text\":\"<session owner=\\\"wolf@macro.com\\\"/>\"}</m-agent-context>\n\nwhat is going on in my workspace".to_owned(),
+        ),
+        role: agent::types::Role::User,
+        attachments: None,
+    }];
+
+    assert_eq!(
+        opener::transcript(&messages),
+        "User: what is going on in my workspace"
+    );
+}
+
+struct SelectedActor(MacroUserIdStr<'static>);
+impl NativeToolGate for SelectedActor {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        _: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async { NativeToolVerdict::RunAs(self.0.clone()) })
+    }
+}
+
+#[tokio::test]
+async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments() {
+    let requester = MacroUserIdStr::try_from_email("requester@example.com").unwrap();
+    let tools = GatedToolSet {
+        tools: Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>()),
+        gate: Arc::new(SelectedActor(requester.clone())),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+    };
+    let result = tools
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+            "ReadTurnContext",
+            &serde_json::json!({"acting_as":"requester"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result["user"], requester.to_string());
+    let schema = tools.request_schemas().unwrap().remove(0).schema;
+    assert!(
+        schema.as_value()["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("acting_as"))
+    );
 }

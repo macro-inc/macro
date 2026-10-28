@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'dictation';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation';
 
 /**
  * A structured part within an assistant message.
@@ -294,7 +294,7 @@ export type ChatMessageContent = string | Array<AssistantMessagePart>;
  */
 export type ChatMessageError = {
     /**
-     * Stable machine-readable code for payment-required errors.
+     * Stable machine-readable code for admission errors (402 or 503).
      */
     code?: string | null;
     error: string;
@@ -463,6 +463,71 @@ export type CreateChatRequest = {
     projectId?: string | null;
 };
 
+/**
+ * What a successful tool call committed to the user's databases.
+ */
+export type DatabaseChange = {
+    kind: 'none';
+} | {
+    kind: 'schema';
+} | {
+    count: number;
+    kind: 'rows';
+};
+
+/**
+ * Sanitized, machine-readable failure of a decision request.
+ */
+export type DecisionErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation without provider credentials or diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Named yes/no questions to evaluate against one arbitrary JSON input.
+ */
+export type DecisionRequest = {
+    /**
+     * Data to classify. The entire compact request must fit in 64 KiB.
+     */
+    input: unknown;
+    /**
+     * One to 32 questions, each at most 500 characters. Keys must be nonblank
+     * and at most 80 UTF-8 bytes; they are preserved in the response.
+     */
+    questions: {
+        [key: string]: string;
+    };
+};
+
+/**
+ * The probability of yes for every requested question, under its original key.
+ */
+export type DecisionResponse = {
+    /**
+     * Probabilities between zero and one, inclusive; not boolean decisions.
+     */
+    probabilities: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * The prompts the user dismissed, on any device.
+ */
+export type DismissedPrompts = {
+    /**
+     * Dismissed prompt ids, oldest dismissal first.
+     */
+    dismissed: Array<string>;
+};
+
 export type DocumentCognitionServiceApiVersion = 'v1' | 'v2';
 
 export type DocumentReference = UserPdfRect & {
@@ -511,7 +576,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -573,7 +638,12 @@ export type FeatureUsage = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+
+/**
+ * A `provider/model` id every user may request without professional features.
+ */
+export type FreeTierModel = 'google/gemini-3.8-flash';
 
 export type GenericErrorResponse = {
     /**
@@ -649,6 +719,10 @@ export type HttpSendChatMessageRequest = {
      */
     model: string;
     /**
+     * Inference speed, validated against the selected model. Defaults to standard.
+     */
+    speed?: ModelSpeed;
+    /**
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
@@ -684,6 +758,10 @@ export type ImportEntity = {
      */
     initiator: Initiator;
     /**
+     * What the item is in its source system.
+     */
+    kind: ImportKind;
+    /**
      * Failure detail from the last import attempt, when one failed.
      */
     last_error?: string | null;
@@ -692,6 +770,16 @@ export type ImportEntity = {
      * [`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`]).
      */
     metadata: unknown;
+    /**
+     * The import row this item was imported under (a subpage's parent page,
+     * a row's database), when it was imported as part of a tree.
+     */
+    parent_id?: string | null;
+    /**
+     * The agent session review that approved importing this item, when it
+     * came from one.
+     */
+    review_id?: string | null;
     /**
      * The external system the item comes from.
      */
@@ -714,23 +802,37 @@ export type ImportEntity = {
      * teammate".
      */
     user_id: string;
+    /**
+     * The teammate's row this one waits on: that teammate is writing the
+     * same object for the team, and this row links to their copy once it
+     * is imported.
+     */
+    waiting_on?: string | null;
 };
 
 /**
- * Gather-run state for one user × source.
+ * What an imported item is in its source system. Each source has its own
+ * kinds; a Notion database and a Notion page, or a Linear project and a
+ * Linear issue, are tracked and deduplicated separately.
+ */
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+
+/**
+ * Discovery-run state for one user × source.
  */
 export type ImportRun = {
     /**
-     * Whether this run should import its onboarding-staged candidates as
-     * soon as gathering finishes.
-     */
-    auto_import: boolean;
-    /**
-     * Gather or automatic-import failure detail, when the run failed.
+     * Discovery failure detail, when the run failed.
      */
     error?: string | null;
     /**
-     * The source this run gathered from.
+     * The review presenting the run's plan, once one does. A Notion plan is
+     * presented while it is still `running`; rows staged after that take it.
+     */
+    review_id?: string | null;
+    scanned?: null | ScanCounts;
+    /**
+     * The source this run discovered from.
      */
     source: ImportSource;
     /**
@@ -746,10 +848,10 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
 
 /**
- * The full import aggregate for a user: gather runs plus visible ledger
+ * The full import aggregate for a user: discovery runs plus visible ledger
  * rows (their own, and teammates' team-imported rows).
  */
 export type ImportState = {
@@ -758,7 +860,7 @@ export type ImportState = {
      */
     entities: Array<ImportEntity>;
     /**
-     * Gather runs, one per source that ever gathered.
+     * Discovery runs, one per source that ever ran discovery.
      */
     runs: Array<ImportRun>;
 };
@@ -772,7 +874,7 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Where an import entity was first staged from. Provenance only — never a
  * visibility filter.
  */
-export type Initiator = 'onboarding' | 'chat';
+export type Initiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type JwtPayload = {
     token: string;
@@ -850,6 +952,11 @@ export type MessageWithAttachments = {
     date: string;
 };
 
+/**
+ * The requested inference speed. Standard is backward compatible with old clients.
+ */
+export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+
 export type NewAttachment = {
     attachment_id: string;
     attachment_type: AttachmentType;
@@ -887,10 +994,34 @@ export type NewMessageAttachment = {
 };
 
 /**
+ * A teammate's copy of a Notion object, shared with the user's team.
+ */
+export type NotionAlreadyImported = {
+    /**
+     * The teammate who imported it, by email.
+     */
+    by: string;
+    /**
+     * The Macro entity it became.
+     */
+    entityId: string;
+    /**
+     * That entity's type (`md`, `project`).
+     */
+    entityType: string;
+};
+
+/**
+ * What a workspace import does with one Notion object.
+ */
+export type NotionDecision = 'copy' | 'tasks' | 'skip' | 'hand';
+
+/**
  * Metadata for one staged Notion page. Deliberately has NO content field:
  * page bodies are fetched at import time, for accepted pages only.
  */
 export type NotionDocMeta = {
+    plan?: null | NotionPlanItem;
     /**
      * One-line summary of what the page contains.
      */
@@ -903,6 +1034,222 @@ export type NotionDocMeta = {
      * Deep link back to the page in Notion.
      */
     url?: string | null;
+};
+
+/**
+ * Where a Notion workspace import stands.
+ */
+export type NotionImportReport = {
+    /**
+     * Who imported the objects already in Macro, most first.
+     */
+    alreadyImportedBy?: Array<NotionImporter>;
+    /**
+     * Plan objects a teammate already imported and shared with the team;
+     * they link to that copy and are not counted as copies.
+     */
+    alreadyInMacro?: number;
+    /**
+     * Objects to copy as they are.
+     */
+    copy: number;
+    /**
+     * Data sources (database tables) in the plan.
+     */
+    dataSources: number;
+    /**
+     * Rows those databases hold, every one counted while planning.
+     */
+    databaseRows: number;
+    /**
+     * Data sources written as databases.
+     */
+    databases: number;
+    /**
+     * Plan objects the decision model has not answered for yet, while
+     * planning is still `running`.
+     */
+    deciding?: number;
+    /**
+     * Pages written as documents.
+     */
+    documents: number;
+    /**
+     * Why the run failed, when it did.
+     */
+    error?: string | null;
+    /**
+     * Objects that failed to import, with the failure.
+     */
+    failures?: Array<NotionReportItem>;
+    /**
+     * Objects that need handling by hand.
+     */
+    hand: number;
+    /**
+     * Objects that need handling by hand, with reasons.
+     */
+    handItems?: Array<NotionReportItem>;
+    /**
+     * Plan objects already imported.
+     */
+    imported: number;
+    /**
+     * Tracker issues in the plan.
+     */
+    issues?: number;
+    /**
+     * Whether the user is on a team. Without one, everything the import
+     * writes stays visible only to them.
+     */
+    onTeam?: boolean;
+    /**
+     * Pages in the plan.
+     */
+    pages: number;
+    /**
+     * Tracker groups written as Macro projects.
+     */
+    projects?: number;
+    /**
+     * The review the plan is tied to, once presented.
+     */
+    reviewId?: string | null;
+    scanned?: null | ScanCounts;
+    /**
+     * Written plan objects shared with the user's team.
+     */
+    sharedWithTeam?: number;
+    /**
+     * Objects left in Notion.
+     */
+    skip: number;
+    status?: null | RunStatus;
+    /**
+     * Tasks the task lists become, one per row.
+     */
+    taskRows: number;
+    /**
+     * Data sources whose rows become tasks.
+     */
+    tasks: number;
+    /**
+     * Plan objects still waiting to be written.
+     */
+    waiting: number;
+    /**
+     * Plan objects waiting for a teammate who is writing the same object
+     * for the team; they link to the teammate's copy once it is written.
+     */
+    waitingOnTeammates?: number;
+    /**
+     * Provider items skipped because they were unreadable, or optional features unavailable.
+     */
+    warnings?: Array<string>;
+    /**
+     * Plan objects being written now.
+     */
+    writing: number;
+};
+
+/**
+ * A teammate who already imported some of a plan's objects.
+ */
+export type NotionImporter = {
+    /**
+     * The teammate, by email.
+     */
+    by: string;
+    /**
+     * How many of the plan's objects they imported.
+     */
+    count: number;
+};
+
+/**
+ * One object's place in a workspace import plan.
+ */
+export type NotionPlanItem = {
+    alreadyImported?: null | NotionAlreadyImported;
+    decision?: null | NotionDecision;
+    /**
+     * Titles of the pages above it, outermost first.
+     */
+    path?: Array<string>;
+    /**
+     * Why, in a short sentence, when the decision model gave one.
+     */
+    reason?: string | null;
+    /**
+     * For a data source: rows counted while planning.
+     */
+    rows?: number | null;
+    /**
+     * For a data source: the titles of a few of its rows.
+     */
+    sampleTitles?: Array<string>;
+    /**
+     * Whether the user may change `shared`: false for users without a team.
+     */
+    shareable?: boolean;
+    /**
+     * Whether what it becomes is shared with the user's team.
+     */
+    shared?: boolean;
+    /**
+     * Why it is (or is not) shared, when the decision model chose or the
+     * import could not share it.
+     */
+    sharedReason?: string | null;
+    taskFields?: null | NotionTaskFields;
+};
+
+/**
+ * One object a workspace import report calls out.
+ */
+export type NotionReportItem = {
+    /**
+     * The ledger row.
+     */
+    importId: string;
+    /**
+     * What the object is.
+     */
+    kind: ImportKind;
+    /**
+     * Why it is called out: the decision model's reason, or the failure.
+     */
+    reason?: string | null;
+    /**
+     * The object's title.
+     */
+    title: string;
+    /**
+     * Its Notion URL.
+     */
+    url?: string | null;
+};
+
+/**
+ * Which Notion columns hold a task list's task fields, by property name.
+ */
+export type NotionTaskFields = {
+    /**
+     * The assignee column.
+     */
+    assignee?: string | null;
+    /**
+     * The due date column.
+     */
+    due?: string | null;
+    /**
+     * The priority column.
+     */
+    priority?: string | null;
+    /**
+     * The status column.
+     */
+    status?: string | null;
 };
 
 /**
@@ -979,6 +1326,10 @@ export type PipedreamCatalogEntryResponse = {
      */
     app_slug: string;
     /**
+     * Categories assigned by Pipedream.
+     */
+    categories?: Array<string>;
+    /**
      * One-line description of the app.
      */
     description?: string | null;
@@ -1040,6 +1391,36 @@ export type PipedreamConnectionResponse = {
 };
 
 /**
+ * A catalog app that connects through its own MCP server instead of
+ * Pipedream.
+ */
+export type PipedreamOverlayResponse = {
+    /**
+     * Pipedream app name slug, as it appears in the catalog.
+     */
+    app_slug: string;
+    /**
+     * The MCP server to authorize with the native MCP OAuth flow.
+     */
+    server_url: string;
+};
+
+/**
+ * Request body for recovering a connect flow whose result the Connect UI
+ * never reported.
+ */
+export type PipedreamRecoverRequest = {
+    /**
+     * The Pipedream app the flow was connecting, by name slug.
+     */
+    app_slug: string;
+    /**
+     * Optional display name for the connector, as for completion.
+     */
+    server_name?: string | null;
+};
+
+/**
  * Response from creating a Pipedream Connect token.
  */
 export type PipedreamTokenResponse = {
@@ -1083,6 +1464,16 @@ export type Price = {
      * Price per audio minute (USD), absent for token billing.
      */
     price_per_audio_minute?: number | null;
+    /**
+     * Price per million cache-read input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD), absent when the model
+     * has no published rate and for audio billing.
+     */
+    price_per_million_cache_write?: number | null;
     /**
      * Price per million input tokens (USD); zero for audio billing.
      */
@@ -1186,9 +1577,23 @@ export type RunImportRequest = {
 };
 
 /**
- * Lifecycle of a gather run (one per user × source).
+ * Lifecycle of a discovery run (one per user × source).
  */
 export type RunStatus = 'running' | 'ready' | 'importing' | 'completed' | 'failed' | 'dismissed';
+
+/**
+ * What a planning run has found in the source so far.
+ */
+export type ScanCounts = {
+    /**
+     * Data sources (database tables) found.
+     */
+    dataSources: number;
+    /**
+     * Pages found.
+     */
+    pages: number;
+};
 
 export type SendChatMessagePayload = JwtPayload & {
     /**
@@ -1274,6 +1679,16 @@ export type SetPricingRequest = {
      */
     price_per_audio_minute?: number | null;
     /**
+     * Price per million cache-read input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache reads then stay unpriced.
+     */
+    price_per_mil_cache_read?: number | null;
+    /**
+     * Price per million cache-write input tokens (USD). Omit it when the model
+     * has no published rate: calls that report cache writes then stay unpriced.
+     */
+    price_per_mil_cache_write?: number | null;
+    /**
      * New price per million input tokens (USD). Required for token pricing.
      */
     price_per_mil_in?: number | null;
@@ -1306,15 +1721,27 @@ export type SharePermissionV2 = {
  */
 export type SlackChannelMeta = {
     /**
+     * Whether Slack has archived this channel.
+     */
+    archived?: boolean;
+    /**
      * Slack's channel id (e.g. `C0123456789`), stable across renames.
      */
     channel_id?: string | null;
+    /**
+     * Total human members in the Slack channel.
+     */
+    member_count?: number | null;
+    /**
+     * Whether `participants` reflects a live membership read.
+     */
+    members_resolved?: boolean;
     /**
      * Channel name without the leading `#`.
      */
     name: string;
     /**
-     * The channel's most relevant members, when discoverable.
+     * Slack members matched to the Macro team roster when discovery resolved membership.
      */
     participants?: Array<SlackParticipant>;
     /**
@@ -1415,10 +1842,18 @@ export type StringIdResponse = {
 
 export type StructuredCompletionError = {
     /**
-     * Stable machine-readable code for payment-required errors.
+     * Stable machine-readable code for admission errors (402 or 503).
      */
     code?: string | null;
     error: string;
+};
+
+export type StructuredCompletionOutcome = {
+    result: unknown;
+    status: 'completed';
+} | {
+    reason: string;
+    status: 'interrupted';
 };
 
 export type StructuredCompletionRequest = {
@@ -1430,7 +1865,19 @@ export type StructuredCompletionRequest = {
 };
 
 export type StructuredCompletionResponse = {
-    result: unknown;
+    outcome: StructuredCompletionOutcome;
+    /**
+     * Actual completed tools, independent of the model's claims.
+     */
+    toolActivity: Array<StructuredToolActivity>;
+};
+
+/**
+ * One tool call the agent finished, and what it did.
+ */
+export type StructuredToolActivity = {
+    name: string;
+    outcome: ToolOutcome;
 };
 
 /**
@@ -1438,10 +1885,21 @@ export type StructuredCompletionResponse = {
  */
 export type TargetType = 'user' | 'team';
 
+export type ToolOutcome = {
+    changes: DatabaseChange;
+    status: 'succeeded';
+} | {
+    status: 'failed';
+};
+
 export type ToolSet = {
     type: 'all';
 } | {
     type: 'none';
+} | {
+    type: 'databases';
+} | {
+    type: 'databases_read_only';
 };
 
 export type UpdateChannelSharePermission = {
@@ -1583,11 +2041,19 @@ export type Usage = {
      */
     audio_seconds?: number | null;
     /**
+     * Input tokens read from a prompt cache; zero for audio billing.
+     */
+    cache_read_input_tokens: number;
+    /**
+     * Input tokens written to a prompt cache; zero for audio billing.
+     */
+    cache_write_input_tokens: number;
+    /**
      * Recording timestamp.
      */
     created_at: string;
     /**
-     * Input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio billing.
      */
     input_tokens: number;
     /**
@@ -1877,6 +2343,7 @@ export type CreateChatData = {
 
 export type CreateChatErrors = {
     401: string;
+    403: string;
     500: string;
 };
 
@@ -2200,6 +2667,59 @@ export type GetCitationHandlerResponses = {
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
 
+export type DecisionsData = {
+    body: DecisionRequest;
+    path?: never;
+    query?: never;
+    url: '/decisions';
+};
+
+export type DecisionsErrors = {
+    /**
+     * Invalid or oversized compact request
+     */
+    400: DecisionErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: DecisionErrorBody;
+    /**
+     * HTTP body exceeds 128 KiB
+     */
+    413: unknown;
+    /**
+     * Decision task failed
+     */
+    500: DecisionErrorBody;
+    /**
+     * Classifier could not produce a valid result
+     */
+    502: DecisionErrorBody;
+    /**
+     * Decision capacity, provider, or usage validation unavailable
+     */
+    503: DecisionErrorBody;
+    /**
+     * Decision deadline exceeded
+     */
+    504: DecisionErrorBody;
+};
+
+export type DecisionsError = DecisionsErrors[keyof DecisionsErrors];
+
+export type DecisionsResponses = {
+    /**
+     * Probability of yes for each named question
+     */
+    200: DecisionResponse;
+};
+
+export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -2215,6 +2735,49 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type NotionReportHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/import/notion';
+};
+
+export type NotionReportHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type NotionReportHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type NotionReportHandlerResponse = NotionReportHandlerResponses[keyof NotionReportHandlerResponses];
+
+export type CancelNotionHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/import/notion/cancel';
+};
+
+export type CancelNotionHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type CancelNotionHandlerResponses = {
+    /**
+     * Where the import stands after cancelling
+     */
+    200: NotionImportReport;
+};
+
+export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -2239,7 +2802,7 @@ export type RunImportHandlerResponses = {
 
 export type RunImportHandlerResponse = RunImportHandlerResponses[keyof RunImportHandlerResponses];
 
-export type DismissRunHandlerData = {
+export type DiscoverHandlerData = {
     body?: never;
     path: {
         /**
@@ -2248,12 +2811,12 @@ export type DismissRunHandlerData = {
         source: string;
     };
     query?: never;
-    url: '/import/runs/{source}/dismiss';
+    url: '/import/runs/{source}/discover';
 };
 
-export type DismissRunHandlerErrors = {
+export type DiscoverHandlerErrors = {
     /**
-     * Unknown import source
+     * Unknown import source or discovery not supported
      */
     400: unknown;
     /**
@@ -2262,46 +2825,14 @@ export type DismissRunHandlerErrors = {
     500: unknown;
 };
 
-export type DismissRunHandlerResponses = {
+export type DiscoverHandlerResponses = {
     /**
-     * Dismissed
+     * Discovery accepted (idempotent)
      */
     204: void;
 };
 
-export type DismissRunHandlerResponse = DismissRunHandlerResponses[keyof DismissRunHandlerResponses];
-
-export type RetryGatherHandlerData = {
-    body?: never;
-    path: {
-        /**
-         * Import source
-         */
-        source: string;
-    };
-    query?: never;
-    url: '/import/runs/{source}/retry';
-};
-
-export type RetryGatherHandlerErrors = {
-    /**
-     * Unknown import source
-     */
-    400: unknown;
-    /**
-     * Internal server error
-     */
-    500: unknown;
-};
-
-export type RetryGatherHandlerResponses = {
-    /**
-     * Retry accepted (idempotent)
-     */
-    204: void;
-};
-
-export type RetryGatherHandlerResponse = RetryGatherHandlerResponses[keyof RetryGatherHandlerResponses];
+export type DiscoverHandlerResponse = DiscoverHandlerResponses[keyof DiscoverHandlerResponses];
 
 export type GetStateHandlerData = {
     body?: never;
@@ -2325,6 +2856,36 @@ export type GetStateHandlerResponses = {
 };
 
 export type GetStateHandlerResponse = GetStateHandlerResponses[keyof GetStateHandlerResponses];
+
+export type WorkspaceReportHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}';
+};
+
+export type WorkspaceReportHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type WorkspaceReportHandlerResponse = WorkspaceReportHandlerResponses[keyof WorkspaceReportHandlerResponses];
+
+export type CancelWorkspaceHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}/cancel';
+};
+
+export type CancelWorkspaceHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
 
 export type DeleteMcpServerData = {
     body?: never;
@@ -2562,6 +3123,61 @@ export type CompleteHandlerResponses = {
 
 export type CompleteHandlerResponse = CompleteHandlerResponses[keyof CompleteHandlerResponses];
 
+export type DismissedPromptsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/onboarding/prompts';
+};
+
+export type DismissedPromptsHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DismissedPromptsHandlerResponses = {
+    /**
+     * Dismissed prompt ids
+     */
+    200: DismissedPrompts;
+};
+
+export type DismissedPromptsHandlerResponse = DismissedPromptsHandlerResponses[keyof DismissedPromptsHandlerResponses];
+
+export type DismissPromptHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Prompt id, e.g. `import:files`
+         */
+        prompt_id: string;
+    };
+    query?: never;
+    url: '/onboarding/prompts/{prompt_id}/dismiss';
+};
+
+export type DismissPromptHandlerErrors = {
+    /**
+     * Malformed prompt id
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DismissPromptHandlerResponses = {
+    /**
+     * Dismissed
+     */
+    204: void;
+};
+
+export type DismissPromptHandlerResponse = DismissPromptHandlerResponses[keyof DismissPromptHandlerResponses];
+
 export type BrowsePipedreamMcpCatalogData = {
     body?: never;
     path?: never;
@@ -2606,6 +3222,7 @@ export type CompletePipedreamMcpConnectionData = {
 export type CompletePipedreamMcpConnectionErrors = {
     401: string;
     404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
     501: ErrorResponse;
 };
@@ -2684,6 +3301,49 @@ export type UpdatePipedreamMcpConnectionResponses = {
 
 export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
 
+export type ListPipedreamMcpOverlaysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/overlays';
+};
+
+export type ListPipedreamMcpOverlaysErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListPipedreamMcpOverlaysError = ListPipedreamMcpOverlaysErrors[keyof ListPipedreamMcpOverlaysErrors];
+
+export type ListPipedreamMcpOverlaysResponses = {
+    200: Array<PipedreamOverlayResponse>;
+};
+
+export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
+
+export type RecoverPipedreamMcpConnectionData = {
+    body: PipedreamRecoverRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/recover';
+};
+
+export type RecoverPipedreamMcpConnectionErrors = {
+    401: string;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type RecoverPipedreamMcpConnectionError = RecoverPipedreamMcpConnectionErrors[keyof RecoverPipedreamMcpConnectionErrors];
+
+export type RecoverPipedreamMcpConnectionResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
+
 export type CreatePipedreamMcpTokenData = {
     body?: never;
     path?: never;
@@ -2749,6 +3409,10 @@ export type SendChatMessageErrors = {
      * Forbidden — user lacks access to the requested model
      */
     403: ChatMessageError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
@@ -2806,11 +3470,23 @@ export type StructuredCompletionErrors = {
     /**
      * Payment required
      */
-    402: unknown;
+    402: StructuredCompletionError;
+    /**
+     * No access to the requested model
+     */
+    403: StructuredCompletionError;
     /**
      * Internal error
      */
     500: StructuredCompletionError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: StructuredCompletionError;
+    /**
+     * Tool-free completion deadline exceeded
+     */
+    504: StructuredCompletionError;
 };
 
 export type StructuredCompletionError2 = StructuredCompletionErrors[keyof StructuredCompletionErrors];

@@ -270,6 +270,11 @@ impl McpToolSet {
         }
     }
 
+    /// Whether this toolset owns a mangled name, without cloning its catalog.
+    pub fn contains_tool(&self, name: &str) -> bool {
+        self.tools.contains_key(&MangledName(name.to_owned()))
+    }
+
     /// Returns `true` when no tools were discovered.
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
@@ -384,6 +389,12 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
             .iter()
             .map(|(mangled, entry)| RequestSchema {
                 name: mangled.as_str().to_string(),
+                description: entry
+                    .tool
+                    .description
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
                 schema: Schema::from((*entry.tool.input_schema).clone()),
             })
             .collect();

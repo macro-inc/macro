@@ -1,0 +1,87 @@
+[package]
+name = "scheduled_action"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+local_auth = ["macro_authorization/local_auth"]
+
+[dependencies]
+ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
+ai_usage = { path = "../ai_usage" }
+bots = { path = "../bots", features = ["outbound"] }
+roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../teams", default-features = false, features = ["outbound"] }
+activity = { path = "../activity", default-features = false }
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
+bot_id = { path = "../bot_id" }
+call = { path = "../call", default-features = false, features = ["outbound"] }
+channel_sender = { path = "../channel_sender" }
+channels = { path = "../channels", default-features = false, features = ["outbound"] }
+crm = { path = "../crm", default-features = false, features = ["ports"] }
+documents = { path = "../documents", default-features = false, features = ["outbound", "ports"] }
+document_sub_type = { path = "../document_sub_type" }
+email = { path = "../email", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../entity_access_management" }
+frecency = { path = "../frecency", features = ["postgres"] }
+jev = { path = "../jev", features = ["outbound"] }
+lexical_client = { path = "../lexical_client" }
+mention_utils = { path = "../mention_utils" }
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "outbound"] }
+entity_access_db_utils = { path = "../entity_access_db_utils" }
+kafka_util = { path = "../kafka_util" }
+macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
+macro_event_topics = { path = "../macro_event_topics" }
+messages = { path = "../messages", features = ["broker", "outbound"] }
+models_properties = { path = "../models_properties" }
+properties = { path = "../properties", default-features = false, features = ["outbound"] }
+system_properties = { path = "../system_properties" }
+trigger_context = { path = "../trigger_context" }
+rdkafka = { workspace = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+serde_json = { workspace = true }
+macro_authorization = { path = "../macro_authorization", features = [
+  "postgres",
+] }
+sqlx = { workspace = true }
+macro_user_id = { path = "../macro_user_id"}
+cron = { workspace = true }
+anyhow = { workspace = true }
+macro_uuid = { path = "../macro_uuid"}
+chrono = { workspace = true}
+chrono-tz = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+futures = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client" }
+share_permission_db_utils = { path = "../share_permission_db_utils" }
+models_permissions = { path = "../models_permissions" }
+macro_db_client = { path = "../macro_db_client" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
+entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { workspace = true }
+tower = { workspace = true }
+
+macro_cors = { path = "../macro_cors" }
+macro_auth = { path = "../macro_auth" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+
+macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }

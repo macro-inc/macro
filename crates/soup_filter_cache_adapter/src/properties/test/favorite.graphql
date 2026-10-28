@@ -1,0 +1,15 @@
+mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
+  setFavorite(entity: $entity, favorite: $favorite) {
+    result {
+      __typename
+      ... on GraphqlMutationSuccess {
+        effects {
+          __typename
+          ... on SoupUpdated {
+            item { __typename id isFavorited }
+          }
+        }
+      }
+    }
+  }
+}

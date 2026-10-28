@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { Expiry } from '@service-cognition/generated/schemas/expiry';
 import type { ProjectionStateResponse } from '@service-cognition/generated/schemas/projectionStateResponse';
@@ -7,10 +7,9 @@ import type { RefreshCadence } from '@service-cognition/generated/schemas/refres
 import type { TargetType } from '@service-cognition/generated/schemas/targetType';
 import type { UpsertProjectionRequest } from '@service-cognition/generated/schemas/upsertProjectionRequest';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { useQuery } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { z } from 'zod';
-import { queryClient } from '../client';
 
 const AI_PROJECTION_UPDATED_MESSAGE_TYPE = 'ai_projection_updated';
 
@@ -45,8 +44,9 @@ export type CreateAIProjectionOptions<Schema extends z.ZodType = z.ZodType> = {
    * generated as schema-conforming JSON (prompted, non-strict — works across
    * providers) and `data` returns the parsed, validated object. */
   schema?: Schema;
-  /** Optional `provider/model` id (e.g. `cerebras/llama-3.3-70b`,
-   * `anthropic/claude-haiku-4-5`). Defaults to the server's default model. */
+  /** Optional `provider/model` id from `@core/component/AI/constant`.
+   * Defaults to the server's default model, which is premium-only. A free
+   * user's request must name a model in `FREE_MODELS`. */
   model?: string;
   /** Whether the projection targets the user or their team. Default `user`. */
   targetType?: TargetType;
@@ -71,6 +71,49 @@ function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
     cycles: 'throw',
     reused: 'inline',
   }) as Record<string, unknown>;
+}
+
+/** Builds the upsert request from one options snapshot. Schema conversion can
+ * throw, so callers run this inside the query function (or `refresh`) where
+ * the error surfaces through the query rather than during component setup. */
+function buildProjectionRequest(
+  opts: CreateAIProjectionOptions<z.ZodType>,
+  overrides?: Partial<UpsertProjectionRequest>
+): UpsertProjectionRequest {
+  return {
+    id: opts.id,
+    prompt: opts.prompt,
+    target_type: opts.targetType ?? 'user',
+    refresh_cadence: opts.refreshCadence ?? 'medium',
+    expiry: opts.expiry ?? 'week',
+    ...(opts.model === undefined ? {} : { model: opts.model }),
+    ...(opts.schema === undefined
+      ? {}
+      : { output_schema: toOutputSchema(opts.schema) }),
+    await: opts.awaitGeneration ?? false,
+    ...overrides,
+  };
+}
+
+// Cached past unmount: closes over the caller's plain options snapshot, not
+// the options accessor, so an unmounted caller can be collected.
+function aiProjectionQueryOptions(
+  queryKey: ReturnType<typeof aiProjectionQueryKey>,
+  opts: CreateAIProjectionOptions<z.ZodType>,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey,
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await cognitionApiServiceClient.upsertAiProjection(
+            buildProjectionRequest(opts)
+          )
+      ),
+    enabled,
+    staleTime: PROJECTION_STALE_TIME,
+  });
 }
 
 function toProjectionState(
@@ -106,7 +149,7 @@ function toProjectionState(
  *   id: 'inbox/important',
  *   prompt: 'Summarize my most important unread emails.',
  *   schema: z.object({ items: z.array(z.string()) }),
- *   model: 'cerebras/llama-3.3-70b',
+ *   model: FREE_DEFAULT_MODEL,
  *   awaitGeneration: true,
  *   enabled: inboxOpen(),
  * }));
@@ -120,37 +163,17 @@ export function createAIProjection<Schema extends z.ZodType>(
 ) {
   const targetType = () => options().targetType ?? 'user';
   const queryKey = () => aiProjectionQueryKey(options().id, targetType());
+  // Write through the same client the query observes so tests and hosts that
+  // provide their own QueryClient see refreshes and gateway pushes.
+  const queryClient = useQueryClient();
 
-  const buildRequest = (
-    overrides?: Partial<UpsertProjectionRequest>
-  ): UpsertProjectionRequest => {
-    const opts = options();
-    return {
-      id: opts.id,
-      prompt: opts.prompt,
-      target_type: targetType(),
-      refresh_cadence: opts.refreshCadence ?? 'medium',
-      expiry: opts.expiry ?? 'week',
-      ...(opts.model === undefined ? {} : { model: opts.model }),
-      ...(opts.schema === undefined
-        ? {}
-        : { output_schema: toOutputSchema(opts.schema) }),
-      await: opts.awaitGeneration ?? false,
-      ...overrides,
-    };
-  };
-
-  const query = useQuery(() => ({
-    queryKey: queryKey(),
-    queryFn: async () =>
-      throwOnErr(
-        async () =>
-          await cognitionApiServiceClient.upsertAiProjection(buildRequest())
-      ),
-    enabled:
-      (options().enabled ?? true) && !!options().id && !!options().prompt,
-    staleTime: PROJECTION_STALE_TIME,
-  }));
+  const query = useQuery(() =>
+    aiProjectionQueryOptions(
+      queryKey(),
+      options(),
+      (options().enabled ?? true) && !!options().id && !!options().prompt
+    )
+  );
 
   // Materializations finish out-of-band (SQS worker or refresh sweeps); the
   // gateway pushes the final state, which we write straight into the cache.
@@ -174,16 +197,23 @@ export function createAIProjection<Schema extends z.ZodType>(
   /** Re-triggers generation even when a cached result exists. Resolves with
    * the post-trigger state (`refreshing`, or the finished result when
    * `awaitGeneration` is set). */
+  const [refreshError, setRefreshError] = createSignal<unknown>();
   const refresh = async (): Promise<ProjectionStateResponse> => {
     const key = queryKey();
-    const state = await throwOnErr(
-      async () =>
-        await cognitionApiServiceClient.upsertAiProjection(
-          buildRequest({ regenerate: true })
-        )
-    );
-    queryClient.setQueryData(key, state);
-    return state;
+    try {
+      const state = await throwOnErr(
+        async () =>
+          await cognitionApiServiceClient.upsertAiProjection(
+            buildProjectionRequest(options(), { regenerate: true })
+          )
+      );
+      setRefreshError(undefined);
+      queryClient.setQueryData(key, state);
+      return state;
+    } catch (error) {
+      setRefreshError(error);
+      throw error;
+    }
   };
 
   // Do not suspend callers while the request is pending: they own the loading
@@ -249,6 +279,11 @@ export function createAIProjection<Schema extends z.ZodType>(
       query.error?.message ??
       parsedResult().error ??
       undefined,
+    /** The server refused the request for the user's plan (403). Repeating
+     * the same request fails the same way. */
+    isForbidden: () =>
+      thrownResultErrorHasCode(query.error, 'FORBIDDEN') ||
+      thrownResultErrorHasCode(refreshError(), 'FORBIDDEN'),
     /** Re-trigger generation, keeping stale data visible meanwhile. */
     refresh,
     /** The underlying tanstack query, for advanced use. */

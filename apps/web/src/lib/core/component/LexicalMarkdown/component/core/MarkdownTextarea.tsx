@@ -1,9 +1,9 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { ChannelWithParticipants } from '@core/user';
+import { onElementConnect } from '@core/util/onElementConnect';
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { HistoryItem } from '@queries/history/types';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { cn } from '@ui';
 import {
@@ -22,6 +22,7 @@ import {
   on,
   onCleanup,
   Show,
+  untrack,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
@@ -53,9 +54,11 @@ import {
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
+import type { MentionLinkResolver } from '../../plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
+  editorStateAsMarkdown,
   initializeEditorEmpty,
   setEditorStateFromHtml,
   setEditorStateFromMarkdown,
@@ -97,6 +100,8 @@ function isHistoryItem(
 }
 
 interface MarkdownTextareaProps {
+  /** Controlled Markdown. External changes update the document without echoing onChange. */
+  value?: string;
   editable: Accessor<boolean>;
   onChange?: (value: string, editor?: LexicalEditor) => void;
   initialValue?: string;
@@ -128,6 +133,7 @@ interface MarkdownTextareaProps {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  resolveAppLink?: MentionLinkResolver;
   autoLinkMatchMode?: AutoLinkMatchMode;
   /**
    * Show a floating format toolbar (headings, lists, inline styles, links)
@@ -160,6 +166,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
   const [markdownState, setMarkdownState] = createSignal<string>('');
 
   let didInitializeContent = false;
+  const [connected, setConnected] = createSignal(false);
+  let externalMarkdown: string | undefined;
 
   const onConnect = () => {
     if (props.focusOnMount) {
@@ -168,13 +176,19 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       });
     }
 
-    if (props.initialHtml) {
+    if (props.value !== undefined) {
+      setEditorStateFromMarkdown(editor, props.value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    } else if (props.initialHtml) {
       setEditorStateFromHtml(editor, props.initialHtml);
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
 
-    if (props.initialHtml || props.initialValue) {
+    if (
+      props.value === undefined &&
+      (props.initialHtml || props.initialValue)
+    ) {
       // We do this to make sure anything relying on the markdownState existing initially
       // has the content
       props.onChange?.(markdownState());
@@ -182,7 +196,18 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
     props.onInitialized?.(editor);
     didInitializeContent = true;
+    setConnected(true);
   };
+
+  createEffect(() => {
+    const value = props.value;
+    if (!connected() || value === undefined) return;
+    untrack(() => {
+      if (value === editorStateAsMarkdown(editor)) return;
+      setEditorStateFromMarkdown(editor, value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    });
+  });
 
   createEffect(() => {
     editor.setEditable(props.editable());
@@ -193,6 +218,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       markdownState,
       () => {
         if (!didInitializeContent) return;
+        const external = markdownState() === externalMarkdown;
+        externalMarkdown = undefined;
+        if (external) return;
         props.onChange?.(markdownState(), editor);
       },
       { defer: true }
@@ -235,7 +263,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     )
     .use(tabIndentationPlugin())
     .use(listSwipeIndentPlugin(props.editable))
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(
       mentionsPlugin({
         menu: mentionsMenuOperations,
@@ -380,6 +408,10 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             });
           }}
           contentEditable={props.editable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!props.editable()}
+          aria-label={props.placeholder || 'Message'}
         />
 
         <DecoratorRenderer editor={editor} />

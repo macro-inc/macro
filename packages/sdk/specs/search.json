@@ -504,6 +504,11 @@
           }
         }
       },
+      "CalendarEventSearchScope": {
+        "type": "string",
+        "description": "Which calendar events a unified search covers.\n\nSharing an event with a channel lets its members see the sharer's copy,\nwhich is on none of their own calendars, so the default scope never finds\nit. Shared events are a separate scope rather than part of the default, so\na caller can list them after the caller's own events without reordering\nthose.",
+        "enum": ["own", "shared_with_you"]
+      },
       "CalendarEventSearchTime": {
         "oneOf": [
           {
@@ -1495,6 +1500,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -1503,6 +1509,21 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "DocumentFilters": {
         "type": "object",
@@ -2163,9 +2184,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -2177,10 +2206,6 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
-          },
-          "reminder_filters": {
-            "$ref": "#/components/schemas/ReminderFilters",
-            "description": "the bundled [ReminderFilters]"
           },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
@@ -2222,7 +2247,10 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -2629,7 +2657,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -2651,6 +2681,9 @@
           "ps",
           "dxf",
           "dwg",
+          "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",
@@ -2718,6 +2751,44 @@
           "name": {
             "type": ["string", "null"],
             "description": "If the match was on the entity name, this will be present with that highlight"
+          }
+        }
+      },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -2970,6 +3041,7 @@
           "display_name",
           "data_type",
           "is_multi_select",
+          "specific_entity_type",
           "created_at",
           "updated_at",
           "is_system",
@@ -3082,7 +3154,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -3092,7 +3179,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -3160,6 +3247,21 @@
           },
           {
             "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
             "required": ["value", "type"],
             "properties": {
@@ -3215,38 +3317,6 @@
           }
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
-      },
-      "ReminderFilters": {
-        "type": "object",
-        "description": "Filters for reminders.",
-        "properties": {
-          "completed": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
-          },
-          "entities": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
-          },
-          "fired": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
-          },
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
-          },
-          "include": {
-            "type": "boolean",
-            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
-          }
-        }
       },
       "SearchGotoAgentSession": {
         "type": "object",
@@ -4640,6 +4710,10 @@
         "type": "object",
         "required": ["query", "match_type"],
         "properties": {
+          "calendar_event_scope": {
+            "$ref": "#/components/schemas/CalendarEventSearchScope",
+            "description": "Which calendar events to search. Defaults to `own`: events on the\ncaller's own and delegated calendars. `shared_with_you` searches only\nevents shared with a channel the caller belongs to that are on none of\ntheir calendars."
+          },
           "collapse": {
             "type": ["boolean", "null"]
           },

@@ -9,9 +9,13 @@ use activity::Ingest;
 use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use chat::domain::events::ChatMacroEvent;
+use databases::domain::events::DatabaseMacroEvent;
 use documents_hex::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
+use forms::domain::events::FormMacroEvent;
+use initiative::domain::events::InitiativeMacroEvent;
 use macro_event_broker::MacroEvent as _;
+use messages::outbound::broker::MessageMacroEvent;
 use projects_hex::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 
@@ -23,14 +27,21 @@ mod source {
         ActivitySourceEvent:
             DocumentMacroEvent,
             ChannelMacroEvent,
+            MessageMacroEvent,
             ChatMacroEvent,
             ProjectMacroEvent,
             EmailMacroEvent,
             PropertyMacroEvent,
             CallMacroEvent,
+            InitiativeMacroEvent,
+            DatabaseMacroEvent,
+            FormMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
+
+mod timeline;
+pub(crate) use timeline::TimelinePublisher;
 
 /// Dispatches each event to its owning domain. Document editing sessions use
 /// the shared inactivity store; all classification and debounce policy stays
@@ -54,11 +65,18 @@ pub(crate) async fn ingest(
             .await
         }
         ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::MessageMacroEvent(e) => {
+            let envelope = e.event();
+            channels::domain::activity::ingest_message_event(envelope.event_id, &envelope.event)
+        }
         ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::PropertyMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
     }
 }
 
@@ -80,6 +98,29 @@ where
     S: entity_access::domain::ports::EntityAccessService,
 {
     type Err = entity_access::domain::models::AccessError;
+
+    async fn viewer_can_see(
+        &self,
+        entity_type: activity::EntityType,
+        entity_id: &str,
+        viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Err> {
+        use entity_access::domain::models::{AccessError, ViewAccessLevel};
+        match self
+            .service
+            .generate_entity_access_receipt::<ViewAccessLevel>(viewer, None, entity_id, entity_type)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(
+                AccessError::Unauthorized
+                | AccessError::UnauthorizedWithMessage(_)
+                | AccessError::NotFound(_)
+                | AccessError::BadRequest(_),
+            ) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
 
     async fn entity_audience(
         &self,

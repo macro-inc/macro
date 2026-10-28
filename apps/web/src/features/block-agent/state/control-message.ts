@@ -73,3 +73,24 @@ export function hasPendingStop(messages: readonly FoldedMessage[]): boolean {
       message.parts[0].control.kind === 'stop'
   );
 }
+
+/** A config change remains pending until the runtime answers it. */
+export function changingConfig(
+  messages: readonly FoldedMessage[],
+  configId: string
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]!;
+    const part = message.parts[0];
+    if (message.parts.length !== 1 || part?.kind !== 'control') continue;
+    if (
+      part.control.kind !== 'set_config_option' ||
+      part.control.config_id !== configId
+    )
+      continue;
+    return message.pending || part.outcome.kind === 'pending'
+      ? part.control.value
+      : undefined;
+  }
+  return undefined;
+}

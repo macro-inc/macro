@@ -1,12 +1,6 @@
-import {
-  processEmailColors,
-  stripColorSchemeMediaQueries,
-  type ThemeColorParams,
-} from '@core/email';
+import { processEmailColors, stripColorSchemeMediaQueries } from '@core/email';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
-import { themeReactive } from '@theme/signals/themeReactive';
-import { themeUpdate } from '@theme/signals/themeSignals';
 import {
   type Component,
   createEffect,
@@ -15,8 +9,10 @@ import {
   untrack,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { createEmailTheme } from '../../../../../../features/email-message/theme';
 
 export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
+  const theme = createEmailTheme();
   let marker: HTMLDivElement | undefined;
   const [shadowContainer, setShadowContainer] = createSignal<HTMLElement>();
   const [content, setContent] = createSignal<HTMLDivElement>();
@@ -54,7 +50,7 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
   // text colors to the theme (or force a white panel for table-layout emails).
   // Display-only — the node's raw html is what exportDOM sends.
   createEffect(() => {
-    themeUpdate();
+    const colors = theme();
     const el = content();
     if (!el) return;
     // Reset to the raw html so recoloring never compounds
@@ -73,16 +69,7 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
         if (adapt) {
           el.style.removeProperty('background-color');
           el.style.removeProperty('color');
-          const theme: ThemeColorParams = {
-            inkL: themeReactive.c0.l[0](),
-            inkC: themeReactive.c0.c[0](),
-            inkH: themeReactive.c0.h[0](),
-            panelL: themeReactive.b1.l[0](),
-            accentL: themeReactive.a0.l[0](),
-            accentC: themeReactive.a0.c[0](),
-            accentH: themeReactive.a0.h[0](),
-          };
-          processEmailColors(el, theme);
+          processEmailColors(el, colors);
         } else {
           el.style.setProperty('background-color', 'white', 'important');
           // Some emails don't set a color, so force black for readability

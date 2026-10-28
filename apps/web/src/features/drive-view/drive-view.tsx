@@ -4,16 +4,27 @@ import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
+import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
-import { createEffect, on, onCleanup, onMount, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+  onMount,
+  Suspense,
+} from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { driveLocationLabel } from './core/location-label';
 import {
@@ -30,10 +41,15 @@ import {
   createDriveViewState,
   type DriveRouteState,
 } from './primitives/drive-route-state';
-import { createDriveState } from './primitives/drive-state';
+import {
+  availableDriveState,
+  createDriveState,
+} from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
+import { documentsTour } from './tour';
 import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
+import { SignedOutDriveWorkspace } from './views/signed-out-drive-workspace';
 
 export type DriveViewProps = { initialFacets?: FacetSelection };
 
@@ -42,14 +58,30 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const panel = useSplitPanelOrThrow();
   const navigation = useDriveDetailNavigation();
   const userId = useUserId();
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const view = createDriveViewState(props.route, () => list.reset());
-  const sidebar = createDriveSidebarSource();
+  const viewState = createMemo(() =>
+    availableDriveState(
+      view.value(),
+      databasesFlag().enabled,
+      formsFlag().enabled
+    )
+  );
+  const searchText = () => view.value().search;
+  const selection = () => ({ ...viewState(), search: searchText() });
+  const sidebar = createDriveSidebarSource({
+    databasesEnabled: () => databasesFlag().enabled,
+    formsEnabled: () => formsFlag().enabled,
+  });
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
-      selection: view.value,
+      selection,
+      databasesEnabled: () => databasesFlag().enabled,
+      formsEnabled: () => formsFlag().enabled,
       userId,
       tagSets,
       tagSetsReady,
@@ -76,7 +108,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
     })
   );
   const state = createDriveState({
-    state: view.value,
+    state: viewState,
     setState: view.setValue,
     folders: sidebar.folders,
     list,
@@ -136,19 +168,40 @@ function DriveComposition(props: { route: DriveRouteState }) {
       controller: list.controller,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
-        void openEntityInSplitFromUnifiedList(entity, {
-          splitHandle: panel.handle,
-          ...options,
-        });
+        fireAndForget(
+          openEntityInSplitFromUnifiedList(entity, {
+            splitHandle: panel.handle,
+            ...options,
+          }),
+          'open-entity-in-split'
+        );
       },
     });
   });
   onMount(() => panel.handle.setDisplayName('Drive'));
 
   return (
-    <DriveProvider value={{ state, source, list, sidebar, actions }}>
-      <DriveWorkspace />
+    <DriveProvider
+      value={{
+        state: { ...state, value: selection },
+        source,
+        list,
+        sidebar,
+        actions,
+      }}
+    >
+      <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
     </DriveProvider>
+  );
+}
+
+/** Public details use the same viewer without constructing private Drive sources. */
+export function SignedOutDriveView() {
+  const route = createDriveRouteState(() => undefined);
+  return (
+    <DriveDetailNavigationProvider location={route.location}>
+      <SignedOutDriveWorkspace />
+    </DriveDetailNavigationProvider>
   );
 }
 

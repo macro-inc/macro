@@ -24,9 +24,16 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
         "__typename": "GraphqlNotification", "id": member_id(id), "state": "DONE"
     })).collect::<Vec<_>>()});
     let vars = variables();
-    let edits = notification_projection_updates(engine.storage(), UPDATE, None, &vars, &data)
-        .await
-        .unwrap();
+    let edits = notification_projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        UPDATE,
+        None,
+        &vars,
+        &data,
+    )
+    .await
+    .unwrap();
     let [ProjectionMutation::PatchExact { remove, insert, .. }] = edits.as_slice() else {
         panic!("bulk updates compose the parent once");
     };
@@ -36,6 +43,7 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: "00000000-0000-0000-0000-000000000101",
                 query: UPDATE,
                 operation_name: None,
@@ -44,6 +52,7 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             optimistic_notification_updates(edits).unwrap(),
         )
@@ -89,9 +98,16 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
 
     let token = claim(&mut engine, single).await;
     let settled = json!({"updateNotifications":[notification(A, "DONE")]});
-    let edits = notification_projection_updates(engine.storage(), UPDATE, None, &vars, &settled)
-        .await
-        .unwrap();
+    let edits = notification_projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        UPDATE,
+        None,
+        &vars,
+        &settled,
+    )
+    .await
+    .unwrap();
     engine
         .commit_optimistic_write_with_projections(
             single, token, UPDATE, None, &vars, &settled, edits,

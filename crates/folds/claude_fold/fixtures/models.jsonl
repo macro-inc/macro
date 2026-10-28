@@ -1,0 +1,5 @@
+{"type":"assistant","uuid":"a","message":{"model":"claude-opus-5","content":[]}}
+{"type":"assistant","uuid":"a","message":{"model":"claude-opus-5","content":[]}}
+{"type":"assistant","uuid":"sub","isSidechain":true,"message":{"model":"claude-haiku-4-5","content":[]}}
+{"type":"assistant","uuid":"synthetic","message":{"model":"<synthetic>","content":[]}}
+{"type":"assistant","uuid":"b","message":{"model":"claude-sonnet-4-6","content":[]}}

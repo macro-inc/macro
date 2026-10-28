@@ -20,13 +20,20 @@ const target = {
 };
 
 describe('extract reply', () => {
-  it('returns the parent of a leading reply target', async () => {
-    const parent = { type: 'channel', id: 'channel' };
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('returns the %s parent of a leading reply target', async (type) => {
+    const parent = { type, id: 'parent-1' };
     const response = await request(
       `<m-reply-target>${JSON.stringify({ parent, ...target })}</m-reply-target>\n\nplease fix`
     );
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({
+    expect(await response.json()).toEqual({
       reply: { parent, ...target },
     });
   });
@@ -35,13 +42,13 @@ describe('extract reply', () => {
       `<m-reply-target>${JSON.stringify({ channelId: 'channel', ...target })}</m-reply-target>\n\nplease fix`
     );
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({
+    expect(await response.json()).toEqual({
       reply: { parent: { type: 'channel', id: 'channel' }, ...target },
     });
   });
   it('returns null for a blockquote', async () => {
     const response = await request('> quoted\n\nplease fix');
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({ reply: null });
+    expect(await response.json()).toEqual({ reply: null });
   });
 });

@@ -13,11 +13,16 @@ pub struct UpsertChannelMessageArgs {
     pub message_id: String,
     pub thread_id: String,
     pub sender_id: String,
+    /// Searchable fallback display name, never an authenticated sender identity.
+    pub imported_author: Option<String>,
     pub mentions: Vec<String>,
     pub content: String,
     pub created_at_millis: EpochMillis,
     pub updated_at_millis: EpochMillis,
 }
+
+#[cfg(test)]
+mod test;
 
 #[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_channel_message(

@@ -1,16 +1,55 @@
+import type { FoldedMessage } from '../../../generated/agent-fold';
 import type {
   AgentAction,
+  AgentMode,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  CodingPreferencesBody,
   ControlResponse,
   PromptAttachment,
+  PullRequestLinkSource,
   SandboxSize,
+  SessionBot,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
+import { User } from '../users/user';
+import { CodeExecution } from './code-execution';
 import { QueuedAction } from './queued-action';
+import { type CreateReviewOptions, SessionReview } from './review';
+import { ToolApproval } from './tool-approval';
+
+/** A session's history folded into readable messages, oldest first. */
+export type FoldedAgentSessionLog = {
+  /** The agent that sent every agent message. */
+  bot: SessionBot;
+  /**
+   * Prompts and replies with their tool calls, results, plans, permission
+   * requests and how each turn ended.
+   */
+  messages: FoldedMessage[];
+};
+
+/** A GitHub pull request linked to a session. */
+export type SessionPullRequest = {
+  /** The pull request's `owner/repo/pull/number` key. */
+  githubKey: string;
+  /** The pull request's GitHub URL. */
+  url: string;
+  /** Whether the session's agent opened it or a person linked it. */
+  source: PullRequestLinkSource;
+  /** Who linked it, for pull requests a person linked. */
+  linkedBy?: User;
+  /** When it was linked. */
+  createdAt: string;
+};
 
 /** A GitHub repository the caller can point a managed session at. */
 export type SelectableRepository = {
@@ -49,6 +88,33 @@ export type CreateManagedSessionOptions = {
 
 /** A managed or externally hosted coding-agent session. */
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'agent_session', this);
+
+  /** Construct an approval handle scoped to this session. */
+  toolApprovalById(id: string): ToolApproval {
+    return ToolApproval.byId(this.client, this, id);
+  }
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionPermissions({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Replace sharing grants. */
+  async updateSharePermissions(options: SharePermissionOptions) {
+    return this.mutate((c) =>
+      c.agentHarness.updateAgentSessionPermissions({
+        path: { session_id: this.id },
+        body: sharePermissionBody(options),
+      }),
+    );
+  }
+
   /** A handle to an agent session by id. Details load on first access. */
   static byId(client: MacroClient, id: string): AgentSession {
     return new AgentSession(client, id);
@@ -57,7 +123,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: CreateManagedSessionOptions
+    opts?: CreateManagedSessionOptions,
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
@@ -68,7 +134,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
           repoUrl: opts?.repoUrl,
           repoBranch: opts?.repoBranch,
         },
-      })
+      }),
     );
     return new AgentSession(client, session.id, session);
   }
@@ -80,10 +146,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * nowhere they reach.
    */
   static async repositories(
-    client: MacroClient
+    client: MacroClient,
   ): Promise<SelectableRepository[]> {
     const { repositories } = unwrap(
-      await client.agentHarness.listAgentRepositories()
+      await client.agentHarness.listAgentRepositories(),
     );
     return repositories.map((repository) => ({
       url: repository.url,
@@ -99,26 +165,45 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    */
   static async repositoryBranches(
     client: MacroClient,
-    repoUrl: string
+    repoUrl: string,
   ): Promise<string[]> {
     const { branches } = unwrap(
       await client.agentHarness.listAgentRepositoryBranches({
         query: { repoUrl },
-      })
+      }),
     );
     return branches;
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent or a coding agent, as the app's Auto
+   * mode decides before starting a session. Rejects when Auto mode is not
+   * enabled for the caller, the classifier is unavailable or slow, or the
+   * caller is out of AI quota.
+   */
+  static async chooseMode(
+    client: MacroClient,
+    prompt: string,
+  ): Promise<AgentMode> {
+    const { mode } = unwrap(
+      await client.agentHarness.chooseAgentMode({ body: { prompt } }),
+    );
+    return mode;
   }
 
   protected async fetch(): Promise<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSession({
         path: { session_id: this.id },
-      })
+      }),
     );
   }
 
   /** The session's user-facing display name. */
   readonly name = this.field('name');
+
+  /** Whether the session is archived and read-only. */
+  readonly isArchived = this.field('isArchived');
 
   /** The model currently configured for the session. */
   readonly model = this.field('model');
@@ -150,13 +235,93 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** When the session was last modified. */
   readonly modifiedAt = this.field('modifiedAt');
 
+  /**
+   * The sessions linked to the GitHub pull request at `url` that the caller
+   * can view, oldest link first.
+   */
+  static async forPullRequest(
+    client: MacroClient,
+    url: string,
+  ): Promise<AgentSession[]> {
+    const { sessionIds } = unwrap(
+      await client.agentHarness.agentSessionsForPullRequest({ body: { url } }),
+    );
+    return sessionIds.map((id) => AgentSession.byId(client, id));
+  }
+
+  /**
+   * The GitHub pull requests linked to this session: the one its agent
+   * opened and any a person linked, oldest first.
+   */
+  async pullRequests(): Promise<SessionPullRequest[]> {
+    const { pullRequests } = unwrap(
+      await this.client.agentHarness.listAgentSessionPullRequests({
+        path: { session_id: this.id },
+      }),
+    );
+    return pullRequests.map((link) => ({
+      githubKey: link.githubKey,
+      url: link.url,
+      source: link.source,
+      linkedBy: link.linkedBy
+        ? User.byId(this.client, link.linkedBy)
+        : undefined,
+      createdAt: link.createdAt,
+    }));
+  }
+
+  /**
+   * Link the GitHub pull request at `url` to this session. Linking one that
+   * is already linked changes nothing.
+   */
+  async linkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.linkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        body: { url },
+      }),
+    );
+  }
+
+  /**
+   * Unlink a GitHub pull request a person linked to this session. The pull
+   * request the session's agent opened stays linked.
+   */
+  async unlinkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.unlinkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        query: { url },
+      }),
+    );
+  }
+
   /** Rename this session. */
   async rename(name: string): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.renameAgentSession({
         path: { session_id: this.id },
         body: { name },
-      })
+      }),
+    );
+  }
+
+  /** Archive this session, making it read-only until unarchived. */
+  async archive(): Promise<void> {
+    await this.setArchived(true);
+  }
+
+  /** Restore an archived session so it can be edited and prompted again. */
+  async unarchive(): Promise<void> {
+    await this.setArchived(false);
+  }
+
+  private async setArchived(isArchived: boolean): Promise<void> {
+    await this.mutate((client) =>
+      client.agentHarness.setAgentSessionArchived({
+        path: { session_id: this.id },
+        body: { isArchived },
+      }),
     );
   }
 
@@ -166,7 +331,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.putAgentSessionSandboxSize({
         path: { session_id: this.id },
         body: { size },
-      })
+      }),
     );
     return next;
   }
@@ -179,13 +344,32 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   static async setDefaultSandboxSize(
     client: MacroClient,
-    size: SandboxSize
+    size: SandboxSize,
   ): Promise<SandboxSize> {
     return unwrap(
       await client.agentHarness.putAgentSandboxSize({
         body: { size },
-      })
+      }),
     ).size;
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  static async codingPreferences(
+    client: MacroClient,
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentCodingPreferences());
+  }
+
+  /** Replace the caller's coding preferences. */
+  static async setCodingPreferences(
+    client: MacroClient,
+    preferences: CodingPreferencesBody,
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(
+      await client.agentHarness.putAgentCodingPreferences({
+        body: preferences,
+      }),
+    );
   }
 
   /**
@@ -201,7 +385,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.controlAgentSession({
         path: { session_id: this.id },
         body: action,
-      })
+      }),
     );
   }
 
@@ -214,7 +398,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    */
   prompt(
     text: string,
-    attachments?: PromptAttachment[]
+    attachments?: PromptAttachment[],
   ): Promise<ControlResponse> {
     return this.control({
       type: 'prompt',
@@ -231,10 +415,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     const { entries } = unwrap(
       await this.client.agentHarness.getAgentSessionQueue({
         path: { session_id: this.id },
-      })
+      }),
     );
     return entries.map((entry) =>
-      QueuedAction.from(this.client, this.id, entry)
+      QueuedAction.from(this.client, this.id, entry),
     );
   }
 
@@ -243,7 +427,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChanges({
         path: { session_id: this.id },
-      })
+      }),
     );
   }
 
@@ -252,7 +436,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChangesPatch({
         path: { session_id: this.id },
-      })
+      }),
     ).patch;
   }
 
@@ -261,8 +445,27 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return this.mutate((client) =>
       client.agentHarness.refreshAgentSessionChanges({
         path: { session_id: this.id },
-      })
+      }),
     );
+  }
+
+  /**
+   * Read this session's whole history as the conversation the app renders:
+   * each user prompt and agent reply, oldest first, with tool calls and their
+   * results, plans, permission requests and how each turn ended. Works on any
+   * session the caller can view, live or finished, so it is the way to read
+   * what another agent session did. Prefer it to {@link log}, which returns
+   * raw protocol frames.
+   */
+  async foldedLog(): Promise<FoldedAgentSessionLog> {
+    const { bot, messages } = unwrap(
+      await this.client.agentHarness.getAgentSessionFoldedLog({
+        path: { session_id: this.id },
+      }),
+    );
+    // The schema is opaque: the server serializes the fold's `FoldedMessage`,
+    // whose TypeScript contract is generated from the same Rust type.
+    return { bot, messages: messages as FoldedMessage[] };
   }
 
   /** Read the complete raw protocol log for this session. */
@@ -270,16 +473,29 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
         path: { session_id: this.id },
-      })
+      }),
     );
   }
+
+  /** Persisted reviews scoped to this session, with or without a code execution. */
+  readonly reviews = {
+    create: (input: CreateReviewOptions) =>
+      SessionReview.createForSession(this.client, this, input),
+    byId: (id: string) => SessionReview.byId(this.client, this, id),
+  };
+
+  /** Saved code executions scoped to this session. Handle construction makes no request. */
+  readonly codeExecutions = {
+    byId: (id: string): CodeExecution =>
+      CodeExecution.byId(this.client, this, id),
+  };
 
   /** Delete this session and any live resources it owns. */
   async delete(): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({
         path: { session_id: this.id },
-      })
+      }),
     );
   }
 }

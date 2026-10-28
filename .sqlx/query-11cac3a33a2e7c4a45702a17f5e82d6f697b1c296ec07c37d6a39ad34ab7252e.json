@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1 FROM import_target_reservation\n            WHERE channel_id = $1 AND team_id <> $2\n        ) OR EXISTS (\n            SELECT 1 FROM import_entity\n            WHERE source = 'slack' AND status = 'imported' AND entity_type = 'channel'\n              AND entity_id = $1::text AND team_id <> $2\n        ) AS \"exists!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "11cac3a33a2e7c4a45702a17f5e82d6f697b1c296ec07c37d6a39ad34ab7252e"
+}

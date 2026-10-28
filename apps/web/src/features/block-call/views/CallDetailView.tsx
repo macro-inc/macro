@@ -1,5 +1,8 @@
 import { ViewShell } from '@app/components/view-shell';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { createSearchParams } from '@app/lib/split-router';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -7,8 +10,9 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
   hasSoupEntity,
@@ -20,6 +24,7 @@ import { Button } from '@ui';
 import {
   type Accessor,
   createMemo,
+  type JSX,
   Match,
   onMount,
   type ParentProps,
@@ -27,6 +32,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import { useCallAgain } from '../component/use-call-again';
@@ -71,21 +77,18 @@ export function CallDetailActions(props: {
   }));
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
-        <Button variant="outline" size="sm" onClick={callAgain}>
-          <PhoneCallIcon class="size-4" />
-          Call Again
-        </Button>
+        <HeaderActionGroup label="Call actions">
+          <HeaderActionButton
+            grouped
+            label="Call Again"
+            icon={<PhoneCallIcon class="size-3.5 touch:size-4" />}
+            onClick={callAgain}
+          />
+        </HeaderActionGroup>
       </Show>
-      <ChatWithAgentButton
-        entity={{
-          type: 'document',
-          id: props.callId,
-          name: props.name,
-          fileType: 'call',
-        }}
-      />
+      <SidePanel.HeaderActionsOutlet />
       <ShareTrigger
         onClick={openShare}
         id={props.callId}
@@ -100,7 +103,7 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <SidePanel.Root persistKey={`call:${props.callId}`}>
+    <SidePanel.Root floating persistKey={`call:${props.callId}`}>
       {props.children}
     </SidePanel.Root>
   );
@@ -110,21 +113,29 @@ function LoadedCallContent(props: {
   callId: string;
   record: CallRecord;
   transcriptTarget?: CallTranscriptTarget;
+  messageId?: string;
+  seek?: string;
 }) {
+  const [, setSearch] = createSearchParams(callDetailSearch);
   onMount(() => {
     optimisticUpdateSoupItemViewedAt(props.callId);
     if (!hasSoupEntity(props.callId)) {
-      void refetchSoupEntity(props.callId, 'call');
+      fireAndForget(refetchSoupEntity(props.callId, 'call'), 'call-detail');
     }
   });
   return (
-    <SidePanel.Layout headerToggle={false}>
+    <SidePanel.Layout headerToggle={false} floating>
       <CallSidePanelSections callId={props.callId} record={props.record} />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <CallRecordingBody
           record={props.record}
           callId={props.callId}
           transcriptTarget={props.transcriptTarget}
+          messageTarget={props.messageId}
+          messageTargetRequestKey={props.seek}
+          onClearMessageTarget={() =>
+            setSearch({ messageId: undefined }, { history: 'replace' })
+          }
         />
       </div>
     </SidePanel.Layout>
@@ -137,6 +148,7 @@ export function CallDetailContent(props: {
   query: ReturnType<typeof useCallRecordQuery>;
   data?: CallDetailData;
   transcriptId?: string;
+  messageId?: string;
   seek?: string;
 }) {
   // Include the route's seek token so selecting the same segment re-runs the seek.
@@ -154,6 +166,7 @@ export function CallDetailContent(props: {
             <Match when={props.query.status === 'pending'}>
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />
@@ -164,9 +177,11 @@ export function CallDetailContent(props: {
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>This call recording could not be displayed.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => void props.query.refetch()}
+                    onClick={() =>
+                      fireAndForget(props.query.refetch(), 'call-detail')
+                    }
                   >
                     Retry
                   </Button>
@@ -181,6 +196,7 @@ export function CallDetailContent(props: {
             fallback={
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />
@@ -191,6 +207,8 @@ export function CallDetailContent(props: {
               callId={props.callId}
               record={data().record}
               transcriptTarget={transcriptTarget()}
+              messageId={props.messageId}
+              seek={props.seek}
             />
           </Suspense>
         )}
@@ -199,21 +217,40 @@ export function CallDetailContent(props: {
   );
 }
 
-export function StandaloneCallDetail(props: {
+export function CallDetailView(props: {
   callId: string;
   transcriptId?: string;
+  messageId?: string;
   seek?: string;
+  header?: (data: Accessor<CallDetailData | undefined>) => JSX.Element;
 }) {
   const detail = useCallDetail(() => props.callId);
+  const analytics = useAnalytics();
+  onMount(() => {
+    analytics.pageView('call');
+    analytics.track('open_entity', {
+      entityType: 'call',
+      entityId: props.callId,
+    });
+  });
   return (
     <CallDetailRoot callId={props.callId}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
         <ViewShell.TopBar class="touch:flex">
           <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-          <span class="min-w-0 truncate text-sm font-semibold">
-            {detail.data()?.name ?? 'Call Recording'}
-          </span>
+          <Show
+            when={props.header}
+            fallback={
+              <>
+                <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+                <span class="min-w-0 truncate text-sm font-semibold">
+                  {detail.data()?.name ?? 'Call Recording'}
+                </span>
+              </>
+            }
+          >
+            {(header) => header()(detail.data)}
+          </Show>
           <Show when={detail.data()}>
             {(data) => (
               <CallDetailActions
@@ -229,6 +266,7 @@ export function StandaloneCallDetail(props: {
           query={detail.query}
           data={detail.data()}
           transcriptId={props.transcriptId}
+          messageId={props.messageId}
           seek={props.seek}
         />
       </div>

@@ -9,6 +9,7 @@ use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarT
 use macro_event_broker::MacroEventBroker;
 
 use super::{
+    ics::{CalendarEventExportAccess, CalendarEventForward, CalendarEventIcs, render_event_ics},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -16,10 +17,11 @@ use super::{
         GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarReauthNotifier,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
+        CalendarEventWrite, CalendarEventWriteOutcome, CalendarOccurrenceService,
+        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
         CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
+        GoogleEventSyncContext, RetiredCalendarEvent,
     },
 };
 
@@ -51,6 +53,7 @@ pub const MENTION_PREVIEWS_MAX: usize = 100;
 /// Calendar use cases with provider and persistence details behind ports.
 pub struct CalendarService<R> {
     repository: R,
+    team_sharing_enabled: bool,
 }
 
 impl<R> CalendarService<R>
@@ -59,7 +62,16 @@ where
 {
     /// Construct the service.
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            team_sharing_enabled: false,
+        }
+    }
+
+    /// Enable legacy team status reads together with the team sharing rollout.
+    pub fn with_team_sharing_enabled(mut self, enabled: bool) -> Self {
+        self.team_sharing_enabled = enabled;
+        self
     }
 
     /// Apply an OAuth grant using actual scopes returned by Google.
@@ -88,23 +100,20 @@ where
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> Result<
-        Vec<(
-            super::models::CalendarEvent,
-            super::models::CalendarOccurrence,
-        )>,
-        Report,
-    > {
+    ) -> Result<Vec<super::models::OccurrenceListing>, Report> {
         validate_query(&range, limit)?;
         let mut rows = self
             .repository
             .list_occurrences(requester_id, range, cursor, limit)
             .await?;
         if let Some(viewer) =
-            ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
+            ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?)
         {
-            for (event, _) in &mut rows {
-                viewer.mark_attendees(&mut event.attendees);
+            for listing in &mut rows {
+                viewer.mark_event(&mut listing.event, listing.link_id);
+                if let Some(attendees) = &mut listing.exception.attendees {
+                    viewer.mark_attendees(attendees, listing.link_id);
+                }
             }
         }
         Ok(rows)
@@ -112,11 +121,11 @@ where
 
     /// Query teammates' out-of-office occurrences in a bounded viewport.
     ///
-    /// Teammates learn when — not necessarily why — each other are out: an
-    /// event marked private or confidential keeps its title withheld,
-    /// mirroring what Google shows viewers without full detail access. The
-    /// same provider event synced through more than one of a teammate's
-    /// connected inboxes collapses to one occurrence.
+    /// Busy-only sharers' occurrences carry no title; only explicit detail
+    /// sharing adds it, and `none` omits the sharer. Private and confidential
+    /// events are omitted because even their out-of-office type would disclose
+    /// metadata beyond a generic busy block. Provider copies synced through
+    /// multiple connected inboxes collapse to one occurrence.
     #[tracing::instrument(skip(self, requester_id, range), err)]
     pub async fn list_team_out_of_office(
         &self,
@@ -125,6 +134,9 @@ where
         limit: u16,
     ) -> Result<Vec<super::models::TeamOutOfOffice>, Report> {
         validate_query(&range, limit)?;
+        if !self.team_sharing_enabled {
+            return Ok(Vec::new());
+        }
         let rows = self
             .repository
             .list_team_out_of_office(requester_id, range, limit)
@@ -153,6 +165,15 @@ where
         self.repository.sync_status(requester_id).await
     }
 
+    /// List every calendar visible to the requester.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> Result<Vec<super::models::VisibleCalendar>, Report> {
+        self.repository.list_visible_calendars(requester_id).await
+    }
+
     /// Resolve mentioned events to the requester's own projections.
     #[tracing::instrument(skip(self, requester_id, items), err)]
     pub async fn mention_previews(
@@ -166,15 +187,88 @@ where
         if items.is_empty() {
             return Ok(Vec::new());
         }
-        self.repository
-            .mention_previews(requester_id, items, Utc::now())
-            .await
+        let mut previews = self
+            .repository
+            .mention_previews(requester_id, items.clone(), Utc::now())
+            .await?;
+        super::join_requests::annotate_join_state(
+            &self.repository,
+            requester_id,
+            &items,
+            &mut previews,
+        )
+        .await?;
+        Ok(previews)
     }
 
     /// The IANA time zone of the requester's primary calendar.
     #[tracing::instrument(skip(self, requester_id), err)]
     pub async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
         self.repository.primary_time_zone(requester_id).await
+    }
+
+    /// Every copy of `event_id`'s meeting the requester holds through one of
+    /// their own inboxes.
+    #[tracing::instrument(skip(self, requester_id), fields(copies), err)]
+    pub async fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Vec<super::models::MeetingCopy>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        tracing::Span::current().record("copies", copies.len());
+        Ok(copies)
+    }
+
+    /// Export an event the requester can see as an iCalendar document.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventIcs>, Report> {
+        let event = self.repository.event_export(requester_id, event_id).await?;
+        Ok(event.map(|event| CalendarEventIcs {
+            document: render_event_ics(&event),
+            title: event.title,
+        }))
+    }
+
+    /// The .ics a forward of the requester's own copy of an event carries,
+    /// and that copy's inbox, which sends it. `None` unless `event_id` is a
+    /// live copy held through one of the requester's own inboxes: a channel
+    /// share or a delegated inbox's copy has no inbox of theirs to send from.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventForward>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        let Some(copy) = copies.into_iter().find(|copy| copy.event_id == event_id) else {
+            return Ok(None);
+        };
+        let Some(event) = self
+            .repository
+            .event_export(requester_id, event_id)
+            .await?
+            .filter(|event| event.access == CalendarEventExportAccess::OwnCopy)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(CalendarEventForward {
+            ics: CalendarEventIcs {
+                document: render_event_ics(&event),
+                title: event.title,
+            },
+            inbox: copy.inbox,
+        }))
     }
 
     /// Re-arm the watched inbox's sync job for a push notification whose
@@ -200,6 +294,19 @@ where
     }
 }
 
+impl<R> CalendarEventForwardSource for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send {
+        CalendarService::event_forward(self, requester_id, event_id)
+    }
+}
+
 impl<R> CalendarOccurrenceService for CalendarService<R>
 where
     R: CalendarRepository,
@@ -210,15 +317,7 @@ where
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<
-        Output = Result<
-            Vec<(
-                super::models::CalendarEvent,
-                super::models::CalendarOccurrence,
-            )>,
-            Report,
-        >,
-    > + Send {
+    ) -> impl Future<Output = Result<Vec<super::models::OccurrenceListing>, Report>> + Send {
         CalendarService::list_occurrences(self, requester_id, range, cursor, limit)
     }
 
@@ -227,6 +326,13 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<super::models::CalendarSyncStatus, Report>> + Send {
         CalendarService::sync_status(self, requester_id)
+    }
+
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<super::models::VisibleCalendar>, Report>> + Send {
+        CalendarService::list_visible_calendars(self, requester_id)
     }
 
     fn mention_previews(
@@ -252,6 +358,22 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
         CalendarService::primary_time_zone(self, requester_id)
+    }
+
+    fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<super::models::MeetingCopy>, Report>> + Send {
+        CalendarService::meeting_copies(self, requester_id, event_id)
+    }
+
+    fn event_ics(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send {
+        CalendarService::event_ics(self, requester_id, event_id)
     }
 }
 
@@ -487,18 +609,18 @@ where
             Err(error) => {
                 let provider_error = error
                     .as_ref()
-                    .downcast_current_context::<GoogleProviderError>();
-                let disposition = match provider_error.map(GoogleProviderError::kind) {
-                    Some(GoogleProviderErrorKind::ReauthRequired) => {
+                    .downcast_current_context::<CalendarProviderError>();
+                let disposition = match provider_error.map(CalendarProviderError::kind) {
+                    Some(CalendarProviderErrorKind::ReauthRequired) => {
                         CalendarBackfillFailureDisposition::CalendarPermissionRequired
                     }
                     Some(
-                        GoogleProviderErrorKind::Permanent
-                        | GoogleProviderErrorKind::PushUnsupported,
+                        CalendarProviderErrorKind::Permanent
+                        | CalendarProviderErrorKind::PushUnsupported,
                     ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
-                        GoogleProviderErrorKind::Transient
-                        | GoogleProviderErrorKind::SyncTokenExpired,
+                        CalendarProviderErrorKind::Transient
+                        | CalendarProviderErrorKind::SyncTokenExpired,
                     )
                     | None => CalendarBackfillFailureDisposition::Retry,
                 };
@@ -715,11 +837,12 @@ where
         // so the coordinator can still classify a wholesale outage.
         let mut any_calendar_healthy = false;
         let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
-        let mut last_isolated_error: Option<GoogleProviderError> = None;
+        let mut last_isolated_error: Option<CalendarProviderError> = None;
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let watch_provider_calendar_id = provider_calendar.provider_calendar_id.clone();
+            let observed_access_role = provider_calendar.access_role.clone();
             let is_read_only = !matches!(
                 provider_calendar.access_role.as_deref(),
                 Some("owner" | "writer")
@@ -729,6 +852,7 @@ where
                 .upsert_google_calendar(key, lease_token, account_id, provider_calendar)
                 .await?;
             let calendar_id = stored_calendar.id;
+            report.team_ooo_changed |= stored_calendar.team_ooo_changed;
             calendar_ids.push(calendar_id);
             if super::models::is_system_calendar(&provider_calendar_id)
                 && stored_calendar.synced_at.is_some_and(|synced_at| {
@@ -744,12 +868,15 @@ where
                 .sync_events(
                     access_token,
                     GoogleEventSyncContext {
-                        target: super::models::GoogleCalendarTarget {
+                        target: super::models::ProviderCalendarTarget {
+                            binding: None,
+                            provider: super::models::CalendarProvider::Google,
                             owner_id: owner_id.to_string(),
                             email_link_id: key.email_link_id,
                             account_id,
                             calendar_id,
                             provider_calendar_id,
+                            observed_access_role,
                             is_read_only,
                             range: range.clone(),
                         },
@@ -758,14 +885,33 @@ where
                     },
                 )
                 .await
-            {
+                .and_then(|batch| {
+                    // Coverage is trustworthy only if every normalized event
+                    // is usable. Reject before committing any part of this
+                    // calendar so its token cannot skip an omitted event.
+                    for upsert in &batch.upserts {
+                        validate_upsert(upsert).map_err(|error| {
+                            tracing::warn!(
+                                error=?error,
+                                calendar_id=%calendar_id,
+                                ical_uid=%upsert.event.ical_uid,
+                                "rejecting incomplete normalized Google Calendar batch"
+                            );
+                            CalendarProviderError::new(
+                                CalendarProviderErrorKind::Transient,
+                                "Google Calendar returned an invalid normalized event",
+                            )
+                        })?;
+                    }
+                    Ok(batch)
+                }) {
                 Ok(batch) => batch,
                 Err(error) => {
                     // A bad or insufficient grant is account-wide, not
                     // calendar-local: surface it immediately so the coordinator
                     // prompts reauthorization rather than marking the account
                     // ready off the calendars that happened to sync.
-                    if error.kind() == GoogleProviderErrorKind::ReauthRequired {
+                    if error.kind() == CalendarProviderErrorKind::ReauthRequired {
                         return Err(rootcause::report!(error).into());
                     }
                     tracing::warn!(
@@ -774,10 +920,13 @@ where
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
                     isolated_failures.push((calendar_id, error.message().to_owned()));
+                    report.team_ooo_changed = true;
                     // A retryable failure outranks a permanent one so a total
                     // failure still surfaces as retryable.
                     last_isolated_error = Some(match last_isolated_error {
-                        Some(previous) if previous.kind() != GoogleProviderErrorKind::Permanent => {
+                        Some(previous)
+                            if previous.kind() != CalendarProviderErrorKind::Permanent =>
+                        {
                             previous
                         }
                         _ => error,
@@ -788,16 +937,7 @@ where
             any_calendar_healthy = true;
             let mut calendar_count = 0;
             for upsert in batch.upserts {
-                if let Err(error) = validate_upsert(&upsert) {
-                    tracing::warn!(
-                        error=?error,
-                        calendar_id=%calendar_id,
-                        ical_uid=%upsert.event.ical_uid,
-                        "skipping invalid normalized Google Calendar event"
-                    );
-                    continue;
-                }
-                let super::models::CalendarEventSource::Google(source) = &upsert.source;
+                let source = upsert.source.details();
                 debug_assert_eq!(source.calendar_id, calendar_id);
                 let outcome = self
                     .repository
@@ -808,6 +948,8 @@ where
                     })
                     .await?;
                 self.publish_write_outcome(&outcome);
+                report.team_ooo_changed |= outcome.team_ooo_changed;
+                report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even
@@ -836,6 +978,8 @@ where
             // A provider-side deletion reaches search only here: the row is
             // gone once the commit lands, so nothing downstream can rediscover
             // it by re-reading Postgres.
+            report.events_retired += retired.len();
+            report.team_ooo_changed |= !retired.is_empty() || cancellation_count > 0;
             self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
@@ -878,7 +1022,7 @@ where
                             })
                             .ok();
                     }
-                    Err(error) if error.kind() == GoogleProviderErrorKind::PushUnsupported => {
+                    Err(error) if error.kind() == CalendarProviderErrorKind::PushUnsupported => {
                         tracing::info!(
                             calendar_id=%calendar_id,
                             "Google Calendar does not support push for this calendar; relying on polling"
@@ -914,7 +1058,8 @@ where
         }
 
         // Record each isolated failure for the settings badge, leaving the
-        // calendar's sync state untouched so the next poll retries it.
+        // calendar's sync state untouched so the next poll retries it. This
+        // write must succeed before the account can report healthy coverage.
         for (calendar_id, message) in isolated_failures {
             self.repository
                 .record_google_calendar_sync_error(
@@ -924,15 +1069,7 @@ where
                     calendar_id,
                     &message,
                 )
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(
-                        error=?error,
-                        calendar_id=%calendar_id,
-                        "failed to record isolated Google Calendar sync error"
-                    );
-                })
-                .ok();
+                .await?;
         }
 
         // A calendar dropped from the provider's list retires its sources, so
@@ -941,6 +1078,8 @@ where
             .repository
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
+        report.events_retired += retired.len();
+        report.team_ooo_changed |= !retired.is_empty();
         self.publish_retirements(retired);
 
         Ok(())

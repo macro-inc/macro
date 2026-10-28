@@ -33,6 +33,10 @@ const channel = (
 const { canExecute } = makeRenameAction({ userId: () => ME });
 
 describe('makeRenameAction.canExecute', () => {
+  it('leaves database renaming to the native database block', () => {
+    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(false);
+  });
+
   it('allows the owner of a private channel to rename it', () => {
     expect(canExecute(channel({ channelType: 'private', ownerId: ME }))).toBe(
       true
@@ -85,10 +89,27 @@ describe('makeRenameAction.canExecute', () => {
     expect(canExecute(entity('document', { ownerId: OTHER }))).toBe(false);
   });
 
+  it('allows active agent sessions but refuses archived ones', () => {
+    expect(canExecute(entity('agent_session', { isArchived: false }))).toBe(
+      true
+    );
+    expect(canExecute(entity('agent_session', { isArchived: true }))).toBe(
+      false
+    );
+  });
+
   it('refuses channel messages, threads, email, and foreign rows', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
     expect(canExecute(entity('email'))).toBe(false);
     expect(canExecute(entity('foreign'))).toBe(false);
+  });
+
+  it('offers only what the rename mutation renames', () => {
+    expect(canExecute(entity('call'))).toBe(true);
+    expect(canExecute(entity('chat'))).toBe(true);
+    expect(canExecute(entity('calendar_event'))).toBe(false);
+    expect(canExecute(entity('initiative'))).toBe(false);
+    expect(canExecute(entity('routine'))).toBe(false);
   });
 });

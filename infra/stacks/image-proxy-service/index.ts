@@ -11,7 +11,7 @@ import { ImageProxyService } from './image-proxy-service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'image-proxy-service',
 };
 

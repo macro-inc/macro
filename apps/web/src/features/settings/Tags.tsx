@@ -1,9 +1,9 @@
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UsersIcon from '@phosphor/users-three.svg';
-import XIcon from '@phosphor/x.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import UsersIcon from '@icon/system/regular/users-three.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TagDot } from '@property/tags/TagDot';
 import {
   type EditableTag,
@@ -22,7 +22,7 @@ import { parseTagNameConflict } from '@service-properties/client';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
@@ -84,9 +84,8 @@ function TagListSection(props: {
       description={props.description}
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          class="rounded-xs"
           onClick={() => props.onCreate(props.scope)}
         >
           <PlusIcon class="size-4" />
@@ -115,49 +114,46 @@ function TagListSection(props: {
                       <div class="flex shrink-0 items-center gap-1">
                         <Show when={props.onShare}>
                           {(onShare) => (
-                            <Tooltip label="Share with team">
-                              <button
-                                type="button"
-                                aria-label={`Share ${optionLabel(option)} with team`}
-                                class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent disabled:opacity-30"
-                                disabled={
-                                  props.deleting ||
-                                  props.sharingOptionId !== undefined
-                                }
-                                onClick={() => onShare()(tag())}
+                            <Button
+                              aria-label={`Share ${optionLabel(option)} with team`}
+                              variant="ghost"
+                              size="icon-sm"
+                              tooltip="Share with team"
+                              disabled={
+                                props.deleting ||
+                                props.sharingOptionId !== undefined
+                              }
+                              onClick={() => onShare()(tag())}
+                            >
+                              <Show
+                                when={props.sharingOptionId === option.id}
+                                fallback={<UsersIcon class="size-4" />}
                               >
-                                <Show
-                                  when={props.sharingOptionId === option.id}
-                                  fallback={<UsersIcon class="size-4" />}
-                                >
-                                  <SpinnerIcon class="size-4 animate-spin" />
-                                </Show>
-                              </button>
-                            </Tooltip>
+                                <SpinnerIcon class="size-4 animate-spin" />
+                              </Show>
+                            </Button>
                           )}
                         </Show>
-                        <Tooltip label="Edit tag">
-                          <button
-                            type="button"
-                            aria-label={`Edit ${optionLabel(option)}`}
-                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent"
-                            disabled={props.deleting}
-                            onClick={() => props.onEdit(tag())}
-                          >
-                            <PencilIcon class="size-4" />
-                          </button>
-                        </Tooltip>
-                        <Tooltip label="Delete tag">
-                          <button
-                            type="button"
-                            aria-label={`Delete ${optionLabel(option)}`}
-                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-failure/10 hover:text-failure focus-visible:border focus-visible:border-failure disabled:opacity-30"
-                            disabled={props.deleting}
-                            onClick={() => props.onDelete(tag())}
-                          >
-                            <TrashIcon class="size-4" />
-                          </button>
-                        </Tooltip>
+                        <Button
+                          aria-label={`Edit ${optionLabel(option)}`}
+                          variant="ghost"
+                          size="icon-sm"
+                          tooltip="Edit tag"
+                          disabled={props.deleting}
+                          onClick={() => props.onEdit(tag())}
+                        >
+                          <PencilIcon class="size-3.5 touch:size-4" />
+                        </Button>
+                        <Button
+                          aria-label={`Delete ${optionLabel(option)}`}
+                          variant="ghost"
+                          size="icon-sm"
+                          tooltip="Delete tag"
+                          disabled={props.deleting}
+                          onClick={() => props.onDelete(tag())}
+                        >
+                          <TrashIcon class="size-3.5 touch:size-4" />
+                        </Button>
                       </div>
                     );
                   }}
@@ -194,7 +190,7 @@ function ConfirmDialog(props: {
             size="icon-sm"
             disabled={props.pending}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
             {props.title}
@@ -205,15 +201,13 @@ function ConfirmDialog(props: {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={props.pending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant="accent"
-              class="rounded-xs"
+              variant="secondary"
               disabled={props.pending}
               onClick={props.onConfirm}
             >
@@ -319,12 +313,7 @@ export function Tags() {
       title="Tags"
       description="Manage personal labels and shared team labels."
       actions={
-        <Button
-          variant="cta"
-          size="sm"
-          depth={3}
-          onClick={() => openCreate('user')}
-        >
+        <Button variant="neutral" size="sm" onClick={() => openCreate('user')}>
           <PlusIcon class="size-4" />
           New tag
         </Button>

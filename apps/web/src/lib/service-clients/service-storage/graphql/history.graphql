@@ -45,6 +45,8 @@ fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
 	fileType
 	ownerId
 	createdAt
+	updatedAt
+	viewedAt
 	subType {
 		__typename
 		... on GraphqlTaskSubType {
@@ -58,6 +60,8 @@ fragment GraphqlChatQuickAccessName on GraphqlSoupChat {
 	name
 	ownerId
 	createdAt
+	updatedAt
+	viewedAt
 }
 
 fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
@@ -65,6 +69,8 @@ fragment GraphqlProjectQuickAccessName on GraphqlSoupProject {
 	name
 	ownerId
 	createdAt
+	updatedAt
+	viewedAt
 }
 
 fragment GraphqlChannelQuickAccessFields on GraphqlSoupChannel {

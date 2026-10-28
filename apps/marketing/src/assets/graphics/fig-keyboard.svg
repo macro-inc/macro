@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="fig-keyboard" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1544 1544">
+  <defs>
+    <style>
+      /* Strokes take currentColor; weight = stroke-width (constant on screen). */
+      .line, .hidden, .guide, .plate, .tile {
+        fill: none;
+        stroke: currentColor;
+        stroke-linejoin: round;
+        stroke-width: 0.9px;
+        vector-effect: non-scaling-stroke;
+      }
+      .hidden { opacity: .5; stroke-linecap: round; } /* key bevel / occluded edges */
+      .guide  { stroke-linecap: round; opacity: .55; } /* shortcut connector lines  */
+      .dash   { stroke-dasharray: 2.5 2.5; }          /* dashed modifier            */
+      .plate  { opacity: .3; stroke-linecap: round; } /* pedestal rings             */
+      /* Faces: `.tile` = keycap tops (currentColor outline, like the rhombus edges,
+         + faint fill); `.face-lit` = rhombus body fill; `.face-shade` = darker side
+         facets. Tune the %s. */
+      .tile { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, color-mix(in srgb, var(--b0) 85%, transparent)); }
+      .face-lit, .face-shade { stroke: none; }
+      .face-lit   { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, color-mix(in srgb, var(--b0) 85%, transparent)); }
+      .face-shade { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1))  2%, color-mix(in srgb, var(--b0) 92%, transparent)); }
+    </style>
+    <!-- Connector fades: the dotted lines are solid currentColor, then a luminance
+         mask dissolves them as they reach the key tiles (white = visible, black =
+         faded). Grey plateau caps the visible opacity at ~55%. -->
+    <linearGradient id="grad-v-left" x1="0" y1="586.3" x2="0" y2="830.4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".5" stop-color="#fff"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <mask id="fade-v-left" maskUnits="userSpaceOnUse" x="0" y="0" width="1544" height="1544"><rect width="1544" height="1544" fill="url(#grad-v-left)"/></mask>
+    <!-- Fork fade runs along the iso axis: gradient vector at 60 deg from
+         horizontal (perpendicular to the 30 deg keycap ground line), so both
+         arms dissolve into their key tiles by the same isometric amount. -->
+    <linearGradient id="grad-curve" x1="1123" y1="696" x2="996" y2="917" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".45" stop-color="#fff"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <mask id="fade-curve" maskUnits="userSpaceOnUse" x="0" y="0" width="1544" height="1544"><rect width="1544" height="1544" fill="url(#grad-curve)"/></mask>
+  </defs>
+
+  <!-- Pedestal rings the keys rest on -->
+  <g id="pedestal">
+    <path class="plate dash" d="M267.6,955.2l567.1,327.5c49.7,28.9,136.9,25.3,194.4-8l281.6-162.6c57.5-33.3,63.7-83.7,14-112.2l-567.1-327.5c-49.7-28.9-136.9-25.3-194.4,8l-281.3,162.6c-57.5,33.3-63.7,83.7-14,112.2h-.3Z"/>
+    <path class="plate" d="M267.6,1027.7l567.1,327.5c49.7,28.9,136.9,25.3,194.4-8l281.6-162.6c57.5-33.3,63.7-83.7,14-112.2l-567.1-327.5c-49.7-28.9-136.9-25.3-194.4,8l-281.3,162.6c-57.5,33.3-63.7,83.7-14,112.2h-.3Z"/>
+  </g>
+
+  <!-- Left key: cap on the pedestal + floating shortcut key, linked by a fading line -->
+  <g id="key-left">
+    <g id="key-left-cap">
+      <path class="tile" d="M464.6,773l-142,82-26.2,34.5v1.8l.7,2.9,14.5,11.1,153,88.3h3.3l153-88.3,14.5-11.1.7-2.9v-1.8l-26.2-34.5-142-82h-3Z"/>
+      <path class="face-shade" d="M609.7,856.7c-37.3,21.5-75.3,43.5-112.6,65-9.1,5.2-20.4,11.8-29.4,17,0,15.9.1,36.2.1,52.1,55.9-32.3,113.4-65.7,169.4-98"/>
+      <path class="hidden" d="M601.5,857.6l-135.4,78.2-137-79.1"/>
+      <path class="hidden" d="M297,894.1l165.2,95.4"/>
+      <path class="hidden" d="M470,989.5l165.2-95.4"/>
+    </g>
+    <g id="key-left-top">
+      <path class="face-lit" d="M360.2,479.8l90.1,98,14.8,8.5h.3s14.6-8.6,14.6-8.6l90.1-98.5v-32.5s-90.1-97.8-90.1-97.8l-14.8-8.5h-.3s-14.6,8.6-14.6,8.6l-90.1,98.5c0,32.5,0,32.4,0,32.4Z"/>
+      <polygon class="face-shade" points="465.4 586.3 465.9 540.2 480.7 523.8 570.2 471.8 570.2 479.2 480 577.7 465.4 586.3"/>
+      <path class="line" d="M360.2,479.8l90.1,98,14.8,8.5h.3s14.6-8.6,14.6-8.6l90.1-98.5v-32.5s-90.1-97.8-90.1-97.8l-14.8-8.5h-.3s-14.6,8.6-14.6,8.6l-90.1,98.5c0,32.5,0,32.4,0,32.4Z"/>
+      <path class="hidden" d="M364.1,474.4l86.9,49.5,14.7,16.3,15-16.4,80.9-47.3"/>
+      <path class="hidden" d="M465.1,357.6l.6,150.2"/>
+    </g>
+    <g id="key-left-link" mask="url(#fade-v-left)">
+      <line class="guide dash" x1="465.4" y1="586.3" x2="465.4" y2="830.4"/>
+    </g>
+  </g>
+
+  <!-- Right keys: two caps + a floating shortcut key, linked by a fading line and curve -->
+  <g id="key-right">
+    <g id="key-right-cap-a">
+      <path class="tile" d="M896.7,790.9l-142,82-26.2,34.5v1.8l.7,2.9,14.5,11.1,153,88.3h3.3l153-88.3,14.5-11.1.7-2.9v-1.8l-26.2-34.5-142-82h-3Z"/>
+      <path class="face-shade" d="M1041.9,874.6c-37.3,21.5-75.3,43.5-112.6,65-9.1,5.2-20.4,11.8-29.4,17,0,15.9.1,36.2.1,52.1,55.9-32.3,113.4-65.7,169.4-98"/>
+      <path class="hidden" d="M1033.6,875.5l-135.4,78.2-137-79.1"/>
+      <path class="hidden" d="M729.1,912l165.2,95.4"/>
+      <path class="hidden" d="M902.1,1007.4l165.2-95.4"/>
+    </g>
+    <g id="key-right-cap-b">
+      <path class="tile" d="M1095.6,908.2l-142,82-26.2,34.5v1.8l.7,2.9,14.5,11.1,153,88.3h3.3l153-88.3,14.5-11.1.7-2.9v-1.8l-26.2-34.5-142-82h-3Z"/>
+      <path class="face-shade" d="M1240.8,992c-37.3,21.5-75.3,43.5-112.6,65-9.1,5.2-20.4,11.8-29.4,17,0,15.9.1,36.2.1,52.1,55.9-32.3,113.4-65.7,169.4-98"/>
+      <path class="hidden" d="M1232.5,992.9l-135.4,78.2-137-79.1"/>
+      <path class="hidden" d="M928,1029.4l165.2,95.4"/>
+      <path class="hidden" d="M1101,1124.8l165.2-95.4"/>
+    </g>
+    <g id="key-right-top">
+      <path class="face-lit" d="M891.8,291.3l90.1,98,14.8,8.5h.3s14.6-8.6,14.6-8.6l90.1-98.5v-32.5s-90.1-97.8-90.1-97.8l-14.8-8.5h-.3s-14.6,8.6-14.6,8.6l-90.1,98.5c0,32.5,0,32.4,0,32.4Z"/>
+      <polygon class="face-shade" points="997 397.7 997.6 351.6 1012.3 335.2 1101.8 283.3 1101.8 290.7 1011.7 389.1 997 397.7"/>
+      <path class="line" d="M891.8,291.3l90.1,98,14.8,8.5h.3s14.6-8.6,14.6-8.6l90.1-98.5v-32.5s-90.1-97.8-90.1-97.8l-14.8-8.5h-.3s-14.6,8.6-14.6,8.6l-90.1,98.5c0,32.5,0,32.4,0,32.4Z"/>
+      <path class="hidden" d="M895.7,285.8l86.9,49.5,14.7,16.3,15-16.4,80.9-47.3"/>
+      <path class="hidden" d="M996.7,169.1l.6,150.2"/>
+    </g>
+    <g id="key-right-link-vert">
+      <line class="guide dash" x1="997.6" y1="397.7" x2="997.6" y2="650.2"/>
+    </g>
+    <g id="key-right-link-curve" mask="url(#fade-curve)">
+      <path class="guide dash" d="M1096.3,977.5v-225.3c0-27.8-14.9-53.5-39-67.3l-125-72c-15.5-8.9-34.9,2.3-34.9,20.2v230"/>
+    </g>
+  </g>
+</svg>

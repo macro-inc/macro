@@ -69,6 +69,11 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
 const cacheWasmRetentionDays = 7;
+// How many builds of content-hashed assets stay published. A tab keeps
+// running the build it loaded until it is reloaded, and the client defers
+// that while someone is using the app, so a deploy must not be able to pull
+// a still-open build's lazily fetched chunks out from under it.
+const assetBuildRetention = 10;
 const shellQuote = (value: string): string =>
   "'" + value.split("'").join("'\\''") + "'";
 execSync('rm -rf ./output', { stdio: 'inherit' });
@@ -89,13 +94,14 @@ execSync(
 );
 
 const appArchive = new pulumi.asset.FileArchive(appArchiveOutputPath);
-new aws.s3.BucketObjectv2(
+const appArchiveObject = new aws.s3.BucketObjectv2(
   'app-archive',
   {
     bucket: webAppAssets.bucket,
     key: 'app/app-archive.zip',
     source: appArchive,
     acl: 'public-read',
+    cacheControl: 'no-store',
   },
   {
     dependsOn: [ownershipControls, publicAccessBlock],
@@ -110,12 +116,10 @@ execSync(
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
   {
-    // Source maps are intentionally public in production; the web client is open source.
-    // Cache WASM is over CloudFront's automatic-compression size limit. Keep
-    // raw bytes in dist/archive for Tauri and local preview, but exclude both
-    // raw and sidecar from generic sync. The targeted uploader stores Brotli
-    // bytes at the original .wasm key with application/wasm + Content-Encoding br.
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/upload-brotli-to-s3.sh ./output/app s3://${webAppAssets.bucket}/app public-read && aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip" --exclude "app-archive/*" --exclude "*cache_wasm_bg*.wasm" --exclude "*cache_wasm_bg*.wasm.br"`,
+    // Publish assets and their cache metadata before any entrypoint can name
+    // them. Source maps remain public; the publisher keeps the special Brotli
+    // WASM upload and never deletes a still-open build's assets.
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/publish-web-assets.sh assets ./output/app s3://${webAppAssets.bucket}/app`,
     triggers: [Date.now()],
   },
   {
@@ -124,34 +128,16 @@ const syncAssetsCommand = new command.local.Command(
   }
 );
 
-// Using the bucket ID we will now update the index.html object metadata to include correct no-store header to disable caching
-// Use randomValue as part of the command so it's considered new on every deployment.
-const updateIndexHtmlObjectMetadataCommand = webAppAssets.id.apply(
-  (bucketName) => {
-    const object = `s3://${bucketName}/app/index.html`;
-    return pulumi.interpolate`aws s3 cp ${object} ${object} --metadata-directive REPLACE --content-type "text/html" --cache-control "no-store" --acl public-read && echo "${Date.now()}"`;
-  }
-);
-
-// Run the command to update the index.html object metadata
-const indexHtmlObjectMetadataCommand = new command.local.Command(
+// Keep the existing resource identity, but publish entrypoint bytes with their
+// final headers in one operation instead of publishing then patching metadata.
+const publishEntrypointsCommand = new command.local.Command(
   'index-html-object-metadata-command',
   {
-    create: updateIndexHtmlObjectMetadataCommand,
-  },
-  { dependsOn: [webAppAssets, syncAssetsCommand], replaceOnChanges: ['*'] }
-);
-
-// Prune only after the current WASM, generic assets, index content, and index
-// metadata have all published. Any earlier failure preserves all prior keys.
-new command.local.Command(
-  'prune-old-cache-wasm-command',
-  {
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/publish-web-assets.sh entrypoints ./output/app s3://${webAppAssets.bucket}/app`,
     triggers: [Date.now()],
   },
   {
-    dependsOn: [indexHtmlObjectMetadataCommand],
+    dependsOn: [webAppAssets, syncAssetsCommand, appArchiveObject],
     replaceOnChanges: ['*'],
   }
 );
@@ -185,21 +171,51 @@ const encodingLambdaEdgeFunction = new aws.lambda.Function(
 const encodingLambdaVersion: pulumi.Output<String> =
   encodingLambdaEdgeFunction.version.apply((v: string) => v);
 
-const appRouteLambda = new aws.lambda.Function('app-route-lambda', {
-  code: new pulumi.asset.FileArchive('./appRouteLambda'),
-  role: lambdaRole.arn,
-  handler: 'index.handler',
-  runtime: Runtime.NodeJS22dX,
-  name: `app-route-lambda-${stack}`,
-  // do not throttle prod
-  reservedConcurrentExecutions: stack === 'prod' ? undefined : 100,
-  publish: true,
-  environment: {
-    variables: {
-      PREVIEW_URL: `https://${stack === 'dev' ? 'dev-' : ''}gateway.macro.com/dss/documents/preview`,
+const appRouteLambda = new aws.lambda.Function(
+  'app-route-lambda',
+  {
+    code: new pulumi.asset.FileArchive('./appRouteLambda'),
+    role: lambdaRole.arn,
+    handler: 'index.handler',
+    runtime: Runtime.NodeJS22dX,
+    name: `app-route-lambda-${stack}`,
+    // do not throttle prod
+    reservedConcurrentExecutions: stack === 'prod' ? undefined : 100,
+    publish: true,
+    environment: {
+      variables: {
+        PREVIEW_URL: `https://${stack === 'dev' ? 'dev-' : ''}gateway.macro.com/dss/documents/preview`,
+      },
     },
   },
-});
+  { dependsOn: [publishEntrypointsCommand] }
+);
+
+// Prune only after every entrypoint, including Lambda-rendered HTML, has
+// published successfully. Failure must leave the preceding build reachable.
+const pruneOldCacheWasmCommand = new command.local.Command(
+  'prune-old-cache-wasm-command',
+  {
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
+    triggers: [Date.now()],
+  },
+  {
+    dependsOn: [publishEntrypointsCommand, appRouteLambda],
+    replaceOnChanges: ['*'],
+  }
+);
+
+new command.local.Command(
+  'retain-recent-builds-command',
+  {
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/retain-recent-builds.sh ./output/app s3://${webAppAssets.bucket}/app ${assetBuildRetention}`,
+    triggers: [Date.now()],
+  },
+  {
+    dependsOn: [pruneOldCacheWasmCommand],
+    replaceOnChanges: ['*'],
+  }
+);
 
 const appRouteFunctionUrl = new aws.lambda.FunctionUrl('app-route-lambda-url', {
   functionName: appRouteLambda.name,

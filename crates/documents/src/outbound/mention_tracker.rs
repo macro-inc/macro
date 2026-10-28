@@ -26,7 +26,7 @@ impl DocumentMentionTrackingPort for LexicalCommsMentionTracker {
     async fn track_document_mentions(
         &self,
         document_id: &str,
-        user_id: &MacroUserIdStr<'static>,
+        user_id: Option<&MacroUserIdStr<'static>>,
         markdown: &str,
     ) -> anyhow::Result<()> {
         if markdown.trim().is_empty() {
@@ -52,7 +52,7 @@ impl DocumentMentionTrackingPort for LexicalCommsMentionTracker {
             &self.db,
             "document",
             document_id,
-            Some(user_id.as_ref()),
+            user_id.map(|user| user.as_ref()),
             &mentions,
         )
         .await?;

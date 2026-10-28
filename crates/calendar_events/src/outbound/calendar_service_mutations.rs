@@ -20,13 +20,14 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::domain::{
+    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
     models::{
-        AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch,
-        VisibleCalendar,
+        AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
+        CalendarEventPatch, VisibleCalendar,
     },
     ports::{
-        CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
-        CalendarUpdateScope,
+        CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
+        CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope,
     },
 };
 
@@ -68,12 +69,14 @@ impl CalendarServiceMutations {
             .header(INTERNAL_MACRO_USER_ID_HEADER, requester_id)
     }
 
-    async fn send(
+    /// Send the request, keeping an error response's status and body for
+    /// the caller to classify.
+    async fn send_raw(
         &self,
         request: reqwest::RequestBuilder,
-    ) -> Result<reqwest::Response, CalendarMutationError> {
+    ) -> Result<reqwest::Response, ResponseFailure> {
         let response = request.send().await.map_err(|error| {
-            CalendarMutationError::Retryable(format!(
+            ResponseFailure::Transport(format!(
                 "calendar mutation request failed to reach the calendar service: {error}"
             ))
         })?;
@@ -81,23 +84,44 @@ impl CalendarServiceMutations {
         if status.is_success() {
             return Ok(response);
         }
-        Err(error_from_response(status, response.text().await.ok()))
+        Err(ResponseFailure::Status(status, response.text().await.ok()))
+    }
+
+    async fn send(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response, CalendarMutationError> {
+        self.send_raw(request)
+            .await
+            .map_err(|failure| match failure {
+                ResponseFailure::Transport(message) => CalendarMutationError::Retryable(message),
+                ResponseFailure::Status(status, body) => error_from_response(status, body),
+            })
     }
 
     async fn event_from(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<CalendarEvent, CalendarMutationError> {
-        self.send(request)
-            .await?
-            .json::<CalendarEvent>()
-            .await
-            .map_err(|error| {
-                CalendarMutationError::PersistFailed(format!(
-                    "calendar mutation succeeded but its echo could not be parsed: {error}"
-                ))
-            })
+        parse_event(self.send(request).await?).await
     }
+}
+
+/// A request that produced no successful response.
+enum ResponseFailure {
+    /// The calendar service could not be reached.
+    Transport(String),
+    /// The calendar service answered with an error status and body.
+    Status(StatusCode, Option<String>),
+}
+
+/// Parse the event echo of a successful mutation response.
+async fn parse_event(response: reqwest::Response) -> Result<CalendarEvent, CalendarMutationError> {
+    response.json::<CalendarEvent>().await.map_err(|error| {
+        CalendarMutationError::PersistFailed(format!(
+            "calendar mutation succeeded but its echo could not be parsed: {error}"
+        ))
+    })
 }
 
 /// Wire body for the calendars listing.
@@ -133,6 +157,14 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         "read_only" => CalendarMutationError::ReadOnly,
         "no_writable_calendar" => CalendarMutationError::NoWritableCalendar,
         "not_attendee" => CalendarMutationError::NotAttendee,
+        "not_organizer" => CalendarMutationError::NotOrganizer,
+        "guests_cannot_invite" => CalendarMutationError::GuestsCannotInvite,
+        "guest_list_hidden" => CalendarMutationError::GuestListHidden,
+        "guests_cannot_modify" => CalendarMutationError::GuestsCannotModify,
+        "already_on_calendar" => CalendarMutationError::AlreadyOnCalendar,
+        "join_request_open" => CalendarMutationError::JoinRequestOpen,
+        "copy_refused" => CalendarMutationError::CopyRefused(error.message),
+        "snapshot" => CalendarMutationError::Snapshot,
         "invalid_input" => CalendarMutationError::InvalidInput(error.message),
         "reauth_required" => CalendarMutationError::ReauthRequired(error.message),
         "provider_rejected" => CalendarMutationError::ProviderRejected(error.message),
@@ -157,11 +189,30 @@ fn fallback_error(status: StatusCode, message: String) -> CalendarMutationError 
     }
 }
 
+/// Map an error response of a create carrying a Macro call. The calendar
+/// service reports a meeting it could not mint under its own code; every
+/// other failure is the calendar write's.
+fn macro_call_error_from_response(
+    status: StatusCode,
+    body: Option<String>,
+) -> CreateEventWithMacroCallError {
+    let parsed = body
+        .as_deref()
+        .and_then(|body| serde_json::from_str::<MutationErrorWire>(body).ok());
+    match parsed {
+        Some(error) if error.code == "macro_call_failed" => {
+            CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(error.message))
+        }
+        _ => CreateEventWithMacroCallError::Calendar(error_from_response(status, body)),
+    }
+}
+
 /// Wire body for event creation, matching `CreateCalendarEventRequest`.
 fn create_body(
     email_link_id: Option<Uuid>,
     calendar_id: Option<Uuid>,
     draft: &CalendarEventDraft,
+    macro_call: bool,
 ) -> serde_json::Value {
     serde_json::json!({
         "emailLinkId": email_link_id,
@@ -177,6 +228,9 @@ fn create_body(
         "reminders": draft.reminders,
         "conference": draft.conference,
         "outOfOffice": draft.out_of_office,
+        "guestPolicy": draft.guest_policy,
+        "idempotencyKey": draft.idempotency_key,
+        "macroCall": macro_call,
     })
 }
 
@@ -208,14 +262,13 @@ fn update_body(
         "reminders": patch.reminders,
         "conference": patch.conference,
         "outOfOffice": patch.out_of_office,
+        "guestPolicy": patch.guest_policy,
         "scope": scope_name,
         "recurrenceId": recurrence_id,
     })
 }
 
-fn attendees_body(
-    attendees: &[crate::domain::models::CalendarAttendeeInput],
-) -> Vec<serde_json::Value> {
+fn attendees_body(attendees: &[CalendarAttendeeInput]) -> Vec<serde_json::Value> {
     attendees
         .iter()
         .map(|attendee| {
@@ -249,24 +302,83 @@ fn delete_query(
     query
 }
 
+/// Wire body adding guests, matching `InviteCalendarEventGuestsRequest`.
+fn invite_body(
+    calendar_id: Option<Uuid>,
+    guests: &[CalendarAttendeeInput],
+    scope: &CalendarUpdateScope,
+) -> serde_json::Value {
+    let (scope_name, recurrence_id) = match scope {
+        CalendarUpdateScope::All => ("all", None),
+        CalendarUpdateScope::ThisEvent { recurrence_id } => {
+            ("this_event", Some(recurrence_id.as_str()))
+        }
+    };
+    let guests: Vec<serde_json::Value> = guests
+        .iter()
+        .map(|guest| {
+            serde_json::json!({
+                "email": guest.email,
+                "optional": guest.is_optional,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "calendarId": calendar_id,
+        "guests": guests,
+        "scope": scope_name,
+        "recurrenceId": recurrence_id,
+    })
+}
+
 /// Wire body for an RSVP, matching `RsvpCalendarEventRequest`.
 fn rsvp_body(
     calendar_id: Option<Uuid>,
     response: AttendeeResponseStatus,
     scope: &CalendarRsvpScope,
+    responding_email: Option<&str>,
 ) -> serde_json::Value {
     match scope {
         CalendarRsvpScope::All => serde_json::json!({
             "calendarId": calendar_id,
             "response": response,
+            "respondingEmail": responding_email,
             "scope": "all",
         }),
         CalendarRsvpScope::ThisEvent { recurrence_id } => serde_json::json!({
             "calendarId": calendar_id,
             "response": response,
+            "respondingEmail": responding_email,
             "scope": "this_event",
             "recurrenceId": recurrence_id,
         }),
+    }
+}
+
+impl CalendarMacroCallService for CalendarServiceMutations {
+    #[tracing::instrument(skip(self, requester_id, draft), err)]
+    async fn create_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> Result<CalendarEvent, CreateEventWithMacroCallError> {
+        let response = self
+            .send_raw(
+                self.request(reqwest::Method::POST, "/events", requester_id)
+                    .json(&create_body(email_link_id, calendar_id, &draft, true)),
+            )
+            .await
+            .map_err(|failure| match failure {
+                ResponseFailure::Transport(message) => {
+                    CalendarMutationError::Retryable(message).into()
+                }
+                ResponseFailure::Status(status, body) => {
+                    macro_call_error_from_response(status, body)
+                }
+            })?;
+        parse_event(response).await.map_err(Into::into)
     }
 }
 
@@ -281,7 +393,7 @@ impl CalendarMutationService for CalendarServiceMutations {
     ) -> Result<CalendarEvent, CalendarMutationError> {
         self.event_from(
             self.request(reqwest::Method::POST, "/events", requester_id)
-                .json(&create_body(email_link_id, calendar_id, &draft)),
+                .json(&create_body(email_link_id, calendar_id, &draft, false)),
         )
         .await
     }
@@ -343,7 +455,7 @@ impl CalendarMutationService for CalendarServiceMutations {
         .map(|_| ())
     }
 
-    #[tracing::instrument(skip(self, requester_id), err)]
+    #[tracing::instrument(skip(self, requester_id, responding_email), err)]
     async fn respond_to_event(
         &self,
         requester_id: &str,
@@ -351,6 +463,7 @@ impl CalendarMutationService for CalendarServiceMutations {
         calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        responding_email: Option<String>,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         self.event_from(
             self.request(
@@ -358,9 +471,79 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}/rsvp"),
                 requester_id,
             )
-            .json(&rsvp_body(calendar_id, response, &scope)),
+            .json(&rsvp_body(
+                calendar_id,
+                response,
+                &scope,
+                responding_email.as_deref(),
+            )),
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id, guests), err)]
+    async fn invite_guests(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.event_from(
+            self.request(
+                reqwest::Method::POST,
+                &format!("/events/{event_id}/guests"),
+                requester_id,
+            )
+            .json(&invite_body(calendar_id, &guests, &scope)),
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn copy_shared_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.event_from(
+            self.request(
+                reqwest::Method::POST,
+                &format!("/events/{event_id}/copy"),
+                requester_id,
+            )
+            .json(&serde_json::json!({ "calendarId": calendar_id })),
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn respond_to_join_request(
+        &self,
+        requester_id: &str,
+        request_id: Uuid,
+        accept: bool,
+    ) -> Result<crate::domain::join_requests::CalendarJoinRequest, CalendarMutationError> {
+        self.send(
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/join-requests/{request_id}"),
+                requester_id,
+            )
+            .json(&serde_json::json!({
+                "decision": if accept { "accept" } else { "decline" },
+            })),
+        )
+        .await?
+        .json()
+        .await
+        .map_err(|error| {
+            CalendarMutationError::PersistFailed(format!(
+                "the join request was answered but its response could not be parsed: {error}"
+            ))
+        })
     }
 
     /// Not reachable over this transport. Disconnecting a calendar is part of

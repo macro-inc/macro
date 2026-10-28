@@ -18,8 +18,9 @@ use crate::domain::models::request::{
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
+    DeviceEndpoint, DisabledNotificationType, MobilePushRecipients, Notification,
+    NotificationResult, NotificationStatusPayload, NotificationTypeName, PatchDelete,
+    UserNotificationRow,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -133,6 +134,7 @@ pub trait NotificationReader: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Unregister the user's device from push notifications.
@@ -233,35 +235,58 @@ where
             .await
             .context(SendNotificationError::Other)?;
 
-        if request.req.recipient_ids.is_empty() {
-            return Ok(None);
-        }
-
-        let (queue_messages, apns_collapse_key) = self
-            .build_queue_message(notification_id, &mut request)
-            .await?;
-
-        let notified_recipients = request.req.recipient_ids.clone();
+        let apns_collapse_key = request
+            .build_apns
+            .as_ref()
+            .map(|apns| apns.attr.collapse_key.as_str());
 
         // Create notification in DB (with collapse key if APNS was built)
         let created = self
             .repository
             .create_notification(
-                request.req,
+                request.req.clone(),
                 notification_id,
                 self.service_name,
-                apns_collapse_key.as_deref(),
+                apns_collapse_key,
             )
             .await
             .context(SendNotificationError::Other)?;
 
-        // If notification already exists (idempotent), return early
+        // Completed publications and withdrawn notifications stay idempotent.
         let Some(n) = created else {
+            if request.req.recipient_ids.is_empty() {
+                return Ok(None);
+            }
             return Ok(Some(NotificationResult {
                 notification_id,
                 notified_recipients: HashSet::new(),
             }));
         };
+
+        // Do not alert again after a recipient has already acted on the stored notification.
+        let n: Vec<_> = n
+            .into_iter()
+            .filter(|row| {
+                row.state == crate::domain::models::NotificationState::Unseen
+                    && row.deleted_at.is_none()
+            })
+            .collect();
+        if n.is_empty() {
+            self.repository
+                .complete_notification_publication(notification_id)
+                .await
+                .context(SendNotificationError::Other)?;
+            return Ok(Some(NotificationResult {
+                notification_id,
+                notified_recipients: HashSet::new(),
+            }));
+        }
+        // A retry uses the original recipients, including when current filters changed.
+        request.req.recipient_ids = n.iter().map(|row| row.owner_id.clone()).collect();
+        let notified_recipients = request.req.recipient_ids.clone();
+        let (queue_messages, _) = self
+            .build_queue_message(notification_id, &mut request)
+            .await?;
 
         // get the timestamp info back out of the db created values
         let first = n
@@ -283,6 +308,11 @@ where
                     .map(|msg| msg.with_timestamps(created_at, updated_at))
                     .collect(),
             )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        self.repository
+            .complete_notification_publication(notification_id)
             .await
             .context(SendNotificationError::Other)?;
 
@@ -347,7 +377,7 @@ where
             ));
         }
 
-        // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
+        // Mobile push: one message with all platforms grouped by recipient.
         if let Some(build_apns) = notification.build_apns.take() {
             let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
             let device_endpoints = self
@@ -356,38 +386,17 @@ where
                 .await
                 .context(SendNotificationError::Other)?;
 
-            let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
-                .into_iter()
-                .filter_map(|(user_id, endpoints)| {
-                    let ios: Vec<String> = endpoints
-                        .into_iter()
-                        .filter_map(|e| match e {
-                            DeviceEndpoint::Ios(arn) => Some(arn),
-                            DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
-                        })
-                        .collect();
-                    if ios.is_empty() {
-                        None
-                    } else {
-                        Some((
-                            user_id,
-                            UserApnsEndpoints {
-                                endpoints: ios,
-                                digest_state: None,
-                            },
-                        ))
-                    }
-                })
-                .collect();
+            let mobile_endpoints =
+                group_mobile_endpoints(device_endpoints, &notification.mobile_push_exclusions);
 
-            if !ios_endpoints.is_empty() {
+            if !mobile_endpoints.is_empty() {
                 let BuildApnsOutput { notif, attr } = build_apns;
                 apns_collapse_key = Some(attr.collapse_key.clone());
                 messages.push(QueueMessage::new_from_apns(
                     APNSTargets {
                         notif,
                         attributes: attr,
-                        ios_device_endpoints: ios_endpoints,
+                        ios_device_endpoints: mobile_endpoints,
                     },
                     typename,
                 ));
@@ -554,31 +563,10 @@ where
             .get_device_endpoints(&[req.user_id.copied()])
             .await?;
 
-        let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
-            .into_iter()
-            .filter_map(|(user_id, endpoints)| {
-                let ios: Vec<String> = endpoints
-                    .into_iter()
-                    .filter_map(|e| match e {
-                        DeviceEndpoint::Ios(arn) => Some(arn),
-                        DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
-                    })
-                    .collect();
-                if ios.is_empty() {
-                    None
-                } else {
-                    Some((
-                        user_id,
-                        UserApnsEndpoints {
-                            endpoints: ios,
-                            digest_state: None,
-                        },
-                    ))
-                }
-            })
-            .collect();
+        let mobile_endpoints =
+            group_mobile_endpoints(device_endpoints, &MobilePushRecipients::default());
 
-        if ios_endpoints.is_empty() {
+        if mobile_endpoints.is_empty() {
             return deserialize_updated_notifications(changed);
         }
 
@@ -612,7 +600,7 @@ where
                                 push_type: PushType::Background,
                                 collapse_key,
                             },
-                            ios_device_endpoints: ios_endpoints.clone(),
+                            ios_device_endpoints: mobile_endpoints.clone(),
                         },
                         &typename,
                     )
@@ -623,6 +611,48 @@ where
 
         deserialize_updated_notifications(changed)
     }
+}
+
+/// Group a user's registered devices into push targets, dropping users with
+/// no push-capable device. VoIP endpoints are delivered separately.
+fn group_mobile_endpoints(
+    device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
+    exclusions: &MobilePushRecipients,
+) -> HashMap<MacroUserIdStr<'static>, UserApnsEndpoints> {
+    device_endpoints
+        .into_iter()
+        .filter_map(|(user_id, endpoints)| {
+            let mut ios = Vec::new();
+            let mut android = Vec::new();
+            for endpoint in endpoints {
+                match endpoint {
+                    DeviceEndpoint::Ios(arn) => ios.push(arn),
+                    DeviceEndpoint::Android(arn) => android.push(arn),
+                    DeviceEndpoint::AndroidNativeCall(arn)
+                        if !exclusions.android.contains(&user_id) =>
+                    {
+                        android.push(arn)
+                    }
+                    DeviceEndpoint::AndroidNativeCall(_) => {}
+                    DeviceEndpoint::IosVoip(_) => {}
+                }
+            }
+            if exclusions.ios.contains(&user_id) {
+                ios.clear();
+            }
+            if ios.is_empty() && android.is_empty() {
+                return None;
+            }
+            Some((
+                user_id,
+                UserApnsEndpoints {
+                    endpoints: ios,
+                    android_endpoints: android,
+                    digest_state: None,
+                },
+            ))
+        })
+        .collect()
 }
 
 /// Deserialize updated rows from their persisted event-tagged metadata representation.
@@ -827,6 +857,7 @@ where
         user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         let platform_arn: &str = match device_type {
             DeviceType::Ios => self.platform_config.apns_platform_arn.as_str(),
@@ -876,7 +907,13 @@ where
         };
 
         self.repository
-            .upsert_device(user_id, device_token, &endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                &endpoint,
+                device_type,
+                native_call_capable && matches!(device_type, DeviceType::Android),
+            )
             .await?;
 
         // A device token must map to a single registration. When SNS minted a

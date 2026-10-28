@@ -11,6 +11,31 @@ export type ActionConfiguration = {
     enabled: boolean;
     kind: ActionKind;
     name: string;
+    /**
+     * Omitted by clients that predate the setting; runs then start unlisted.
+     */
+    run_visibility?: RunVisibility;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+};
+
+/**
+ * Canonical configuration replacement. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
+ * it too, so clients that predate the setting do not reset it.
+ */
+export type ActionConfigurationUpdate = {
+    /**
+     * Still sent by clients deployed before the activation endpoint.
+     *
+     * @deprecated
+     */
+    enabled?: boolean | null;
+    kind: ActionKind;
+    name: string;
+    run_visibility?: null | RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -24,8 +49,8 @@ export type ActionExecutionRecord = {
     id?: string | null;
     is_success: boolean;
     /**
-     * ID of the primary resource produced by this run (e.g. a chat thread).
-     * Opaque to the scheduler; the UI interprets it based on the action kind.
+     * ID of the primary resource produced by this run. Its type is recorded in
+     * `result`, independently of the routine's current configuration.
      */
     resource_id?: string | null;
     result: {
@@ -37,7 +62,7 @@ export type ActionExecutionRecord = {
 export type ActionKind = 'Agent';
 
 /**
- * Exactly one trigger per action. Existing cron validation is reused.
+ * A routine may run on one trigger or any of several schedules and Macro events.
  */
 export type ActionTrigger = {
     schedule: Schedule;
@@ -46,12 +71,73 @@ export type ActionTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    triggers: RoutineTriggers;
+    type: 'multiple';
+};
+
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
 };
 
 export type AgentTask = {
-    model: string;
+    agent?: null | AgentTaskAgent;
+    /**
+     * Apps the routine requires on top of the agent's own. The owner must
+     * have each one connected to save the routine and for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
+    model?: null | RoutineModelId;
     prompt: string;
     user_prompt: string;
+};
+
+/**
+ * A persona selection, independent of its runtime and current default model.
+ */
+export type AgentTaskAgent = {
+    bot_id: string;
+};
+
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Why an event-triggered run was skipped before it started.
+ */
+export type ConditionResult = {
+    /**
+     * The classifier's probability, from 0 to 1, that the answer was yes.
+     */
+    probability: number;
+    status: 'not_met';
+} | {
+    status: 'unavailable';
 };
 
 /**
@@ -67,9 +153,15 @@ export type EmptyResponse = {
 };
 
 /**
- * An event name AND an entity ID must match within the same filter.
+ * An event name AND an entity ID must match within the same filter. A
+ * condition further requires the event's content to answer it with yes.
  */
 export type EventFilter = {
+    /**
+     * Yes/no question about the triggering content, e.g. "Is this email an
+     * invoice?". The routine runs only when the answer is yes.
+     */
+    condition?: string | null;
     events: Array<EventName>;
     ids?: Array<string> | null;
 };
@@ -83,11 +175,36 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended';
+
+/**
+ * Transcript resource created by a run. Never infer this from current task configuration.
+ */
+export type ExecutionResource = {
+    id: string;
+    type: ExecutionResourceType;
+};
+
+/**
+ * Closed set of transcript destinations understood by routine clients.
+ */
+export type ExecutionResourceType = 'chat' | 'agent';
+
+/**
+ * Version 1 execution metadata stored in the existing JSON result column.
+ * Null/string column values predate this envelope and refer to legacy chats.
+ */
+export type ExecutionResult = {
+    condition?: null | ConditionResult;
+    error?: string | null;
+    resource?: null | ExecutionResource;
+    version: number;
+};
 
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
+    resource?: null | ExecutionResource;
 };
 
 /**
@@ -103,6 +220,63 @@ export type LegacyActionConfiguration = {
     };
     timezone: string;
 };
+
+/**
+ * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
+ */
+export type RoutineModelId = string;
+
+/**
+ * A shared routine's snapshot, readable by any signed-in user with its ID.
+ */
+export type RoutineTemplate = {
+    /**
+     * Routines activated from this template, including stopped ones.
+     */
+    active_count: number;
+    /**
+     * Who shared it: the source routine's owner.
+     */
+    author: string;
+    created_at: string;
+    description: string;
+    /**
+     * The routine it was shared from.
+     */
+    id: string;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+    updated_at: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * An individual trigger in a routine's trigger list.
+ */
+export type RoutineTrigger = {
+    schedule: Schedule;
+    timezone: string;
+    type: 'cron';
+} | {
+    filters: EventFilters;
+    type: 'events';
+};
+
+/**
+ * Bounded schedules and one combined set of event filters.
+ */
+export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * Whether a routine's runs are listed in Home and the Agents list. Routines
+ * that run often would bury the owner's own work, so runs start unlisted;
+ * either way they stay in the routine's history. The string form is the
+ * `scheduled_action.run_visibility` column's.
+ */
+export type RunVisibility = 'listed' | 'unlisted';
 
 export type Schedule = string;
 
@@ -136,9 +310,17 @@ export type ScheduledAction = {
      * rather than failing to parse.
      */
     owner: string;
+    /**
+     * Whether the action's runs are listed in Home and the Agents list.
+     */
+    run_visibility: RunVisibility;
     task: {
         [key: string]: unknown;
     };
+    /**
+     * The shared template this routine was activated from, if any.
+     */
+    template_id?: string | null;
     trigger: ActionTrigger;
     updated_at: string;
 };
@@ -164,29 +346,72 @@ export type ScheduledActionResponse = ScheduledAction & {
 
 /**
  * Live status update for a scheduled-action run, broadcast via the connection
- * gateway to the owner. Clients use the `chat_id` to navigate to the run
- * transcript and the variant tag to toggle the running indicator.
+ * gateway to the owner. Clients use the typed resource to navigate to the run
+ * transcript and the variant tag to toggle the running indicator. `chat_id`
+ * remains populated only for chat runs, for older clients.
  *
  * Serialized with a `type` tag (`started`/`stopped`) and delivered over the
  * single `scheduled_action_update` message type on the gateway.
  */
 export type ScheduledActionUpdate = {
     action_id: string;
-    chat_id: string;
+    chat_id?: string | null;
     owner: string;
+    resource?: null | ExecutionResource;
     type: 'started';
 } | {
     action_id: string;
-    chat_id: string;
+    chat_id?: string | null;
     is_success: boolean;
     owner: string;
+    resource?: null | ExecutionResource;
     type: 'stopped';
+};
+
+export type SetScheduledActionEnabled = {
+    enabled: boolean;
+};
+
+/**
+ * What the owner supplies when sharing; the rest is snapshotted from the routine.
+ */
+export type ShareRoutineTemplate = {
+    description: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * A user-specific part of a shared routine.
+ */
+export type TemplateVariable = {
+    fill: VariableFill;
+    id: string;
+    kind: 'user';
+    label: string;
+} | {
+    /**
+     * The mention's block name, such as `channel` or `md`.
+     */
+    block_name: string;
+    fill: VariableFill;
+    id: string;
+    kind: 'item';
+    label: string;
+} | {
+    fill: VariableFill;
+    kind: 'time_zone';
+    timezone: string;
 };
 
 /**
  * Full replacement of client configuration, not of server-owned action state.
  */
-export type UpdateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
+export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+
+/**
+ * How a variable is filled when someone activates the template.
+ */
+export type VariableFill = 'activator' | 'shared' | 'choice';
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -240,6 +465,7 @@ export type CreateScheduledActionData = {
 export type CreateScheduledActionErrors = {
     400: string;
     401: string;
+    403: string;
     500: string;
 };
 
@@ -277,6 +503,32 @@ export type DeleteScheduledActionResponses = {
 
 export type DeleteScheduledActionResponse = DeleteScheduledActionResponses[keyof DeleteScheduledActionResponses];
 
+export type GetScheduledActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}';
+};
+
+export type GetScheduledActionErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionError = GetScheduledActionErrors[keyof GetScheduledActionErrors];
+
+export type GetScheduledActionResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
+
 export type UpdateScheduledActionData = {
     body: UpdateScheduledAction;
     path: {
@@ -308,6 +560,37 @@ export type UpdateScheduledActionResponses = {
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
 
+export type SetScheduledActionEnabledData = {
+    body: SetScheduledActionEnabled;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/enabled';
+};
+
+export type SetScheduledActionEnabledErrors = {
+    400: string;
+    401: string;
+    404: string;
+    /**
+     * Configuration changed or execution is active
+     */
+    409: string;
+    500: string;
+};
+
+export type SetScheduledActionEnabledError = SetScheduledActionEnabledErrors[keyof SetScheduledActionEnabledErrors];
+
+export type SetScheduledActionEnabledResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type SetScheduledActionEnabledResponse = SetScheduledActionEnabledResponses[keyof SetScheduledActionEnabledResponses];
+
 export type ExecuteScheduledActionNowData = {
     body?: never;
     path: {
@@ -323,12 +606,20 @@ export type ExecuteScheduledActionNowData = {
 export type ExecuteScheduledActionNowErrors = {
     400: string;
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     404: string;
     /**
      * Action is already running
      */
     409: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ExecuteScheduledActionNowError = ExecuteScheduledActionNowErrors[keyof ExecuteScheduledActionNowErrors];
@@ -364,3 +655,116 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type UnshareScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type UnshareScheduledActionTemplateErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type UnshareScheduledActionTemplateError = UnshareScheduledActionTemplateErrors[keyof UnshareScheduledActionTemplateErrors];
+
+export type UnshareScheduledActionTemplateResponses = {
+    204: void;
+};
+
+export type UnshareScheduledActionTemplateResponse = UnshareScheduledActionTemplateResponses[keyof UnshareScheduledActionTemplateResponses];
+
+export type GetScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type GetScheduledActionTemplateErrors = {
+    401: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionTemplateError = GetScheduledActionTemplateErrors[keyof GetScheduledActionTemplateErrors];
+
+export type GetScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type GetScheduledActionTemplateResponse = GetScheduledActionTemplateResponses[keyof GetScheduledActionTemplateResponses];
+
+export type ShareScheduledActionTemplateData = {
+    body: ShareRoutineTemplate;
+    path: {
+        /**
+         * ID of the routine to share
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type ShareScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ShareScheduledActionTemplateError = ShareScheduledActionTemplateErrors[keyof ShareScheduledActionTemplateErrors];
+
+export type ShareScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
+
+export type ActivateScheduledActionTemplateData = {
+    body: CreateScheduledAction;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template/activate';
+};
+
+export type ActivateScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    403: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type ActivateScheduledActionTemplateError = ActivateScheduledActionTemplateErrors[keyof ActivateScheduledActionTemplateErrors];
+
+export type ActivateScheduledActionTemplateResponses = {
+    201: ScheduledActionResponse;
+};
+
+export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];

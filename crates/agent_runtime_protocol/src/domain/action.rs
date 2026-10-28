@@ -23,6 +23,9 @@ mod test;
 /// ACP session config option used to select the agent's model.
 pub const MODEL_CONFIG_ID: &str = "model";
 
+/// Marks server-added execution context that runtimes read but transcripts omit.
+pub const INVOCATION_CONTEXT_META: &str = "macro/invocation-context";
+
 /// Identifies one accepted [`AgentAction`] end to end: returned by the
 /// control endpoint, written as the JSON-RPC request id on the action's wire
 /// frame, and read back off that frame as `request_id` on the folded message
@@ -176,6 +179,10 @@ impl PromptAttachment {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
+    /// Trusted system events, authored only by the harness.
+    #[cfg_attr(feature = "utoipa", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notifications: Option<crate::domain::notification::NotificationInput>,
     /// Files the prompt refers to, in the order the user attached them.
     /// Delivered after the text as one `resource_link` block each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -205,6 +212,37 @@ impl AgentPromptAction {
 pub struct AgentSetModelAction {
     /// The model slug the agent should switch to.
     pub model: String,
+}
+
+/// Ask the agent to change one advertised select-style session setting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSetConfigOptionAction {
+    /// Opaque ACP config id advertised by the agent.
+    pub config_id: String,
+    /// Opaque select value advertised for that config option.
+    pub value: String,
+}
+
+impl AgentSetConfigOptionAction {
+    /// Read a non-model select change back from its ACP request.
+    pub fn from_runtime(message: &ToRuntimeMessage) -> Option<(SessionId, Self)> {
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
+            return None;
+        };
+        let ClientRequest::SetSessionConfigOptionRequest(request) =
+            ClientRequest::parse_message(&request.method, &request.params).ok()?
+        else {
+            return None;
+        };
+        let config_id = request.config_id.to_string();
+        if config_id == MODEL_CONFIG_ID {
+            return None;
+        }
+        let value = request.value.as_value_id()?.to_string();
+        Some((request.session_id, Self { config_id, value }))
+    }
 }
 
 impl AgentSetModelAction {
@@ -400,6 +438,8 @@ pub enum AgentAction {
     Prompt(AgentPromptAction),
     /// Switch the model the agent runs on.
     SetModel(AgentSetModelAction),
+    /// Change an agent-advertised select-style session setting.
+    SetConfigOption(AgentSetConfigOptionAction),
     /// Compact the agent's current context.
     Compact,
     /// Interrupt whatever the agent is doing.
@@ -429,14 +469,35 @@ impl AgentAction {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
             attachments,
+            notifications: None,
             name_source: None,
         })
+    }
+
+    /// Start a system turn from a leased batch of events.
+    pub fn notification(notifications: Vec<crate::domain::notification::Notification>) -> Self {
+        let mut action = Self::prompt("");
+        if let Self::Prompt(prompt) = &mut action {
+            prompt.notifications = Some(crate::domain::notification::NotificationInput {
+                notifications,
+                system_turn: true,
+            });
+        }
+        action
     }
 
     /// Ask the agent to switch models.
     pub fn set_model(model: impl Into<String>) -> Self {
         Self::SetModel(AgentSetModelAction {
             model: model.into(),
+        })
+    }
+
+    /// Ask the agent to change one of its advertised select settings.
+    pub fn set_config_option(config_id: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::SetConfigOption(AgentSetConfigOptionAction {
+            config_id: config_id.into(),
+            value: value.into(),
         })
     }
 
@@ -456,6 +517,9 @@ impl AgentAction {
     pub fn control_from_runtime(message: &ToRuntimeMessage) -> Option<Self> {
         if let Some((_, action)) = AgentSetModelAction::from_runtime(message) {
             return Some(Self::SetModel(action));
+        }
+        if let Some((_, action)) = AgentSetConfigOptionAction::from_runtime(message) {
+            return Some(Self::SetConfigOption(action));
         }
 
         let ToRuntimeMessage::Acp(AcpMessage(frame)) = message else {
@@ -497,6 +561,7 @@ impl AgentAction {
             // An elicitation answer is the running turn's own business: the
             // agent is blocked on it mid-turn, so it must ride alongside.
             Self::SetModel(_)
+            | Self::SetConfigOption(_)
             | Self::Stop
             | Self::RespondElicitation(_)
             | Self::RespondToPermission(_) => false,
@@ -529,8 +594,29 @@ impl AgentAction {
                     )
                     .collect();
                 let payload = PromptRequest::new(session_id.clone(), blocks);
-                let params = serde_json::to_value(&payload)
+                let mut params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
+                if let Some(input) = &action.notifications {
+                    let context =
+                        crate::domain::notification::notification_context(&input.notifications)
+                            .map_err(|error| ActionError::Acp(error.to_string()))?;
+                    params["prompt"]
+                        .as_array_mut()
+                        .ok_or_else(|| ActionError::Acp("missing prompt blocks".into()))?
+                        .insert(0, serde_json::json!({"type":"text", "text":context}));
+                    params["_meta"] =
+                        serde_json::json!({crate::domain::notification::NOTIFICATIONS_META: input});
+                }
+                if let Some(turn) = AgentActionId::from_request_id(&request_id) {
+                    let context = serde_json::json!({
+                        "version": 1,
+                        "text": format!("<invocation turn_id=\"{turn}\">Use this turn_id for ExecuteCode calls originating in this prompt. Never substitute another turn's ID for a stale call.</invocation>")
+                    });
+                    params["prompt"]
+                        .as_array_mut()
+                        .ok_or_else(|| ActionError::Acp("missing prompt blocks".into()))?
+                        .push(serde_json::json!({"type":"text", "text":format!("<m-agent-context>{context}</m-agent-context>"), "_meta": { INVOCATION_CONTEXT_META: true }}));
+                }
                 let frame =
                     RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
                         .map_err(|error| ActionError::Acp(error.to_string()))?;
@@ -541,6 +627,21 @@ impl AgentAction {
                     session_id.clone(),
                     MODEL_CONFIG_ID,
                     action.model.as_str(),
+                );
+                let params = serde_json::to_value(&payload)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let frame =
+                    RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
+                        .map_err(|error| ActionError::Acp(error.to_string()))?;
+                Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
+            }
+            Self::SetConfigOption(action) => {
+                let payload = SetSessionConfigOptionRequest::new(
+                    session_id.clone(),
+                    action.config_id.clone(),
+                    agent_client_protocol::schema::v1::SessionConfigValueId::new(
+                        action.value.clone(),
+                    ),
                 );
                 let params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;

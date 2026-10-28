@@ -1,10 +1,10 @@
+import { Telemetry } from '@macro-inc/observability';
 import { createMemo, For, type ParentProps, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
 import { ThreadReplyRail } from '../Thread/ThreadReplyRail';
 import {
-  DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
@@ -28,11 +28,11 @@ export function Replies(props: RepliesProps) {
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(
       ctx.parent()?.thread.reply_count ?? ctx.replies().length,
-      DEFAULT_VISIBLE_REPLY_COUNT
+      ctx.displayReplies().length
     );
 
   const collapsedReplyUsers = () =>
-    getUniqueReplyUserIds(ctx.replies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
+    getUniqueReplyUserIds(ctx.replies().slice(ctx.displayReplies().length));
 
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(ctx.parent()?.thread.latest_reply_at, ctx.replies());
@@ -166,7 +166,11 @@ export function Replies(props: RepliesProps) {
                   onClick={(event) => {
                     const parent = ctx.parent();
                     if (!parent) return;
-                    replyAction()?.({ message: parent, event });
+                    Promise.resolve(
+                      replyAction()?.({ message: parent, event })
+                    ).catch((error) =>
+                      Telemetry.error(error, { surface: 'channel-thread' })
+                    );
                   }}
                   aria-label="Reply"
                 />

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (l.macro_id = c.actor_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = c.actor_id)) AS \"authorized!\",\n                EXISTS (SELECT 1 FROM email_mailbox_command_targets t WHERE t.command_id = c.id AND t.status IN ('failed','conflict')) AS \"has_errors!\"\n            FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id\n            WHERE c.id = $1 AND c.lease_id = $2 AND c.lease_until > now() AND c.status = 'running'\n                AND l.is_sync_active AND l.sync_generation = c.generation AND l.grant_generation = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "authorized!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "has_errors!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "cb2773cb6fe8a57781cb87e639b04bb9504c219ddf036288a4054aa26906a6f0"
+}

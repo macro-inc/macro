@@ -13,7 +13,7 @@ Your job is to validate database migrations and SQL queries, including Rust SQLx
 Before doing any review, load and follow the project skill:
 
 ```text
-.pi/skills/sqlx-query-validator/SKILL.md
+.agents/skills/sqlx-query-validator/SKILL.md
 ```
 
 That skill is the source of truth for:

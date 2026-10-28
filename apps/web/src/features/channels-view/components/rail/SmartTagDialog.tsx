@@ -1,6 +1,7 @@
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import {
@@ -75,7 +76,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
       >
         <form
           class="flex shrink-0 flex-col gap-4"
-          onSubmit={(event) => void submit(event)}
+          onSubmit={(event) => fireAndForget(submit(event), 'channels-view')}
           aria-busy={saving()}
         >
           <div class="flex items-center justify-between gap-2">
@@ -86,14 +87,16 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
               </Dialog.Title>
             </div>
             <Button
+              variant="ghost"
+              aria-label="Close"
+              tooltip="Close"
               type="button"
-              label="Close"
-              size="icon-composer"
+              size="icon-md"
               tabIndex={-1}
               disabled={saving()}
               onClick={() => props.onOpenChange(false)}
             >
-              <XIcon />
+              <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
           <div class="flex flex-col gap-4 px-2">
@@ -140,7 +143,6 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
             <Button
               type="button"
               variant="ghost"
-              depth={3}
               disabled={saving()}
               onClick={() => props.onOpenChange(false)}
             >
@@ -148,9 +150,8 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
             </Button>
             <Button
               type="submit"
-              variant={canSubmit() ? 'accent' : 'ghost'}
-              depth={3}
-              class="rounded-lg border-0 not-touch:h-[33.75px] not-touch:rounded-full not-touch:px-[15px]"
+              variant="primary"
+              class="not-touch:h-[33.75px] not-touch:px-[15px]"
               disabled={!canSubmit() || saving()}
             >
               {saving()
@@ -191,7 +192,9 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => void preview.refetch()}
+                      onClick={() =>
+                        fireAndForget(preview.refetch(), 'channels-view')
+                      }
                     >
                       Retry
                     </Button>

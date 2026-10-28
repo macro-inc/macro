@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET in_flight = $2, updated_at = now() WHERE action_id = $1 AND state = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f33da26f420babbff3375780082a8bd96742f487982293b97d2871a9bafd52e2"
+}

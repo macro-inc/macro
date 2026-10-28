@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, isChannelEntity } from '@entity/types/entity';
@@ -7,13 +8,21 @@ import {
   useSearchSoupQuery,
   validateSearchServiceText,
 } from '@queries/soup/search';
-import { type Accessor, createMemo } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { type SoupSearchPoolEntry, useOptionalSearchContext } from './context';
 import { createSoupFreshSearch, nameFuzzySearchFilter } from './utils';
 
 const LOCAL_SEARCH_DEBOUNCE_MS = 20;
 const SERVICE_SEARCH_DEBOUNCE_MS = 300;
 const FEATURED_RESULT_COUNT = 3;
+/** A query whose results stay unreplaced this long counts as one search. */
+const SEARCH_SETTLE_MS = 1500;
 
 export type SoupSearchMatchType = 'exact' | 'partial';
 
@@ -23,6 +32,8 @@ export type SoupSearchRequest = {
 };
 
 export type CreateSearchStateOptions = {
+  /** Where the search runs (a view id such as 'search' or 'email'), for analytics. */
+  surface: Accessor<string>;
   text: Accessor<string>;
   buildRequest: (search: SoupSearchRequest) => SearchSoupQueryArgs;
   enabled?: Accessor<boolean>;
@@ -44,6 +55,56 @@ export function soupSearchMatchType(query: string): SoupSearchMatchType {
 }
 
 const freshSearch = createSoupFreshSearch();
+
+/** Coarse result-count buckets; the first page caps the count. */
+function searchResultCountBucket(count: number): string {
+  if (count === 0) return '0';
+  if (count < 10) return '1-9';
+  if (count < 50) return '10-49';
+  return '50+';
+}
+
+/**
+ * Reports one `search_performed` per settled service query. Results landing
+ * for a newer query replace the pending report, so typing reports only the
+ * query the user stopped on; leaving the surface reports it at once. Once
+ * service search turns off (the box is cleared), the same query counts again.
+ */
+function trackSettledSearches(
+  surface: Accessor<string>,
+  searching: Accessor<boolean>,
+  landed: Accessor<
+    { query: string; matchType: SoupSearchMatchType; count: number } | undefined
+  >
+) {
+  // Refetches and later pages of the same query are not new searches.
+  let lastQuery: string | undefined;
+  let pending: (() => void) | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    clearTimeout(timer);
+    pending?.();
+    pending = undefined;
+  };
+  createEffect(() => {
+    if (!searching()) {
+      lastQuery = undefined;
+      return;
+    }
+    const search = landed();
+    if (!search || search.query === lastQuery) return;
+    lastQuery = search.query;
+    clearTimeout(timer);
+    const properties = {
+      surface: untrack(surface),
+      matchType: search.matchType,
+      resultCount: searchResultCountBucket(search.count),
+    };
+    pending = () => analytics.track('search_performed', properties);
+    timer = setTimeout(flush, SEARCH_SETTLE_MS);
+  });
+  onCleanup(flush);
+}
 
 /**
  * Combines local quick-access search with service-backed results while
@@ -105,11 +166,32 @@ export function createSearchState(options: CreateSearchStateOptions) {
   });
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
-    if (isServiceDisabled() || !isServiceDebounceSettled()) return [];
+    if (
+      isServiceDisabled() ||
+      !isServiceDebounceSettled() ||
+      !searchQuery.isSuccess ||
+      searchQuery.isPlaceholderData
+    )
+      return [];
 
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
 
     return searchQuery.data ?? [];
+  });
+
+  trackSettledSearches(options.surface, queryEnabled, () => {
+    const query = serviceText();
+    if (
+      !searchQuery.isSuccess ||
+      searchQuery.isPlaceholderData ||
+      searchQuery.isFetching
+    )
+      return undefined;
+    return {
+      query,
+      matchType: soupSearchMatchType(query),
+      count: searchQuery.data?.length ?? 0,
+    };
   });
 
   const featuredIds = createMemo<string[]>(
@@ -171,11 +253,15 @@ export function createSearchState(options: CreateSearchStateOptions) {
     isSettling: () => isLocalSearchSettling() || isSearchServiceLoading(),
     usesServiceSearch: queryEnabled,
     isLoading: () => isSearchServiceLoading() && data().length === 0,
-    isFetching: () => isSearchServiceLoading() || searchQuery.isFetching,
+    isFetching: () =>
+      isSearchServiceLoading() || (queryEnabled() && searchQuery.isFetching),
     error: () =>
       searchQuery.error instanceof Error ? searchQuery.error : undefined,
-    hasNextPage: () => queryEnabled() && (searchQuery.hasNextPage ?? false),
-    isFetchingNextPage: () => searchQuery.isFetchingNextPage,
+    hasNextPage: () =>
+      queryEnabled() &&
+      !searchQuery.isPlaceholderData &&
+      (searchQuery.hasNextPage ?? false),
+    isFetchingNextPage: () => queryEnabled() && searchQuery.isFetchingNextPage,
     fetchNextPage: () => searchQuery.fetchNextPage(),
     refetch: () => searchQuery.refetch(),
     /** Refetches the service results, throwing on failure so a caller (mobile

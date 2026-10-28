@@ -1,5 +1,6 @@
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EditorType } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
@@ -149,7 +150,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   }
 
   // Text paste handling
-  plugins.use(textPastePlugin());
+  plugins.use(textPastePlugin(config.resolveAppLink));
 
   // Markdown paste handling (rich & full editors only)
   if (config.type !== 'plain-text') {
@@ -235,7 +236,6 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       plugins.use(
         agentCommandsPlugin({
           menu: agentCommandsMenuOps,
-          commands: config.agentCommands.commands,
         })
       );
     }
@@ -295,6 +295,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
               undefined,
               fileDropConfig.constrainedMediaDimensions
             )
+          ).catch((error) =>
+            Telemetry.error(error, { surface: 'markdown-file-paste' })
           );
         },
       })

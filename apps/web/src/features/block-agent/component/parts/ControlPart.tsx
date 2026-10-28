@@ -31,6 +31,21 @@ function label(part: ControlPartData): string {
         ([control]) => `Couldn't switch to ${modelLabel(control.model)}`
       )
       .with(
+        [{ kind: 'set_config_option' }, { kind: 'pending' }],
+        ([control]) =>
+          `Setting ${configLabel(control.config_id)} to ${control.value}…`
+      )
+      .with(
+        [{ kind: 'set_config_option' }, { kind: 'accepted' }],
+        ([control]) =>
+          `${configLabel(control.config_id)} set to ${control.value}`
+      )
+      .with(
+        [{ kind: 'set_config_option' }, { kind: 'rejected' }],
+        ([control]) =>
+          `Couldn't set ${configLabel(control.config_id)} to ${control.value}`
+      )
+      .with(
         [{ kind: 'compact' }, { kind: 'pending' }],
         () => 'Compacting context…'
       )
@@ -52,6 +67,11 @@ function label(part: ControlPartData): string {
       .with([{ kind: 'stop' }, { kind: 'accepted' }], () => 'Stopped')
       .exhaustive()
   );
+}
+
+function configLabel(configId: string): string {
+  if (configId === 'reasoning_effort') return 'Reasoning effort';
+  return configId.replaceAll('_', ' ');
 }
 
 export function ControlPart(props: { part: ControlPartData }) {

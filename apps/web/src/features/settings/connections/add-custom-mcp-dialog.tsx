@@ -53,7 +53,7 @@ export function AddCustomMcpDialog(props: {
       class="w-100"
     >
       <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
+        <Panel.Header class="p-6">
           <span class="text-ink text-sm font-semibold">Add MCP Server</span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">
@@ -89,13 +89,12 @@ export function AddCustomMcpDialog(props: {
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
-            <Button variant="outline" size="sm" depth={3} onClick={close}>
+            <Button variant="ghost" size="sm" onClick={close}>
               Cancel
             </Button>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
-              depth={3}
               disabled={
                 !name().trim() || !url().trim() || addMutation.isPending
               }

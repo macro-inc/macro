@@ -44,25 +44,6 @@ type UserNotificationListRow = (
     Option<String>,
 );
 
-#[derive(sqlx::FromRow)]
-struct EntityNotificationListRow {
-    owner_id: String,
-    notification_id: Uuid,
-    event_item_id: String,
-    event_item_type: String,
-    secondary_event_item_id: Option<String>,
-    secondary_event_item_type: Option<String>,
-    sent: bool,
-    state: NotificationState,
-    created_at: DateTime<Utc>,
-    viewed_at: Option<DateTime<Utc>>,
-    updated_at: DateTime<Utc>,
-    deleted_at: Option<DateTime<Utc>>,
-    notification_metadata: serde_json::Value,
-    notification_event_type: String,
-    sender_id: Option<String>,
-}
-
 struct UpdatedUserNotificationRow {
     owner_id: String,
     notification_id: Uuid,
@@ -294,46 +275,6 @@ fn push_entities_filter<'a>(
     builder.push(")");
 }
 
-fn message_ref_matches_row(
-    message_id: &str,
-    secondary_event_item_id: Option<&str>,
-    secondary_event_item_type: Option<&str>,
-    metadata: &serde_json::Value,
-) -> bool {
-    let directly_targets_message = metadata
-        .get("messageId")
-        .or_else(|| metadata.get("message_id"))
-        .and_then(|value| value.as_str())
-        .is_some_and(|stored_message_id| stored_message_id == message_id);
-    let targets_message_as_thread = secondary_event_item_type == Some("channel_message")
-        && secondary_event_item_id == Some(message_id);
-
-    directly_targets_message || targets_message_as_thread
-}
-
-fn notification_entity_matches_row(
-    entity: &Entity<'_>,
-    event_item_id: &str,
-    event_item_type: &str,
-    secondary_event_item_id: Option<&str>,
-    secondary_event_item_type: Option<&str>,
-    metadata: &serde_json::Value,
-) -> bool {
-    let directly_targets_entity = event_item_type == entity.entity_type.as_ref()
-        && event_item_id == entity.entity_id.as_ref();
-    let targets_secondary_entity = secondary_event_item_type == Some(entity.entity_type.as_ref())
-        && secondary_event_item_id == Some(entity.entity_id.as_ref());
-    let targets_message = entity.entity_type == EntityType::ChannelMessage
-        && message_ref_matches_row(
-            entity.entity_id.as_ref(),
-            secondary_event_item_id,
-            secondary_event_item_type,
-            metadata,
-        );
-
-    directly_targets_entity || targets_secondary_entity || targets_message
-}
-
 fn push_cursor_filter(
     builder: &mut QueryBuilder<'_, Postgres>,
     cursor_timestamp: Option<DateTime<Utc>>,
@@ -415,7 +356,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
 
     /// Create a notification record in the database.
     ///
-    /// Returns `Some(notification_id)` if created, `None` if it already exists (idempotent).
+    /// Returns new or unpublished recipient rows; completed or withdrawn notifications return None.
     fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
@@ -423,6 +364,18 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         service_name: &str,
         apns_collapse_key: Option<&str>,
     ) -> impl std::future::Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Whether a resolved workflow has withdrawn this notification before delivery.
+    fn notification_is_withdrawn(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<bool, Report>> + Send;
+
+    /// Record successful delivery-queue publication; retries remain pending until this succeeds.
+    fn complete_notification_publication(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Update the sent status for recipients who received the notification.
     fn update_sent_status<'a>(
@@ -603,6 +556,7 @@ impl NotificationDbOps for PgPool {
             r#"
             SELECT user_id FROM user_notification_item_unsubscribe
             WHERE item_id = $1 AND user_id = ANY($2)
+              AND (snoozed_until IS NULL OR snoozed_until > NOW())
             "#,
             item_id,
             &ids
@@ -631,7 +585,7 @@ impl NotificationDbOps for PgPool {
 
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, device_endpoint, device_type as "device_type: DbDeviceType"
+            SELECT user_id, device_endpoint, device_type as "device_type: DbDeviceType", native_call_capable
             FROM notification_user_device_registration
             WHERE user_id = ANY($1)
             "#,
@@ -649,6 +603,9 @@ impl NotificationDbOps for PgPool {
 
             let device = match row.device_type {
                 DbDeviceType::Ios => DeviceEndpoint::Ios(row.device_endpoint),
+                DbDeviceType::Android if row.native_call_capable => {
+                    DeviceEndpoint::AndroidNativeCall(row.device_endpoint)
+                }
                 DbDeviceType::Android => DeviceEndpoint::Android(row.device_endpoint),
                 DbDeviceType::IosVoip => DeviceEndpoint::IosVoip(row.device_endpoint),
             };
@@ -685,7 +642,59 @@ impl NotificationDbOps for PgPool {
         let sender_id = request.sender_id.as_ref().map(|id| id.to_string());
         let typename = request.notification.tag.as_ref();
 
-        // Insert notification
+        super::withdrawal::lock_notification(&mut tx, notification_id).await?;
+        let withdrawn = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM notification_withdrawal WHERE notification_id = $1) AS "exists!""#, notification_id).fetch_one(tx.as_mut()).await?;
+        if withdrawn {
+            return Ok(None);
+        }
+
+        let existing = sqlx::query_scalar!(
+            "SELECT publication_complete FROM notification WHERE id = $1",
+            notification_id
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+        if let Some(complete) = existing {
+            if complete {
+                return Ok(None);
+            }
+            let recipients = sqlx::query!(
+                r#"SELECT user_id, sent, state AS "state: NotificationState",
+                    created_at::timestamptz AS "created_at!", seen_at::timestamptz AS viewed_at,
+                    created_at::timestamptz AS "updated_at!", deleted_at::timestamptz AS deleted_at
+                FROM user_notification WHERE notification_id = $1"#,
+                notification_id
+            )
+            .fetch_all(tx.as_mut())
+            .await?;
+            let metadata = Arc::new(request.notification.content);
+            let rows = recipients
+                .into_iter()
+                .map(|recipient| {
+                    Ok(UserNotificationRow {
+                        owner_id: MacroUserIdStr::try_from(recipient.user_id)?,
+                        notification_id,
+                        notification_event_type: typename.to_string(),
+                        entity: request.notification_entity.clone().into_owned(),
+                        sent: recipient.sent,
+                        state: recipient.state,
+                        created_at: recipient.created_at,
+                        viewed_at: recipient.viewed_at,
+                        updated_at: recipient.updated_at,
+                        deleted_at: recipient.deleted_at,
+                        notification_metadata: metadata.clone(),
+                        sender_id: request.sender_id.clone().map(CowLike::into_owned),
+                    })
+                })
+                .collect::<Result<Vec<_>, Report>>()?;
+            tx.commit().await?;
+            return Ok(Some(rows));
+        }
+        if request.recipient_ids.is_empty() {
+            return Ok(None);
+        }
+
+        // Insert notification and a pending publication checkpoint together.
         let result = sqlx::query!(
             r#"
             INSERT INTO notification (
@@ -698,9 +707,10 @@ impl NotificationDbOps for PgPool {
                 sender_id,
                 apns_collapse_key,
                 secondary_event_item_id,
-                secondary_event_item_type
+                secondary_event_item_type,
+                publication_complete
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
             ON CONFLICT (id) DO NOTHING
             "#,
             notification_id,
@@ -731,13 +741,22 @@ impl NotificationDbOps for PgPool {
 
         let created_at = sqlx::query_scalar!(
             r#"
-            INSERT INTO user_notification (notification_id, user_id)
-            SELECT $1, user_id
+            INSERT INTO user_notification (
+                notification_id,
+                user_id,
+                event_item_type,
+                event_item_id,
+                notification_event_type
+            )
+            SELECT $1, user_id, $3, $4, $5
             FROM UNNEST($2::text[]) as user_id
             RETURNING created_at::timestamptz as "created_at!"
             "#,
             notification_id,
-            &user_ids
+            &user_ids,
+            entity_type,
+            request.notification_entity.entity_id.as_ref(),
+            typename
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -769,6 +788,23 @@ impl NotificationDbOps for PgPool {
             .collect();
 
         Ok(Some(rows))
+    }
+
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM notification_withdrawal WHERE notification_id = $1) AS "exists!""#,
+            notification_id
+        ).fetch_one(self).await?)
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        sqlx::query!(
+            "UPDATE notification SET publication_complete = true WHERE id = $1",
+            notification_id
+        )
+        .execute(self)
+        .await?;
+        Ok(())
     }
 
     async fn update_sent_status<'a>(
@@ -921,29 +957,51 @@ impl NotificationDbOps for PgPool {
                 SELECT entity_type, entity_id
                 FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)
             )
-            SELECT un.notification_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = $1
-              AND un.deleted_at IS NULL
-              AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
-              AND EXISTS (
-                  SELECT 1
-                  FROM requested_entities entity
-                  WHERE (
-                      n.event_item_type = entity.entity_type
-                      AND n.event_item_id = entity.entity_id
-                  )
-                  OR (
-                      n.secondary_event_item_type = entity.entity_type
-                      AND n.secondary_event_item_id = entity.entity_id
-                  )
-                  OR (
-                      entity.entity_type = 'channel_message'
-                      AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id
-                  )
-              )
-            ORDER BY un.created_at, un.notification_id
+            -- The primary entity reads only the viewer's rows from
+            -- idx_user_notification_viewer_entity; secondary entities and
+            -- message ids match few notifications each.
+            SELECT matched.notification_id AS "notification_id!"
+            FROM (
+                SELECT un.notification_id, un.created_at
+                FROM requested_entities entity
+                JOIN user_notification un
+                  ON un.event_item_type = entity.entity_type
+                 AND un.event_item_id = entity.entity_id
+                WHERE un.user_id = $1
+                  AND un.deleted_at IS NULL
+                  AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
+                UNION
+                SELECT un.notification_id, un.created_at
+                FROM requested_entities entity
+                JOIN notification n
+                  ON n.secondary_event_item_type = entity.entity_type
+                 AND n.secondary_event_item_id = entity.entity_id
+                CROSS JOIN LATERAL (
+                    SELECT un.notification_id, un.created_at
+                    FROM user_notification un
+                    WHERE un.user_id = $1 AND un.notification_id = n.id
+                      AND un.deleted_at IS NULL
+                      AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
+                    -- Probe the viewer's row per notification: a plain join
+                    -- can scan the viewer's whole history for each entity.
+                    OFFSET 0
+                ) un
+                UNION
+                SELECT un.notification_id, un.created_at
+                FROM requested_entities entity
+                JOIN notification n
+                  ON COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id
+                CROSS JOIN LATERAL (
+                    SELECT un.notification_id, un.created_at
+                    FROM user_notification un
+                    WHERE un.user_id = $1 AND un.notification_id = n.id
+                      AND un.deleted_at IS NULL
+                      AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))
+                    OFFSET 0
+                ) un
+                WHERE entity.entity_type = 'channel_message'
+            ) matched
+            ORDER BY matched.created_at, matched.notification_id
             "#,
             user_id.as_ref(),
             &entity_types,
@@ -1199,144 +1257,10 @@ impl NotificationDbOps for PgPool {
         entities: Vec<Entity<'static>>,
         query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
-        if query != Default::default() {
-            return super::entity_notifications::get_filtered_entity_notifications(
-                self, user_id, entities, query,
-            )
-            .await;
-        }
-        let mut seen_entities = HashSet::new();
-        let entities = entities
-            .into_iter()
-            .filter(|entity| seen_entities.insert(entity.clone()))
-            .collect::<Vec<_>>();
-
-        let mut result = entities
-            .iter()
-            .cloned()
-            .map(|entity| (entity, Vec::new()))
-            .collect::<HashMap<_, _>>();
-
-        if entities.is_empty() {
-            return Ok(result);
-        }
-
-        let filters = NotificationListFilters {
-            states: NotificationState::ACTIVE.to_vec(),
-            include_types: Vec::new(),
-            entities: entities.clone(),
-        };
-
-        let mut builder = QueryBuilder::new(
-            r#"
-            SELECT
-                un.user_id as owner_id,
-                un.notification_id,
-                n.event_item_id,
-                n.event_item_type,
-                n.secondary_event_item_id,
-                n.secondary_event_item_type,
-                un.sent,
-                un.state,
-                un.created_at::timestamptz as created_at,
-                un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
-                un.deleted_at::timestamptz as deleted_at,
-                n.metadata as notification_metadata,
-                n.notification_event_type as notification_event_type,
-                n.sender_id as sender_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = "#,
-        );
-        builder.push_bind(user_id.as_ref());
-        push_notification_status_filters(&mut builder, &filters);
-        push_entities_filter(&mut builder, &entities);
-        builder.push(" ORDER BY un.created_at DESC, un.notification_id DESC");
-
-        let rows = builder
-            .build_query_as::<EntityNotificationListRow>()
-            .fetch_all(self)
-            .await?;
-
-        for row in rows {
-            let EntityNotificationListRow {
-                owner_id,
-                notification_id,
-                event_item_id,
-                event_item_type,
-                secondary_event_item_id,
-                secondary_event_item_type,
-                sent,
-                state,
-                created_at,
-                viewed_at,
-                updated_at,
-                deleted_at,
-                notification_metadata,
-                notification_event_type,
-                sender_id,
-            } = row;
-
-            let entity = match EntityType::from_str(&event_item_type) {
-                Ok(entity_type) => entity_type.with_entity_string(event_item_id.clone()),
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-            let sender_id = match sender_id
-                .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
-                .transpose()
-            {
-                Ok(sender_id) => sender_id,
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-            let owner_id = match MacroUserIdStr::parse_from_str(&owner_id).map(CowLike::into_owned)
-            {
-                Ok(owner_id) => owner_id,
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-
-            let notification = UserNotificationRow {
-                owner_id,
-                notification_id,
-                notification_event_type: notification_event_type.clone(),
-                entity,
-                sent,
-                state,
-                created_at,
-                viewed_at,
-                updated_at,
-                deleted_at,
-                notification_metadata: notification_metadata.clone(),
-                sender_id,
-            };
-
-            for requested_entity in &entities {
-                if notification_entity_matches_row(
-                    requested_entity,
-                    &event_item_id,
-                    &event_item_type,
-                    secondary_event_item_id.as_deref(),
-                    secondary_event_item_type.as_deref(),
-                    &notification_metadata,
-                ) {
-                    result
-                        .entry(requested_entity.clone())
-                        .or_default()
-                        .push(notification.clone());
-                }
-            }
-        }
-
-        Ok(result)
+        super::entity_notifications::get_filtered_entity_notifications(
+            self, user_id, entities, query,
+        )
+        .await
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -1604,6 +1528,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
             .await
     }
 
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        self.db.notification_is_withdrawn(notification_id).await
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        self.db
+            .complete_notification_publication(notification_id)
+            .await
+    }
+
     async fn update_sent_status<'a>(
         &self,
         notification_id: Uuid,
@@ -1754,9 +1688,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         self.db
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 

@@ -80,12 +80,27 @@ describe('workbook import and export actions', () => {
     expect(store.sheets()).toHaveLength(1);
     expect(store.cells().A1.value).toBe('original');
     expect(actions.preview()?.data.warnings).toEqual(imported.warnings);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.sheets()).toHaveLength(2);
     expect(store.cells().A1.value).toBe('=2+2');
     store.undo();
     expect(store.sheets()).toHaveLength(1);
     expect(store.cells().A1.value).toBe('original');
+  });
+
+  it('shows the pending import before a long write holds the main thread', async () => {
+    const { store, actions } = setup();
+    vi.mocked(importWorkbookFile).mockResolvedValue(imported);
+    await actions.importExcel(file);
+    const confirming = actions.confirmImport();
+    expect(actions.importing()).toBe(true);
+    expect(store.sheets()).toHaveLength(1);
+    await actions.confirmImport();
+    expect(store.sheets()).toHaveLength(1);
+    await confirming;
+    expect(actions.importing()).toBe(false);
+    expect(store.sheets()).toHaveLength(2);
+    expect(actions.preview()).toBeUndefined();
   });
 
   it('cancels without changes and refuses imports after permission revocation', async () => {
@@ -96,7 +111,7 @@ describe('workbook import and export actions', () => {
     expect(store.sheets()).toHaveLength(1);
     await actions.importExcel(file);
     setCanEdit(false);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.sheets()).toHaveLength(1);
     expect(actions.preview()).toBeDefined();
   });
@@ -107,7 +122,7 @@ describe('workbook import and export actions', () => {
     await actions.importExcel(file);
     actions.setImportMode('replace');
     store.setCells({ B1: { value: 'new work' } });
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(actions.importError()).toContain('changed since the preview');
     expect(store.cells().B1.value).toBe('new work');
     expect(store.sheets()).toHaveLength(1);
@@ -119,7 +134,7 @@ describe('workbook import and export actions', () => {
     vi.mocked(importWorkbookFile).mockResolvedValue(imported);
     await actions.importExcel(file);
     actions.setImportMode('replace');
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.activeSheet().name).toBe('Imported');
     expect(store.cells().A1.value).toBe('=2+2');
     store.undo();
@@ -140,7 +155,7 @@ describe('workbook import and export actions', () => {
       sheets: [{ ...imported.sheets[0], name: 'Sheet1' }],
     });
     await actions.importExcel(file);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(actions.importError()).toContain('already exists');
     expect(store.cells()).toEqual({});
     expect(store.sheets()).toHaveLength(1);
@@ -176,7 +191,7 @@ describe('workbook import and export actions', () => {
 
   it.each([
     'budget.xls',
-    'budget.xlsm',
+    'budget.xltm',
     'budget.xlsx.exe',
     'budget.csv',
     'budget',
@@ -200,12 +215,30 @@ describe('workbook import and export actions', () => {
     const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
     await actions.importExcel({
       ...file,
-      size: 5 * 1024 * 1024 + 1,
+      size: 50 * 1024 * 1024 + 1,
       arrayBuffer,
     });
     expect(arrayBuffer).not.toHaveBeenCalled();
-    expect(actions.notice()).toContain('5 MB');
+    expect(actions.notice()).toContain('50 MB');
   });
+
+  it.each(['budget.xlsm', 'BUDGET.XLSM'])(
+    'previews macro-enabled workbook %s like an .xlsx',
+    async (name) => {
+      const { actions } = setup();
+      vi.mocked(importWorkbookFile).mockResolvedValue({
+        ...imported,
+        warnings: ['VBA macros are not imported.'],
+      });
+      await actions.importExcel({ ...file, name });
+      expect(importWorkbookFile).toHaveBeenCalled();
+      expect(actions.preview()?.name).toBe(name);
+      expect(actions.preview()?.data.warnings).toContain(
+        'VBA macros are not imported.'
+      );
+      expect(actions.notice()).toBe('');
+    }
+  );
 
   it('replaces an old preview immediately and ignores stale decoder results from superseded requests', async () => {
     const { actions, store } = setup();
@@ -280,9 +313,13 @@ describe('workbook import and export actions', () => {
     const { store, actions, onExport, setCanEdit } = setup();
     store.setCells({ A1: { value: '=3+4' } });
     const encoding = deferred<WorkbookFileExport>();
-    vi.mocked(exportWorkbookFile).mockReturnValueOnce(encoding.promise);
+    // Like the worker transport, take the snapshot when the export starts.
+    let request!: Parameters<typeof exportWorkbookFile>[0];
+    vi.mocked(exportWorkbookFile).mockImplementationOnce((workbook) => {
+      request = structuredClone(workbook);
+      return encoding.promise;
+    });
     const run = actions.exportExcel();
-    const request = vi.mocked(exportWorkbookFile).mock.calls[0][0];
     store.setCells({ A1: { value: '99' } });
     setCanEdit(false);
     await actions.exportExcel();

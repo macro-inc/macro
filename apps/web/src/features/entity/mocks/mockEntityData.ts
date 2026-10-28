@@ -53,6 +53,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 0,
+        color: null,
       },
       {
         id: 'opt_medium',
@@ -61,6 +62,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 1,
+        color: null,
       },
       {
         id: 'opt_low',
@@ -69,6 +71,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 2,
+        color: null,
       },
     ],
     owner: { scope: 'team', team_id: '00000000-0000-0000-0000-000000000001' },
@@ -90,6 +93,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 0,
+        color: null,
       },
       {
         id: 'opt_in_progress',
@@ -98,6 +102,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 1,
+        color: null,
       },
       {
         id: 'opt_done',
@@ -106,6 +111,7 @@ const MOCK_PROPERTIES: Property[] = [
         updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 2,
+        color: null,
       },
     ],
     owner: { scope: 'team', team_id: '00000000-0000-0000-0000-000000000001' },

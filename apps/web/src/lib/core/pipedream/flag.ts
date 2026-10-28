@@ -24,10 +24,15 @@ export const PIPEDREAM_MCP_OVERRIDE =
   getFeatureFlagOverride('ENABLE_PIPEDREAM_MCP') ??
   (DEV_MODE_ENV ? true : undefined);
 
-/** Whether this user sees the Pipedream connector frontend. */
-export function usePipedreamMcpFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(PIPEDREAM_MCP_FLAG, {
+/** The Pipedream flag with its loading state, for gates that must not guess. */
+export function usePipedreamMcpFlagResult() {
+  return useFeatureFlag(PIPEDREAM_MCP_FLAG, {
     enabledOverride: PIPEDREAM_MCP_OVERRIDE,
   });
+}
+
+/** Whether this user sees the Pipedream connector frontend. */
+export function usePipedreamMcpFlag(): Accessor<boolean> {
+  const flag = usePipedreamMcpFlagResult();
   return () => flag().enabled;
 }

@@ -377,6 +377,7 @@ fn entry(to_runtime: bool, value: Value) -> AgentSessionLog {
         } else {
             Message::ToServer(ToServerMessage::Acp(AcpMessage(frame)))
         },
+        logged_at: None,
     }
 }
 fn assert_fold(log: &[AgentSessionLog]) -> Vec<FoldedMessage> {

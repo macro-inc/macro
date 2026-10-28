@@ -236,9 +236,12 @@ export const notificationServiceClient = {
       })
     ).map((result) => ({ data: result }));
   },
-  async unsubscribeItem(args: WithItem) {
+  async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
+    const query = args.snoozed_until
+      ? `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`
+      : '';
     return notificationFetch<{}>(
-      `/unsubscribe/item/${args.item_type}/${args.item_id}`,
+      `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {
         method: 'POST',
       }
@@ -246,7 +249,7 @@ export const notificationServiceClient = {
   },
   async removeUnsubscribeItem(args: WithItem) {
     return notificationFetch<{}>(
-      `/unsubscribe/item/${args.item_type}/${args.item_id}`,
+      `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}`,
       {
         method: 'DELETE',
       }

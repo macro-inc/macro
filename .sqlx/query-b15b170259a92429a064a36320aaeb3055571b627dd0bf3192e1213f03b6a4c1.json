@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)\n           SELECT $1, user_id, 'member'::comms_participant_role, $3 FROM UNNEST($2::text[]) AS user_id\n           ON CONFLICT (channel_id, user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b15b170259a92429a064a36320aaeb3055571b627dd0bf3192e1213f03b6a4c1"
+}

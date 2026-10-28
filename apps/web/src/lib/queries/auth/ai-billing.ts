@@ -1,8 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
-import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { authKeys } from './keys';
 import { invalidateUserInfo } from './user-info';
 
@@ -52,9 +54,58 @@ export function useAiBillingPlansQuery() {
   }));
 }
 
+/**
+ * Included AI per seat per period from the plan catalog, in cents at provider
+ * cost, keyed by tier. The backend owns the amount; this is the only place the
+ * frontend should get it from. Empty until the catalog has loaded.
+ */
+export function useIncludedAiCentsByTier(): () => Partial<
+  Record<AiPlanTier, number>
+> {
+  const plans = useAiBillingPlansQuery();
+  return () =>
+    Object.fromEntries(
+      (queryReadyGate(plans) ? plans.data.plans : []).map((plan) => [
+        plan.tier,
+        plan.included_ai_cents_per_seat,
+      ])
+    );
+}
+
 export function invalidateAiBillingSummary() {
   return queryClient.invalidateQueries({
     queryKey: authKeys.aiBillingSummary.queryKey,
+  });
+}
+
+/** Renewal and scheduled downgrade, read only while Billing settings needs it. */
+function subscriptionStatusQueryOptions(enabled: boolean) {
+  return {
+    queryKey: authKeys.subscriptionStatus.queryKey,
+    queryFn: async () =>
+      await throwOnErr(() => authServiceClient.getSubscriptionStatus()),
+    enabled,
+    staleTime: AI_BILLING_SUMMARY_STALE_TIME,
+    throwOnError: false,
+    retry: 1,
+  };
+}
+
+export function useSubscriptionStatusQuery(
+  options?: UseAiBillingSummaryQueryOptions
+) {
+  return useQuery(() =>
+    subscriptionStatusQueryOptions(
+      typeof options?.enabled === 'function'
+        ? options.enabled()
+        : (options?.enabled ?? true)
+    )
+  );
+}
+
+export function invalidateSubscriptionStatus() {
+  return queryClient.invalidateQueries({
+    queryKey: authKeys.subscriptionStatus.queryKey,
   });
 }
 
@@ -64,6 +115,27 @@ export function useUpdateAiOverageMutation() {
     mutationFn: async (args: { enabled: boolean; limitCents: number }) =>
       await throwOnErr(
         async () => await authServiceClient.updateAiOverage(args)
+      ),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(authKeys.aiBillingSummary.queryKey, snapshot);
+    },
+  }));
+}
+
+/**
+ * Turn automatic credit reloads (and with them, usage billing) on or off and
+ * set the balance thresholds and optional monthly spend limit.
+ */
+export function useUpdateAiAutoReloadMutation() {
+  return useMutation(() => ({
+    mutationFn: async (args: {
+      enabled: boolean;
+      minimumBalanceCents: number;
+      targetBalanceCents: number;
+      monthlySpendLimitCents: number | null;
+    }) =>
+      await throwOnErr(
+        async () => await authServiceClient.updateAiAutoReload(args)
       ),
     onSuccess: (snapshot) => {
       queryClient.setQueryData(authKeys.aiBillingSummary.queryKey, snapshot);
@@ -90,10 +162,11 @@ export function useChangePlanMutation() {
   return useMutation(() => ({
     mutationFn: async (args: { plan: PaidPlan }) =>
       await throwOnErr(async () => await authServiceClient.changePlan(args)),
-    onSuccess: () => {
-      // Roles flip via webhook shortly after; refetch both views.
-      void invalidateUserInfo();
-      void invalidateAiBillingSummary();
+    onSuccess: async () => {
+      // Roles flip via webhook; the scheduled change is available immediately.
+      fireAndForget(invalidateUserInfo(), 'ai-billing');
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
+      await invalidateSubscriptionStatus();
     },
   }));
 }

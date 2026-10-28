@@ -51,6 +51,17 @@ fn surrounding_quotes_and_whitespace_are_trimmed() {
     assert_eq!(ApiKey::new("'crsr_abc'").expose(), "crsr_abc");
 }
 
+#[test]
+fn both_cursor_key_prefixes_build_a_client() {
+    for key in ["crsr_abc", "grok_abc"] {
+        CursorClient::new(CursorConfig {
+            api_key: ApiKey::new(key),
+            ..config()
+        })
+        .unwrap_or_else(|error| panic!("{key:?} should build a client: {error}"));
+    }
+}
+
 /// A placeholder must fail at startup with something recognizable, which is
 /// why the error deliberately reports a length and a short prefix.
 #[test]
@@ -614,4 +625,49 @@ async fn an_expired_presigned_url_fails_with_its_status() {
     let printed = format!("{error}");
     assert!(printed.contains("403"), "got {printed}");
     assert!(printed.contains("Request has expired"), "got {printed}");
+}
+
+#[tokio::test]
+async fn both_initial_and_followup_requests_include_prompt_images() {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{body_partial_json, method, path},
+    };
+    let server = MockServer::start().await;
+    let body = serde_json::json!({"prompt": {"text": "look", "images": [{"data": "aW1n", "mimeType": "image/png"}]}});
+    Mock::given(method("POST"))
+        .and(path("/v1/agents"))
+        .and(body_partial_json(body.clone()))
+        .respond_with(ResponseTemplate::new(200).set_body_string(CREATED_BODY))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/agents/bc-test/runs"))
+        .and(body_partial_json(body))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"id":"run-test"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = client_against(server.uri());
+    let images = [CursorPromptImage {
+        data: "aW1n".into(),
+        mime_type: "image/png".into(),
+        source_url: Some("https://cdn.example/pic".into()),
+    }];
+    client
+        .create_agent("look", None, false, &[], None, &images)
+        .await
+        .expect("create agent");
+    client
+        .create_run(
+            &CursorAgentId::new("bc-test".to_owned()),
+            "look",
+            None,
+            &images,
+        )
+        .await
+        .expect("followup run");
 }

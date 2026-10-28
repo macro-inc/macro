@@ -15,7 +15,6 @@ import { useModifyPlaceable } from './placeables';
 
 vi.mock('../queries/annotations', () => ({
   getPdfAnchors: vi.fn(async () => []),
-  getPdfComments: vi.fn(async () => []),
 }));
 
 vi.mock('@queries/messages/document-messages', () => ({
@@ -32,7 +31,6 @@ vi.mock('../signal/pdfViewer', () => ({
 }));
 
 vi.mock('./comments/commentOperations', () => ({
-  useDeleteComment: () => vi.fn(),
   useDeleteMessageCommentThread: () => vi.fn(),
   useDeleteNewComments: () => vi.fn(),
 }));

@@ -11,13 +11,13 @@ use super::{Mode, frontend, mailpit, proxy, sdk_webhook};
 /// The host-facing endpoints of an instance: (label, url, host port).
 /// Shared by the startup summary and `status-local`.
 pub fn endpoint_rows(instance: &Instance) -> Vec<(&'static str, String, u16)> {
-    // Headless stacks serve the app from the proxy origin; showing the
-    // dev-server URL there reads as "frontend down" when nothing is wrong.
-    let (frontend_url, frontend_port) = if super::stack::frontend_is_static(instance) {
-        (frontend::static_url(instance), instance.port(Port::Proxy))
+    // Both attached and headless stacks expose the app through HTTPS.
+    let frontend_url = if super::stack::frontend_is_static(instance) {
+        frontend::static_url(instance)
     } else {
-        (frontend::url(instance), instance.port(Port::Frontend))
+        frontend::https_url(instance).unwrap_or_else(|_| frontend::static_url(instance))
     };
+    let frontend_port = instance.port(Port::Proxy);
     vec![
         ("frontend", frontend_url, frontend_port),
         ("proxy", proxy::url(instance), instance.port(Port::Proxy)),
@@ -83,9 +83,8 @@ pub fn stop_command(instance: &Instance) -> String {
 }
 
 /// Print the mode/instance/endpoints block after a successful startup.
-/// `frontend_url` differs by flow: the dev-server origin for `run_local`, the
-/// proxy-served bundle for headless `stack up`; `mailpit_url` follows the same
-/// direct-versus-single-origin distinction. `shared_app_url` is the public
+/// `frontend_url` is the HTTPS app URL; `mailpit_url` differs between attached
+/// and headless flows. `shared_app_url` is the public
 /// app tunnel when `--with-cf-tunnel` opened one — passed explicitly because,
 /// unlike the egress tunnel, it is not written into the env.
 pub fn print(

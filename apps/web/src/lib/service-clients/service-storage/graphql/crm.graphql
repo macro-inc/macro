@@ -8,3 +8,97 @@ fragment GraphqlCrmCompanyQuickAccessFields on GraphqlSoupCrmCompany {
 	updatedAt
 	viewedAt
 }
+
+fragment GraphqlCrmContactFields on GraphqlSoupCrmContact {
+  __typename
+  id
+  contactTeamId: teamId
+  companyId
+  companyName
+  email
+  crmContactName: name
+  hidden
+  firstInteraction
+  lastInteraction
+  createdAt
+  updatedAt
+  viewedAt
+}
+
+query CrmContacts($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ...GraphqlCrmContactFields
+      }
+      nextCursor
+    }
+  }
+}
+
+fragment CrmPipelineEntryFields on GraphqlCrmPipelineEntry {
+  __typename
+  id
+  pipeline {
+    __typename
+    id
+    name
+    sharing
+    tableId
+    canEdit
+  }
+  cells {
+    __typename
+    column {
+      __typename
+      id
+      name
+      dataType
+      isMultiSelect
+      specificEntityType
+      writable
+      options {
+        __typename
+        id
+        color
+        value {
+          __typename
+          ... on GraphqlStringPropertyOptionValue {
+            stringValue: value
+          }
+          ... on GraphqlNumberPropertyOptionValue {
+            numberValue: value
+          }
+        }
+      }
+    }
+    value {
+      ...SoupPropertyValueFields
+    }
+  }
+}
+
+query CrmRecordPipelineEntries($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ... on GraphqlSoupCrmCompany {
+          id
+          pipelineEntries {
+            ...CrmPipelineEntryFields
+          }
+        }
+        ... on GraphqlSoupCrmContact {
+          id
+          pipelineEntries {
+            ...CrmPipelineEntryFields
+          }
+        }
+      }
+    }
+  }
+}

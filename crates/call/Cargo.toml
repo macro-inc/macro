@@ -35,7 +35,7 @@ outbound = [
   "dep:urlencoding",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio"]
+ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
@@ -75,6 +75,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
@@ -87,6 +88,7 @@ serde = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }

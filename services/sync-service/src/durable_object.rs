@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
     sync::{Arc, LazyLock},
 };
@@ -18,23 +18,25 @@ use worker::{
 };
 
 use crate::{
-    ai_peer::is_ai_peer,
-    auth::{AccessLevel, TokenFrom, decode_jwt, socket_access},
-    constants::USER_PEER_D1_BINDING,
-    d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
-    domain::document::DocumentAttribution,
+    auth::{AccessLevel, TokenFrom, WriteAccess, decode_jwt, socket_access},
+    constants::{SYSTEM_AUTHOR_ID, USER_PEER_D1_BINDING},
+    d1::{
+        PeerWithUserId, get_user_id_from_peer_id, insert_missing_user_mappings, insert_user_mapping,
+    },
+    domain::document::{DocumentAttribution, writing_peers},
     dss_internal::InteractionReason,
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     mutex::Mutex,
+    socket::{InboundBuffers, Socket, protocol},
     state::DocumentState,
     storage::{
         SessionStorage, backends::durable_kv::DurableKVStorage, get_snapshot_storage,
         snapshot::SnapshotStorage,
     },
     tags::{get_ws_id_from_tags, new_ws_id},
-    timeit, websocket,
+    timeit,
 };
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
@@ -49,7 +51,9 @@ pub mod status_codes {
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 mod document_api;
+mod document_delete;
 mod document_effects;
+mod peer_ids;
 mod surface_api;
 pub(crate) mod surface_migration;
 
@@ -58,6 +62,7 @@ use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
 
 mod path {
     pub const CONNECT: &str = "connect";
+    pub const DELETE: &str = "delete";
     pub const EXISTS: &str = "exists";
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
@@ -136,11 +141,15 @@ pub struct DocumentSyncSession {
     awareness: EphemeralStore,
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
-    msg_buffer: Arc<Mutex<Vec<u8>>>,
+    /// Partial inbound messages, isolated by connection.
+    inbound: InboundBuffers,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     /// Distinct editors since the last snapshot notification.
     pending_editors: Arc<Mutex<BTreeSet<DocumentAttribution>>>,
+    /// Writing peers already recorded in D1 since this object woke, so
+    /// updates skip remapping them.
+    mapped_writing_peers: Mutex<BTreeSet<u64>>,
     surface_lifecycle: Mutex<Option<SurfaceLifecycle>>,
     source_migration: Mutex<Option<surface_migration::SourceState>>,
     // Serialize whole callbacks, including persistence awaits. A freeze must
@@ -232,7 +241,7 @@ impl<'a> Wsm<'a> {
         }
         Ok(())
     }
-    pub async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
+    pub async fn get_peer_ids(&mut self, include_ai: bool) -> Result<Vec<u64>> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
@@ -241,10 +250,7 @@ impl<'a> Wsm<'a> {
             .lock("Wsm::get_peer_ids get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .peer_ids
-            .iter()
-            .cloned()
-            .collect())
+            .active_peer_ids(include_ai))
     }
 
     pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
@@ -256,16 +262,16 @@ impl<'a> Wsm<'a> {
             .context("invalid signed websocket attribution")
     }
 
-    pub async fn can_edit(&mut self) -> Result<bool> {
+    pub async fn write_access(&mut self) -> Result<WriteAccess> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
             .dss
             .ws_meta_map
-            .lock("Wsm::can_edit get")
+            .lock("Wsm::write_access get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .can_edit())
+            .write_access())
     }
 
     pub async fn add_new_peerid(&mut self, peerid: u64, document_id: &str) -> Result<()> {
@@ -323,6 +329,21 @@ fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentA
 }
 
 impl DocumentSyncSession {
+    pub(crate) fn env(&self) -> &Env {
+        &self.env
+    }
+
+    pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
+        Socket::new(ws.clone(), self.inbound.clone())
+    }
+
+    pub(crate) fn get_sockets(&self) -> Vec<Socket> {
+        self.active_websockets()
+            .into_iter()
+            .map(|ws| self.socket_for(&ws))
+            .collect()
+    }
+
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.active_websockets()
     }
@@ -339,6 +360,7 @@ impl DocumentSyncSession {
         let Ok(ws_id) = get_ws_id(&self.state, ws) else {
             return;
         };
+        self.socket_for(ws).forget(&ws_id);
         self.ws_meta_map
             .lock("DocumentSyncSession::forget_websocket_metadata")
             .remove(&ws_id);
@@ -408,8 +430,9 @@ impl DocumentSyncSession {
                     .await;
             }
 
-            // EXIST, PEER, and WAKEUP don't require auth
+            // EXIST, PEER, and WAKEUP don't require auth; DELETE requires the internal key
             (path_needs_claims, Some(document_id)) => match path_needs_claims {
+                path::DELETE => return self.delete_handler(&req, document_id).await,
                 path::EXISTS => return self.exists_handler(document_id).await,
                 path::PEER => {
                     return self
@@ -480,11 +503,18 @@ impl DocumentSyncSession {
         let storage = get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
         if storage.has_snapshot().await? {
-            return Err(Error::from("snapshot already exists"));
+            return Response::error("snapshot already exists", 409);
         } else {
             debug!(document_id = document_id, "Initializing snapshot");
             let body_raw = req.bytes().await?;
             let body = InitializeFromSnapshotRequest::deserialize(&body_raw).with_context(|| format!("Failed to deserialize InitializeFromSnapshotRequest with document_id: [{document_id}]"))?;
+            // Services initialize documents (imports, uploads, copies), so the
+            // snapshot's peers belong to the system author unless already mapped.
+            // Mapped before storing: a failed store is retried, a stored one is not.
+            let writers = writing_peers(&body.snapshot)
+                .map_err(|error| Error::from(format!("invalid initial snapshot: {error}")))?;
+            let db = self.env.d1(USER_PEER_D1_BINDING)?;
+            insert_missing_user_mappings(&db, document_id, SYSTEM_AUTHOR_ID, &writers).await?;
             storage.store_snapshot(&body.snapshot).await?;
             *self
                 .document_id
@@ -512,11 +542,10 @@ impl DocumentSyncSession {
         {
             let awareness = self.awareness.encode_all();
             for ws in &self.state.get_websockets() {
-                if let Err(e) = websocket::send_initial_sync(
-                    ws,
+                if let Err(e) = protocol::send_initial_sync(
+                    &self.socket_for(ws),
                     snapshot.as_slice(),
                     awareness.as_slice(),
-                    self.msg_buffer.clone(),
                 ) {
                     warn!(
                         error =? e,
@@ -535,19 +564,14 @@ impl DocumentSyncSession {
     }
 
     /// Active peer ids. With `include_ai = false`, AI editors (peer ids from the
-    /// reserved AI block) are filtered out so callers see only human collaborators.
+    /// reserved AI block or signed agent actors) are filtered out.
     async fn active_peer_ids_handler(&self, include_ai: bool) -> Result<Response> {
         if !self.state.get_websockets().is_empty() {
             self.validate_surface_sockets(None).await?;
         }
         let mut peer_ids: BTreeSet<u64> = BTreeSet::new();
         for ws in self.get_websockets() {
-            let new_peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
-            peer_ids.extend(
-                new_peer_ids
-                    .into_iter()
-                    .filter(|&p| include_ai || !is_ai_peer(p)),
-            );
+            peer_ids.extend(Wsm::new(self, &ws).get_peer_ids(include_ai).await?);
         }
         let str_ids = peer_ids
             .into_iter()
@@ -748,11 +772,10 @@ impl DocumentSyncSession {
                 // Size of the initial sync this connect sent — the server end
                 // of the client's `doc.sync.initial-sync` span.
                 tracing::Span::current().record("snapshot.bytes", snapshot.len());
-                websocket::send_initial_sync(
-                    &pair.server,
+                protocol::send_initial_sync(
+                    &self.socket_for(&pair.server),
                     snapshot.as_slice(),
                     self.awareness.encode_all().as_slice(),
-                    self.msg_buffer.clone(),
                 )
                 .context("failed to send initial sync message")?;
             } else {
@@ -805,19 +828,8 @@ impl DocumentSyncSession {
         }
     }
 
-    /// Check if provided document_id exists.
-    /// 1. is self.document_id set
-    /// 2. is document_id  it do::kv
-    /// 3. does snapshot exist with document_id?
+    /// A connected room identity does not imply initialized collaborative content.
     async fn exists(&self, document_id: &str) -> Result<bool> {
-        if self.document_id_is_some() {
-            return Ok(true);
-        }
-        // This gets document_id via dokv if it exists
-        if self.document_id().await.is_ok() {
-            return Ok(true);
-        }
-        // self.session_storage would not be set because it requires self.document_id be set
         let snapshot_storage =
             get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
@@ -848,32 +860,42 @@ impl DocumentSyncSession {
     #[instrument(skip_all, err)]
     /// Get the `document_id`. First try checking self.document_id, if not there get from DOKV.
     async fn document_id(&self) -> Result<Arc<String>> {
+        self.try_document_id()
+            .await?
+            .ok_or(Error::from("DOCUMENT_ID not found in storage"))
+    }
+
+    /// Like [`Self::document_id`], but `None` instead of an error when this
+    /// object holds no session.
+    async fn try_document_id(&self) -> Result<Option<Arc<String>>> {
         if let Some(id) = self
             .document_id
             .lock("DocumentSyncSession::document_id get within main document_id fn")
             .as_ref()
             .cloned()
         {
-            return Ok(id);
+            return Ok(Some(id));
         }
-        let id: Arc<String> = Arc::new(
-            self.state
-                .storage()
-                .get(DOCUMENT_ID_KEY)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
-                        DOCUMENT_ID_KEY
-                    )
-                })?
-                .ok_or(Error::from("DOCUMENT_ID not found in storage"))?,
-        );
+        let Some(id) = self
+            .state
+            .storage()
+            .get::<String>(DOCUMENT_ID_KEY)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
+                    DOCUMENT_ID_KEY
+                )
+            })?
+        else {
+            return Ok(None);
+        };
+        let id = Arc::new(id);
         *self
             .document_id
             .lock("DocumentSyncSession::document_id set within main document_id fn") =
             Some(id.clone());
-        Ok(id)
+        Ok(Some(id))
     }
 
     async fn session_storage(&self) -> Result<Rc<SessionStorage>> {
@@ -923,6 +945,9 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
     let mut router = Router::new();
     router
         .insert("/document/{document_id}/connect", path::CONNECT)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/delete", path::DELETE)
         .unwrap();
     router
         .insert("/document/{document_id}/exists", path::EXISTS)
@@ -991,9 +1016,10 @@ impl DurableObject for DocumentSyncSession {
             session_storage: Mutex::new(None),
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
-            msg_buffer: Arc::new(Mutex::new(vec![])),
+            inbound: Arc::new(Mutex::new(HashMap::new())),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
             pending_editors: Arc::new(Mutex::new(Default::default())),
+            mapped_writing_peers: Mutex::new(Default::default()),
             surface_lifecycle: Mutex::new(None),
             source_migration: Mutex::new(None),
             mutation_barrier: futures::lock::Mutex::new(()),
@@ -1036,14 +1062,21 @@ impl DurableObject for DocumentSyncSession {
             trace.remote_parent = %remote_parent,
         );
 
+        // Log the failure inside the span and the scope: the scope flushes
+        // telemetry when it ends, and a log buffered after it is only exported
+        // if a later request on the same isolate happens to flush it.
         let res = worker_rs_otel::scope(
             &self.env,
             &self.state,
-            self.inner_fetch(req).instrument(span),
+            async {
+                self.inner_fetch(req)
+                    .await
+                    .context("DurableObject::fetch error")
+            }
+            .instrument(span),
         )
         .await;
-        res.context("DurableObject::fetch error")?
-            .with_cors(&cors(set_allow_origin.as_deref()))
+        res?.with_cors(&cors(set_allow_origin.as_deref()))
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
@@ -1073,8 +1106,13 @@ impl DurableObject for DocumentSyncSession {
             }
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
+        let socket = self.socket_for(&ws);
+        let ws_id = get_ws_id(&self.state, &ws)?;
+        let Some(binary_message) = socket.receive(&ws_id, &binary_message)? else {
+            return Ok(());
+        };
         worker_rs_otel::scope(&self.env, &self.state, async {
-            let mut telemetry = websocket::InboundMessageTelemetry::new(binary_message.len());
+            let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
 
             let res: Result<()> = async {
                 let document_id = self.document_id().await.inspect_err(|_| {
@@ -1083,21 +1121,19 @@ impl DurableObject for DocumentSyncSession {
                 let ws_id = get_ws_id_from_tags(&self.state.get_tags(&ws)).ok();
                 telemetry.record_context(&document_id, ws_id);
 
-                let message =
-                    websocket::deserialize_message(&binary_message).inspect_err(|_| {
-                        telemetry.record_message_type("invalid");
-                        telemetry.record_error_stage("deserialize");
-                    })?;
-                telemetry.record_message_type(websocket::message_type(&message));
+                let message = protocol::deserialize_message(&binary_message).inspect_err(|_| {
+                    telemetry.record_message_type("invalid");
+                    telemetry.record_error_stage("deserialize");
+                })?;
+                telemetry.record_message_type(protocol::message_type(&message));
 
-                websocket::process_message(
-                    &ws,
+                protocol::process_message(
+                    &self.socket_for(&ws),
                     &document_id,
                     &*self.document_state().await?,
                     &*self.session_storage().await?,
                     &self.awareness,
                     message,
-                    self.msg_buffer.clone(),
                     self,
                     &mut telemetry,
                 )
@@ -1224,20 +1260,20 @@ impl DurableObject for DocumentSyncSession {
             return Ok(());
         }
         worker_rs_otel::scope(&self.env, &self.state, async {
+            // Sockets closed by `delete_handler` report back after the session is gone.
+            if self.try_document_id().await?.is_none() {
+                self.forget_websocket_metadata(&ws).await;
+                return Ok(());
+            }
             self.validate_surface_sockets(None).await?;
-            let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
+            let peer_ids = Wsm::new(self, &ws).get_peer_ids(true).await?;
             for peer_id in peer_ids {
                 self.awareness.delete(&peer_id.to_string());
                 let update = self.awareness.encode(&peer_id.to_string());
 
                 // Don't silently discard the error
-                websocket::broadcast_awareness(
-                    &ws,
-                    self.get_websockets().as_slice(),
-                    update.as_slice(),
-                    self.msg_buffer.clone(),
-                )
-                .context("failed to broadcast awareness")?;
+                protocol::broadcast_awareness(self, &self.socket_for(&ws), update.as_slice())
+                    .context("failed to broadcast awareness")?;
             }
 
             if self.state.get_websockets().len() == 1

@@ -18,8 +18,20 @@ const VERSION = 2;
 export const REPLY_TARGET_NODE_TYPE = 'reply-target';
 export const REPLY_TARGET_NODE_TAG = 'm-reply-target';
 
+export const REPLY_TARGET_PARENT_TYPES = [
+  'channel',
+  'document',
+  'initiative',
+  'crm_company',
+  'crm_contact',
+  'call',
+] as const;
+
 /** The message reference and preview persisted by a reply-target node. */
-export type ReplyTargetParent = { type: 'channel' | 'document'; id: string };
+export type ReplyTargetParent = {
+  type: (typeof REPLY_TARGET_PARENT_TYPES)[number];
+  id: string;
+};
 
 export type ReplyTargetData = {
   parent: ReplyTargetParent;
@@ -33,12 +45,12 @@ export type ReplyTargetData = {
 export function isReplyTargetData(value: unknown): value is ReplyTargetData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
+  if (!data.parent || typeof data.parent !== 'object') return false;
+  const parent = data.parent as Record<string, unknown>;
   return (
-    !!data.parent &&
-    typeof data.parent === 'object' &&
-    ['channel', 'document'].includes((data.parent as ReplyTargetParent).type) &&
-    typeof (data.parent as ReplyTargetParent).id === 'string' &&
-    (data.parent as ReplyTargetParent).id.length > 0 &&
+    REPLY_TARGET_PARENT_TYPES.some((type) => type === parent.type) &&
+    typeof parent.id === 'string' &&
+    parent.id.length > 0 &&
     typeof data.targetMessageId === 'string' &&
     typeof data.targetThreadId === 'string' &&
     typeof data.displayText === 'string' &&
@@ -86,7 +98,7 @@ export type ReplyTargetDecoratorProps = ReplyTargetData & {
   theme: EditorThemeClasses;
 };
 
-/** A block-level reference to another message in a channel thread. */
+/** A block-level reference to another message in a conversation. */
 export class ReplyTargetNode extends DecoratorNode<
   DecoratorComponent<ReplyTargetDecoratorProps> | undefined
 > {
@@ -207,7 +219,7 @@ export class ReplyTargetNode extends DecoratorNode<
   }
 }
 
-/** Create a block-level channel reply-target reference. */
+/** Create a block-level message reply-target reference. */
 export function $createReplyTargetNode(data: ReplyTargetData): ReplyTargetNode {
   return $applyNodeReplacement(
     new ReplyTargetNode(

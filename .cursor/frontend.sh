@@ -19,7 +19,7 @@ if ! in_pinned_nix_shell; then
 fi
 
 FRONTEND_PORT=3000
-PROXY_ORIGIN='http://localhost:8090'
+PROXY_ORIGIN='https://localhost:8090'
 DEV_URL="http://localhost:${FRONTEND_PORT}/app"
 PID_FILE="${LOG_DIR}/frontend-dev.pid"
 DEV_LOG="${LOG_DIR}/frontend-dev.log"
@@ -41,19 +41,28 @@ if curl -fsS --max-time 2 "${DEV_URL}" >/dev/null 2>&1; then
   exit 0
 fi
 
-if ! curl -fsS --max-time 3 "${PROXY_ORIGIN}/auth/health" >/dev/null 2>&1; then
+if ! curl -fsS --cacert "${WORKSPACE_ROOT}/infra/local/certs/ca.pem" --max-time 3 "${PROXY_ORIGIN}/auth/health" >/dev/null 2>&1; then
   echo "cursor-cloud frontend: stack is not running — run: bash .cursor/stack.sh" >&2
   exit 1
 fi
 
 : >"${DEV_LOG}"
+\cd "${WORKSPACE_ROOT}"
+BACKEND_ROUTES="$(cargo x frontend-proxy-routes)"
+just apps/web/ensure-cache-wasm
+just apps/web/ensure-agent-fold-wasm
 \cd "${WORKSPACE_ROOT}/apps/web"
 setsid env \
   PORT="${FRONTEND_PORT}" \
+  NODE_EXTRA_CA_CERTS="${WORKSPACE_ROOT}/infra/local/certs/ca.pem" \
+  MACRO_LOCAL_HOSTNAME="$(hostname)" \
   VITE_LOCAL_SERVERS=ALL \
-  VITE_LOCAL_BACKEND_ORIGIN="${PROXY_ORIGIN}" \
-  VITE_AI_EDITING_WORKER_URL="${PROXY_ORIGIN}/ai-editing" \
-  bun run --bun dev >>"${DEV_LOG}" 2>&1 </dev/null &
+  VITE_LOCAL_BACKEND_ORIGIN="same-origin" \
+  MACRO_LOCAL_BACKEND_PROXY="${PROXY_ORIGIN}" \
+  MACRO_LOCAL_BACKEND_ROUTES="${BACKEND_ROUTES}" \
+  VITE_AI_EDITING_WORKER_URL="/ai-editing" \
+  python3 -c 'import subprocess; child = subprocess.Popen(["node", "../../node_modules/vite/bin/vite.js", "-c", "vite.config.ts"], stdin=subprocess.PIPE); raise SystemExit(child.wait())' \
+  >>"${DEV_LOG}" 2>&1 </dev/null &
 echo "$!" >"${PID_FILE}"
 
 # Cold starts build wasm packages before Vite binds; be patient once.

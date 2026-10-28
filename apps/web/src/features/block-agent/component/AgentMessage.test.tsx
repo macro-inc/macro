@@ -12,9 +12,24 @@ import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
 
+const renderTelemetry = vi.hoisted(() => ({
+  context: vi.fn(),
+  observe: vi.fn(),
+}));
+vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: renderTelemetry.context,
+}));
+
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
 // is a marker. The per-part components have their own tests.
+const openedOrigins = vi.hoisted(() => [] as unknown[]);
+vi.mock('../open-prompt-origin', () => ({
+  useOpenPromptOrigin: () => (destination: unknown, options: unknown) => {
+    openedOrigins.push({ destination, options });
+  },
+}));
+
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
@@ -32,16 +47,31 @@ vi.mock('@ui', () => ({
     <div data-testid="bubble">{props.children}</div>
   ),
 }));
-vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: { text: string }) => <p data-testid="text">{props.text}</p>,
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string }) => (
+      <p data-testid="text">{props.markdown}</p>
+    ),
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  channelTheme: {},
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
     part: { id: string; status: string };
-    context: { partIndex: number; inFlight: boolean };
+    context: {
+      partIndex: number;
+      inFlight: boolean;
+      followedBy: (name: string) => boolean;
+    };
   }) => (
     <div
       data-index={props.context.partIndex}
+      data-followed-by-save={String(
+        props.context.followedBy('SaveDatabaseQuery')
+      )}
       data-status={props.part.status}
       data-live={String(props.context.inFlight)}
       data-testid="tool"
@@ -72,8 +102,10 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => (
-    <div data-testid="action-line">{props.label}</div>
+  ActionLine: (props: { label: string; detail?: string }) => (
+    <div data-testid="action-line" data-detail={props.detail}>
+      {props.label}
+    </div>
   ),
   FailureNoticeCard: (props: {
     notice: { title: string; body: string; link?: { url: string } | null };
@@ -103,6 +135,8 @@ vi.mock('../views/LiveToolGroup', () => ({
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  renderTelemetry.context.mockReset();
+  renderTelemetry.observe.mockReset();
   cleanup();
 });
 
@@ -132,13 +166,82 @@ const message = (
   agentSessionId: 'session',
   requestId: null,
   pending: false,
+  postedAt: null,
+  segments: [],
+  phase: null,
   turn: 0,
   author: { kind: 'agent' },
   parts,
   stop,
 });
 
+describe('Message incomplete mentions', () => {
+  const partial = 'See <m-document-mention>{"documentId":"unfinished';
+
+  it('keeps a cancelled reply clean when stopping and after remount', () => {
+    const [reply, setReply] = createSignal(message([text(partial)], null));
+    const [inFlight, setInFlight] = createSignal(true);
+    const view = render(() => (
+      <Message message={reply()} inFlight={inFlight()} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+
+    setReply(message([text(partial)], { kind: 'cancelled' }));
+    setInFlight(false);
+    expect(view.getByTestId('text').textContent).toBe('See ');
+    view.unmount();
+
+    const restored = render(() => (
+      <Message message={reply()} inFlight={false} />
+    ));
+    expect(restored.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('hides an interrupted reply without a recorded stop reason', () => {
+    const view = render(() => (
+      <Message message={message([text(partial)], null)} inFlight={false} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('preserves unfinished markup in user prompts', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(partial)]),
+          author: { kind: 'user', userId: null },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('text').textContent).toBe(partial);
+  });
+});
+
 describe('Message tool grouping', () => {
+  it('observes only agent answer DOM on the existing session and matching turn', () => {
+    renderTelemetry.context.mockReturnValue({
+      observeRenderedText: renderTelemetry.observe,
+    });
+    const answer = message([text('Hello')]);
+    answer.turn = 3;
+    render(() => <Message message={answer} inFlight />);
+    expect(renderTelemetry.observe).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      3,
+      expect.any(HTMLElement)
+    );
+    cleanup();
+    renderTelemetry.observe.mockClear();
+    render(() => (
+      <Message
+        message={{ ...answer, author: { kind: 'user', userId: null } }}
+        inFlight={false}
+      />
+    ));
+    expect(renderTelemetry.observe).not.toHaveBeenCalled();
+  });
+
   it('folds consecutive tool calls into one group, keeping their indices', () => {
     const view = render(() => (
       <Message
@@ -172,6 +275,39 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
       'Looking.',
       'Done.',
+    ]);
+  });
+
+  it('tells each call whether a later call of the turn saves the query', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          {
+            kind: 'tool_use',
+            id: 'query',
+            name: { kind: 'mcp', server: 'macro', tool: 'QueryDatabase' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          {
+            kind: 'tool_use',
+            id: 'save',
+            name: { kind: 'mcp', server: 'macro', tool: 'SaveDatabaseQuery' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          text('Saved.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view
+        .getAllByTestId('tool')
+        .map((el) => [el.textContent, el.dataset.followedBySave])
+    ).toEqual([
+      ['query', 'true'],
+      ['save', 'false'],
     ]);
   });
 
@@ -633,6 +769,26 @@ describe('Message prompt attribution', () => {
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();
   });
+
+  it('renders a notification Cursor wrote full-width, not as a prompt', () => {
+    const notification = [
+      '<system_notification source="github" conclusion="success" checks="27" subscriptionType="github:ci:branch">',
+      'All 27 CI checks completed without failures.',
+      '</system_notification>',
+    ].join('\n');
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(notification)]),
+          author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('bubble')).toBeNull();
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('text').textContent).toBe(notification);
+  });
 });
 
 describe('Message failed turns', () => {
@@ -646,7 +802,7 @@ describe('Message failed turns', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('action-line').textContent).toContain(
+    expect(view.getByTestId('action-line').dataset.detail).toBe(
       'Internal error: something broke'
     );
     expect(view.queryByTestId('failure-notice')).toBeNull();
@@ -677,5 +833,83 @@ describe('Message failed turns', () => {
       'https://www.cursor.com/dashboard?tab=settings'
     );
     expect(view.queryByTestId('action-line')).toBeNull();
+  });
+});
+
+describe('Message prompt footer', () => {
+  const context = (xml: string) =>
+    `<m-agent-context>${JSON.stringify({ version: 1, text: xml }).replace(/</g, '\\u003c')}</m-agent-context>\nWork on the assigned task.`;
+
+  it('says under the prompt what started it, and goes there on click', () => {
+    openedOrigins.length = 0;
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context(
+                '<trigger kind="task_assigned" discussion="d1"><assigned by="Julia" by_id="macro|julia@example.com"/><task id="task-1" title="Fix calendar popover scroll" status="Todo"/></trigger>'
+              )
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+
+    const line = view.getByRole('button', {
+      name: 'via task Fix calendar popover scroll from Julia',
+    });
+    line.click();
+    line.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, shiftKey: true })
+    );
+    expect(openedOrigins).toEqual([
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: false },
+      },
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: true },
+      },
+    ]);
+  });
+
+  it('shows only when a prompt typed in the session was posted', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context('<session owner="Me" owner_id="macro|me@macro.com"/>')
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          postedAt: '2026-10-15T14:02:00+00:00',
+        }}
+        inFlight={false}
+      />
+    ));
+    const footer = view.getByTestId('prompt-footer');
+    expect(footer.querySelector('button')).toBeNull();
+    expect(footer.querySelector('time')?.dateTime).toBe(
+      '2026-10-15T14:02:00+00:00'
+    );
+  });
+
+  it('adds nothing under a prompt the log has not confirmed', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text('Do the thing.')]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          pending: true,
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('prompt-footer')).toBeNull();
   });
 });

@@ -17,10 +17,10 @@ export function LogoProgress(props: LogoProgressProps) {
       class={props.class}
       display="block"
     >
-      <path d={LOGO_PATH} fill="var(--b4)" />
+      <path d={LOGO_PATH} fill="var(--color-edge)" />
       <path
         d={LOGO_PATH}
-        fill="var(--a0)"
+        fill="var(--color-accent)"
         style={{
           'clip-path': `inset(0 ${clipRight()} 0 0)`,
           transition: 'clip-path 0.3s ease',

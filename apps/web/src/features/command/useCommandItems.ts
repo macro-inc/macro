@@ -1,29 +1,30 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import {
-  type Bucket,
-  type EntityItem,
-  type QuickAccessItem,
-  type UserItem,
-  useQuickAccess,
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { inEnglish } from '@app/lib/i18n';
+import { enableProjects } from '@core/constant/featureFlags';
+import type {
+  EntityItem,
+  QuickAccessItem,
+  UserItem,
 } from '@core/context/quickAccess';
-// Imported from the module rather than the barrel: the barrel pulls in
-// QuickAccessProvider, which cycles back here, and `exclude` runs at module
-// evaluation time below.
-import { exclude } from '@core/context/quickAccess/types';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import type { HotkeyCommand } from '@core/hotkey/types';
-import {
-  createFreshSearch,
-  type FreshSortConfig,
-  type TimestampedItem,
-} from '@core/util/freshSort';
+import { TOKENS } from '@core/hotkey/tokens';
+import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
+import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
+import type { CrmContactEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
+import {
+  type CreateProjectCommandItem,
+  newProjectCommand,
+  type ProjectCommandItem,
+} from './project-items';
+import { useEntitySearch } from './queries/entity-search';
 import { getCommandLastUsedAt } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter, DisplayHotkeyStep } from './types';
@@ -39,6 +40,8 @@ type CommandItem = {
   data: HotkeyCommand;
   displayHotkey?: string;
   displayHotkeySequence?: DisplayHotkeyStep[];
+  /** Its keys run another command here, as Email's g t runs Sent. */
+  hideHotkey?: boolean;
 };
 
 /** Search item: triggers full-text search in the sidebar Search view */
@@ -65,12 +68,25 @@ type AskAiItem = {
 };
 
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
+type CommandMenuItem =
+  | QuickAccessItem
+  | CommandItem
+  | SearchItem
+  | AskAiItem
+  | ProjectCommandItem
+  | CreateProjectCommandItem;
 
 export type PaginationControls = {
   hasMore: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
+};
+
+/** CRM contacts matching a typed query, beyond those Quick Access holds. */
+export type CommandContactSource = PaginationControls & {
+  contacts: Accessor<CrmContactEntity[]>;
+  isLoading: Accessor<boolean>;
+  error: Accessor<Error | undefined>;
 };
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
@@ -93,19 +109,6 @@ function isAskAiItem(item: CommandMenuItem): item is AskAiItem {
   return item.kind === 'ask-ai';
 }
 
-/**
- * Entities shown in the no-query recency list. Unopened CRM companies (no
- * `viewedAt`) are excluded so the recency view sorts companies purely by when
- * the user last opened them — without this they'd fall back to `updatedAt` and
- * surface companies the user has never touched. They stay reachable via search.
- */
-function showInRecencyList(item: CommandMenuItem): boolean {
-  if (item.bucket === 'crm_company') {
-    return item.timestamps.viewedAt != null;
-  }
-  return true;
-}
-
 /** Categories that surface a "Search for [query]" row in the command menu */
 const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'all',
@@ -114,7 +117,6 @@ const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'documents',
   'tasks',
   'chats',
-  'projects',
 ]);
 
 function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
@@ -142,15 +144,13 @@ function makeAskAiItem(query: string): AskAiItem {
   };
 }
 
-function createSearchConfig(hasQuery: boolean): FreshSortConfig {
-  return {
-    useViewedAt: true,
-    dmBoost: hasQuery ? 1.8 : 1.0,
-    fuzzyWeight: hasQuery ? 0.7 : 0.0,
-    timeWeight: hasQuery ? 0.7 : 0.9,
-    minFuzzyThreshold: hasQuery ? 0.1 : 0,
-    commaSeparatedChannelMatch: true,
-  };
+function commandKey(command: CommandWithInfo): string {
+  const description = inEnglish(() =>
+    typeof command.description === 'function'
+      ? command.description()
+      : command.description
+  );
+  return description.replaceAll(' ', '-');
 }
 
 /**
@@ -165,15 +165,12 @@ function commandsToItems(
     displayHotkeySequence?: (
       command: CommandWithInfo
     ) => DisplayHotkeyStep[] | undefined;
+    hideHotkey?: (command: CommandWithInfo) => boolean;
   }
 ): CommandItem[] {
   const seen = new Set<string>();
   const dedupedCommands = commands.filter((command) => {
-    const description =
-      typeof command.description === 'function'
-        ? command.description()
-        : command.description;
-    const id = description.replaceAll(' ', '-');
+    const id = commandKey(command);
     if (seen.has(id)) {
       return false;
     }
@@ -188,7 +185,8 @@ function commandsToItems(
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
     const keywords = command.keywords?.join(' ') ?? '';
-    const id = `command-${description.replaceAll(' ', '-')}`;
+    // Persisted recency keys stay English so they survive a language change.
+    const id = `command-${commandKey(command)}`;
     const lastUsedAt = getCommandLastUsedAt(id);
 
     return {
@@ -201,6 +199,7 @@ function commandsToItems(
       data: command,
       displayHotkey: options?.displayHotkey?.(command),
       displayHotkeySequence: options?.displayHotkeySequence?.(command),
+      hideHotkey: options?.hideHotkey?.(command),
     };
   });
 
@@ -263,6 +262,19 @@ function getSurfacedNestedCommands(commands: CommandWithInfo[]) {
 function useCommandsList(
   commandScopeCommands: Accessor<CommandWithInfo[]>
 ): () => CommandItem[] {
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const availableItems = (
+    commands: CommandWithInfo[],
+    options?: Parameters<typeof commandsToItems>[1]
+  ) =>
+    commandsToItems(
+      commands.filter(
+        (command) =>
+          command.hotkeyToken !== TOKENS.create.initiative ||
+          projectsFlag().enabled
+      ),
+      options
+    );
   const scopeId = activeScope() ?? '';
   const capturedCommands = getActiveCommandsFromScope(scopeId, {
     sortByScopeLevel: false,
@@ -277,12 +289,25 @@ function useCommandsList(
     limitToCurrentScope: true,
     ignoreInputFocused: true,
   });
+  // The command each go-to letter runs: a focused view's letter (Email's g t
+  // Sent) runs before the app's, which then shows no keys.
+  const goToKeyOwners = new Map<ValidHotkey, CommandWithInfo>();
+  for (const command of [...goToCommands].sort(
+    (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
+  )) {
+    for (const hotkey of command.hotkeys ?? []) {
+      if (!goToKeyOwners.has(hotkey)) goToKeyOwners.set(hotkey, command);
+    }
+  }
+  const ownGoToKey = (command: CommandWithInfo) =>
+    command.hotkeys?.find((key) => goToKeyOwners.get(key) === command);
 
   return createMemo(() => {
+    projectsFlag();
     // If we're in a command scope (multi-stage command), show those commands instead
     const scopeCommands = commandScopeCommands();
     if (scopeCommands.length > 0) {
-      return commandsToItems(scopeCommands, {
+      return availableItems(scopeCommands, {
         displayHotkeySequence: nestedCommandScopeDisplaySequence,
       });
     }
@@ -292,7 +317,7 @@ function useCommandsList(
       const selectionCommands = capturedCommands.filter((command) =>
         command.tags?.includes(HotkeyTags.SelectionModification)
       );
-      return commandsToItems(selectionCommands);
+      return availableItems(selectionCommands);
     }
 
     // Include sidebar go-to commands in the main command menu with their
@@ -306,7 +331,7 @@ function useCommandsList(
     );
 
     return [
-      ...commandsToItems(
+      ...availableItems(
         [
           ...capturedCommands,
           ...surfacedNestedCommands.map((item) => item.command),
@@ -316,84 +341,18 @@ function useCommandsList(
             surfacedHotkeySequences.get(command),
         }
       ),
-      ...commandsToItems(goToCommands, {
+      ...availableItems(goToCommands, {
         displayHotkeySequence: (command) => {
-          const hotkey = command.hotkeys?.[0];
+          const hotkey = ownGoToKey(command);
           return hotkey
             ? [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: hotkey }]
             : undefined;
         },
+        hideHotkey: (command) =>
+          Boolean(command.hotkeys?.length) && !ownGoToKey(command),
       }),
     ];
   });
-}
-
-const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
-  Record<CategoryFilter, Bucket[]>
-> = {
-  all: exclude('person'),
-  channels: ['channel'],
-  dms: ['dm'],
-  documents: ['note', 'document', 'snippet', 'project'],
-  tasks: ['task'],
-  chats: ['chat'],
-  projects: ['project'],
-  people: ['person'],
-};
-
-/** Creates only the Quick Access list needed by the active category. */
-function useQuickAccessCategory(
-  categoryFilter: Accessor<CategoryFilter>,
-  commandScopeCommands: Accessor<CommandWithInfo[]>,
-  searchTerm: Accessor<string>,
-  enabled: Accessor<boolean>
-) {
-  const quickAccess = useQuickAccess();
-  const commands = useCommandsList(commandScopeCommands);
-  const activeList = createMemo(() => {
-    if (
-      commandScopeCommands().length > 0 ||
-      CommandState.isEntityActionMode()
-    ) {
-      return undefined;
-    }
-    const buckets = QUICK_ACCESS_BUCKETS_BY_CATEGORY[categoryFilter()];
-    return buckets
-      ? quickAccess.useList({ buckets, searchTerm, enabled })
-      : undefined;
-  });
-  const items = createMemo((): CommandMenuItem[] => {
-    if (
-      commandScopeCommands().length > 0 ||
-      CommandState.isEntityActionMode() ||
-      categoryFilter() === 'commands'
-    ) {
-      return commands();
-    }
-
-    const entities: CommandMenuItem[] = activeList()?.items() ?? [];
-    if (categoryFilter() !== 'all') return entities;
-    return mergeSortedArrays(
-      entities,
-      commands(),
-      (a, b) => b.sortTimestamp - a.sortTimestamp
-    );
-  });
-
-  return {
-    items,
-    isLoadingEntities: () => {
-      const list = activeList();
-      return !!list?.isLoading() && list.items().length === 0;
-    },
-    pagination: {
-      hasMore: () => activeList()?.hasMore() ?? false,
-      isLoadingMore: () => activeList()?.isLoadingMore() ?? false,
-      loadMore: async () => {
-        await activeList()?.loadMore();
-      },
-    } satisfies PaginationControls,
-  };
 }
 
 export function useCommandItems(
@@ -403,65 +362,55 @@ export function useCommandItems(
     showSearchRow?: boolean;
     /**
      * Source of multi-stage command-scope commands. Defaults to the desktop
-     * command menu state; mobile search passes its own scope state.
+     * command menu state.
      */
     commandScopeCommands?: Accessor<CommandWithInfo[]>;
     /** Whether this menu should drive cache-backed Quick Access search. */
     searchActive?: Accessor<boolean>;
+    /** Finds CRM contacts for typed People and All queries. */
+    contactDiscovery?: (
+      search: Accessor<string>,
+      active: Accessor<boolean>
+    ) => CommandContactSource;
   }
 ) {
   const showSearchRow = options?.showSearchRow ?? true;
   const commandScopeCommands =
     options?.commandScopeCommands ?? CommandState.commandScopeCommands;
-  const quickAccess = useQuickAccess();
-  const searchActive = () => options?.searchActive?.() === true;
-  const scopedSearchTerm = () => (searchActive() ? query() : '');
-  const category = useQuickAccessCategory(
-    categoryFilter,
-    commandScopeCommands,
-    scopedSearchTerm,
-    searchActive
-  );
-  const categoryItems = category.items;
-
-  const search = createMemo(() => {
-    const q = query();
-    const hasQuery = q.trim().length > 0;
-    return createFreshSearch<CommandMenuItem>({
-      config: createSearchConfig(hasQuery),
-      getName: (item) => item.searchText,
-      isDmItem: (item) => item.bucket === 'dm',
-      getTimestamp: (item) => item.timestamps,
-    });
+  const commands = useCommandsList(commandScopeCommands);
+  const entityEnabled = () =>
+    options?.searchActive?.() === true &&
+    commandScopeCommands().length === 0 &&
+    !CommandState.isEntityActionMode();
+  const entities = useEntitySearch(query, categoryFilter, {
+    enabled: entityEnabled,
+    excludeEmails: true,
+    contactDiscovery: options?.contactDiscovery,
   });
-
-  const rankItems = (
-    items: CommandMenuItem[],
-    queryText: string
-  ): CommandMenuItem[] => {
-    if (!queryText.trim()) return items.filter(showInRecencyList);
+  const categoryItems = (): CommandMenuItem[] => {
     if (
-      !quickAccess.usesRecordSelection() &&
-      !quickAccess.usesSearchProjection()
-    ) {
-      return search()(items, queryText).map((result) => result.item);
-    }
-
-    const entities = items.filter(isEntityItem);
-    const localItems = items.filter((item) => !isEntityItem(item));
-    const rankedLocalItems = search()(localItems, queryText).map(
-      (result) => result.item
-    );
-    if (entities.length === 0) return rankedLocalItems;
-
-    const topCommands = rankedLocalItems.filter(isCommandItem).slice(0, 3);
-    const topCommandIds = new Set(topCommands.map((item) => item.id));
+      commandScopeCommands().length > 0 ||
+      CommandState.isEntityActionMode() ||
+      categoryFilter() === 'commands'
+    )
+      return commands();
+    if (categoryFilter() === 'all')
+      return entities.withDiscovery(
+        mergeSortedArrays<CommandMenuItem>(
+          entities.cachedItems(),
+          commands(),
+          (a, b) => b.sortTimestamp - a.sortTimestamp
+        )
+      );
+    const items = entities.items();
     return [
-      ...topCommands,
-      ...entities,
-      ...rankedLocalItems.filter((item) => !topCommandIds.has(item.id)),
+      ...items,
+      ...(entities.projectsEnabled() && categoryFilter() === 'projects'
+        ? [newProjectCommand]
+        : []),
     ];
   };
+  const rankItems = entities.rankItems;
 
   const shouldShowSearchRow = (q: string) => {
     if (!showSearchRow) return false;
@@ -515,8 +464,8 @@ export function useCommandItems(
 
   return {
     items: filteredItems,
-    isLoadingEntities: category.isLoadingEntities,
-    pagination: category.pagination,
+    isLoadingEntities: entities.isLoadingEntities,
+    pagination: entities.pagination,
   };
 }
 

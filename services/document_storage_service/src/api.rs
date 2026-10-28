@@ -19,6 +19,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 pub(crate) mod context;
 mod saved_views;
+mod sync;
 pub(crate) mod util;
 
 // Middleware
@@ -27,6 +28,7 @@ mod middleware;
 // Routes
 mod annotations;
 mod documents;
+mod folders_query;
 mod graphql_soup;
 mod health;
 mod history;
@@ -48,6 +50,7 @@ mod threads;
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+    let sync_sessions = state.sync_sessions.clone();
     let app = api_router(state.clone())
         .layer(
             ServiceBuilder::new()
@@ -76,10 +79,16 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         &state.config.environment,
         &state.config.port
     );
-    axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
+    let shutdown_sessions = sync_sessions.clone();
+    let result = axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(async move {
+            macro_entrypoint::shutdown_signal().await;
+            shutdown_sessions.cancel();
+        })
         .await
-        .context("error starting service")
+        .context("error starting service");
+    sync_sessions.shutdown().await;
+    result
 }
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
@@ -97,6 +106,13 @@ fn api_router(state: ApiContext) -> Router {
     // Webhook router is outside auth — LiveKit validates via its own JWT,
     // cal.com validates via HMAC signature.
     let webhook_router = Router::new()
+        .nest(
+            "/call/guest-chat",
+            messages::inbound::guest_chat::router(
+                state.guest_chat_service.clone(),
+                state.call_public_rate_limiter.clone(),
+            ),
+        )
         .nest(
             "/call",
             call::inbound::axum_router::webhook_router(
@@ -116,6 +132,7 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .merge(sync::router())
         .nest(
             "/dictation",
             dictation::inbound::axum_router::dictation_router(state.dictation_state.clone()),
@@ -216,6 +233,22 @@ fn api_router(state: ApiContext) -> Router {
         .merge(calendar_events::inbound::axum_router::calendar_router(
             state.calendar_state.clone(),
         ))
+        .merge(
+            calendar_events::inbound::join_request_router::calendar_join_request_router(
+                state.calendar_join_request_state.clone(),
+            ),
+        )
+        .merge(calendar_events::inbound::team_router::team_calendar_router(
+            calendar_events::inbound::team_router::CalendarTeamRouterState::new(
+                std::sync::Arc::new(calendar_events::domain::team::CalendarTeamServiceImpl::new(
+                    calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(
+                        state.db.clone(),
+                    ),
+                    state.config.calendar_team_sharing_enabled,
+                )),
+                state.authorization_state.clone(),
+            ),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
@@ -252,12 +285,51 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/slack",
+            slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
+        )
+        .nest(
+            "/external-chats",
+            external_chat::inbound::router::external_chats_router(
+                state.external_chat_state.chats.clone(),
+            ),
+        )
+        .nest(
+            "/whatsapp",
+            whatsapp_linked::inbound::router::whatsapp_router(
+                state.external_chat_state.whatsapp.clone(),
+            ),
+        )
+        .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
         .nest(
+            "/entities",
+            access_requests::inbound::axum_router::router(state.access_requests_state.clone()),
+        )
+        .nest(
             "/initiatives",
             initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+        )
+        .nest(
+            "/databases",
+            databases::inbound::axum_router::databases_router(state.databases_state.clone())
+                .merge(databases_sql::inbound::axum_router::sql_router(
+                    state.sql_state.clone(),
+                ))
+                .merge(databases::inbound::starter_router::starter_router(
+                    state.database_starter_state.clone(),
+                ))
+                .merge(
+                    database_webhooks::inbound::axum_router::database_webhooks_router(
+                        state.database_webhooks_state.clone(),
+                    ),
+                ),
+        )
+        .nest(
+            "/forms",
+            forms::inbound::axum_router::forms_router(state.forms_state.clone()),
         )
         .nest(
             "/collab_surfaces",
@@ -269,6 +341,17 @@ fn api_router(state: ApiContext) -> Router {
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
                 state.foreign_entity_state.clone(),
+            ),
+        )
+        .nest(
+            "/github_pull_requests",
+            github_pull_requests::inbound::axum_router::github_pull_requests_router(
+                state.github_pull_request_state.clone(),
+            )
+            .merge(
+                github_pull_requests::inbound::changes_router::github_pull_request_changes_router(
+                    state.github_pull_request_changes_state.clone(),
+                ),
             ),
         )
         .nest(
@@ -285,7 +368,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
+                "/pipelines",
+                crm::inbound::pipelines::router(state.pipeline_state.clone()),
+            ),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
@@ -296,6 +382,12 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
+                .nest(
+                    "/github",
+                    github::inbound::pull_request_index_router::pull_request_index_router(
+                        state.github_pull_request_index_state.clone(),
+                    ),
+                )
                 .nest(
                     "/search",
                     search_service::search_router()

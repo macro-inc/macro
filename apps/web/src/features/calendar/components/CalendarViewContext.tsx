@@ -1,18 +1,14 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { makePersisted } from '@solid-primitives/storage';
+import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
   batch,
   createEffect,
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type ParentProps,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import {
-  CALENDAR_PREFERENCES_KEY,
-  getPreferredCalendarPeriodView,
-} from '../calendar-preferences';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
 import {
   type CalendarEvent,
@@ -21,21 +17,13 @@ import {
   type CalendarWeekStart,
   isCalendarEventVisible,
 } from '../types';
-import { getDefaultCalendarTimeFormat } from '../utils/time-format';
+import { useCalendarPreferences } from '../utils/preferences';
 
 interface CalendarDisplaySettings {
   readonly periodView: CalendarPeriodView;
   readonly showWeekends: boolean;
   readonly weekStartsOn: CalendarWeekStart;
   readonly timeFormat: CalendarTimeFormat;
-}
-
-interface CalendarPreferences {
-  periodView: CalendarPeriodView;
-  hiddenSourceIds: string[];
-  showWeekends: boolean;
-  weekStartsOn: CalendarWeekStart;
-  timeFormat: CalendarTimeFormat;
 }
 
 type CalendarViewContextProps = ParentProps<{
@@ -70,7 +58,10 @@ function createCalendarEventSelection(
       setAnchor(nextAnchor);
       setOrigin(nextOrigin);
     });
-    onFocusedEventIdChange?.(nextEvent.eventId);
+    // Opaque team projections have no direct-event navigation capability.
+    onFocusedEventIdChange?.(
+      nextEvent.teamProjection ? undefined : nextEvent.eventId
+    );
   };
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
@@ -83,28 +74,12 @@ export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider(
     'CalendarViewContext',
     (props: CalendarViewContextProps) => {
-      const defaultPreferences: CalendarPreferences = {
-        periodView: getPreferredCalendarPeriodView(),
-        hiddenSourceIds: [],
-        showWeekends: true,
-        weekStartsOn: 0,
-        timeFormat: getDefaultCalendarTimeFormat(),
-      };
-      const [preferences, setPreferences] = makePersisted(
-        createStore<CalendarPreferences>(defaultPreferences),
-        {
-          name: CALENDAR_PREFERENCES_KEY,
-          deserialize: (value) => ({
-            ...defaultPreferences,
-            ...(JSON.parse(value) as Partial<CalendarPreferences>),
-          }),
-        }
-      );
-      const { sources, sourceById } = useCalendarSources();
+      const [preferences, setPreferences] = useCalendarPreferences();
+      const { sources, sourceById, sourcesReady } = useCalendarSources();
       // Sources default to visible, so calendars discovered after a
       // preference was saved (or events whose calendar is still loading)
       // never silently disappear.
-      const hiddenSourceIds = createMemo(
+      const hiddenSourceIds = createMemo<ReadonlySet<string>>(
         () => new Set(preferences.hiddenSourceIds)
       );
       const isSourceVisible = (sourceId: string) =>
@@ -113,12 +88,27 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const selection = createCalendarEventSelection(
         props.onFocusedEventIdChange
       );
-      createEffect(() => {
-        const periodView = props.periodView;
-        if (periodView && preferences.periodView !== periodView) {
-          setPreferences('periodView', periodView);
-        }
+      // A revoked OOO agenda entry can lie outside every mounted viewport.
+      // Close detached selections synchronously when authorization resets data.
+      const unsubscribeTeamReset = subscribeToTeamCalendarReset(() => {
+        const selected = selection.event();
+        if (
+          selected?.teamProjection ||
+          selected?.calendar.id.startsWith('team-ooo:')
+        )
+          selection.close();
       });
+      onCleanup(unsubscribeTeamReset);
+      // Preferences are shared across providers; track only this route's period
+      // so two mounted calendars never overwrite each other in a loop.
+      createEffect(
+        on(
+          () => props.periodView,
+          (periodView) => {
+            if (periodView) setPreferences('periodView', periodView);
+          }
+        )
+      );
       createEffect(
         on(
           () => props.focusedEventId,
@@ -128,6 +118,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
               previousEventId !== undefined &&
               focusedEventId !== previousEventId &&
               selectedEvent &&
+              !selectedEvent.teamProjection &&
               selectedEvent.eventId !== focusedEventId
             ) {
               selection.close(false);
@@ -163,20 +154,30 @@ export const [CalendarViewContextProvider, useCalendarView] =
           if (isCalendarEventVisible(event, isSourceVisible))
             selection.refresh(event);
           else closeEventDetails();
-        } else if (rangeIsCurrent && selection.origin() === 'grid') {
+        } else if (
+          (rangeIsCurrent || selected.teamProjection) &&
+          selection.origin() === 'grid'
+        ) {
           // Agenda selections can be outside the visible grid's date range.
           closeEventDetails();
         }
       };
 
-      const setSourceVisibility = (sourceId: string, visible: boolean) => {
-        setPreferences('hiddenSourceIds', (current) =>
-          visible
-            ? current.filter((id) => id !== sourceId)
-            : current.includes(sourceId)
-              ? current
-              : [...current, sourceId]
-        );
+      const setSourcesVisibility = (
+        sourceIds: readonly string[],
+        visible: boolean
+      ) => {
+        const hidden = new Set(preferences.hiddenSourceIds);
+        let changed = false;
+        for (const sourceId of sourceIds) {
+          if (visible) changed = hidden.delete(sourceId) || changed;
+          else if (!hidden.has(sourceId)) {
+            hidden.add(sourceId);
+            changed = true;
+          }
+        }
+        if (!changed) return;
+        setPreferences('hiddenSourceIds', [...hidden]);
 
         const selected = selection.event();
         if (
@@ -187,13 +188,18 @@ export const [CalendarViewContextProvider, useCalendarView] =
           closeEventDetails();
         }
       };
+      const setSourceVisibility = (sourceId: string, visible: boolean) =>
+        setSourcesVisibility([sourceId], visible);
 
       return {
         displaySettings,
         sources,
         sourceById,
+        sourcesReady,
+        hiddenSourceIds,
         isSourceVisible,
         setSourceVisibility,
+        setSourcesVisibility,
         selectedEvent: selection.event,
         selectedEventAnchor: selection.anchor,
         setPeriodView: (periodView: CalendarPeriodView) => {

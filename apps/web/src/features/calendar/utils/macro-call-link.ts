@@ -66,13 +66,12 @@ export function removeCalendarMacroCall(
             .replace(/<[^>]+>/g, '')
             .replace(/&amp;/g, '&')
             .trim();
+          const linkedUrl = calendarMacroCallUrl({ description: paragraph });
+          const textUrl = text.match(/^Join Macro call:\s*(\S+)$/i)?.[1];
           const generated =
-            text === `Join Macro call: ${existingUrl}` ||
-            text === 'Join Macro call';
-          return generated &&
-            calendarMacroCallUrl({ description: paragraph }) === existingUrl
-            ? ''
-            : paragraph;
+            text === 'Join Macro call' ||
+            (textUrl !== undefined && macroCallUrl(textUrl) === linkedUrl);
+          return generated && linkedUrl ? '' : paragraph;
         }
       )
       .trim(),

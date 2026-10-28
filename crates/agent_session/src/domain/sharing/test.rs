@@ -14,6 +14,7 @@ type SavedUpdate = (
 
 #[derive(Clone)]
 struct Repo {
+    private_conversation: bool,
     id: AgentSessionId,
     writes: Arc<Mutex<Vec<SavedUpdate>>>,
 }
@@ -21,6 +22,7 @@ struct Repo {
 impl Repo {
     fn new() -> Self {
         Self {
+            private_conversation: false,
             id: AgentSessionId::new(),
             writes: Default::default(),
         }
@@ -28,6 +30,9 @@ impl Repo {
 }
 
 impl SessionSharingRepo for Repo {
+    async fn is_private_conversation(&self, _: AgentSessionId) -> Result<bool> {
+        Ok(self.private_conversation)
+    }
     async fn permissions(&self, _: AgentSessionId) -> Result<SharePermissionV2> {
         Ok(SharePermissionV2 {
             id: self.id.to_string(),
@@ -89,6 +94,27 @@ fn request() -> UpdateSharePermissionRequestV2 {
         team_share_access_level: None,
         channel_share_permissions: None,
     }
+}
+
+#[tokio::test]
+async fn a_dm_owner_cannot_share_the_underlying_session() {
+    let repo = Repo {
+        private_conversation: true,
+        ..Repo::new()
+    };
+    let service = SessionSharingService::new(repo.clone());
+    let result = service
+        .update_permissions(
+            &owner_access(repo.id, OWNER),
+            UpdateSharePermissionRequestV2 {
+                link_share: Some(Some(LinkShare::Public)),
+                link_share_access_level: Some(Some(AccessLevel::View)),
+                ..request()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(AgentSessionError::InvalidSharing(_))));
+    assert!(repo.writes.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -237,4 +263,20 @@ async fn effective_owner_access_does_not_substitute_for_the_session_owner() {
         ));
     }
     assert!(repo.writes.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_private_agents_channel_may_watch_but_not_steer() {
+    assert_eq!(
+        originating_channel_access(SessionBotOwnership::User),
+        AccessLevel::View
+    );
+}
+
+#[test]
+fn a_shared_agents_channel_may_steer() {
+    assert_eq!(
+        originating_channel_access(SessionBotOwnership::Shared),
+        AccessLevel::Edit
+    );
 }

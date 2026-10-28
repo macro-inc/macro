@@ -9,8 +9,9 @@ import {
   it,
   vi,
 } from 'vitest';
-import { createSplitLayout, type SplitId } from '../layoutManager';
+import type { SplitId } from '../layoutManager';
 import { createSplitFocusTracker } from '../splitFocusTracker';
+import { createRoutedSplitLayout } from './fixtures';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -69,10 +70,10 @@ const FOCUS_DEBOUNCE_MS = 50;
  */
 function mountFreshLoad() {
   return createRoot((dispose) => {
-    const manager = createSplitLayout(createMockOrchestrator(), [
-      { type: 'component', id: 'home' },
-      { type: 'md', id: 'doc-1' },
-    ]);
+    const manager = createRoutedSplitLayout(
+      createMockOrchestrator(),
+      '/home/~/channels'
+    );
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(
       manager.splits().map((split) => [split.id, createPanel()])
@@ -116,6 +117,51 @@ describe('createSplitFocusTracker', () => {
     expect(document.activeElement).toBe(panelRefs.get(last.id));
     expect(manager.activeSplitId()).toBe(last.id);
 
+    dispose();
+  });
+
+  it('preserves a focused chrome input through deferred insertion but honors explicit return focus', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
+    const [, last] = manager.splits();
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+
+    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
+
+    expect(document.activeElement).toBe(input);
+    expect(manager.activeSplitId()).toBe(last.id);
+    manager.returnFocus();
+    expect(document.activeElement).toBe(panelRefs.get(last.id));
+    dispose();
+  });
+
+  it('still focuses a new pane when the previous pane owns an editor', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
+    const [first, last] = manager.splits();
+    const input = document.createElement('input');
+    panelRefs.get(first.id)?.append(input);
+    input.focus();
+
+    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
+
+    expect(document.activeElement).toBe(panelRefs.get(last.id));
+    dispose();
+  });
+
+  it('keeps a surviving pane active after removal without taking chrome focus', async () => {
+    const { dispose, manager } = mountFreshLoad();
+    const [first, last] = manager.splits();
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+
+    manager.removeSplit(last.id);
+    await vi.runAllTimersAsync();
+
+    expect(manager.splits().map((split) => split.id)).toEqual([first.id]);
+    expect(manager.activeSplitId()).toBe(first.id);
+    expect(document.activeElement).toBe(input);
     dispose();
   });
 });

@@ -12,6 +12,12 @@ pub struct GraphqlNotificationFilter {
     pub states: Option<Vec<GraphqlNotificationState>>,
     /// Event names to include; omitted or empty means every event type.
     pub event_types: Option<Vec<String>>,
+    /// Only notifications about top-level channel messages, including mentions but excluding reactions.
+    pub top_level_messages_only: Option<bool>,
+    /// Scope channel edges to their feed row rather than thread/mention stacks.
+    /// Scoping includes active seen reasons. Other entity edges are unchanged.
+    /// Applied before the edge limit.
+    pub channel_feed_only: Option<bool>,
 }
 
 impl GraphqlNotificationFilter {
@@ -25,6 +31,8 @@ impl GraphqlNotificationFilter {
             query.states = states.into_iter().map(Into::into).collect();
         }
         query.event_types = self.event_types.unwrap_or_default();
+        query.top_level_messages_only = self.top_level_messages_only.unwrap_or_default();
+        query.channel_feed_only = self.channel_feed_only.unwrap_or_default();
         query.limit = limit
             .map(u32::try_from)
             .transpose()

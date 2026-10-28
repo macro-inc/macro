@@ -11,7 +11,7 @@ pub enum AuthServiceClientError {
     InternalServerError { details: String },
     #[error("unable to build request: {details}")]
     RequestBuildError { details: String },
-    #[error("an unknown error occurred")]
+    #[error("{}", .0.message)]
     Generic(GenericErrorResponse),
 }
 

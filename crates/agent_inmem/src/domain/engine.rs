@@ -1,10 +1,14 @@
 //! The seam between the ACP surface and the agentic loop that serves it.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use agent_api_keys::domain::UsableAgentKey;
 use ai_tools::user_tool_review::UserToolReviewer;
+use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
 use model_owner::Owner;
 use tokio::sync::mpsc;
@@ -12,9 +16,17 @@ use tokio_util::sync::CancellationToken;
 
 use super::user_input::SharedUserInputRequester;
 
-/// The agent's display name and `@` handle, for the turn's system prompt.
+/// Who the agent is: the bot a session belongs to, by id and by name.
+///
+/// The name and handle go into the turn's system prompt so the model knows
+/// who it is; the id and name also make the turn's tools act as that bot, so
+/// what the agent writes is attributed to it - and presented under its name
+/// wherever a reader sees the write happen, such as the cursor the editing
+/// worker draws - rather than to Macro.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentIdentity {
+    /// The bot the session belongs to.
+    pub bot: BotId,
     /// Display name, e.g. `Grunk`.
     pub name: String,
     /// Stable `@` handle without a leading `@`, e.g. `grunk`.
@@ -23,6 +35,13 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
+    /// Whether the turn answers the user or condenses their conversation.
+    pub purpose: TurnPurpose,
+    /// The session the turn belongs to.
+    pub session_id: agent_session::domain::model::AgentSessionId,
+    /// Counts what the turn is waiting on a person for - a question, or a
+    /// tool call held for the owner - so the idle timeout leaves it be.
+    pub awaiting: Arc<AwaitingUser>,
     /// The session's owner, whom the turn acts on behalf of: tools run with
     /// their identity and token usage is recorded against them. Both need a
     /// person, which the engine asks of this rather than assumes.
@@ -30,12 +49,17 @@ pub struct TurnRequest {
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Provider-independent effort selected for this session.
+    pub reasoning_effort: ReasoningEffort,
+    /// Inference speed applied without changing model or reasoning effort.
+    pub speed: agent::ModelSpeed,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.
     pub identity: Option<AgentIdentity>,
     /// The session's instructions, appended to the engine's own system
-    /// prompt. `None` runs the engine's default prompt unchanged.
+    /// prompt. `None` runs the engine's default prompt unchanged. For a
+    /// [`TurnPurpose::Summary`] call, the whole system prompt.
     pub instructions: Option<String>,
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
@@ -54,6 +78,52 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
+    /// The agent's own key the turn's model calls run on instead of Macro's,
+    /// with their usage recorded against it rather than the owner's
+    /// allowance. `None` runs on Macro.
+    pub agent_key: Option<UsableAgentKey>,
+}
+
+/// Whether a model call answers the user or condenses their conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnPurpose {
+    /// A turn of the conversation, with the agent's tools.
+    Conversation,
+    /// A call that condenses the conversation for its continuation - its
+    /// summary, or an image read for it. No tools, no memory, no opening
+    /// line, and `instructions` as its whole system prompt.
+    Summary,
+}
+
+/// How many things a turn currently waits on a person for. Shared between
+/// whatever is waiting (a question to the user, a tool call held for the
+/// owner), which counts itself in, and the turn loop, which reads it to tell
+/// "waiting on someone" from "hung".
+#[derive(Debug, Default)]
+pub struct AwaitingUser(AtomicUsize);
+
+impl AwaitingUser {
+    /// Whether anything is being waited on.
+    #[must_use]
+    pub fn is_waiting(&self) -> bool {
+        self.0.load(Ordering::Acquire) > 0
+    }
+
+    /// Count one wait until the guard drops - on an answer, an error, or the
+    /// waiting future being cancelled.
+    pub fn begin(&self) -> AwaitingGuard<'_> {
+        self.0.fetch_add(1, Ordering::AcqRel);
+        AwaitingGuard(self)
+    }
+}
+
+/// One wait, counted until dropped.
+pub struct AwaitingGuard<'a>(&'a AwaitingUser);
+
+impl Drop for AwaitingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 /// Runs one conversational turn and streams its parts back.

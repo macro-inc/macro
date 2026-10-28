@@ -3,8 +3,8 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CopyIcon from '@phosphor/copy.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useTaskSimilaritySearchQuery } from '@queries/storage/task-duplicates';
@@ -75,7 +75,7 @@ function SimilarTasksInner(props: {
 
   return (
     <Show when={entities().length > 0}>
-      <div class="shrink-0 flex flex-col gap-0.5">
+      <div class="-mx-4 shrink-0 flex flex-col gap-0.5 border-t border-edge-muted px-4 pt-3">
         <button
           type="button"
           class="flex items-center gap-1.5 px-1.5 py-1 text-xs font-medium text-ink-muted hover:text-ink"

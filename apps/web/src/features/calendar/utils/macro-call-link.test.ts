@@ -93,6 +93,31 @@ describe('Macro calendar call links', () => {
     });
   });
 
+  it('hides a generated invitation with tracking parameters in its displayed URL', () => {
+    const trackedUrl = `${URL}?join=true&amp;source=calendar`;
+    expect(
+      removeCalendarMacroCall(
+        {
+          description: `<p>Agenda</p><p>Join Macro call: <a href="${trackedUrl}">${trackedUrl}</a></p>`,
+          location: 'Room 2',
+        },
+        URL
+      )
+    ).toEqual({ description: '<p>Agenda</p>', location: 'Room 2' });
+  });
+
+  it('hides generated Macro invitations even when the series URL differs', () => {
+    expect(
+      removeCalendarMacroCall(
+        {
+          description: `<p>Join Macro call: <a href="${SETUP_URL}">${SETUP_URL}</a></p>`,
+          location: 'Room 2',
+        },
+        URL
+      ).description
+    ).toBe('');
+  });
+
   it('preserves independently authored call links and other description content', () => {
     const content = {
       description: `<p>Related call: <a href="${URL}">prior discussion</a></p>`,

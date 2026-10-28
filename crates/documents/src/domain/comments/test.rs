@@ -5,7 +5,11 @@ use entity_access::domain::models::{Entity, EntityPermission, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MockMessageReader,
-    models::{BotSenderProfile, MessageParent, MessageThread, MessageThreadPreview, ThreadState},
+    discussions::{MAX_DISCUSSIONS, PAGE_SIZE},
+    models::{
+        BotSenderProfile, MessageListItem, MessageParent, MessageThread, MessageThreadPreview,
+        ThreadState,
+    },
     ports::{MessageCursor, MessagePage},
 };
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -44,6 +48,7 @@ fn message(n: u128, root: Option<u128>, content: &str) -> Message {
         parent: MessageParent::parse("document", DOCUMENT).unwrap(),
         thread_id: root.map(id),
         sender_id: ChannelSender::new_from_user(user()),
+        guest_name: None,
         imported_author: None,
         bot_profile: None,
         mentions: vec![],
@@ -563,4 +568,92 @@ async fn deleted_threads_do_not_count_toward_the_cap() {
         discussions.iter().map(|d| d.id).collect::<Vec<_>>(),
         vec![id(1)]
     );
+}
+
+#[tokio::test]
+async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(message(2, None, "Workbook comment"), None, vec![]),
+                item(
+                    message(1, None, "Range comment"),
+                    Some(ThreadAnchor::Spreadsheet {
+                        sheet_id: "sheet-1".into(),
+                        sheet_name: "Budget".into(),
+                        range: "B4:C9".into(),
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert_eq!(discussions[0].kind, CommentThreadKind::Inline);
+    assert_eq!(
+        discussions[0].anchor,
+        CommentAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into()
+        }
+    );
+    assert_eq!(discussions[1].kind, CommentThreadKind::Discussion);
+    assert_eq!(discussions[1].anchor, CommentAnchor::Document);
+}
+
+#[tokio::test]
+async fn design_pins_are_inline_and_name_their_layer_and_point() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(
+                    message(1, None, "Layer comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: Some("12:34".into()),
+                        x: 18.5,
+                        y: -4.0,
+                    }),
+                    vec![],
+                ),
+                item(
+                    message(2, None, "Canvas comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: None,
+                        x: 100.0,
+                        y: 200.0,
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert!(
+        discussions
+            .iter()
+            .all(|d| d.kind == CommentThreadKind::Inline)
+    );
+    let anchors: Vec<_> = discussions
+        .iter()
+        .map(|d| serde_json::to_value(&d.anchor).unwrap())
+        .collect();
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "nodeId": "12:34", "x": 18.5, "y": -4.0
+    })));
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "x": 100.0, "y": 200.0
+    })));
 }

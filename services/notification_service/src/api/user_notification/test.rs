@@ -117,6 +117,23 @@ fn to_typed_row_channel_message_reply() {
 }
 
 #[test]
+fn to_typed_row_channel_message_reaction() {
+    let metadata = serde_json::json!({
+        "messageId": "msg-4",
+        "messageContent": "Great idea",
+        "emoji": "👍",
+        "channelType": "Public",
+        "channelName": "general"
+    });
+    let row = make_row("channel_message_reaction", metadata);
+    let typed = to_typed_row(row).expect("should deserialize channel_message_reaction");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMessageReaction(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_new_email() {
     let metadata = serde_json::json!({
         "sender": "ext@example.com",
@@ -204,6 +221,21 @@ fn to_typed_row_github_pr_status_changed() {
         }
         other => panic!("expected GithubPrStatusChanged variant, got {other:?}"),
     }
+}
+
+#[test]
+fn to_typed_row_calendar_event_join_request() {
+    let metadata = serde_json::json!({
+        "requestId": "01a15f1b-801e-70d6-873d-689f42c0b0e9",
+        "eventId": "01a0d015-b785-7602-9dc8-db34ca69c29b",
+        "title": "Offsite"
+    });
+    let row = make_row("calendar_event_join_request", metadata);
+    let typed = to_typed_row(row).expect("should deserialize calendar_event_join_request");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::CalendarEventJoinRequest(_)
+    ));
 }
 
 #[test]

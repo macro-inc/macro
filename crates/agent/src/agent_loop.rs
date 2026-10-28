@@ -1,24 +1,116 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
-use crate::hook::{BridgeInputs, RegisterFn, ToolRouter, UserToolFinisher};
-use crate::model::PredefinedModel;
+use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
+use crate::model::metering::MeteringContext;
+use crate::model::metering_http::MeteredHttpClient;
 use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::model::types::Model;
+use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
-use rig_core::message::Message;
+use rig_core::message::{AssistantContent, Message};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-const DEFAULT_MAX_TURNS: usize = 16;
+const DEFAULT_MAX_TURNS: usize = 200;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
+
+/// A session's system prompt, optionally split where the part every session
+/// of the agent repeats byte for byte ends, with an optional tail that
+/// changes every turn.
+///
+/// Anthropic caches the shared part apart from the per-session rest
+/// (instructions, memory), so a session reads the shared part back even when
+/// its rest is new. The turn's part comes last, after anything the loop adds
+/// (the model id, connected integrations), so a change to it costs only what
+/// follows it. Other providers receive the parts joined.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemPrompt {
+    shared: Option<String>,
+    rest: String,
+    turn: String,
+}
+
+impl SystemPrompt {
+    /// A prompt whose leading `shared` part is the same for every session of
+    /// the agent and whose `rest` is the session's own.
+    pub fn split(shared: impl Into<String>, rest: impl Into<String>) -> Self {
+        Self {
+            shared: Some(shared.into()),
+            rest: rest.into(),
+            turn: String::new(),
+        }
+    }
+
+    /// This prompt with `turn`, the part only this turn sends, at its end.
+    #[must_use]
+    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
+        self.turn = turn.into();
+        self
+    }
+
+    /// The shared part, when the prompt is split.
+    pub fn shared(&self) -> Option<&str> {
+        self.shared.as_deref()
+    }
+
+    /// Everything after the shared part: the session's own, then the turn's.
+    pub fn rest(&self) -> String {
+        format!("{}{}", self.rest, self.turn)
+    }
+
+    /// The whole prompt as one string.
+    pub(crate) fn joined(&self) -> String {
+        self.to_string()
+    }
+
+    fn push_str(&mut self, text: &str) {
+        self.rest.push_str(text);
+    }
+}
+
+impl std::fmt::Display for SystemPrompt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{}{}{}",
+            self.shared.as_deref().unwrap_or_default(),
+            self.rest,
+            self.turn
+        )
+    }
+}
+
+impl From<String> for SystemPrompt {
+    fn from(rest: String) -> Self {
+        Self {
+            shared: None,
+            rest,
+            turn: String::new(),
+        }
+    }
+}
+
+impl From<&String> for SystemPrompt {
+    fn from(rest: &String) -> Self {
+        rest.clone().into()
+    }
+}
+
+impl From<&str> for SystemPrompt {
+    fn from(rest: &str) -> Self {
+        rest.to_owned().into()
+    }
+}
 
 /// Factory for creating per-request agent sessions.
 ///
@@ -30,10 +122,13 @@ const DEFAULT_MAX_TOKENS: u64 = 16_000;
 /// (MCP tools are per-user, system prompt depends on toolset selection).
 pub struct AgentLoop {
     model: String,
+    reasoning_effort: Option<ReasoningEffort>,
+    speed: ModelSpeed,
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
@@ -41,27 +136,62 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// The router this loop's model calls use instead of the shared one, when
+    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    router: Option<ModelRouter<MeteredHttpClient>>,
 }
 
 impl AgentLoop {
     /// Create an `AgentLoop` with provider clients from `APP_SECRETS_JSON` or the environment and
     /// the default model (Opus 4.7).
     ///
-    /// `recorder` is the [`UsageRecorder`] every session created from this loop
-    /// logs token usage to — it is required so that no AI call goes unrecorded.
+    /// Sessions log legacy aggregates through `recorder`. When its separate
+    /// tracking capability is present, they also bind observational per-attempt
+    /// scopes; analytics injection alone is not proof of attempt coverage.
     ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
         Self {
             model: PredefinedModel::default().to_string(),
+            reasoning_effort: None,
+            speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
             user_tool_finisher: None,
+            result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            router: None,
         }
+    }
+
+    /// Run the model's calls on `api_key` instead of the deployment's key for
+    /// its provider. Call after [`Self::with_model`]: the key is for the
+    /// selected model's provider, which must be native Anthropic or OpenAI.
+    ///
+    /// Fails rather than falling back when the model does not route, since a
+    /// fallback would run on the deployment's key while the usage is recorded
+    /// as the caller's. Only the loop's own model calls use the key; tools
+    /// that call models themselves still use the deployment's keys.
+    pub fn with_provider_api_key(mut self, api_key: &str) -> Result<Self, AgentError> {
+        let provider = Model::try_from(self.model.as_str())?.provider().to_owned();
+        let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
+        router.route(&self.model)?;
+        self.router = Some(router);
+        Ok(self)
+    }
+
+    /// Select a supported inference speed without changing the model or effort.
+    pub fn with_speed(mut self, speed: ModelSpeed) -> Result<Self, AgentError> {
+        if !speed.supported(&self.model) {
+            return Err(AgentError::Other(anyhow::anyhow!(
+                "speed is not supported by this model"
+            )));
+        }
+        self.speed = speed;
+        Ok(self)
     }
 
     /// Finish user tools inside the turn.
@@ -78,12 +208,29 @@ impl AgentLoop {
         self
     }
 
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
+        self
+    }
+
     /// Override the model.
     ///
     /// Accepts any stringifiable id — an [`AgentModel`] (backend) or a raw
     /// api-id string (frontend).
     pub fn with_model<M: ToString>(mut self, model: M) -> Self {
         self.model = model.to_string();
+        if !self.speed.supported(&self.model) {
+            self.speed = ModelSpeed::Standard;
+        }
+        self
+    }
+
+    /// Override the model provider's default reasoning effort.
+    pub fn with_reasoning_effort(mut self, effort: ReasoningEffort) -> Self {
+        self.reasoning_effort = Some(effort);
         self
     }
 
@@ -143,7 +290,7 @@ impl AgentLoop {
         &self,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
-        system_prompt: &str,
+        system_prompt: impl Into<SystemPrompt>,
         usage_ctx: UsageContext,
     ) -> Session
     where
@@ -157,17 +304,23 @@ impl AgentLoop {
             context,
             system_prompt,
             usage_ctx,
-            |handle, prompt, max_turns, max_tokens, telemetry| {
-                ModelRouter::shared()
-                    .expect("failed to initialize model router")
-                    .agent(
-                        &self.model,
-                        handle,
-                        prompt,
-                        max_turns,
-                        max_tokens,
-                        telemetry,
-                    )
+            |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
+                let router = match &self.router {
+                    Some(router) => router,
+                    None => ModelRouter::shared().expect("failed to initialize model router"),
+                };
+                let routed = router.route_or_default(&self.model);
+                telemetry.set_model(routed.provider(), routed.model_name());
+                routed.into_agent(
+                    self.reasoning_effort,
+                    self.speed,
+                    handle,
+                    prompt,
+                    tool_search,
+                    max_turns,
+                    max_tokens,
+                    &telemetry,
+                )
             },
         )
         .await
@@ -182,9 +335,16 @@ impl AgentLoop {
         &self,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
-        system_prompt: &str,
+        system_prompt: impl Into<SystemPrompt>,
         usage_ctx: UsageContext,
-        build: impl FnOnce(ToolServerHandle, &str, usize, u64, GenAiContext) -> ProviderAgent,
+        build: impl FnOnce(
+            ToolServerHandle,
+            &SystemPrompt,
+            &ToolSearch,
+            usize,
+            u64,
+            GenAiContext,
+        ) -> ProviderAgent,
     ) -> Session
     where
         Context: Clone + Send + Sync + 'static,
@@ -206,8 +366,13 @@ impl AgentLoop {
                 buffer.lock().expect("loaded_buffer poisoned").extend(tools)
             })
         };
+        let catalog = Arc::new(catalog);
+        let tool_search = ToolSearch {
+            catalog: catalog.clone(),
+            loads: ToolLoads::default(),
+        };
         let request_context = RequestContext::new(usage_ctx.user.clone())
-            .with_tool_search(Arc::new(catalog), loader)
+            .with_tool_search(catalog, loader)
             .with_genai_telemetry(self.genai_telemetry);
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
@@ -262,6 +427,7 @@ impl AgentLoop {
                         }
                         let adapter = DynToolSetAdapter::loaded(
                             tool.name,
+                            tool.description,
                             tool.schema,
                             toolset.clone(),
                             context.clone(),
@@ -278,12 +444,13 @@ impl AgentLoop {
         // request. A model's training data predates its own release, so a
         // newly released model doesn't recognize its own id and may fall back
         // to identifying as a predecessor — tell it to trust the id.
-        let mut system_prompt = format!(
-            "{system_prompt}\n\nYou are the {} model. If this model id is unfamiliar, \
+        let mut system_prompt = system_prompt.into();
+        system_prompt.push_str(&format!(
+            "\n\nYou are the {} model. If this model id is unfamiliar, \
              that is because it was released after your training data cutoff — trust \
              this id over your training data when identifying yourself.",
             self.model
-        );
+        ));
         // Tell the model which connected integrations it can reach via tool
         // search. The prompt text lives in the `prompt` crate; the toolset names
         // are the dynamic data injected here. Omitted when nothing is connected.
@@ -306,11 +473,18 @@ impl AgentLoop {
         let agent = build(
             handle,
             &system_prompt,
+            &tool_search,
             self.max_turns,
             self.max_tokens,
             telemetry.clone(),
         );
 
+        let financial_context = MeteringContext::for_session(
+            self.recorder.clone(),
+            &usage_ctx,
+            &self.model,
+            self.speed,
+        );
         Session {
             agent,
             history: Vec::new(),
@@ -319,13 +493,16 @@ impl AgentLoop {
                 routing,
                 loaded_buffer,
                 register_loaded,
+                tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,
             model: self.model.clone(),
             request_context,
             telemetry,
+            financial_context,
         }
     }
 
@@ -338,7 +515,7 @@ impl AgentLoop {
         &self,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
-        system_prompt: &str,
+        system_prompt: impl Into<SystemPrompt>,
         usage_ctx: UsageContext,
         model: M,
     ) -> Session
@@ -351,12 +528,71 @@ impl AgentLoop {
             context,
             system_prompt,
             usage_ctx,
-            move |handle, prompt, max_turns, max_tokens, telemetry| {
-                ProviderAgent::test(model, prompt, max_turns, max_tokens, handle, telemetry)
+            move |handle, prompt, _, max_turns, max_tokens, telemetry| {
+                ProviderAgent::test(
+                    model,
+                    &prompt.joined(),
+                    max_turns,
+                    max_tokens,
+                    handle,
+                    telemetry,
+                )
             },
         )
         .await
     }
+
+    /// Start a session routed through `router`, as production routes through
+    /// the shared one: the provider arms build the agent, over whatever
+    /// transport the router's clients were given.
+    #[cfg(test)]
+    pub(crate) async fn test_routed_session<Context, H>(
+        &self,
+        router: &ModelRouter<H>,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: impl Into<SystemPrompt>,
+        usage_ctx: UsageContext,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+        H: rig_core::http_client::HttpClientExt
+            + Clone
+            + Default
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
+                let routed = router.route_or_default(&self.model);
+                telemetry.set_model(routed.provider(), routed.model_name());
+                ProviderAgent::Test(Box::new(routed.into_agent(
+                    self.reasoning_effort,
+                    self.speed,
+                    handle,
+                    prompt,
+                    tool_search,
+                    max_turns,
+                    max_tokens,
+                    &telemetry,
+                )))
+            },
+        )
+        .await
+    }
+}
+
+/// A session's on-demand tools: the catalog the model loads from, and which
+/// result loaded which of them.
+pub(crate) struct ToolSearch {
+    pub(crate) catalog: Arc<Vec<SearchableTool>>,
+    pub(crate) loads: ToolLoads,
 }
 
 /// A single streaming conversation session.
@@ -372,6 +608,7 @@ pub struct Session {
     model: String,
     request_context: RequestContext,
     telemetry: GenAiContext,
+    financial_context: Option<MeteringContext>,
 }
 
 impl Session {
@@ -398,7 +635,8 @@ impl Session {
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
         // `agent.stream.*` are recorded by the stream driver as the run ends;
         // see `StreamLiveness` in `crate::model::router`. Declared on both
-        // shapes of the span because either one can be the run's.
+        // shapes of the span because either one can be the run's; `agent.turn`
+        // names the model itself, `invoke_agent` through `gen_ai.request.model`.
         let span = if self.telemetry.enabled() {
             tracing::info_span!(
                 "invoke_agent",
@@ -408,21 +646,39 @@ impl Session {
                 gen_ai.provider.name = self.telemetry.provider_name(),
                 gen_ai.request.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
-                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.first_chunk_ms = tracing::field::Empty,
+                agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,
             )
         } else {
             tracing::info_span!(
                 "agent.turn",
                 agent.name = %self.telemetry.agent_name(),
+                agent.model = self.telemetry.model_name(),
                 agent.stream.items = tracing::field::Empty,
-                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.first_chunk_ms = tracing::field::Empty,
+                agent.stream.first_chunk_kind = tracing::field::Empty,
                 agent.stream.trailing_silence_ms = tracing::field::Empty,
             )
         };
         let telemetry = self.telemetry.clone();
-        let result = self
-            .send_message_in(messages)
+        // A newly activated turn may replace the construction-time scope, but
+        // observational/legacy callers must never downgrade an activated session.
+        let current = MeteringContext::current();
+        let financial_context = if current.as_ref().is_some_and(MeteringContext::activated) {
+            current
+        } else if self
+            .financial_context
+            .as_ref()
+            .is_some_and(|context| context.activated() || context.records_per_call())
+        {
+            self.financial_context.clone()
+        } else if current.is_some() {
+            MeteringContext::for_operation(self.recorder.as_ref(), &self.usage_ctx)
+        } else {
+            self.financial_context.clone()
+        };
+        let result = MeteringContext::carry(financial_context, self.send_message_in(messages))
             .instrument(span.clone())
             .await;
         if let Err(error) = &result {
@@ -441,6 +697,8 @@ impl Session {
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        MeteringContext::require_usage(&self.usage_ctx)
+            .map_err(|error| AgentError::Other(error.into()))?;
         self.history = messages;
 
         let Some((prompt, history)) = self.history.split_last() else {
@@ -448,6 +706,14 @@ impl Session {
                 "messages must not be empty"
             )));
         };
+
+        // A session lives for one turn, so whatever the conversation loaded
+        // before is gone. Reload what it called, in the order it first did,
+        // rather than have the model reload each tool every turn.
+        let called = called_catalog_tools(history, &self.request_context.searchable_tools);
+        if !called.is_empty() {
+            (self.bridge_inputs.register_loaded)(called).await;
+        }
 
         let stream = self
             .agent
@@ -471,4 +737,27 @@ impl Session {
     pub fn get_history(&self) -> &[Message] {
         &self.history
     }
+}
+
+/// The catalog tools `history` called, in the order of their first call.
+fn called_catalog_tools(history: &[Message], catalog: &[SearchableTool]) -> Vec<SearchableTool> {
+    let mut called: Vec<SearchableTool> = Vec::new();
+    for message in history {
+        let Message::Assistant { content, .. } = message else {
+            continue;
+        };
+        for content in content.iter() {
+            let AssistantContent::ToolCall(call) = content else {
+                continue;
+            };
+            let name = &call.function.name;
+            if called.iter().any(|tool| &tool.name == name) {
+                continue;
+            }
+            if let Some(tool) = catalog.iter().find(|tool| &tool.name == name) {
+                called.push(tool.clone());
+            }
+        }
+    }
+    called
 }

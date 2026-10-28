@@ -89,7 +89,9 @@ fn projector(policy: ContentPolicy) -> GenAiProjector {
 fn replay(projector: &mut GenAiProjector, jsonl: &str) {
     for mut entry in parse_log(jsonl) {
         match &mut entry.content {
-            Message::ToRuntime(message) => projector.on_outbound(message, None),
+            Message::Notification(message) | Message::ToRuntime(message) => {
+                projector.on_outbound(message, None)
+            }
             Message::ToServer(message) => projector.on_inbound(message),
         }
     }
@@ -185,6 +187,10 @@ fn a_turn_becomes_an_agent_span_with_a_tool_span_per_call() {
         result.contains("events.rs"),
         "terminal output recorded: {result}"
     );
+    assert_eq!(
+        int_attribute(bash, attr::MACRO_TOOL_RESULT_BYTES),
+        Some(i64::try_from(result.len()).unwrap())
+    );
     assert_eq!(bash.status, Status::Unset);
 
     let write = spans_named(&spans, "execute_tool Write");
@@ -200,7 +206,7 @@ fn the_harness_announced_by_initialize_names_the_agent() {
     let mut projector = projector(ContentPolicy::enabled());
     replay(
         &mut projector,
-        include_str!("../../../../../agent_fold/fixtures/real/real_single_turn.jsonl"),
+        include_str!("../../../../../folds/agent_fold/fixtures/real/real_single_turn.jsonl"),
     );
     let spans = finished(&exporter, &provider);
 
@@ -225,7 +231,7 @@ fn usage_is_recorded_per_turn_from_the_running_totals() {
     let mut projector = projector(ContentPolicy::enabled());
     replay(
         &mut projector,
-        include_str!("../../../../../agent_fold/fixtures/real/real_multi_turn.jsonl"),
+        include_str!("../../../../../folds/agent_fold/fixtures/real/real_multi_turn.jsonl"),
     );
     let spans = finished(&exporter, &provider);
 
@@ -344,6 +350,33 @@ fn a_refused_prompt_ends_the_turn_in_error() {
         string_array_attribute(agent[0], attr::RESPONSE_FINISH_REASONS),
         Some(vec!["error".to_owned()])
     );
+    assert_eq!(
+        int_attribute(agent[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS),
+        None,
+        "a turn that streamed nothing has no time to first output"
+    );
+}
+
+#[test]
+fn time_to_first_output_dates_the_first_streamed_chunk() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::enabled());
+    replay(&mut projector, fixtures::TURN);
+    let spans = finished(&exporter, &provider);
+
+    let agent = spans_named(&spans, "invoke_agent");
+    assert_eq!(agent.len(), 1);
+    let ttfo = int_attribute(agent[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS)
+        .expect("a turn with output records its time to first output");
+    // A replay streams instantly; what matters is the value is a sane,
+    // non-negative duration recorded once on the turn span.
+    assert!((0..1_000).contains(&ttfo), "replay is instant: {ttfo}ms");
+    let tools = spans_named(&spans, "execute_tool Bash");
+    assert_eq!(
+        int_attribute(tools[0], attr::MACRO_TIME_TO_FIRST_OUTPUT_MS),
+        None,
+        "tool spans do not carry the turn's time to first output"
+    );
 }
 
 #[test]
@@ -366,6 +399,8 @@ fn content_is_not_recorded_when_capture_is_off() {
     let bash = spans_named(&spans, "execute_tool Bash")[0];
     assert!(attribute(bash, attr::TOOL_CALL_ARGUMENTS).is_none());
     assert!(attribute(bash, attr::TOOL_CALL_RESULT).is_none());
+    // A size is not content: it is recorded either way.
+    assert!(int_attribute(bash, attr::MACRO_TOOL_RESULT_BYTES).is_some_and(|bytes| bytes > 0));
     assert_eq!(
         string_attribute(bash, attr::TOOL_NAME).as_deref(),
         Some("Bash")
@@ -773,4 +808,109 @@ fn tool_error_text_follows_the_content_policy() {
         }
         other => panic!("expected an error status, got {other:?}"),
     }
+}
+
+/// Text latency must survive earlier tool/thought/empty chunks, even when
+/// content capture is disabled. Move the clock instead of sleeping.
+#[test]
+fn first_text_is_independent_of_tools_reasoning_and_empty_chunks() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::disabled());
+    projector.begin_turn(RequestId::Str("timing".to_owned()), None, None);
+    let turn = projector.turn.as_mut().expect("turn");
+    turn.started = Instant::now() - std::time::Duration::from_secs(1);
+    let update = |value| serde_json::from_value::<SessionUpdate>(value).expect("update");
+    projector.on_update(update(json!({
+        "sessionUpdate": "tool_call", "toolCallId": "tool", "title": "Read", "status": "pending"
+    })));
+    projector.on_update(update(json!({
+        "sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "Thinking"}
+    })));
+    projector.on_update(update(json!({
+        "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": " \n"}
+    })));
+    let turn = projector.turn.as_mut().expect("turn");
+    assert!(!turn.first_text_recorded);
+    turn.started = Instant::now() - std::time::Duration::from_secs(5);
+    projector.on_update(update(json!({
+        "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Hello"}
+    })));
+    projector.turn.as_mut().expect("turn").started =
+        Instant::now() - std::time::Duration::from_secs(30);
+    projector.on_update(update(json!({
+        "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": " again"}
+    })));
+    projector.on_stopped(&StopReason::Closed(CloseReason::TransportClosed));
+    let spans = finished(&exporter, &provider);
+    let turn = spans_named(&spans, "invoke_agent")[0];
+    assert!(
+        (5_000..10_000)
+            .contains(&int_attribute(turn, attr::MACRO_TIME_TO_FIRST_TEXT_MS).expect("text"))
+    );
+    for attr in [
+        attr::MACRO_TIME_TO_FIRST_REASONING_MS,
+        attr::MACRO_TIME_TO_FIRST_TOOL_CALL_MS,
+    ] {
+        assert!((1_000..5_000).contains(&int_attribute(turn, attr).expect("milestone")));
+    }
+    assert!(attribute(turn, attr::OUTPUT_MESSAGES).is_none());
+}
+
+#[test]
+fn tool_only_turn_has_no_first_text_measurement() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::disabled());
+    projector.begin_turn(RequestId::Str("tool-only".to_owned()), None, None);
+    projector.on_update(
+        serde_json::from_value(json!({
+            "sessionUpdate": "tool_call", "toolCallId": "tool", "title": "Read", "status": "pending"
+        }))
+        .expect("tool call"),
+    );
+    projector.on_stopped(&StopReason::Closed(CloseReason::TransportClosed));
+    let spans = finished(&exporter, &provider);
+    let turn = spans_named(&spans, "invoke_agent")[0];
+    assert!(int_attribute(turn, attr::MACRO_TIME_TO_FIRST_TOOL_CALL_MS).is_some());
+    assert!(int_attribute(turn, attr::MACRO_TIME_TO_FIRST_TEXT_MS).is_none());
+}
+
+#[test]
+fn initialization_spans_end_at_response_or_disconnect() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::disabled());
+    for id in ["ready", "interrupted"] {
+        let request = RawJsonRpcMessage::request(
+            "session/new".to_owned(),
+            json!({"cwd": "/w", "mcpServers": []}),
+            RequestId::Str(id.to_owned()),
+        )
+        .expect("request");
+        projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(request)), None);
+    }
+    assert_eq!(projector.initialization_spans.len(), 2);
+    projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::response(
+            RequestId::Str("ready".to_owned()),
+            Ok(json!({"sessionId": "s"})),
+        ),
+    )));
+    assert_eq!(projector.initialization_spans.len(), 1);
+    projector.on_stopped(&StopReason::Closed(CloseReason::TransportClosed));
+    assert!(projector.initialization_spans.is_empty());
+    let spans = finished(&exporter, &provider);
+    let initialization = spans_named(&spans, "agent.init.acp");
+    assert_eq!(initialization.len(), 2);
+    let outcomes: HashSet<_> = initialization
+        .iter()
+        .filter_map(|span| string_attribute(span, "outcome"))
+        .collect();
+    assert_eq!(
+        outcomes,
+        HashSet::from(["success".to_owned(), "stopped".to_owned()])
+    );
+    assert!(
+        initialization
+            .iter()
+            .all(|span| string_attribute(span, "rpc.method").as_deref() == Some("session/new"))
+    );
 }

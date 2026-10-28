@@ -28,7 +28,7 @@ fn posted(parent: MessageParent, bot: bool) -> MessageEvent {
     }
 }
 #[tokio::test]
-async fn user_posts_from_both_parents_dispatch_once_and_bot_responses_never_reenter() {
+async fn user_posts_dispatch_once_and_bot_responses_never_reenter() {
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let delivery = Delivery::default();
     let publisher = messages::domain::effects::MessageEffects::new(
@@ -39,6 +39,7 @@ async fn user_posts_from_both_parents_dispatch_once_and_bot_responses_never_reen
     for parent in [
         MessageParent::Channel(uuid::Uuid::from_u128(900)),
         MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Call(uuid::Uuid::from_u128(1)),
     ] {
         publisher
             .publish(posted(parent.clone(), false))
@@ -49,7 +50,7 @@ async fn user_posts_from_both_parents_dispatch_once_and_bot_responses_never_reen
         publisher.publish(posted(parent, true)).await.unwrap();
         assert!(receiver.try_recv().is_err());
     }
-    assert_eq!(delivery.0.lock().unwrap().len(), 4);
+    assert_eq!(delivery.0.lock().unwrap().len(), 6);
 }
 #[tokio::test]
 async fn closed_agent_receiver_does_not_suppress_realtime_and_notification_delivery() {

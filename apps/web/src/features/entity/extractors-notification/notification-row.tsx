@@ -1,17 +1,21 @@
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { NotificationType } from '@core/types';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification, type UnifiedNotification } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { Layout } from '../core/Layout';
 import type { EntityData } from '../types/entity';
 import { isNotificationUnread } from '../utils/notification';
-import { useNotificationActions } from './notification-actions';
+import {
+  reportNotificationActionError,
+  useNotificationActions,
+} from './notification-actions';
 import {
   DocumentMentionPill,
   NotificationContent,
@@ -189,12 +193,13 @@ function HeaderTrailing(props: {
       </span>
       <Show when={props.canMarkDone}>
         <Button
+          variant="ghost"
           onClick={(e) => {
             e.stopPropagation();
             props.onMarkAsDone();
           }}
-          tooltip="Mark done"
-          class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
+          tooltip={t('entityActions.markDoneCommand')}
+          class="text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
         >
           <CheckIcon class="size-3" />
         </Button>
@@ -323,7 +328,7 @@ export function NotificationRow(props: NotificationRowProps) {
   };
 
   const handleMarkAsDone = () => {
-    markAsDone();
+    markAsDone().catch(reportNotificationActionError);
   };
 
   const handleMarkAsRead = async () => {
@@ -351,7 +356,7 @@ export function NotificationRow(props: NotificationRowProps) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleClick(e);
+              handleClick(e).catch(reportNotificationActionError);
             }
             if (e.key === 'e' && canMarkDone()) {
               e.preventDefault();
@@ -371,10 +376,19 @@ export function NotificationRow(props: NotificationRowProps) {
         <div onClick={(e) => e.stopPropagation()}>
           <ContextMenuContent class="text-xs text-ink-muted">
             <Show when={canMarkDone()}>
-              <MenuItem text="Mark Done" onClick={() => handleMarkAsDone()} />
+              <MenuItem
+                text={t('entityActions.markDone')}
+                onClick={() => handleMarkAsDone()}
+              />
             </Show>
-            <MenuItem text="Mark Read" onClick={handleMarkAsRead} />
-            <MenuItem text="Copy Link" onClick={handleCopyLink} />
+            <MenuItem
+              text={t('entityActions.markRead')}
+              onClick={handleMarkAsRead}
+            />
+            <MenuItem
+              text={t('entityActions.copyLink')}
+              onClick={handleCopyLink}
+            />
           </ContextMenuContent>
         </div>
       </ContextMenu.Portal>

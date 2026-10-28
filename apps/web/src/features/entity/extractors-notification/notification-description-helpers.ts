@@ -103,9 +103,17 @@ export function getActionVerb(type: NotificationType): string {
       .with('document_mention', () => 'shared with you')
       .with('mentioned_in_document_comment', () => 'mentioned you in a comment')
       .with('replied_to_document_comment_thread', () => 'replied to a comment')
-      .with('commented_on_document', () => 'commented')
+      .with('initiative_discussion', () => 'commented')
+      .with('entity_access_requested', () => 'requested access')
+      .with('entity_access_granted', () => 'granted access')
+      .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
-      .with('channel_message_send', () => 'sent a message')
+      .with(
+        'channel_message_send',
+        'external_chat_message',
+        () => 'sent a message'
+      )
+      .with('channel_message_reaction', () => 'reacted to your message')
       .with('ai_response', () => 'AI responded')
       .with('new_email', () => 'sent an email')
       .with('channel_invite', () => 'invited you')
@@ -121,11 +129,12 @@ export function getActionVerb(type: NotificationType): string {
       // Reads as a standalone phrase, not an actor's action — nobody sent it.
       .with('reminder', () => 'reminder')
       .with('calendar_event_reminder', () => 'upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('inbox_reauth_required', () => 'needs reconnection')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
-      .exhaustive()
+      .exhaustive(() => 'updated')
   );
 }
 
@@ -136,7 +145,12 @@ export function getActionVerb(type: NotificationType): string {
 export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
-    .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
+    .with('channel_message_send', 'external_chat_message', () =>
+      count === 1 ? 'message' : 'messages'
+    )
+    .with('channel_message_reaction', () =>
+      count === 1 ? 'reaction' : 'reactions'
+    )
     .with('ai_response', () => (count === 1 ? 'response' : 'responses'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('document_mention', () =>
@@ -148,7 +162,16 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('replied_to_document_comment_thread', () =>
       count === 1 ? 'reply' : 'replies'
     )
-    .with('commented_on_document', () => (count === 1 ? 'comment' : 'comments'))
+    .with('initiative_discussion', () => (count === 1 ? 'comment' : 'comments'))
+    .with('entity_access_requested', () =>
+      count === 1 ? 'access request' : 'access requests'
+    )
+    .with('entity_access_granted', () =>
+      count === 1 ? 'access grant' : 'access grants'
+    )
+    .with('commented_on_document', 'crm_discussion', () =>
+      count === 1 ? 'comment' : 'comments'
+    )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
@@ -166,6 +189,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('call_started', () => (count === 1 ? 'call' : 'calls'))
     .with('reminder', () => (count === 1 ? 'reminder' : 'reminders'))
     .with('calendar_event_reminder', () => (count === 1 ? 'event' : 'events'))
+    .with('calendar_event_join_request', () =>
+      count === 1 ? 'request to join' : 'requests to join'
+    )
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'
@@ -176,7 +202,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('agent_session_mentioned', () =>
       count === 1 ? 'mention' : 'mentions'
     )
-    .exhaustive();
+    .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }
 
 export function getTypePreposition(type: NotificationType): string {

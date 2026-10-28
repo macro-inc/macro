@@ -3,7 +3,8 @@ import { previewKeys } from '@queries/preview/keys';
 import type { PreviewItem } from '@queries/preview/types';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
-import { useQuery } from '@tanstack/solid-query';
+import type { CalendarMentionPreviewRequestItem } from '@service-storage/generated/schemas/calendarMentionPreviewRequestItem';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { calendarKeys } from './keys';
 
@@ -36,6 +37,9 @@ export function invalidateCalendarEventPreviews(eventId?: string): void {
       },
     });
   }
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.searchPreviews._def,
+  });
   queryClient.invalidateQueries({
     queryKey: eventId
       ? [...calendarKeys.mentionPreview._def, eventId]
@@ -90,19 +94,56 @@ export function useCalendarMentionPreviewQuery(
 ) {
   return useQuery(() => {
     const target = input();
-    return {
-      queryKey: calendarKeys.mentionPreview(
-        target?.eventId ?? '',
-        target?.occurrenceKey
-      ).queryKey,
-      queryFn: () => {
-        if (!target) {
-          throw new Error('Calendar mention preview target is unavailable');
-        }
-        return fetchPreview(target.eventId, target.occurrenceKey);
-      },
-      enabled: target !== undefined && options?.().enabled !== false,
-      staleTime: MENTION_PREVIEW_STALE_TIME,
-    };
+    return calendarMentionPreviewQueryOptions(
+      target?.eventId,
+      target?.occurrenceKey,
+      options?.().enabled !== false
+    );
+  });
+}
+
+// Closes over the target's plain fields only, never the caller's accessors.
+function calendarMentionPreviewQueryOptions(
+  eventId: string | undefined,
+  occurrenceKey: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: calendarKeys.mentionPreview(eventId ?? '', occurrenceKey)
+      .queryKey,
+    queryFn: () => {
+      if (eventId === undefined) {
+        throw new Error('Calendar mention preview target is unavailable');
+      }
+      return fetchPreview(eventId, occurrenceKey);
+    },
+    enabled: eventId !== undefined && enabled,
+    staleTime: MENTION_PREVIEW_STALE_TIME,
+  });
+}
+
+/** Resolve search result locations in one request, scoped to each occurrence. */
+export function useCalendarSearchPreviewsQuery(
+  inputs: Accessor<CalendarMentionPreviewRequestItem[]>
+) {
+  return useQuery(() => calendarSearchPreviewsQueryOptions(inputs()));
+}
+
+function calendarSearchPreviewsQueryOptions(
+  items: CalendarMentionPreviewRequestItem[]
+) {
+  return queryOptions({
+    queryKey: calendarKeys.searchPreviews(items).queryKey,
+    queryFn: async () => {
+      const result = await storageServiceClient.getBatchCalendarEventPreviews({
+        items,
+      });
+      if (result.isErr()) {
+        throw new Error('Failed to fetch calendar search previews');
+      }
+      return result.value.items;
+    },
+    enabled: items.length > 0,
+    staleTime: MENTION_PREVIEW_STALE_TIME,
   });
 }

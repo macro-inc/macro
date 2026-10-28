@@ -1,10 +1,11 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import FilePdf from '@phosphor/file-pdf.svg';
-import FileText from '@phosphor/file-text.svg';
-import Heart from '@phosphor/heart.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Heart from '@icon/system/regular/heart.svg';
 import { createSignal, For, Show } from 'solid-js';
+import { cn } from '../utils/classname';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -30,7 +31,12 @@ function ReferenceDemo() {
           aria-pressed={saved()}
           onClick={() => setSaved(!saved())}
         >
-          <Heart class={saved() ? 'fill-current text-accent' : ''} />
+          <Heart
+            class={cn(
+              'size-3.5 shrink-0',
+              saved() && 'fill-current text-accent'
+            )}
+          />
         </Button>
       </Item.Actions>
     </Item>
@@ -206,7 +212,7 @@ function TaskDemo() {
         <Button
           size="icon-sm"
           variant="ghost"
-          class="shrink-0 rounded-full text-task"
+          class="shrink-0 text-task"
           aria-label="Complete review task"
           aria-pressed={completed()}
           onClick={() => setCompleted(!completed())}
@@ -253,7 +259,7 @@ function TextOnlyDemo() {
       <Item.Actions class="h-5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           aria-pressed={following()}
           onClick={() => setFollowing(!following())}
         >

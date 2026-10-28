@@ -10,5 +10,5 @@ export type NotifEventOneOfOnethreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnethreeTag = {
-  channel_message_send: 'channel_message_send',
+  entity_access_granted: 'entity_access_granted',
 } as const;

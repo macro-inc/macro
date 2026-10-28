@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.request AS \"request: Json<RequestData>\",\n                          r.publication AS \"publication: Json<RateData>\",\n                          j.funding AS \"funding: Json<FundingData>\",\n                          j.finalization AS \"finalization: Json<StateData>\"\n                   FROM ai_financial_invocation j JOIN ai_financial_rate r ON r.version = j.rate_version\n                   WHERE j.invocation_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request: Json<RequestData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "publication: Json<RateData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "funding: Json<FundingData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "finalization: Json<StateData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "a90ce080fa5c03ee3f9a9ac5053610a439192f2e9359fb52f1d5ab4a7a5c9ad6"
+}

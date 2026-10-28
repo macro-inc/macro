@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import {
   hasSoupEntity,
@@ -7,6 +9,7 @@ import {
 } from '@queries/soup/cache';
 import {
   blockNameToItemType,
+  type HistoryItemType,
   type ItemType,
   isCloudStorageItem,
 } from '@service-storage/client';
@@ -23,12 +26,16 @@ function isSoupEntityTag(
       'email',
       'channel_message',
       'channel_thread',
-      'automation',
+      'routine',
       'agent_session',
+      'database',
+      'form',
       'calendar_event',
       'foreign',
       'crm_company',
       'crm_contact',
+      'crm_pipeline',
+      'initiative',
       () => false
     )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)
@@ -45,13 +52,26 @@ function isSoupEntityTag(
 // Foreign entities (GitHub PRs) are intentionally omitted: they are not
 // documents, and posting `/history/document/{id}` 401s because ACL looks
 // up a document that does not exist.
-function shouldTrackInUserHistory(itemType: ItemType): boolean {
+function shouldTrackInUserHistory(
+  itemType: ItemType
+): itemType is HistoryItemType {
   return (
     isCloudStorageItem(itemType) ||
     itemType === 'agent_session' ||
     itemType === 'crm_company' ||
     itemType === 'crm_contact'
   );
+}
+
+async function fetchOpenedSoupEntity(
+  itemId: string,
+  itemType: ItemType & SoupEntityTag
+) {
+  try {
+    await refetchSoupEntity(itemId, itemType);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'track-block-opened', itemType });
+  }
 }
 
 /**
@@ -72,7 +92,10 @@ export function track({
   optimisticUpdateSoupItemViewedAt(itemId);
   const inSoup = hasSoupEntity(itemId);
   if (!inSoup && isSoupEntityTag(itemType)) {
-    refetchSoupEntity(itemId, itemType);
+    fireAndForget(
+      fetchOpenedSoupEntity(itemId, itemType),
+      'track-block-opened'
+    );
   }
 
   if (!shouldTrackInUserHistory(itemType)) return;

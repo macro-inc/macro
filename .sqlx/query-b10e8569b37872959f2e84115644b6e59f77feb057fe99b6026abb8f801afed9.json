@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ce.id, ce.user_id, ce.title, ce.started_at, ce.ended_at, ce.duration_ms, ce.created_at,\n               sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\",\n               src.provider AS \"provider?\", src.external_url, src.metadata ->> 'summary' AS summary\n        FROM call_entities ce\n        JOIN \"SharePermission\" sp ON sp.id = ce.share_permission_id\n        LEFT JOIN LATERAL (\n            SELECT provider, external_url, metadata\n            FROM call_entity_sources\n            WHERE call_id = ce.id\n            ORDER BY synced_at DESC NULLS LAST\n            LIMIT 1\n        ) src ON true\n        WHERE ce.id = $1 AND ce.created_via <> 'native'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "provider?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "external_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "summary",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "b10e8569b37872959f2e84115644b6e59f77feb057fe99b6026abb8f801afed9"
+}

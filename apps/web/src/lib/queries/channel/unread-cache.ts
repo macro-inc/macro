@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import {
   ChannelUnreadCacheWriteDocument,
   type ChannelUnreadCacheWriteSubscription,
@@ -8,13 +9,13 @@ import {
   type ChannelUnreadPresenceQueryVariables,
   type SoupNotificationFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
 import { getChannelListRevalidations } from '../soup/graphql/channel-list-revalidation';
 
 const channelMessageEvents = new Set([
   'channel_mention',
   'channel_message_send',
-  'channel_message_reply',
   'document_mention',
 ]);
 
@@ -41,7 +42,8 @@ export async function cacheNewChannelUnread(
     !isCurrent() ||
     notification.entityType !== 'CHANNEL' ||
     notification.state !== 'UNSEEN' ||
-    !channelMessageEvents.has(notification.eventType)
+    !channelMessageEvents.has(notification.eventType) ||
+    !isUnreadChannelMessageNotification(mapGraphqlNotification(notification))
   ) {
     return false;
   }
@@ -50,22 +52,22 @@ export async function cacheNewChannelUnread(
     __typename: 'GraphqlSoupChannel' as const,
     id: notification.entityId,
   };
+  const witness = {
+    id: notification.id,
+    state: notification.state,
+    createdAt: notification.createdAt,
+  };
   await host.writeQuery({
     query: relationshipQuery,
     operationName: 'ChannelUnreadCacheWrite',
+    variables: {},
     data: {
       soupUpdates: [
         {
           __typename: 'SoupUpdated',
           item: {
             ...channel,
-            unreadNotifications: [
-              {
-                id: notification.id,
-                state: notification.state,
-                createdAt: notification.createdAt,
-              },
-            ],
+            unreadNotifications: [witness],
           },
         },
       ],

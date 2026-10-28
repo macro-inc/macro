@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_billing_usage_observation (event_id, user_id, subscription_id, item_id, facts, decision)\n            VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85a0dea7efa1b0f59b36afe382544e36beb1737c14cb9fc3ad0868bb747abdc4"
+}

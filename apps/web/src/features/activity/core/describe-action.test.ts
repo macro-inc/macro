@@ -26,13 +26,23 @@ const DESCRIBE_CASES: Array<[ActivityAction, string]> = [
     'removed a participant',
   ],
   [{ kind: 'call-started' }, 'started a call'],
+  [{ kind: 'responded' }, 'responded'],
 ];
 
 const ENTITY_CASES: Array<
   [ActivityAction, { verb: string; connector?: string }]
 > = [
   [{ kind: 'created' }, { verb: 'created' }],
+  [
+    { kind: 'task-added', taskId: 'task' },
+    { verb: 'added a task', connector: 'to' },
+  ],
+  [
+    { kind: 'task-removed', taskId: 'task' },
+    { verb: 'removed a task', connector: 'from' },
+  ],
   [{ kind: 'messaged' }, { verb: 'sent a message', connector: 'in' }],
+  [{ kind: 'responded' }, { verb: 'responded', connector: 'to' }],
   [
     { kind: 'participant-added', participant: 'macro|sarah@example.com' },
     { verb: 'added a participant', connector: 'to' },

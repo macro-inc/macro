@@ -171,6 +171,19 @@ impl CollabSurfaceRepo for PgCollabSurfaceRepo {
         Ok(())
     }
 
+    async fn is_deleted(&self, id: Uuid) -> Result<bool, CollabSurfaceRepoErr> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM collab_surfaces WHERE id = $1 AND deleted_at IS NOT NULL
+            ) AS "deleted!"
+            "#,
+            id,
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
     async fn soft_delete(&self, id: Uuid) -> Result<(), CollabSurfaceRepoErr> {
         sqlx::query!(
             r#"

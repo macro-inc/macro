@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import WideChannel from '@phosphor/hash-straight.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import WideChannel from '@icon/system/regular/hash-straight.svg';
+import List from '@icon/system/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal } from 'solid-js';
 import { VList } from 'virtua/solid';
@@ -33,7 +33,8 @@ const ListEntitiesToolResponse = (props: {
       case 'document':
         return item.name || 'Document';
       case 'aiChat':
-        return item.name || 'Chat';
+      case 'agentSession':
+        return item.name || 'Agent session';
       case 'project':
         return item.name || 'Project';
       case 'email':
@@ -61,7 +62,8 @@ const ListEntitiesToolResponse = (props: {
           />
         );
       case 'aiChat':
-        return <EntityIcon targetType="chat" size="xs" theme="monochrome" />;
+      case 'agentSession':
+        return <EntityIcon targetType="agent" size="xs" theme="monochrome" />;
       case 'project':
         return <EntityIcon targetType="project" size="xs" theme="monochrome" />;
       case 'email':
@@ -89,6 +91,13 @@ const ListEntitiesToolResponse = (props: {
         return (event: MouseEvent) => {
           openWithSplit(
             { type: 'chat', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
+        };
+      case 'agentSession':
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'agent', id: item.id },
             { activate: true, preferNewSplit: event.shiftKey }
           );
         };

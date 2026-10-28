@@ -1,3 +1,4 @@
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import type {
   EmailThreadHost,
@@ -8,11 +9,15 @@ import {
   EmailThread,
   type EmailThreadProps,
 } from '@app/features/email-thread/email-thread';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
 import { Show } from 'solid-js';
+import { QueuedSendStatus } from '../email-compose/queued-send-status';
 import { EmailTaskButton } from './component/EmailTaskButton';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
 
@@ -22,6 +27,8 @@ export type EmailThreadHostViewContext = {
 
 export type EmailThreadHostViewProps = {
   title: string;
+  /** Host control after the subject's last word, in place of Copy subject. */
+  titleTrailing?: JSX.Element;
   threadId: Accessor<string>;
   source: EmailThreadSource;
   threadTransport: EmailThreadProps['threadTransport'];
@@ -44,10 +51,6 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       type: 'component',
       id: 'task-compose',
       params: {
-        initialTitle:
-          props.title.length > 70
-            ? `${props.title.slice(0, 70)}...`
-            : props.title,
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: props.threadId(),
@@ -60,16 +63,22 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
   return (
     <EmailThread
       title={props.title}
+      titleTrailing={props.titleTrailing}
       threadId={props.threadId}
       source={props.source}
       threadTransport={props.threadTransport}
       host={props.host}
+      openCalendar={(target) => {
+        fireAndForget(openCalendarEventSplit(target), 'email-thread');
+      }}
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
         <>
           {props.chrome?.({ createTask })}
+          <QueuedSendStatus threadId={props.threadId()} />
           <SidePanel.Layout
+            floating
             defaultOpen={false}
             headerToggle={props.sidePanelHeaderToggle}
           >
@@ -88,24 +97,25 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
 function ThreadActions(props: { title: string; onCreateTask: () => void }) {
   const context = useEmailThreadState();
   return (
-    <SidePanel.Section
-      id="email-ai-actions"
-      title="Actions"
-      defaultOpen
-      order={0}
-    >
-      <div class="m-px flex items-center justify-start gap-2">
+    <SidePanel.HeaderActions>
+      <HeaderActionGroup label="Actions" size="md">
         <Show when={context.thread()?.db_id}>
           {(id) => (
             <AskMacroButton
+              grouped
+              size={isTouchDevice() ? undefined : 'icon-md'}
               entity={{ type: 'email', id: id(), name: props.title }}
             />
           )}
         </Show>
         <Show when={context.thread()?.db_id}>
-          <EmailTaskButton onClick={props.onCreateTask} />
+          <EmailTaskButton
+            grouped
+            size={isTouchDevice() ? undefined : 'icon-md'}
+            onClick={props.onCreateTask}
+          />
         </Show>
-      </div>
-    </SidePanel.Section>
+      </HeaderActionGroup>
+    </SidePanel.HeaderActions>
   );
 }

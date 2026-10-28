@@ -291,6 +291,12 @@ impl PgCallRepo {
         )
         .execute(tx.as_mut())
         .await?;
+        sqlx::query!(
+            "DELETE FROM call_meeting_preparations WHERE meeting_id = $1",
+            meeting_id
+        )
+        .execute(tx.as_mut())
+        .await?;
         tx.commit().await?;
         Ok((
             Call {

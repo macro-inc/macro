@@ -1,13 +1,17 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useGetChannelJoinLinkMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
-export function ChannelJoinLinkButton(props: { channelId: string }) {
+export function ChannelJoinLinkButton(props: {
+  channelId: string;
+  iconOnly?: boolean;
+}) {
   const getJoinLinkMutation = useGetChannelJoinLinkMutation();
   const [joinCode, setJoinCode] = createSignal<string>();
   const [copied, setCopied] = createSignal(false);
@@ -71,11 +75,12 @@ export function ChannelJoinLinkButton(props: { channelId: string }) {
 
   return (
     <Button
-      variant="outline"
-      size="sm"
-      class="rounded-xs"
+      aria-label={buttonLabel()}
+      tooltip={buttonLabel()}
+      variant="secondary"
+      size={props.iconOnly ? 'icon-md' : 'sm'}
       disabled={getJoinLinkMutation.isPending}
-      onClick={() => void copyJoinLink()}
+      onClick={() => fireAndForget(copyJoinLink(), 'channel-invite')}
     >
       <Show
         when={!getJoinLinkMutation.isPending}
@@ -85,7 +90,7 @@ export function ChannelJoinLinkButton(props: { channelId: string }) {
           <CheckIcon class="size-4" />
         </Show>
       </Show>
-      {buttonLabel()}
+      <Show when={!props.iconOnly}>{buttonLabel()}</Show>
     </Button>
   );
 }

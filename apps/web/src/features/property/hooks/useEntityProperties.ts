@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAddEntityPropertyMutation,
   useDeleteEntityPropertyMutation,
@@ -43,7 +44,7 @@ export function useEntityProperties(
     properties: () => query.data ?? [],
     isLoading: () => query.isLoading,
     error: () => (query.error ? ERROR_MESSAGES.PROPERTY_FETCH : null),
-    refetch: () => void query.refetch(),
+    refetch: () => fireAndForget(query.refetch(), 'entity-properties'),
     addProperty: (propertyDefinitionId: string) =>
       addMutation.mutateAsync({ entityId, entityType, propertyDefinitionId }),
     removeProperty: (propertyId: string) =>

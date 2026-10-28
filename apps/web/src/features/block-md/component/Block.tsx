@@ -9,7 +9,7 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockDataSignal as blockLoaderDataSignal } from '@core/internal/BlockLoader';
@@ -27,11 +27,10 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownData } from '../definition';
-import { OldOverlay } from '../history/OldOverlay';
+import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { FindAndReplace } from './FindAndReplace';
@@ -39,7 +38,7 @@ import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
-import { InstructionsTopBar, TopBar } from './TopBar';
+import { TopBar } from './TopBar';
 import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
@@ -74,10 +73,12 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   });
   const persistedName = useBlockDocumentName('');
   const fallbackName = useBlockDocumentName();
-  const instructionsMdId = useInstructionsMdIdQuery();
-  const isInstructions = () =>
-    instructionsMdId.isSuccess && documentId === instructionsMdId.data;
   const markdownState = createMarkdownDocumentState();
+  if (!useIsNestedBlock())
+    createMarkdownRouteNavigation(
+      () => documentId,
+      markdownState.params.navigate
+    );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: markdownState.params.navigate,
   });
@@ -131,9 +132,8 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
         fallbackName={fallbackName()}
       >
         <ModalsProvider>
-          <OldOverlay />
-          <SidePanel.Layout>
-            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
+          <SidePanel.Layout floating>
+            <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
               <MarkdownSidePanelSections />
             </Show>
             <div class="flex flex-col size-full">
@@ -150,18 +150,14 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                   </Show>
                 </SplitHeaderRight>
                 <Suspense>
-                  <Show when={isInstructions()} fallback={<ManagedTopBar />}>
-                    <InstructionsTopBar />
-                  </Show>
+                  <ManagedTopBar />
                 </Suspense>
                 <Suspense>
-                  <Show when={!isInstructions()}>
-                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
-                      <FindAndReplace
-                        hotkeyScope={blockHotkeyScopeSignal.get()}
-                      />
-                    </div>
-                  </Show>
+                  <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
+                    <FindAndReplace
+                      hotkeyScope={blockHotkeyScopeSignal.get()}
+                    />
+                  </div>
                 </Suspense>
               </div>
               <DocumentDebouncedNotificationReadMarker
@@ -169,7 +165,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                 documentId={documentId}
               />
               <MarkdownDocumentContent
-                isInstructions={isInstructions()}
                 hotkeyScope={blockHotkeyScopeSignal.get()}
                 autoFocus={canAutofocus && !navigatedFromJK()}
                 doInitialSync={data()?.doInitialSync}

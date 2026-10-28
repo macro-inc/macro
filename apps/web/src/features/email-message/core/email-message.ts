@@ -1,3 +1,5 @@
+import type { CalendarInvitation } from './calendar-invitation';
+import type { MessageOperation } from './message-operation';
 /** Feature-owned values. Transport adaptation belongs to queries. */
 export interface EmailContact {
   email: string;
@@ -6,6 +8,7 @@ export interface EmailContact {
 }
 
 export interface EmailAttachment {
+  reference_url?: string | null;
   content_id?: string | null;
   db_id: string;
   filename?: string | null;
@@ -14,7 +17,23 @@ export interface EmailAttachment {
   size_bytes?: number | null;
 }
 
+/** Whether a file is an iCalendar event file, by its MIME type or `.ics` name. */
+export function isCalendarFile(
+  fileName: string | null | undefined,
+  mimeType: string | null | undefined
+): boolean {
+  const type = mimeType?.split(';')[0].trim().toLowerCase();
+  return (
+    type === 'text/calendar' ||
+    type === 'application/ics' ||
+    !!fileName?.toLowerCase().endsWith('.ics')
+  );
+}
+
 export interface EmailDraftAttachment {
+  upload_pending?: boolean;
+  content_id?: string | null;
+  is_inline?: boolean;
   content_type: string;
   file_name: string;
   id: string;
@@ -35,6 +54,9 @@ export interface EmailLabel {
 }
 
 export interface EmailMessage {
+  draft_generation?: number;
+  operation?: MessageOperation | null;
+  calendar_invitations?: CalendarInvitation[];
   attachments: EmailAttachment[];
   attachments_draft: EmailDraftAttachment[];
   attachments_forwarded: EmailForwardedAttachment[];
@@ -49,11 +71,18 @@ export interface EmailMessage {
   from?: null | EmailContact;
   internal_date_ts?: string | null;
   is_draft: boolean;
+  is_read: boolean;
   labels: EmailLabel[];
   link_id: string;
   provider_id?: string | null;
   replying_to_id?: string | null;
   scheduled_send_time?: string | null;
+  scheduled_send_status?:
+    | 'pending'
+    | 'sending'
+    | 'failed'
+    | 'unconfirmed'
+    | null;
   sent_at?: string | null;
   snippet?: string | null;
   subject?: string | null;

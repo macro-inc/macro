@@ -1,14 +1,11 @@
+mod pull_requests;
+
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use channels::domain::{
-    broker_events::{
-        ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
-        ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
-    },
-    models::{ChannelSender, ChannelType},
-};
+use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
     ChatUpdatedMetadata,
@@ -26,6 +23,10 @@ use email::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::events::{
+    MessageAttachmentCreatedMetadata, MessageDeletedMetadata, MessageEventAttachment,
+    MessagePostedMetadata,
+};
 use messages::domain::models::SimpleMention;
 use model_owner::Owner;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
@@ -115,12 +116,16 @@ fn subscribes_to_all_existing_soup_source_topics() {
     assert_eq!(
         DeclaredMacroEvent::topics(),
         [
+            "macro.github_pull_requests",
             "macro.documents",
             "macro.projects",
             "macro.chats",
             "macro.email",
             "macro.channels",
+            "macro.messages",
             "macro.properties",
+            "macro.initiatives",
+            "macro.calls",
         ]
     );
 }
@@ -139,6 +144,7 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
         created_at: None,
     });
     let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
         actor: None,
@@ -383,6 +389,105 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
 }
 
 #[test]
+fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() {
+    let id = Uuid::now_v7();
+    let purged = InitiativeTopicEvent::Purged {
+        initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+    };
+    let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: id.to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    });
+
+    for cleanup_first in [false, true] {
+        let deletion = patches_from_initiative_event(&purged);
+        let cleanup = patches_from_property_event(&cleanup);
+        let patches = if cleanup_first {
+            [cleanup, deletion].concat()
+        } else {
+            [deletion, cleanup].concat()
+        };
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Deleted(_)));
+        assert_eq!(
+            patch_entity(&patches[0]).entity_type,
+            EntityType::Initiative
+        );
+        assert_eq!(patch_entity(&patches[0]).entity_id, id.to_string());
+    }
+}
+
+#[test]
+fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
+    let metadata = EntityPropertiesClearedMetadata {
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    };
+    for metadata in [
+        EntityPropertiesClearedMetadata {
+            actor_user_id: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            actor: Some(ChannelSender::new_from_user(user())),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            on_behalf_of: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            entity_type: PropertyEntityType::Company,
+            ..metadata
+        },
+    ] {
+        let entity_id = metadata.entity_id.clone();
+        let patches =
+            patches_from_property_event(&PropertyTopicEvent::EntityPropertiesCleared(metadata));
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_id, entity_id);
+    }
+}
+
+#[test]
+fn a_cell_edit_updates_the_database_row() {
+    let row = "70000000-0000-0000-0000-000000000001";
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
+        entity_id: row.to_string(),
+        entity_type: PropertyEntityType::DatabaseRow,
+        property_definition_id: Uuid::from_u128(0x5e1ec700_0000_0000_0000_000000000001),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::DatabaseRow
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, row);
+    assert_eq!(
+        patches[0].access_source.entity_type,
+        EntityType::DatabaseRow
+    );
+}
+
+#[test]
 fn property_events_for_non_property_soup_items_are_ignored() {
     for entity_type in [PropertyEntityType::Channel, PropertyEntityType::User] {
         let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
@@ -509,23 +614,44 @@ fn new_email_events_map_to_realtime_thread_patches() {
     );
 }
 
+fn posted(
+    parent: MessageParent,
+    message_id: Uuid,
+    mentions: Vec<SimpleMention>,
+) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent,
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        content: "shared".to_string(),
+        mentions,
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    }
+}
+
 #[test]
 fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event =
-        ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
-            channel_id,
-            message_id: Uuid::now_v7(),
-            actor: ChannelSender::new_from_user(user()),
-            attachments: vec![ChannelEventAttachment {
-                attachment_id: Uuid::now_v7(),
-                entity_type: "document".to_string(),
-                entity_id: DOCUMENT_ID.to_string(),
-                created_at: Utc::now(),
-            }],
-        });
+    let message_id = Uuid::now_v7();
+    let event = MessageTopicEvent::AttachmentCreated(MessageAttachmentCreatedMetadata {
+        parent: MessageParent::Channel(channel_id),
+        message_id,
+        thread_id: None,
+        root_id: message_id,
+        actor: ChannelSender::new_from_user(user()),
+        attachments: vec![MessageEventAttachment {
+            attachment_id: Uuid::now_v7(),
+            entity_type: "document".to_string(),
+            entity_id: DOCUMENT_ID.to_string(),
+            created_at: Utc::now(),
+        }],
+    });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
@@ -538,23 +664,16 @@ fn attachment_events_update_referenced_documents_for_channel_members() {
 #[test]
 fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared a document".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "document".to_string(),
             entity_id: DOCUMENT_ID.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
@@ -566,23 +685,16 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
 fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let session_id = Uuid::now_v7().to_string();
-    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
-        channel_id,
-        message_id: Uuid::now_v7(),
-        thread_id: None,
-        sender: ChannelSender::new_from_user(user()),
-        triggered_by: None,
-        channel_type: ChannelType::Private,
-        content: "shared an agent session".to_string(),
-        mentions: vec![SimpleMention {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::Channel(channel_id),
+        Uuid::now_v7(),
+        vec![SimpleMention {
             entity_type: "agent_session".to_string(),
             entity_id: session_id.to_string(),
         }],
-        attachments: Vec::new(),
-        created_at: Utc::now(),
-    });
+    ));
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 3);
     assert_eq!(
         patch_entity(&patches[2]).entity_type,
@@ -594,18 +706,29 @@ fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members(
 }
 
 #[test]
+fn document_discussion_posts_patch_nothing() {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::parse("document", DOCUMENT_ID).unwrap(),
+        Uuid::now_v7(),
+        vec![],
+    ));
+    assert!(patches_from_message_event(&event).is_empty());
+}
+
+#[test]
 fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();
-    let event = ChannelTopicEvent::MessageDeleted(ChannelMessageDeletedMetadata {
-        channel_id,
+    let event = MessageTopicEvent::Deleted(MessageDeletedMetadata {
+        parent: MessageParent::Channel(channel_id),
         message_id,
         thread_id: None,
+        root_id: message_id,
         actor: ChannelSender::new_from_user(user()),
         deleted_at: None,
     });
 
-    let patches = patches_from_channel_event(&event);
+    let patches = patches_from_message_event(&event);
     assert_eq!(patches.len(), 2);
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert!(matches!(patches[1].patch, Patch::Deleted(_)));
@@ -623,7 +746,7 @@ async fn updated_payload_maps_to_document_patch_and_commits() {
     let commits = AtomicUsize::new(0);
 
     assert!(matches!(
-        process_event(&service, &event, || {
+        process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         })
         .await,
@@ -661,7 +784,7 @@ async fn transient_service_failures_are_retried_before_committing() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         commits.fetch_add(1, Ordering::SeqCst);
     })
@@ -682,7 +805,7 @@ async fn exhausted_service_retries_drop_and_commit_the_event() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         assert_eq!(started.elapsed(), Duration::from_secs(15));
         commits.fetch_add(1, Ordering::SeqCst);
@@ -700,14 +823,14 @@ async fn dropped_event_does_not_prevent_later_events_from_being_processed() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let committed_offsets = Mutex::new(Vec::new());
 
-    let first_outcome = process_event(&service, &first_event, || {
+    let first_outcome = process_event(&service, &NoPullRequestSessions, &first_event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         committed_offsets.lock().expect("offsets lock").push(0);
     })
     .await;
     assert!(matches!(first_outcome, EventOutcome::Dropped));
 
-    let next_outcome = process_event(&service, &next_event, || {
+    let next_outcome = process_event(&service, &NoPullRequestSessions, &next_event, || {
         assert_eq!(
             service.attempts.load(Ordering::SeqCst),
             MAX_NOTIFY_ATTEMPTS + 1
@@ -738,7 +861,7 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
     service.failures.insert(2);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), 4);
         commits.fetch_add(1, Ordering::SeqCst);
     })
@@ -766,7 +889,7 @@ async fn partial_event_failure_discards_remaining_patches_and_commits() {
     service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(
             service.attempts.load(Ordering::SeqCst),
             MAX_NOTIFY_ATTEMPTS + 1
@@ -795,7 +918,7 @@ async fn ignored_event_commits_without_notifying() {
     let service = flaky_service(0);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         commits.fetch_add(1, Ordering::SeqCst);
     })
     .await;
@@ -819,7 +942,7 @@ async fn offset_is_committed_only_after_every_patch_finishes() {
     let event = reindex_event(vec![Uuid::now_v7(), Uuid::now_v7()]);
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
-    let process = process_event(&service, &event, || {
+    let process = process_event(&service, &NoPullRequestSessions, &event, || {
         commits.fetch_add(1, Ordering::SeqCst);
     });
     tokio::pin!(process);
@@ -840,7 +963,7 @@ async fn cancellation_during_publication_leaves_the_event_uncommitted() {
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &event, || {
+        let process = process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         });
         tokio::pin!(process);
@@ -856,7 +979,7 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &event, || {
+        let process = process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         });
         tokio::pin!(process);
@@ -868,4 +991,108 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     tokio::time::advance(Duration::from_secs(15)).await;
     assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
     assert_eq!(commits.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
+    use initiative::domain::{events::InitiativeChange, models::InitiativeId};
+
+    let id = InitiativeId::from_uuid(Uuid::from_u128(42));
+    for event in [
+        InitiativeTopicEvent::Created(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+        InitiativeTopicEvent::Updated(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+    ] {
+        assert_eq!(
+            patches_from_initiative_event(&event),
+            vec![update(EntityType::Initiative, id)]
+        );
+    }
+    assert_eq!(
+        property_update(PropertyEntityType::Initiative, &id.to_string()),
+        vec![update(EntityType::Initiative, id)]
+    );
+    assert_eq!(
+        patches_from_initiative_event(&InitiativeTopicEvent::Purged { initiative_id: id }),
+        vec![delete(EntityType::Initiative, id)]
+    );
+}
+
+#[test]
+fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
+    use models_properties::{service::property_value::PropertyValue, shared::EntityReference};
+    use system_properties::SystemPropertyKey;
+
+    let project = |id: &str| {
+        Some(PropertyValue::EntityRef(vec![EntityReference {
+            entity_id: id.to_owned(),
+            entity_type: PropertyEntityType::Initiative,
+            specific_message_id: None,
+        }]))
+    };
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: DOCUMENT_ID.to_string(),
+        entity_type: PropertyEntityType::Task,
+        property_definition_id: SystemPropertyKey::PROJECT_UUID,
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: project("project-to"),
+        previous_value: project("project-from"),
+        updated_at: Utc::now(),
+    });
+    assert_eq!(
+        patches_from_property_event(&event),
+        vec![
+            update(EntityType::Document, DOCUMENT_ID),
+            update(EntityType::Initiative, "project-from"),
+            update(EntityType::Initiative, "project-to"),
+        ]
+    );
+    // A deleted project's internal cleanup refreshes only the task.
+    let PropertyTopicEvent::EntityPropertyUpdated(mut cleanup) = event else {
+        unreachable!()
+    };
+    cleanup.actor_user_id = None;
+    cleanup.value = None;
+    assert_eq!(
+        patches_from_property_event(&PropertyTopicEvent::EntityPropertyUpdated(cleanup)),
+        vec![update(EntityType::Document, DOCUMENT_ID)]
+    );
+}
+
+struct NoPullRequestSessions;
+impl PullRequestSessions for NoPullRequestSessions {
+    async fn linked_sessions(&self, _: &str) -> Result<Vec<Entity<'static>>, Report> {
+        Ok(Vec::new())
+    }
+}
+
+#[test]
+fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
+    let call_id = Uuid::now_v7();
+    let imported = CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+        call_id,
+        owner: user(),
+    });
+    let patches = patches_from_call_event(&imported);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Call);
+    assert_eq!(patch_entity(&patches[0]).entity_id, call_id.to_string());
+
+    let summarized = CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
+        call_id,
+        channel_id: None,
+        ai_name_generated: false,
+    });
+    assert!(patches_from_call_event(&summarized).is_empty());
 }

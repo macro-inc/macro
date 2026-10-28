@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.email_link_id FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id\n            WHERE a.provider='outlook' AND a.sync_status<>'disabled' AND NOT EXISTS(\n                SELECT 1 FROM email_link_microsoft_scopes s WHERE s.link_id=l.id AND s.grant_generation=l.grant_generation AND l.is_sync_active\n                    AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[])\n            FOR UPDATE OF l SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "99847434b8a067fc5bb66a0662150f9d7464bef2401a8cc01543635a50503cb7"
+}

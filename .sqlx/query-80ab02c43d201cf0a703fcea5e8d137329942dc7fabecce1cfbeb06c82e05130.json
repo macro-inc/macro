@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT publication AS \"publication: Json<RateData>\"\n                   FROM ai_financial_rate WHERE version = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "publication: Json<RateData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80ab02c43d201cf0a703fcea5e8d137329942dc7fabecce1cfbeb06c82e05130"
+}

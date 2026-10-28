@@ -96,19 +96,13 @@ describe('availableBotMentionUsers', () => {
       'cursor'
     );
     const codex = agent('codex', 'Codex', 'all', 'codex-cloud');
-    const claude = agent('claude', 'Claude', 'all', 'claude-cloud');
     expect(
       availableBotMentionUsers(
         [bot(CURSOR_BOT_ID, 'Cursor'), installed.bot],
-        [global, installed, codex, claude],
+        [global, installed, codex],
         false
       ).map((user) => user.id)
-    ).toEqual([
-      'bot|installed-cursor',
-      'bot|global-cursor',
-      'bot|codex',
-      'bot|claude',
-    ]);
+    ).toEqual(['bot|installed-cursor', 'bot|global-cursor', 'bot|codex']);
   });
   it('hides the built-in Cursor bot before agent metadata is available', () => {
     expect(
@@ -130,7 +124,7 @@ describe('availableBotMentionUsers', () => {
       dispose();
     });
   });
-  it.each(['cursor', 'codex-cloud', 'claude-cloud'])(
+  it.each(['cursor', 'codex-cloud'])(
     'offers global and installed %s agents before connection',
     (harness) => {
       const global = agent('global', 'Global', 'all', harness);
@@ -197,15 +191,28 @@ describe('availableBotMentionUsers', () => {
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
   });
 
-  it('includes channel-selected agents on a document surface only', () => {
-    const selected = agent('doc-only', 'Doc only', 'selected');
+  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
+    'includes channel-selected agents on a %s discussion surface',
+    (surface) => {
+      const selected = agent('doc-only', 'Doc only', 'selected');
+      expect(
+        availableBotMentionUsers([], [selected], true, 'channel').map(
+          (u) => u.id
+        )
+      ).toEqual([]);
+      expect(
+        availableBotMentionUsers([], [selected], true, surface).map((u) => u.id)
+      ).toEqual(['bot|doc-only']);
+    }
+  );
+
+  it('offers owned and team agents in calls regardless of channel scope', () => {
+    const owned = agent('owned-agent', 'Owned agent', 'selected');
+    const team = agent('team-agent', 'Team agent', 'all');
     expect(
-      availableBotMentionUsers([], [selected], true, 'channel').map((u) => u.id)
-    ).toEqual([]);
-    expect(
-      availableBotMentionUsers([], [selected], true, 'document').map(
-        (u) => u.id
+      availableBotMentionUsers([], [owned, team], true, 'call').map(
+        (user) => user.id
       )
-    ).toEqual(['bot|doc-only']);
+    ).toEqual(['bot|owned-agent', 'bot|team-agent']);
   });
 });

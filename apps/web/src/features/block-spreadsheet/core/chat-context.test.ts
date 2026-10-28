@@ -5,7 +5,7 @@ const sheet = {
   id: 'sheet-2',
   name: 'Annual budget',
   cells: {},
-  layout: { rowCount: 200, columnWidths: {} },
+  layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
 };
 
 describe('spreadsheet chat context', () => {

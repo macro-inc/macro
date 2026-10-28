@@ -1,13 +1,15 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear.svg';
-import MinusIcon from '@phosphor/minus.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -74,9 +76,10 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     visible: boolean
   ) => {
     calendarView.closeEventDetails();
-    for (const source of group.calendars) {
-      calendarView.setSourceVisibility(source.id, visible);
-    }
+    calendarView.setSourcesVisibility(
+      group.calendars.map((source) => source.id),
+      visible
+    );
   };
   const isAccountVisible = (group: CalendarAccountGroup) =>
     group.calendars.every((source) => calendarView.isSourceVisible(source.id));
@@ -110,7 +113,26 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     calendarView.closeEventDetails();
     match(account.action)
       .with('enable', () => {
-        startAddInbox({ scopes: 'calendar' });
+        fireAndForget(
+          startAddInbox({
+            scopes: account.consentScopes,
+            provider: account.provider,
+            reconnectLinkId: account.linkId,
+            emailAddress: account.emailAddress,
+          }),
+          'add-inbox'
+        );
+      })
+      .with('reconnect', () => {
+        fireAndForget(
+          startAddInbox({
+            scopes: account.consentScopes,
+            provider: account.provider,
+            reconnectLinkId: account.linkId,
+            emailAddress: account.emailAddress,
+          }),
+          'add-inbox'
+        );
       })
       .with('turnOff', () => {
         setTurnOffTarget({
@@ -124,7 +146,10 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   // A brand-new account needs the mailbox scopes alongside calendar.
   const connectAnotherAccount = () => {
     calendarView.closeEventDetails();
-    startAddInbox({ scopes: 'gmail_and_calendar' });
+    fireAndForget(
+      startAddInbox({ scopes: 'gmail_and_calendar' }),
+      'calendar-settings'
+    );
   };
 
   return {
@@ -153,19 +178,29 @@ type CalendarSettingsControls = ReturnType<
 
 function DesktopCalendarSettings(props: {
   controls: CalendarSettingsControls;
+  sidebar?: boolean;
 }) {
   const controls = props.controls;
   const calendarView = controls.calendarView;
 
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown placement={props.sidebar ? 'top-end' : 'bottom-end'}>
       <Dropdown.Trigger
         variant="ghost"
-        size="icon-sm"
-        class="shrink-0 rounded-lg"
+        size={props.sidebar ? 'md' : 'icon-lg'}
+        class={
+          props.sidebar
+            ? 'h-(--sidebar-row-height) w-full justify-start gap-(--sidebar-label-gap) rounded-lg border-transparent bg-transparent px-(--sidebar-item-inset) text-left font-normal touch:h-11'
+            : 'shrink-0 border-transparent bg-transparent'
+        }
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-3.5" />
+        <Show when={props.sidebar} fallback={<GearIcon class="size-5" />}>
+          <ViewSidebar.Icon>
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 truncate">Settings</span>
+        </Show>
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
         <Show when={controls.showCalendarVisibility()}>
@@ -288,11 +323,15 @@ function DesktopCalendarSettings(props: {
                   <span
                     class="shrink-0 text-xs font-medium"
                     classList={{
-                      'text-accent': account.action === 'enable',
+                      'text-accent': account.action !== 'turnOff',
                       'text-failure': account.action === 'turnOff',
                     }}
                   >
-                    {account.action === 'enable' ? 'Enable' : 'Turn off'}
+                    {match(account.action)
+                      .with('enable', () => 'Enable')
+                      .with('reconnect', () => 'Reconnect')
+                      .with('turnOff', () => 'Turn off')
+                      .exhaustive()}
                   </span>
                 </Dropdown.Item>
               )}
@@ -315,7 +354,10 @@ function DesktopCalendarSettings(props: {
   );
 }
 
-function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
+function MobileCalendarSettings(props: {
+  controls: CalendarSettingsControls;
+  sidebar?: boolean;
+}) {
   const controls = props.controls;
   const calendarView = controls.calendarView;
   const [open, setOpen] = createSignal(false);
@@ -331,11 +373,20 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
       <MobileDrawer.Trigger
         as={Button}
         variant="ghost"
-        size="icon-sm"
-        class="shrink-0 rounded-full"
+        size={props.sidebar ? 'md' : 'icon-lg'}
+        class={
+          props.sidebar
+            ? 'h-(--sidebar-row-height) w-full justify-start gap-(--sidebar-label-gap) rounded-lg px-(--sidebar-item-inset) text-left font-normal touch:h-11'
+            : 'shrink-0 rounded-full'
+        }
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-6" />
+        <Show when={props.sidebar} fallback={<GearIcon class="size-6" />}>
+          <ViewSidebar.Icon>
+            <GearIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 truncate">Settings</span>
+        </Show>
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>
@@ -479,11 +530,15 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
                     <span
                       class="shrink-0 text-xs font-medium"
                       classList={{
-                        'text-accent': account.action === 'enable',
+                        'text-accent': account.action !== 'turnOff',
                         'text-failure': account.action === 'turnOff',
                       }}
                     >
-                      {account.action === 'enable' ? 'Enable' : 'Turn off'}
+                      {match(account.action)
+                        .with('enable', () => 'Enable')
+                        .with('reconnect', () => 'Reconnect')
+                        .with('turnOff', () => 'Turn off')
+                        .exhaustive()}
                     </span>
                   </MobileDrawer.Item>
                 )}
@@ -513,7 +568,10 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
  * Responsive calendar display settings menu. The turn-off confirmation lives
  * outside the menu so it survives the menu closing on select.
  */
-export function CalendarSettingsDropdown(props: { isNarrow?: boolean }) {
+export function CalendarSettingsDropdown(props: {
+  isNarrow?: boolean;
+  sidebar?: boolean;
+}) {
   const controls = createCalendarSettingsControls(
     () => props.isNarrow ?? false
   );
@@ -522,9 +580,14 @@ export function CalendarSettingsDropdown(props: { isNarrow?: boolean }) {
     <>
       <Show
         when={isMobile()}
-        fallback={<DesktopCalendarSettings controls={controls} />}
+        fallback={
+          <DesktopCalendarSettings
+            controls={controls}
+            sidebar={props.sidebar}
+          />
+        }
       >
-        <MobileCalendarSettings controls={controls} />
+        <MobileCalendarSettings controls={controls} sidebar={props.sidebar} />
       </Show>
       <TurnOffCalendarDialog
         target={controls.turnOffTarget()}

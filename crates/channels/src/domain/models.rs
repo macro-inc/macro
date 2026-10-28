@@ -8,9 +8,6 @@ use item_filters::ast::{
 #[cfg(any(feature = "list", feature = "outbound"))]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::models::{
-    PatchMessageNotificationPolicy, PostMessageNotificationPolicy, SimpleMention,
-};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -32,15 +29,6 @@ pub struct BotSenderProfile {
     pub avatar_url: Option<String>,
 }
 
-/// Request to fetch a page of channel messages.
-#[derive(Debug)]
-pub struct GetChannelMessagesRequest {
-    /// The channel to fetch messages from.
-    pub channel_id: Uuid,
-    /// Page size, clamped to [1, 100].
-    pub limit: u16,
-}
-
 /// Filter for the type of channel attachments to return.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -52,76 +40,8 @@ pub enum ChannelAttachmentType {
     Dss,
 }
 
-/// Filters for channel message queries.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct ChannelMessageFilters {
-    /// When non-empty, only return messages with these IDs.
-    #[serde(default)]
-    pub message_ids: Vec<Uuid>,
-    /// When set, only return top-level messages created at or after this timestamp.
-    #[serde(default)]
-    pub created_after: Option<DateTime<Utc>>,
-    /// When set, only return top-level messages created strictly after this timestamp.
-    #[serde(default)]
-    pub created_after_exclusive: Option<DateTime<Utc>>,
-    /// When set, only return top-level messages created before this timestamp.
-    #[serde(default)]
-    pub created_before: Option<DateTime<Utc>>,
-    /// When set, only return top-level messages with channel activity at or after
-    /// this timestamp. Activity means either the message itself was created after
-    /// this time, or a thread reply was created after this time.
-    ///
-    /// Accepts the legacy JSON field `last_activity` for backwards compatibility.
-    #[serde(default, alias = "last_activity")]
-    pub activity_after: Option<DateTime<Utc>>,
-    /// When set, only return top-level messages with channel activity before this
-    /// timestamp. Activity means either the parent message or at least one thread
-    /// reply falls in the requested activity window.
-    #[serde(default)]
-    pub activity_before: Option<DateTime<Utc>>,
-    /// When set, only return top-level messages where the message itself or
-    /// any active thread reply has a notification for the requesting user that
-    /// matches these notification state constraints.
-    #[serde(default)]
-    pub notification_filters: NotificationFilters,
-}
-
 /// Notification state filters shared with all other item types.
 pub use item_filters::NotificationFilters;
-
-/// Where a channel message sits in the channel/thread model.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelMessageKind {
-    /// A top-level message in the channel timeline.
-    TopLevelMessage,
-    /// A reply inside a top-level message's thread.
-    ThreadReply,
-}
-
-/// Resolution metadata for any channel message id.
-#[derive(Debug, Clone)]
-pub struct ResolvedChannelMessage {
-    /// The requested message id.
-    pub message_id: Uuid,
-    /// Channel this message belongs to.
-    pub channel_id: Uuid,
-    /// Whether the message is top-level or a thread reply.
-    pub kind: ChannelMessageKind,
-    /// The top-level parent/thread id. Equals `message_id` for top-level messages.
-    pub thread_id: Uuid,
-    /// When the requested message was created.
-    pub created_at: DateTime<Utc>,
-}
-
-/// Direction for cursor-based message pagination.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MessagePageDirection {
-    /// Fetch older messages than the cursor.
-    Older,
-    /// Fetch newer messages than the cursor.
-    Newer,
-}
 
 /// A top-level message with thread info, reactions, and attachments.
 #[derive(Debug, Clone)]
@@ -237,6 +157,17 @@ pub struct CountedReaction {
     pub users: Vec<String>,
 }
 
+/// Message details needed to notify its author about a new reaction.
+#[derive(Debug, Clone)]
+pub struct ReactionMessageContext {
+    /// Message author.
+    pub sender: Sender,
+    /// Root thread id when this message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Macro Markdown message body.
+    pub content: String,
+}
+
 /// An attachment on a message.
 #[derive(Debug, Clone)]
 pub struct MessageAttachment {
@@ -340,33 +271,6 @@ pub struct ChannelParticipant {
     pub left_at: Option<DateTime<Utc>>,
 }
 
-/// A channel message returned by the message-context endpoint.
-#[derive(Debug, Clone)]
-pub struct ChannelContextMessage {
-    /// Message id.
-    pub id: Uuid,
-    /// Channel id.
-    pub channel_id: Uuid,
-    /// Parent thread id for replies.
-    pub thread_id: Option<Uuid>,
-    /// User who sent the message.
-    pub sender_id: String,
-    /// For an agent (bot) message, the id of the user who triggered it.
-    pub triggered_by: Option<String>,
-    /// Bot profile when the sender is a bot.
-    pub bot_profile: Option<BotSenderProfile>,
-    /// Message content.
-    pub content: String,
-    /// When the message was created.
-    pub created_at: DateTime<Utc>,
-    /// When the message was last updated.
-    pub updated_at: DateTime<Utc>,
-    /// When the message was edited.
-    pub edited_at: Option<DateTime<Utc>>,
-    /// When the message was soft-deleted.
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
 /// A reference to an attachment entity originating from a channel message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttachmentChannelReference {
@@ -385,6 +289,28 @@ pub struct AttachmentChannelReference {
     /// When the message itself was created.
     pub message_created_at: DateTime<Utc>,
     /// When the attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
+/// A reference to an attachment entity from a comment: a message on a
+/// document, initiative, CRM record, or call rather than on a channel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentCommentReference {
+    /// Stored type of the entity the comment belongs to.
+    pub parent_entity_type: String,
+    /// Id of the entity the comment belongs to.
+    pub parent_entity_id: String,
+    /// Message that contains the reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the mention or attachment row was created.
     pub attachment_created_at: DateTime<Utc>,
 }
 
@@ -410,6 +336,8 @@ pub struct AttachmentGenericReference {
 pub enum AttachmentEntityReference {
     /// Referenced from a channel message.
     Channel(AttachmentChannelReference),
+    /// Referenced from a comment on a non-channel entity.
+    Comment(AttachmentCommentReference),
     /// Referenced from any non-message source entity.
     Generic(AttachmentGenericReference),
 }
@@ -470,7 +398,9 @@ pub struct ThreadReplyRow {
 }
 
 /// Type of channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -478,6 +408,7 @@ pub struct ThreadReplyRow {
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.
     Public,
@@ -487,17 +418,6 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
-}
-
-impl std::fmt::Display for ChannelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChannelType::Public => f.write_str("public"),
-            ChannelType::Private => f.write_str("private"),
-            ChannelType::DirectMessage => f.write_str("direct_message"),
-            ChannelType::Team => f.write_str("team"),
-        }
-    }
 }
 
 /// Request to add a user to all organization channels.
@@ -657,27 +577,6 @@ pub enum GetOrCreateAction {
     Create,
 }
 
-/// Typing indicator action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum TypingAction {
-    /// User started typing.
-    Start,
-    /// User stopped typing.
-    Stop,
-}
-
-/// Reaction mutation action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub enum ReactionAction {
-    /// Add a reaction.
-    Add,
-    /// Remove a reaction.
-    Remove,
-}
-
 /// Request to create a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -726,9 +625,9 @@ pub struct CreateChannelResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct GetOrCreateDmRequest {
-    /// Recipient user id.
+    /// Recipient user id (`macro|...`) or agent persona id (`bot|...`).
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub recipient_id: MacroUserIdStr<'static>,
+    pub recipient_id: Sender,
 }
 
 /// Request to get or create a private channel.
@@ -765,25 +664,13 @@ pub struct PatchChannelRequest {
     pub auto_join_team: Option<bool>,
 }
 
-/// New attachment to add to a channel message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct NewChannelAttachment {
-    /// Attachment entity type.
-    pub entity_type: String,
-    /// Attachment entity id.
-    pub entity_id: String,
-    /// Optional rendered width.
-    pub width: Option<i32>,
-    /// Optional rendered height.
-    pub height: Option<i32>,
-}
-
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
     /// Agent session entity.
     AgentSession,
+    /// Database entity.
+    Database,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -796,6 +683,10 @@ pub enum ReferencedShareItemType {
     Call,
     /// Calendar event entity: one owner's projection of a meeting.
     CalendarEvent,
+    /// Form entity: posting one lets the channel respond to it.
+    Form,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -803,12 +694,15 @@ impl ReferencedShareItemType {
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
             "agent_session" => Some(Self::AgentSession),
+            "database" => Some(Self::Database),
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
             "thread" | "email" | "email_thread" => Some(Self::EmailThread),
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
+            "form" => Some(Self::Form),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -817,12 +711,15 @@ impl ReferencedShareItemType {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::AgentSession => "agent_session",
+            Self::Database => "database",
             Self::Document => "document",
             Self::Chat => "chat",
             Self::Project => "project",
             Self::EmailThread => "thread",
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
+            Self::Form => "form",
+            Self::ExternalChat => "external_chat",
         }
     }
 
@@ -877,93 +774,24 @@ impl ReferencedShareItem {
     }
 }
 
-/// Request to send a channel message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PostMessageRequest {
-    /// Message body.
-    pub content: String,
-    /// Message mentions.
-    pub mentions: Vec<SimpleMention>,
-    /// Optional thread parent id.
-    pub thread_id: Option<Uuid>,
-    /// Attachments to add after message creation.
-    pub attachments: Vec<NewChannelAttachment>,
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
-    /// Internal notification policy for this post.
-    #[serde(skip)]
-    #[cfg_attr(feature = "inbound", schema(ignore))]
-    pub notification_policy: PostMessageNotificationPolicy,
-    /// For an agent (bot) post, the id of the user who triggered it. `None`
-    /// for ordinary human posts. Set internally, never from the wire.
-    #[serde(skip)]
-    #[cfg_attr(feature = "inbound", schema(ignore))]
-    pub triggered_by: Option<String>,
+/// Whether a referenced item was granted to a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceShareOutcome {
+    /// A channel grant exists. An existing direct grant is left as it was.
+    Shared,
+    /// The actor's access is below what sharing this kind of item requires.
+    NotPermitted,
 }
 
-/// Response returned after sending a message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PostMessageResponse {
-    /// Created message id.
-    pub id: String,
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
-}
-
-/// Request to patch a channel message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PatchMessageRequest {
-    /// Optional replacement message body.
-    pub content: Option<String>,
-    /// Optional replacement mentions.
-    pub mentions: Option<Vec<SimpleMention>>,
-    /// Attachment ids to remove.
-    pub attachment_ids_to_delete: Option<Vec<String>>,
-    /// Attachments to add.
-    pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
-    /// Internal notification policy for this patch.
-    #[serde(skip)]
-    #[cfg_attr(feature = "inbound", schema(ignore))]
-    pub notification_policy: PatchMessageNotificationPolicy,
-}
-
-/// Query parameters for deleting a message.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct DeleteMessageQuery {
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
-}
-
-/// Request to mutate a reaction.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PostReactionRequest {
-    /// Reaction emoji.
-    pub emoji: String,
-    /// Message id to react to.
-    pub message_id: String,
-    /// Reaction action.
-    pub action: ReactionAction,
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
-}
-
-/// Request to emit a typing event.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PostTypingRequest {
-    /// Typing action.
-    pub action: TypingAction,
-    /// Optional thread id.
-    pub thread_id: Option<String>,
-    /// Optional optimistic-update nonce.
-    pub nonce: Option<String>,
+/// One referenced item and whether it was shared with the channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceShareResult {
+    /// Referenced entity id.
+    pub entity_id: String,
+    /// Referenced entity type.
+    pub entity_type: ReferencedShareItemType,
+    /// Grant outcome.
+    pub outcome: ReferenceShareOutcome,
 }
 
 /// Request to add participants.
@@ -1015,27 +843,6 @@ pub struct MutatedMessage {
     pub edited_at: Option<DateTime<Utc>>,
     /// Deleted timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-}
-
-/// Persisted attachment returned by mutation operations.
-#[derive(Debug, Clone, Serialize)]
-pub struct MutatedAttachment {
-    /// Attachment id.
-    pub id: Uuid,
-    /// Channel id.
-    pub channel_id: Uuid,
-    /// Message id.
-    pub message_id: Uuid,
-    /// Attachment entity type.
-    pub entity_type: String,
-    /// Attachment entity id.
-    pub entity_id: String,
-    /// Optional rendered width.
-    pub width: Option<i32>,
-    /// Optional rendered height.
-    pub height: Option<i32>,
-    /// Created timestamp.
-    pub created_at: DateTime<Utc>,
 }
 
 /// Channel info row used by mutation logic.
@@ -1178,6 +985,83 @@ pub struct GetChannelsParams {
     query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }
 
+/// An entity whose references are looked up, as stored on reference edges
+/// (for example `crm_company` and the company id).
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceTarget {
+    /// Stored entity type of the referenced entity.
+    pub entity_type: String,
+    /// Referenced entity id.
+    pub entity_id: String,
+}
+
+/// What a live reference to a target belongs to.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ReferenceSource {
+    /// A document or task whose content references the target.
+    Document(String),
+    /// An undeleted message that references the target.
+    Message(ReferencingMessage),
+}
+
+/// An undeleted message that mentions or attaches a reference target.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferencingMessage {
+    /// The message id.
+    pub message_id: Uuid,
+    /// The root of the message's thread, or `None` for a top-level message.
+    pub thread_id: Option<Uuid>,
+    /// The channel or discussion the message belongs to.
+    pub parent: MessageParent,
+}
+
+#[cfg(feature = "list")]
+impl ReferencingMessage {
+    /// The top-level message the reference appears under: the thread root
+    /// for a reply, otherwise the message itself.
+    pub fn root_id(&self) -> Uuid {
+        self.thread_id.unwrap_or(self.message_id)
+    }
+}
+
+/// The channel or discussion a message belongs to.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MessageParent {
+    /// A channel message.
+    Channel(Uuid),
+    /// A discussion message on a document.
+    Document(String),
+    /// A discussion message on an initiative.
+    Initiative(Uuid),
+    /// A discussion message on a CRM company.
+    CrmCompany(Uuid),
+    /// A discussion message on a CRM contact.
+    CrmContact(Uuid),
+    /// A message in a call's thread.
+    Call(Uuid),
+}
+
+#[cfg(feature = "list")]
+impl MessageParent {
+    /// Parse a stored parent, or `None` for an unknown parent type or id.
+    pub fn from_stored(parent_type: &str, parent_id: &str) -> Option<Self> {
+        let uuid = || Uuid::parse_str(parent_id).ok();
+        Some(match parent_type {
+            "channel" => Self::Channel(uuid()?),
+            "document" => Self::Document(parent_id.to_owned()),
+            "initiative" => Self::Initiative(uuid()?),
+            "crm_company" => Self::CrmCompany(uuid()?),
+            "crm_contact" => Self::CrmContact(uuid()?),
+            "call" => Self::Call(uuid()?),
+            _ => return None,
+        })
+    }
+}
+
 /// Channel thread reply rows request.
 #[cfg(feature = "list")]
 #[derive(Debug)]
@@ -1299,6 +1183,8 @@ pub struct LatestMessage {
 #[cfg(feature = "list")]
 #[derive(Debug, Clone)]
 pub struct ChannelWithLatest {
+    /// Persona identity for the viewer's private agent conversation.
+    pub agent_dm: Option<super::agent_dm::AgentDmProfile>,
     /// Channel plus participants.
     pub channel: ChannelWithParticipants,
     /// Latest message data.

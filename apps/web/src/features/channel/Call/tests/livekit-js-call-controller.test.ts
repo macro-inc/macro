@@ -1,11 +1,16 @@
+import { Telemetry } from '@macro-inc/observability';
 import type { CallTokenResponse } from '@service-call/client';
-import type { Room } from 'livekit-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Room, RoomOptions } from 'livekit-client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const roomOptions = vi.fn();
 const connectRoom = vi.fn<() => Promise<void>>();
 
 vi.mock('livekit-client', () => ({
   Room: class {
+    constructor(options: RoomOptions) {
+      roomOptions(options);
+    }
     remoteParticipants = new Map();
     on() {}
     removeAllListeners() {}
@@ -38,6 +43,7 @@ function track() {
 
 function setup(state?: { connectionState: string; room?: Room }) {
   let room: Room | null = state?.room ?? null;
+  const setInitialMediaState = vi.fn();
   const finishLocalMediaSetup = vi.fn(async () => undefined);
   const controller = createLivekitJsCallController({
     room: () => room,
@@ -60,20 +66,41 @@ function setup(state?: { connectionState: string; room?: Room }) {
     setConnectionState: () => undefined,
     setActiveCall: () => undefined,
     setDuplicateConnectCallId: () => undefined,
-    setInitialMediaState: () => undefined,
+    setInitialMediaState,
     setRemoteParticipants: () => undefined,
     clearOptimisticJoin: () => undefined,
     bumpTrackVersion: () => undefined,
     bumpSpeakerVersion: () => undefined,
     setScreenSharing: () => undefined,
   });
-  return { controller, finishLocalMediaSetup };
+  return { controller, finishLocalMediaSetup, setInitialMediaState };
 }
 
 describe('livekit call controller prejoin tracks', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(() => {
     connectRoom.mockReset();
     connectRoom.mockResolvedValue(undefined);
+  });
+
+  it('carries selected devices and background into the connected room', async () => {
+    const { controller, setInitialMediaState } = setup();
+    const preferences = {
+      microphoneDeviceId: 'mic-2',
+      cameraDeviceId: 'camera-2',
+      speakerDeviceId: 'speaker-2',
+      backgroundEffect: { type: 'blur' as const, intensity: 'medium' as const },
+    };
+    await controller.connect(token, preferences);
+    expect(roomOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        audioCaptureDefaults: { deviceId: { exact: 'mic-2' } },
+        videoCaptureDefaults: { deviceId: { exact: 'camera-2' } },
+        audioOutput: { deviceId: 'speaker-2' },
+      })
+    );
+    expect(setInitialMediaState).toHaveBeenCalledWith(preferences);
   });
 
   it('hands prejoin tracks to media setup instead of stopping them', async () => {
@@ -83,10 +110,31 @@ describe('livekit call controller prejoin tracks', () => {
     expect(finishLocalMediaSetup).toHaveBeenCalledWith(
       expect.anything(),
       1,
-      localTracks
+      localTracks,
+      expect.objectContaining({ span: expect.any(Function) })
     );
     expect(localTracks.microphone.stop).not.toHaveBeenCalled();
     expect(localTracks.camera.stop).not.toHaveBeenCalled();
+  });
+
+  it('explicitly parents background media after the asynchronous room connection', async () => {
+    const connectionSpan = Telemetry.span('test');
+    const phases = vi.spyOn(connectionSpan, 'span');
+    vi.spyOn(Telemetry, 'span').mockReturnValue(connectionSpan);
+    const { controller, finishLocalMediaSetup } = setup();
+
+    await controller.connect(token);
+
+    expect(phases).toHaveBeenCalledWith(
+      'call.media.setup',
+      expect.any(Function)
+    );
+    expect(finishLocalMediaSetup).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      undefined,
+      expect.objectContaining({ span: expect.any(Function) })
+    );
   });
 
   it('stops prejoin tracks when the room fails to connect', async () => {

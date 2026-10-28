@@ -21,6 +21,7 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroDocumentsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroSoupRealtimeTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroProjectsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroInitiativesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroPropertiesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroTeamsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroChannelsTopic::TOPIC_STR));
@@ -33,4 +34,6 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroChatsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroAgentSessionsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroAgentSessionLifecycleTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroDatabasesTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroFormsTopic::TOPIC_STR));
 }

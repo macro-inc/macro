@@ -6,16 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ScheduledActionUpdateOneOf } from './scheduledActionUpdateOneOf';
-import type { ScheduledActionUpdateOneOfThree } from './scheduledActionUpdateOneOfThree';
+import type { ScheduledActionUpdateOneOfFive } from './scheduledActionUpdateOneOfFive';
 
 /**
  * Live status update for a scheduled-action run, broadcast via the connection
-gateway to the owner. Clients use the `chat_id` to navigate to the run
-transcript and the variant tag to toggle the running indicator.
+gateway to the owner. Clients use the typed resource to navigate to the run
+transcript and the variant tag to toggle the running indicator. `chat_id`
+remains populated only for chat runs, for older clients.
 
 Serialized with a `type` tag (`started`/`stopped`) and delivered over the
 single `scheduled_action_update` message type on the gateway.
  */
 export type ScheduledActionUpdate =
   | ScheduledActionUpdateOneOf
-  | ScheduledActionUpdateOneOfThree;
+  | ScheduledActionUpdateOneOfFive;

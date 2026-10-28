@@ -113,7 +113,8 @@ pub async fn delete_email_filter(
 /// message from the given sender address or domain. Called after an
 /// email_filters change, since the override feeds the signal heuristic.
 /// The recompute mirrors sync_thread_signal_flag (thread.rs) / the
-/// Importance(true) predicate in the dynamic query builder.
+/// Importance(true) predicate in the dynamic query builder, including the
+/// unconditional exclusion of Macro's own notification sender (`$4` domain).
 #[tracing::instrument(skip(conn), err)]
 pub async fn resync_signal_flags_for_sender(
     conn: &mut sqlx::PgConnection,
@@ -149,11 +150,13 @@ pub async fn resync_signal_flags_for_sender(
                 EXISTS (
                     SELECT 1
                     FROM email_messages m
-                    WHERE m.thread_id = a.thread_id
+                    JOIN email_message_mailbox_facts facts ON facts.id = m.id
+                    WHERE m.thread_id = a.thread_id AND facts.is_present
+                      AND NOT facts.in_trash
                       AND NOT EXISTS (
-                          SELECT 1 FROM email_message_labels ml
-                          JOIN email_labels l ON ml.label_id = l.id
-                          WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                          SELECT 1 FROM email_contacts sender_c
+                          WHERE sender_c.id = m.from_contact_id
+                            AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $4
                       )
                       AND (
                           (
@@ -215,21 +218,7 @@ pub async fn resync_signal_flags_for_sender(
                                         )
                                   )
                               )
-                              AND (
-                                  m.is_draft = TRUE
-                                  OR EXISTS (
-                                      SELECT 1 FROM email_message_labels ml
-                                      JOIN email_labels l ON ml.label_id = l.id
-                                      WHERE ml.message_id = m.id
-                                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                                  )
-                                  OR NOT EXISTS (
-                                      SELECT 1 FROM email_message_labels ml
-                                      JOIN email_labels l ON ml.label_id = l.id
-                                      WHERE ml.message_id = m.id
-                                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                                  )
-                              )
+                              AND facts.provider_is_primary
                           )
                       )
                 ) AS sig
@@ -245,6 +234,7 @@ pub async fn resync_signal_flags_for_sender(
         link_id,
         email_address,
         email_domain,
+        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
     )
     .execute(conn)
     .await?;

@@ -1,10 +1,11 @@
 import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
-import { redactCallLinkTokens } from './telemetryUrl';
+import { redactLinkTokens } from './telemetryUrl';
 
 const tracedOrigins: ReadonlySet<string> = (() => {
   const origins = new Set<string>();
@@ -44,8 +45,13 @@ function tracedFetch(
   const url = requestUrl(input);
   if (!url) return platformFetch(input, init);
   const method = (init.method ?? 'GET').toUpperCase();
-  const path = redactCallLinkTokens(url.pathname);
-  const span = Telemetry.clientSpan(`http ${method} ${path}`);
+  const path = redactLinkTokens(url.pathname);
+  const span = traceOptions?.parentSpan
+    ? traceOptions.parentSpan.run(() =>
+        Telemetry.clientSpan(`http ${method} ${path}`)
+      )
+    : Telemetry.clientSpan(`http ${method} ${path}`);
+  const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
   span.setAttr('http.url', `${url.origin}${path}`);
@@ -55,6 +61,8 @@ function tracedFetch(
         span.injectTraceHeaders(init.headers);
       }
       const response = await platformFetch(input, init);
+      span.setAttr('http.response_headers_ms', performance.now() - started);
+      span.setAttr('http.timing_scope', 'until_response_headers');
       span.setAttr('http.status_code', response.status);
       if (!response.ok) {
         const expected = traceOptions?.expectedStatusCodes?.includes(
@@ -77,12 +85,10 @@ function tracedFetch(
         error instanceof Error
           ? {
               name: error.name,
-              message: redactCallLinkTokens(error.message),
-              stack: error.stack
-                ? redactCallLinkTokens(error.stack)
-                : undefined,
+              message: redactLinkTokens(error.message),
+              stack: error.stack ? redactLinkTokens(error.stack) : undefined,
             }
-          : redactCallLinkTokens(String(error))
+          : redactLinkTokens(String(error))
       );
       throw error;
     } finally {
@@ -105,6 +111,25 @@ export type BaseFetchErrorCode =
   | 'INVALID_JSON'
   | 'UNKNOWN_ERROR'
   | 'GONE';
+
+/** The error safeFetch reports for a failed status when no custom handler words it. */
+export function statusError(status: number): ResultError<BaseFetchErrorCode> {
+  return match(status)
+    .returnType<ResultError<BaseFetchErrorCode>>()
+    .with(404, () => ({ code: 'NOT_FOUND', message: 'Resource not found' }))
+    .with(401, () => ({ code: 'UNAUTHORIZED', message: 'Unauthorized access' }))
+    .with(403, () => ({ code: 'FORBIDDEN', message: 'Forbidden' }))
+    .with(409, () => ({ code: 'CONFLICT', message: 'Resource conflict' }))
+    .with(410, () => ({ code: 'GONE', message: 'Resource deleted' }))
+    .with(500, () => ({
+      code: 'SERVER_ERROR',
+      message: 'Internal server error',
+    }))
+    .otherwise(() => ({
+      code: 'HTTP_ERROR',
+      message: `HTTP error! status: ${status}`,
+    }));
+}
 
 /**
  * A function type for custom error response handling.
@@ -149,8 +174,10 @@ export interface RetryConfig {
   delay?: 'exponential' | number;
 }
 
-/** Trace-only classification for responses that are expected by the caller. */
+/** Trace context and response classification, never forwarded to fetch. */
 export interface SafeFetchTraceOptions {
+  /** Restore the action's parent after async auth or mutation scheduling. */
+  parentSpan?: Span;
   /** Non-OK responses that should not mark the HTTP span as failed. */
   expectedStatusCodes?: readonly number[];
 }
@@ -290,36 +317,9 @@ export async function safeFetch<
           return fetchErr(customError ? [customError] : []);
         }
 
-        switch (response.status) {
-          case 404:
-            return fetchErr([
-              { code: 'NOT_FOUND', message: 'Resource not found' },
-            ]);
-          case 401:
-            return fetchErr([
-              { code: 'UNAUTHORIZED', message: 'Unauthorized access' },
-            ]);
-          case 403:
-            return fetchErr([{ code: 'FORBIDDEN', message: 'Forbidden' }]);
-          case 409:
-            return fetchErr([
-              { code: 'CONFLICT', message: 'Resource conflict' },
-            ]);
-          case 410:
-            return fetchErr([{ code: 'GONE', message: 'Resource deleted' }]);
-          case 500:
-            lastError = fetchErr([
-              { code: 'SERVER_ERROR', message: 'Internal server error' },
-            ]);
-            break;
-          default:
-            return fetchErr([
-              {
-                code: 'HTTP_ERROR',
-                message: `HTTP error! status: ${response.status}`,
-              },
-            ]);
-        }
+        const failure = statusError(response.status);
+        if (failure.code !== 'SERVER_ERROR') return fetchErr([failure]);
+        lastError = fetchErr([failure]);
       } else {
         if (fetchInit.method === 'HEAD') return ok({} as T);
 
@@ -331,7 +331,10 @@ export async function safeFetch<
           return ok({ contentType, body: text } as T);
         }
 
-        if (contentType.includes('application/octet-stream')) {
+        if (
+          contentType.includes('application/octet-stream') ||
+          contentType.includes('text/calendar')
+        ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }
 
@@ -351,9 +354,7 @@ export async function safeFetch<
         return fetchErr([
           {
             code: 'UNKNOWN_ERROR',
-            message: redactCallLinkTokens(
-              `An unknown error occurred: ${error}`
-            ),
+            message: redactLinkTokens(`An unknown error occurred: ${error}`),
           },
         ]);
       }

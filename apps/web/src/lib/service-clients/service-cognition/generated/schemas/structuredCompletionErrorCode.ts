@@ -6,6 +6,6 @@
  */
 
 /**
- * Stable machine-readable code for payment-required errors.
+ * Stable machine-readable code for admission errors (402 or 503).
  */
 export type StructuredCompletionErrorCode = string | null;

@@ -24,7 +24,7 @@ fi
 \cd "${WORKSPACE_ROOT}"
 
 if [ "${1:-}" != "--fresh" ] \
-  && curl -fsS --max-time 3 http://localhost:8090/auth/health >/dev/null 2>&1; then
+  && curl -fsS --cacert "${WORKSPACE_ROOT}/infra/local/certs/ca.pem" --max-time 3 https://localhost:8090/auth/health >/dev/null 2>&1; then
   echo "cursor-cloud stack: backend already running"
 else
   build_local_stack_binaries

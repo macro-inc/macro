@@ -35,6 +35,31 @@ go out the moment an event is created, ask in the thread before creating an even
 Sending email is not available from a channel: there is no SendEmail tool here. If asked to
 draft or send an email, say you cannot do that from a channel and suggest asking Macro in an AI
 chat or using the email composer.
+
+## Sharing what you create or link
+
+Linking an item in a channel does not give the channel access to it; only sharing does. So
+whenever your reply links an item you created, edited, or found this turn (a document,
+calendar event, chat, database, form, project, call, email thread, or agent session), the
+last line of your reply must be exactly:
+
+Do you want me to share this with the members of the channel?
+
+Ask even when you just created the item at the user's request, and even when you think the
+channel might already see it; you cannot tell, so ask. Do not share it in the same turn.
+Name the item only when "this" would be ambiguous. The only exceptions:
+- The user already asked you to share it: call `ShareWithChannel` instead of asking.
+- The item is this channel or a message already in it.
+
+Before you send any reply, check: does it link an item? If so, is that question the last
+line? If not, add it.
+
+A later message in this thread that agrees ("yes", "yeah", "please", "go ahead", "share it")
+answers that question. Call `ShareWithChannel` for that item and this channel — `channelId` is
+the `id` on the conversation parent above; a calendar chip is entity type `calendar_event` and
+its `documentId` is the event id — then reply with only "Okay." Do not repeat the earlier answer. Agreement to a
+different question is not agreement to share. If they decline, acknowledge in a few words and
+do not share. If the tool says you cannot share it, say that plainly instead of "Okay."
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
@@ -43,8 +68,31 @@ dates and times from the <current_time> block (EOD = 5:00 PM local) instead of a
 user's time zone when the block names one — asking rather than silently assuming UTC when it \
 does not — treats tool calls as executing immediately (no composer or pending \
 confirmation to point the user at), only takes explicitly requested actions, checks before \
-creating events with attendees, and declines email drafting/sending with a pointer to AI chat \
-or the email composer.";
+creating events with attendees, declines email drafting/sending with a pointer to AI chat \
+or the email composer, and when a reply links an item ends \
+by asking \"Do you want me to share this with the members of the channel?\" — always, \
+including for items it just created, since linking does not grant access — then, on a yes \
+in the thread, calls ShareWithChannel and replies only \"Okay.\"";
 
 /// The channel-mention prompt for the Macro channel bot.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+#[cfg(test)]
+mod test {
+    use super::PROMPT;
+
+    #[test]
+    fn a_linked_item_is_offered_to_the_channel_and_shared_only_after_yes() {
+        let instructions = PROMPT.instructions.as_ref();
+        assert!(
+            instructions.contains("Do you want me to share this with the members of the channel?")
+        );
+        assert!(instructions.contains("`ShareWithChannel`"));
+        assert!(instructions.contains("Ask even when you just created the item"));
+        assert!(instructions.contains("reply with only \"Okay.\""));
+        assert!(instructions.contains("calendar_event"));
+        assert!(instructions.contains("`channelId` is\nthe `id` on the conversation parent"));
+        assert!(instructions.contains("its `documentId` is the event id"));
+        assert!(PROMPT.intent.contains("ShareWithChannel"));
+    }
+}

@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelInviteMetadata } from './channelInviteMetadata';
+import type { EntityAccessRequestedMetadata } from './entityAccessRequestedMetadata';
 import type { NotifEventOneOfOneoneTag } from './notifEventOneOfOneoneTag';
 
 /**
- * The user was invited to a channel.
+ * Someone requested more access to a shared entity.
  */
 export type NotifEventOneOfOneone = {
-  /** The user was invited to a channel. */
-  content: ChannelInviteMetadata;
+  /** Someone requested more access to a shared entity. */
+  content: EntityAccessRequestedMetadata;
   tag: NotifEventOneOfOneoneTag;
 };

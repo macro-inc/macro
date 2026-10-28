@@ -9,7 +9,10 @@ mod sync;
 
 #[cfg(feature = "link")]
 pub use link::{Auth, GithubLinkService, GithubOauth, GithubRepo};
+#[cfg(all(test, feature = "sync"))]
+pub use sync::MockGithubSyncRepo;
 #[cfg(feature = "sync")]
 pub use sync::{
-    GithubRepositoryClient, GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService,
+    GithubInstallationLister, GithubPullRequestIndex, GithubRepositoryClient, GithubSyncClient,
+    GithubSyncRealtime, GithubSyncRepo, GithubSyncService,
 };

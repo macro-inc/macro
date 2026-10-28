@@ -1,23 +1,20 @@
-import { HoverCard } from '@core/component/HoverCard';
+import { DocumentOutline } from '@app/components/DocumentOutline';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $getRoot, type LexicalEditor } from 'lexical';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-} from 'solid-js';
+import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 type OutlineHeading = {
   key: string;
   level: number;
   text: string;
+  preview: string;
 };
 
-const ACTIVE_HEADING_OFFSET = 80;
+const HEADING_SCROLL_OFFSET = 80;
+const SECTION_PREVIEW_LENGTH = 240;
 const MIN_OUTLINE_HEADINGS = 3;
 export const MARKDOWN_OUTLINE_WIDTH = 40;
+export const MARKDOWN_OUTLINE_INSET = 16;
 
 export function shouldShowOutline(
   headingCount: number,
@@ -26,18 +23,35 @@ export function shouldShowOutline(
   return enabled && headingCount >= MIN_OUTLINE_HEADINGS;
 }
 
-export function getActiveHeadingIndex(
-  headingTops: number[],
-  activeLine: number
-): number {
-  if (headingTops.length === 0) return -1;
+/**
+ * Whether the rail fits in the margin left of the text column, given that
+ * column's own distance from the notebook's left edge. The rail takes pointer
+ * events, so fitting the notebook is not enough: checkbox markers are
+ * `li::before` boxes drawn outside the list item and flush with the column's
+ * left edge, and a rail reaching past the column swallows the click that would
+ * tick one. The margin has to be measured rather than derived from the
+ * notebook's width, because a comment layout pushes the column left without
+ * making the notebook any narrower.
+ */
+export function outlineFitsGutter(contentInset: number): boolean {
+  return contentInset >= MARKDOWN_OUTLINE_INSET + MARKDOWN_OUTLINE_WIDTH;
+}
 
-  let activeIndex = 0;
-  for (const [index, top] of headingTops.entries()) {
-    if (top > activeLine) break;
-    activeIndex = index;
-  }
-  return activeIndex;
+/** A section runs from its heading to the next heading (or the editor end). */
+export function getVisibleHeadingIndexes(
+  headingTops: number[],
+  documentBottom: number,
+  viewportTop: number,
+  viewportBottom: number
+): number[] {
+  if (viewportBottom <= viewportTop) return [];
+
+  return headingTops.flatMap((top, index) => {
+    const bottom = headingTops[index + 1] ?? documentBottom;
+    return top < viewportBottom && bottom > viewportTop && bottom > top
+      ? [index]
+      : [];
+  });
 }
 
 function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
@@ -47,7 +61,8 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
       (heading, index) =>
         heading.key === b[index]?.key &&
         heading.level === b[index]?.level &&
-        heading.text === b[index]?.text
+        heading.text === b[index]?.text &&
+        heading.preview === b[index]?.preview
     )
   );
 }
@@ -66,17 +81,29 @@ export function useMarkdownOutline(props: {
     }
 
     const refreshHeadings = () => {
-      const nextHeadings = editor.getEditorState().read(() =>
-        $getRoot()
-          .getChildren()
-          .filter($isHeadingNode)
-          .map((node) => ({
-            key: node.getKey(),
-            level: Number(node.getTag().slice(1)),
-            text: node.getTextContent().trim(),
-          }))
-          .filter((heading) => heading.text.length > 0)
-      );
+      const nextHeadings = editor.getEditorState().read(() => {
+        const sections: OutlineHeading[] = [];
+        for (const node of $getRoot().getChildren()) {
+          const text = node.getTextContent().trim();
+          if ($isHeadingNode(node) && text) {
+            sections.push({
+              key: node.getKey(),
+              level: Number(node.getTag().slice(1)),
+              text,
+              preview: '',
+            });
+          } else {
+            const section = sections.at(-1);
+            if (section && section.preview.length < SECTION_PREVIEW_LENGTH) {
+              section.preview = `${section.preview} ${text}`
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, SECTION_PREVIEW_LENGTH);
+            }
+          }
+        }
+        return sections;
+      });
 
       setHeadings((current) =>
         headingsEqual(current, nextHeadings) ? current : nextHeadings
@@ -95,44 +122,15 @@ export function useMarkdownOutline(props: {
 
 type MarkdownOutlineState = ReturnType<typeof useMarkdownOutline>;
 
-function OutlineDash(props: { active: boolean }) {
-  return (
-    <span
-      class={
-        props.active
-          ? 'h-px w-3 rounded-full bg-accent'
-          : 'h-px w-2 rounded-full bg-ink/20'
-      }
-    />
-  );
-}
-
-function OutlineItem(props: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={props.label}
-      aria-current={props.active ? 'location' : undefined}
-      class="h-7 w-full truncate rounded-md px-2 text-left text-xs text-ink-muted hover:bg-hover hover:text-ink"
-      classList={{ 'font-semibold text-accent': props.active }}
-      onClick={props.onClick}
-    >
-      {props.label}
-    </button>
-  );
-}
-
 export function MarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
   outline: MarkdownOutlineState;
   portalMount: Accessor<HTMLElement>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
-  const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
+  const [visibleHeadingKeys, setVisibleHeadingKeys] = createSignal<Set<string>>(
+    new Set()
+  );
   const [viewportCenter, setViewportCenter] = createSignal(0);
 
   createEffect(() => {
@@ -156,30 +154,65 @@ export function MarkdownOutline(props: {
 
     let frame: number | undefined;
 
-    const syncActiveHeading = () => {
-      const containerTop = scrollContainer.getBoundingClientRect().top;
-      const activeLine = containerTop + ACTIVE_HEADING_OFFSET;
-      const headingTops = currentHeadings.map(
-        (heading) =>
-          editor.getElementByKey(heading.key)?.getBoundingClientRect().top ??
-          Number.POSITIVE_INFINITY
+    const syncVisibleHeadings = () => {
+      const root = editor.getRootElement();
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const viewportTop = Math.max(
+        0,
+        containerRect.top + scrollContainer.clientTop
       );
-      const activeIndex = getActiveHeadingIndex(headingTops, activeLine);
-      setActiveHeadingKey(currentHeadings[activeIndex]?.key);
+      const viewportBottom = Math.min(
+        window.innerHeight,
+        containerRect.top +
+          scrollContainer.clientTop +
+          scrollContainer.clientHeight
+      );
+      const renderedHeadings = currentHeadings.flatMap((heading) => {
+        const element = editor.getElementByKey(heading.key);
+        return element
+          ? [{ key: heading.key, top: element.getBoundingClientRect().top }]
+          : [];
+      });
+      const indexes = getVisibleHeadingIndexes(
+        renderedHeadings.map((heading) => heading.top),
+        root?.getBoundingClientRect().bottom ?? viewportTop,
+        viewportTop,
+        viewportBottom
+      );
+      setVisibleHeadingKeys(
+        new Set(indexes.map((index) => renderedHeadings[index].key))
+      );
     };
 
     const queueViewportSync = () => {
-      if (frame !== undefined) cancelAnimationFrame(frame);
+      if (frame !== undefined) return;
       frame = requestAnimationFrame(() => {
-        syncActiveHeading();
+        frame = undefined;
+        syncVisibleHeadings();
       });
     };
+    const resizeObserver = new ResizeObserver(queueViewportSync);
+    resizeObserver.observe(scrollContainer);
+    const unregisterRootListener = editor.registerRootListener(
+      (root, previousRoot) => {
+        if (previousRoot) resizeObserver.unobserve(previousRoot);
+        if (root) resizeObserver.observe(root);
+        queueViewportSync();
+      }
+    );
+    const unregisterUpdateListener =
+      editor.registerUpdateListener(queueViewportSync);
     queueViewportSync();
     scrollContainer.addEventListener('scroll', queueViewportSync, {
       passive: true,
     });
+    window.addEventListener('resize', queueViewportSync);
     onCleanup(() => {
+      unregisterRootListener();
+      unregisterUpdateListener();
+      resizeObserver.disconnect();
       scrollContainer.removeEventListener('scroll', queueViewportSync);
+      window.removeEventListener('resize', queueViewportSync);
       if (frame !== undefined) cancelAnimationFrame(frame);
     });
   });
@@ -195,8 +228,8 @@ export function MarkdownOutline(props: {
         scrollContainer.scrollTop +
         elementTop -
         containerTop -
-        ACTIVE_HEADING_OFFSET,
-      behavior: 'smooth',
+        HEADING_SCROLL_OFFSET,
+      behavior: 'instant',
     });
   };
 
@@ -205,51 +238,21 @@ export function MarkdownOutline(props: {
     if (!headingElement) return;
 
     scrollToElement(headingElement);
-    setActiveHeadingKey(heading.key);
   };
 
   return (
-    <div
-      class="pointer-events-auto sticky z-1 w-3 -translate-y-1/2"
-      style={{ top: `${viewportCenter()}px` }}
-    >
-      <HoverCard
-        closeDelay={0}
-        content={
-          <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl border border-edge bg-surface p-2 shadow-menu">
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineItem
-                  active={activeHeadingKey() === heading.key}
-                  label={heading.text}
-                  onClick={() => scrollToHeading(heading)}
-                />
-              )}
-            </For>
-          </div>
-        }
-        contentZIndexClass="z-item-options-menu"
-        gutter={-12}
-        openDelay={0}
-        placement="right"
-        portalMount={props.portalMount()}
-        trigger={
-          <div
-            aria-hidden="true"
-            class="flex w-3 flex-col items-start gap-2 py-1"
-          >
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineDash active={activeHeadingKey() === heading.key} />
-              )}
-            </For>
-          </div>
-        }
-        triggerAriaLabel="Document outline"
-        triggerAs="nav"
-        triggerClass="w-3 outline-none"
-        triggerTabIndex={0}
-      />
-    </div>
+    <DocumentOutline
+      label="Document outline"
+      items={props.outline.headings()}
+      activeKeys={visibleHeadingKeys()}
+      viewportHeight={viewportCenter() * 2}
+      portalMount={props.portalMount()}
+      onSelect={(key) => {
+        const heading = props.outline
+          .headings()
+          .find((heading) => heading.key === key);
+        if (heading) scrollToHeading(heading);
+      }}
+    />
   );
 }

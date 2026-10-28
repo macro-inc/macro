@@ -1,5 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { GroupSoupMembershipDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  GroupSoupMembershipDocument,
+  PropertyAssignmentParentFragmentDoc,
+} from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import {
@@ -8,7 +11,9 @@ import {
   remove,
   removeEmbeddedLink,
   select,
+  selectRecord,
   update,
+  upsertByField,
   upsertEmbeddedLink,
 } from './optimistic';
 
@@ -58,6 +63,36 @@ describe('typed optimistic graph updates', () => {
     expect(prepend.operation.kind).toBe('prependUnique');
   });
 
+  it('serializes an entity-rooted fragment path without a query or variables', () => {
+    const properties = selectRecord(PropertyAssignmentParentFragmentDoc, {
+      __typename: 'GraphqlSoupDocument',
+      id: 'doc-1',
+    }).field('properties');
+    const patch = upsertByField(properties, {
+      entity: { __typename: 'GraphqlProperty', id: 'temporary-1' },
+      whereField: 'propertyDefinitionId',
+      equals: 'priority',
+    });
+    expect(patch).toMatchObject({
+      recordRoot: {
+        fragmentName: 'PropertyAssignmentParent',
+        entityKey: 'GraphqlSoupDocument:doc-1',
+      },
+      path: [{ field: 'properties' }],
+      variablesJson: '{}',
+      operation: {
+        kind: 'upsertByField',
+        whereField: 'propertyDefinitionId',
+        equals: 'priority',
+      },
+    });
+    expect(patch.operationName).toBeUndefined();
+    expect(
+      update(properties, remove({ __typename: 'GraphqlProperty', id: 'old' }))
+        .recordRoot
+    ).toEqual(patch.recordRoot);
+  });
+
   it('serializes counted embedded link changes', () => {
     const bins = select(GroupSoupMembershipDocument, { input })
       .field('user')
@@ -102,6 +137,17 @@ describe('typed optimistic graph updates', () => {
 
   it('uses generated operation result and variable types', () => {
     const typeAssertions = () => {
+      const record = selectRecord(PropertyAssignmentParentFragmentDoc, {
+        __typename: 'GraphqlSoupDocument',
+        id: 'doc-1',
+      });
+      // @ts-expect-error Fragment fields remain type checked.
+      record.field('missing');
+      selectRecord(PropertyAssignmentParentFragmentDoc, {
+        // @ts-expect-error Identity type must belong to the generated fragment.
+        __typename: 'GraphqlProperty',
+        id: 'property-1',
+      });
       // @ts-expect-error GroupSoupMembership requires an input variable.
       select(GroupSoupMembershipDocument, {});
 

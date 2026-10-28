@@ -7,6 +7,7 @@ mod edit;
 mod revert_delete;
 mod share;
 mod team_share;
+mod tree;
 mod upload_folder;
 
 #[cfg(test)]
@@ -14,34 +15,56 @@ mod tests;
 
 use std::collections::HashMap;
 
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
 };
 use model_owner::Owner;
-use sqlx::PgPool;
+use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, PurgedProjectTree,
-    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, ProjectTree,
+    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
 /// PostgreSQL-backed project repository.
 #[derive(Clone)]
-pub struct PgProjectRepo {
+pub struct PgProjectRepo<B> {
     pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
 }
 
-impl PgProjectRepo {
-    /// Create a repository backed by the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<B: BotFacts> PgProjectRepo<B> {
+    /// Create a repository backed by `pool` that registers the owners of
+    /// created projects and uploaded folder trees through `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
     }
 }
 
 fn decode_owner(value: &str) -> Result<Owner, sqlx::Error> {
     Owner::from_principal_str(value).map_err(|error| sqlx::Error::Decode(Box::new(error)))
+}
+
+async fn register_owned<B: BotFacts>(
+    transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
+    id: &str,
+    entity_type: RegisteredEntityType,
+    owner: Owner,
+) -> Result<(), sqlx::Error> {
+    let id = id
+        .parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+    registrar
+        .register_owned_entity(transaction, NewEntityRecord::new(id, entity_type, owner))
+        .await
+        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    Ok(())
 }
 
 fn map_project(
@@ -64,15 +87,27 @@ fn map_project(
     })
 }
 
-impl ProjectRepo for PgProjectRepo {
+impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
     async fn get_team_default_link_share(
         &self,
-        user_id: &str,
-    ) -> Result<Option<models_permissions::share_permission::TeamLinkShareDefault>, Self::Err> {
-        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+        owner: &Owner,
+    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT t.default_link_share AS "default_link_share?: LinkShare"
+            FROM owner_team($1) ot
+            JOIN team t ON t.id = ot.team_id
+            LIMIT 1
+            "#,
+            owner.principal_id(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| TeamLinkShareDefault(row.default_link_share)))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -173,6 +208,59 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_accessible_projects_for_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Project>, Self::Err> {
+        sqlx::query!(
+            r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1
+            )
+            SELECT
+                p.id,
+                p.name,
+                p."userId" AS "user_id",
+                p."parentId" AS "parent_id",
+                p."createdAt"::timestamptz AS "created_at",
+                p."updatedAt"::timestamptz AS "updated_at",
+                p."deletedAt"::timestamptz AS "deleted_at"
+            FROM "Project" p
+            WHERE p."deletedAt" IS NULL
+                AND p.id IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    JOIN user_source_ids us ON us.source_id = ea.source_id
+                    WHERE ea.entity_type = 'project'
+                )
+            ORDER BY p."updatedAt" DESC
+            "#,
+            user_id,
+        )
+        .try_map(|row| {
+            map_project(
+                row.id,
+                row.name,
+                row.user_id,
+                row.parent_id,
+                row.created_at,
+                row.updated_at,
+                row.deleted_at,
+            )
+        })
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_pending_root_projects(
         &self,
         user_id: &str,
@@ -220,6 +308,15 @@ impl ProjectRepo for PgProjectRepo {
         project_id: &str,
     ) -> Result<Vec<model::item::Item>, Self::Err> {
         content::get_project_children(&self.pool, project_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_tree(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> Result<ProjectTree, Self::Err> {
+        tree::get_project_tree(&self.pool, project_id, limit).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -309,7 +406,7 @@ impl ProjectRepo for PgProjectRepo {
     #[tracing::instrument(err, skip(self, args))]
     async fn create_project(&self, args: CreateProjectArgs) -> Result<Project, Self::Err> {
         let mut transaction = self.pool.begin().await?;
-        let project = create::create_project(&mut transaction, &args).await?;
+        let project = create::create_project(&mut transaction, &self.registrar, &args).await?;
         transaction.commit().await?;
         Ok(project)
     }
@@ -383,7 +480,7 @@ impl ProjectRepo for PgProjectRepo {
         args: UploadFolderRepoArgs,
     ) -> Result<model::folder::UploadFolderWithIdsResponse, Self::Err> {
         let mut transaction = self.pool.begin().await?;
-        let result = upload_folder::upload_folder(&mut transaction, args).await?;
+        let result = upload_folder::upload_folder(&mut transaction, &self.registrar, args).await?;
         transaction.commit().await?;
         Ok(result)
     }

@@ -1,8 +1,15 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import {
+  type BackgroundEffect,
+  backgroundProcessorOptions,
+} from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
+import type { Span } from '@macro-inc/observability';
 import {
   fetchActiveCall,
   invalidateActiveCallQueries,
@@ -33,7 +40,8 @@ import {
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';
-import { createCallLifecycle } from './call-lifecycle';
+import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
+import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -52,7 +60,8 @@ import {
   useMaybeNativeCallState,
 } from './native-call-state';
 import {
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
+  prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
 
@@ -76,18 +85,11 @@ export type MediaDeviceInfo = {
   kind: MediaDeviceKind;
 };
 
-export type BlurIntensity = 'light' | 'medium' | 'heavy';
-
-export type BackgroundEffect =
-  | { type: 'none' }
-  | { type: 'blur'; intensity: BlurIntensity }
-  | { type: 'image'; id: string; path: string };
-
-export const BLUR_RADIUS: Record<BlurIntensity, number> = {
-  light: 5,
-  medium: 10,
-  heavy: 20,
-};
+export type {
+  BackgroundEffect,
+  BlurIntensity,
+} from '@core/media/background-effect';
+export { BLUR_RADIUS } from '@core/media/background-effect';
 
 type ImageBackgroundEffect = Extract<BackgroundEffect, { type: 'image' }>;
 
@@ -757,13 +759,7 @@ function createCallState() {
     const camTrack = camPub?.track as LocalTrack | undefined;
     if (!isLiveLocalTrack(camTrack)) return true;
 
-    const processorOptions =
-      effect.type === 'blur'
-        ? {
-            mode: 'background-blur' as const,
-            blurRadius: BLUR_RADIUS[effect.intensity],
-          }
-        : { mode: 'virtual-background' as const, imagePath: effect.path };
+    const processorOptions = backgroundProcessorOptions(effect);
 
     try {
       if (room() !== r || !isLiveLocalTrack(camTrack)) return true;
@@ -1076,7 +1072,7 @@ function createCallState() {
 
   // Re-enumerate when devices change (e.g. headphones plugged in)
   const handleDeviceChange = () => {
-    enumerateDevices();
+    fireAndForget(enumerateDevices(), 'call-devices');
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
@@ -1132,7 +1128,9 @@ function createCallState() {
       source === 'microphone'
         ? new livekit.LocalAudioTrack(
             mediaStreamTrack,
-            currentMicrophoneCaptureOptions() as MediaTrackConstraints,
+            currentMicrophoneCaptureOptions(
+              store.activeAudioInputDeviceId
+            ) as MediaTrackConstraints,
             false
           )
         : new livekit.LocalVideoTrack(
@@ -1142,14 +1140,56 @@ function createCallState() {
           );
     track.source =
       LK_TRACK_SOURCE[source === 'microphone' ? 'Microphone' : 'Camera'];
+    await publishPreparedTrack(targetRoom, track);
+  }
+
+  /** Attach the selected background before any camera frames are published. */
+  async function publishPreparedTrack(targetRoom: Room, track: LocalTrack) {
+    let processor:
+      | ReturnType<
+          typeof import('@livekit/track-processors').BackgroundProcessor
+        >
+      | undefined;
     try {
+      if (
+        track.source === LK_TRACK_SOURCE.Camera &&
+        store.backgroundEffect.type !== 'none'
+      ) {
+        const { BackgroundProcessor, supportsBackgroundProcessors } =
+          await import('@livekit/track-processors');
+        if (!supportsBackgroundProcessors())
+          throw new Error('Background effects are unavailable');
+        processor = BackgroundProcessor(
+          backgroundProcessorOptions(store.backgroundEffect)
+        );
+        await track.setProcessor(processor);
+      }
+      if (room() !== targetRoom) {
+        track.stop();
+        return;
+      }
       await targetRoom.localParticipant.publishTrack(track, {
         source: track.source,
       });
+      if (processor && room() === targetRoom) setBlurProcessor(processor);
     } catch (error) {
       track.stop();
       throw error;
     }
+  }
+
+  async function enableInitialCamera(targetRoom: Room) {
+    const deviceId = store.activeVideoInputDeviceId;
+    const capture = deviceId ? { deviceId: { exact: deviceId } } : undefined;
+    if (store.backgroundEffect.type === 'none') {
+      await targetRoom.localParticipant.setCameraEnabled(true, capture);
+      return;
+    }
+    const livekit = getLivekit();
+    if (!livekit) throw new Error('LiveKit is not loaded');
+    const track = await livekit.createLocalVideoTrack(capture);
+    track.source = LK_TRACK_SOURCE.Camera;
+    await publishPreparedTrack(targetRoom, track);
   }
 
   /** Reuse the prejoin track, falling back to device capture if it fails. */
@@ -1157,24 +1197,45 @@ function createCallState() {
     targetRoom: Room,
     source: keyof CallPrejoinTracks,
     prejoinTrack: MediaStreamTrack | undefined,
-    enableDevice: () => Promise<unknown>
+    enableDevice: () => Promise<unknown>,
+    mediaSpan?: Span
   ) {
+    const callId = store.activeCallId;
     if (prejoinTrack?.readyState === 'live') {
       try {
-        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        await traceCallMedia(
+          'publish_prejoin',
+          {
+            'call.id': callId ?? undefined,
+            'call.media.device': source,
+          },
+          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          mediaSpan
+        );
         return;
       } catch (e) {
         console.error(`failed to publish prejoin ${source} track`, e);
+        if (source === 'camera' && store.backgroundEffect.type !== 'none')
+          throw e;
       }
     }
     prejoinTrack?.stop();
-    await enableDevice();
+    await traceCallMedia(
+      'enable',
+      {
+        'call.id': callId ?? undefined,
+        'call.media.device': source,
+      },
+      enableDevice,
+      mediaSpan
+    );
   }
 
   async function finishLocalMediaSetup(
     targetRoom: Room,
     setupVersion: number,
-    prejoinTracks?: CallPrejoinTracks
+    prejoinTracks?: CallPrejoinTracks,
+    mediaSpan?: Span
   ) {
     // Each step claims its track; anything left unclaimed is stopped.
     const unclaimed = { ...prejoinTracks };
@@ -1184,7 +1245,7 @@ function createCallState() {
       return track;
     };
     try {
-      await setUpLocalMedia(targetRoom, setupVersion, claim);
+      await setUpLocalMedia(targetRoom, setupVersion, claim, mediaSpan);
     } finally {
       stopPrejoinTracks(unclaimed);
     }
@@ -1193,7 +1254,8 @@ function createCallState() {
   async function setUpLocalMedia(
     targetRoom: Room,
     setupVersion: number,
-    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined,
+    mediaSpan?: Span
   ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1209,8 +1271,9 @@ function createCallState() {
           () =>
             targetRoom.localParticipant.setMicrophoneEnabled(
               true,
-              currentMicrophoneCaptureOptions()
-            )
+              currentMicrophoneCaptureOptions(store.activeAudioInputDeviceId)
+            ),
+          mediaSpan
         );
       }
     } catch (e) {
@@ -1236,14 +1299,16 @@ function createCallState() {
 
     if (!store.isVideoMuted) {
       try {
-        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
-          targetRoom.localParticipant.setCameraEnabled(true)
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'camera',
+          claim('camera'),
+          () => enableInitialCamera(targetRoom),
+          mediaSpan
         );
         if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
         if (store.isVideoMuted) {
           await targetRoom.localParticipant.setCameraEnabled(false);
-        } else {
-          await ensureBackgroundEffectOnCameraTrack(targetRoom, true);
         }
       } catch (error) {
         console.error('failed to enable camera', error);
@@ -1317,6 +1382,25 @@ function createCallState() {
     setInitialMediaState: (preferences) => {
       setStore('isAudioMuted', preferences?.microphoneEnabled === false);
       setStore('isVideoMuted', preferences?.cameraEnabled !== true);
+      if (preferences?.microphoneDeviceId !== undefined)
+        setStore(
+          'activeAudioInputDeviceId',
+          preferences.microphoneDeviceId || null
+        );
+      if (preferences?.cameraDeviceId !== undefined)
+        setStore(
+          'activeVideoInputDeviceId',
+          preferences.cameraDeviceId || null
+        );
+      if (preferences?.speakerDeviceId !== undefined)
+        setStore(
+          'activeAudioOutputDeviceId',
+          preferences.speakerDeviceId || null
+        );
+      if (preferences?.backgroundEffect) {
+        setStore('backgroundEffect', preferences.backgroundEffect);
+        setPersistedBackgroundEffect(preferences.backgroundEffect);
+      }
     },
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
@@ -1365,16 +1449,33 @@ function createCallState() {
     const newMuted = !store.isAudioMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setMicrophoneEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setMicrophoneEnabled(false)
+        );
       } else {
         // Re-enable the mic. When the muted publication survived
         // (stopMicTrackOnMute is false) this only unmutes and the capture
         // options are ignored; they matter when the track was stopped and
         // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          currentMicrophoneCaptureOptions(deviceId)
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions(deviceId)
+            )
         );
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
@@ -1398,14 +1499,31 @@ function createCallState() {
     const newMuted = !store.isVideoMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setCameraEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setCameraEnabled(false)
+        );
         // Track is gone — drop our processor ref so the next enable starts clean.
         setBlurProcessor(null);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
-        await r.localParticipant.setCameraEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setCameraEnabled(
+              true,
+              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            )
         );
         // Read the actual device the browser chose so the dropdown is accurate
         const camPub = r.localParticipant.getTrackPublication(
@@ -1519,8 +1637,11 @@ function createCallState() {
     }
   }
 
+  // When this client joined its current call, for time-in-call analytics.
+  let joinedAt: number | undefined;
   const lifecycle = createCallLifecycle({
     shouldRequestToken: callSession.shouldRequestToken,
+    prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
     connect: (token) =>
       callSession.connectWithToken(token, {
@@ -1550,7 +1671,7 @@ function createCallState() {
         unregister();
       };
     },
-    onJoined: (call) => {
+    onJoined: (call, source) => {
       const answeringUserId = userId();
       if (answeringUserId && call.callId) {
         publishCallResolution({
@@ -1559,29 +1680,53 @@ function createCallState() {
           answeredBy: answeringUserId,
         });
       }
-      void invalidateActiveCallQueries();
+      fireAndForget(invalidateActiveCallQueries(), 'call-membership');
+      joinedAt = Date.now();
       analytics.track('call_action', {
         action: 'joined',
         channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        trigger: source,
       });
     },
-    onLeft: (channelId) =>
+    onLeft: (call, reason) => {
+      const secondsInCall =
+        joinedAt === undefined
+          ? undefined
+          : Math.round((Date.now() - joinedAt) / 1000);
+      joinedAt = undefined;
       analytics.track('call_action', {
         action: 'left',
-        channelId,
-        leaveReason: 'user_initiated',
-      }),
+        channelId: call.channelId,
+        callId: call.callId ?? undefined,
+        leaveReason: reason,
+        secondsInCall,
+      });
+    },
     reportError: (error) => console.error('call lifecycle failed', error),
   });
   const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
     lifecycle.getState()
   );
-  const unsubscribeLifecycle = lifecycle.subscribe((state) =>
-    setLifecycleSnapshot(state)
-  );
+  // Reloading into a newer app build would cut the call off.
+  let releaseReloadHold: (() => void) | undefined;
+  const holdReloadDuringCall = (state: CallLifecycleState) => {
+    const inCall = state.t !== 'idle' && state.t !== 'failed';
+    if (inCall && !releaseReloadHold) {
+      releaseReloadHold = holdAutomaticReload();
+    } else if (!inCall && releaseReloadHold) {
+      releaseReloadHold();
+      releaseReloadHold = undefined;
+    }
+  };
+  holdReloadDuringCall(lifecycle.getState());
+  const unsubscribeLifecycle = lifecycle.subscribe((state) => {
+    setLifecycleSnapshot(state);
+    holdReloadDuringCall(state);
+  });
 
   const unsubscribeNative =
-    isNativeIosCallKitEnabled() && nativeCall
+    isNativeCallEnabled() && nativeCall
       ? bindNativeCallLifecycle(nativeCall, lifecycle)
       : undefined;
 
@@ -1595,6 +1740,7 @@ function createCallState() {
   onCleanup(() => {
     unsubscribeNative?.();
     unsubscribeLifecycle();
+    releaseReloadHold?.();
     lifecycle.dispose();
     disposed = true;
     browserConnectGeneration += 1;

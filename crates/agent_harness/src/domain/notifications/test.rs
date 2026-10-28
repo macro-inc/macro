@@ -4,7 +4,7 @@ use agent_session::domain::events::{
     SessionOpenedMetadata, SessionSettledMetadata, ThreadOrigin, TurnStartedMetadata, TurnSummary,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SessionSource};
 use bot_id::BotId;
 
 const SESSION: Uuid = Uuid::from_u128(0xA);
@@ -35,6 +35,7 @@ fn identity() -> SessionIdentity {
             Uuid::from_u128(3),
         )),
         audience: vec![owner(), user("alice@macro.com"), user("bob@macro.com")],
+        source: agent_session::domain::model::SessionSource::User,
     }
 }
 
@@ -195,6 +196,69 @@ fn settled_without_a_turn_record_notifies_nobody() {
     assert!(actions.is_empty());
 }
 
+fn routine_run() -> SessionIdentity {
+    SessionIdentity {
+        origin: None,
+        source: SessionSource::Routine,
+        ..identity()
+    }
+}
+
+fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
+    AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+        identity: routine_run(),
+        last_turn: Some(TurnSummary {
+            turn: TurnId(turn),
+            action_id: AgentActionId::mint(),
+            actor: Some(owner()),
+            announcement_message_id: None,
+            stop_reason: stop_reason.to_owned(),
+            excerpt: Some("Nothing new today.".to_owned()),
+        }),
+    })
+}
+
+#[test]
+fn a_routine_run_that_finished_normally_notifies_nobody() {
+    assert!(coder(&routine_settled(0, "end_turn")).is_empty());
+    assert!(plan(&routine_settled(0, "end_turn"), false).is_empty());
+}
+
+#[test]
+fn a_routine_run_that_failed_still_notifies() {
+    for stop_reason in ["cancelled", "error", "max_tokens", "refusal"] {
+        let notify = one_settled(coder(&routine_settled(0, stop_reason)));
+        assert_eq!(notify.metadata.stop_reason, stop_reason);
+        assert_eq!(
+            notify.recipients,
+            vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
+        );
+    }
+}
+
+#[test]
+fn a_turn_the_owner_prompts_after_a_routine_run_notifies() {
+    let notify = one_settled(coder(&routine_settled(1, "end_turn")));
+    assert_eq!(notify.metadata.turn, 1);
+}
+
+#[test]
+fn a_routine_runs_question_still_notifies() {
+    let actions = coder(&AgentSessionLifecycleEvent::WaitingForInput(
+        WaitingForInputMetadata {
+            identity: routine_run(),
+            turn: TurnId(0),
+            action_id: AgentActionId::mint(),
+            announcement_message_id: None,
+            question: "Which inbox?".to_owned(),
+        },
+    ));
+    assert!(matches!(
+        actions.as_slice(),
+        [PlannedNotification::WaitingForInput(_)]
+    ));
+}
+
 #[test]
 fn waiting_for_input_goes_to_the_audience() {
     let actions = coder(&AgentSessionLifecycleEvent::WaitingForInput(
@@ -242,6 +306,29 @@ fn a_chat_agents_announced_turn_waits_silently() {
     assert!(actions.is_empty(), "{actions:#?}");
 }
 
+#[test]
+fn assignment_session_links_keep_completion_and_question_notifications() {
+    let mut identity = identity();
+    identity.origin = Some(ThreadOrigin::new(
+        messages::domain::models::MessageParent::parse("document", "task-1").unwrap(),
+        Uuid::from_u128(4),
+        Uuid::from_u128(4),
+    ));
+    assert!(matches!(
+        plan(&settled(identity.clone(), 0), false).as_slice(),
+        [PlannedNotification::Settled(_)]
+    ));
+    let AgentSessionLifecycleEvent::WaitingForInput(mut event) = waiting(Some(Uuid::from_u128(4)))
+    else {
+        unreachable!();
+    };
+    event.identity = identity;
+    assert!(matches!(
+        plan(&AgentSessionLifecycleEvent::WaitingForInput(event), false).as_slice(),
+        [PlannedNotification::WaitingForInput(_)]
+    ));
+}
+
 /// Only the announced turn has a reply to speak through: a chat session
 /// asking from the session view still notifies its audience, and a coding
 /// agent's chip says nothing about a question.
@@ -276,6 +363,7 @@ fn mentioned_notifies_exactly_the_people_named() {
                 user("alice@macro.com"),
                 user("carol@macro.com"),
             ],
+            origin_message_id: None,
         },
     ));
 
@@ -302,10 +390,33 @@ fn a_mention_of_nobody_is_nothing() {
             action_id: AgentActionId::mint(),
             mentioned_by: Some(owner()),
             mentioned: Vec::new(),
+            origin_message_id: None,
         },
     ));
 
     assert!(actions.is_empty());
+}
+
+/// A prompt posted as a channel or document message already notified the
+/// users it named on the post itself; the session does not tell them twice.
+/// Whether the bot is a coding agent makes no difference: the message service
+/// notifies the mention regardless of who else the message names.
+#[test]
+fn a_mention_in_a_posted_message_is_already_announced() {
+    for is_coding in [true, false] {
+        let actions = plan(
+            &AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
+                identity: identity(),
+                action_id: AgentActionId::mint(),
+                mentioned_by: Some(owner()),
+                mentioned: vec![user("carol@macro.com"), user("alice@macro.com")],
+                origin_message_id: Some(Uuid::from_u128(7)),
+            }),
+            is_coding,
+        );
+
+        assert!(actions.is_empty(), "is_coding={is_coding}: {actions:#?}");
+    }
 }
 
 #[test]
@@ -353,4 +464,46 @@ fn a_notify_becomes_a_realtime_and_push_request_with_its_own_id() {
         "a bot is nobody's sender"
     );
     assert_eq!(value["req"]["notification"]["tag"], "agent_session_settled");
+}
+
+#[test]
+fn a_held_tool_call_tells_only_the_owner() {
+    let approval = Uuid::from_u128(0xA99);
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        approval,
+        Some(&user("alice@macro.com")),
+        "Macro",
+        "ListEmails",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(notify.recipients, [owner()], "only the owner can answer");
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to use Macro ListEmails with your access. Approve or decline it."
+    );
+    assert_eq!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, approval)
+    );
+    assert_ne!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, Uuid::from_u128(0xA98)),
+        "each held call is its own notification"
+    );
+}
+
+#[test]
+fn a_held_tool_call_a_bot_asked_for_says_so() {
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        Uuid::from_u128(1),
+        None,
+        "Linear",
+        "create_issue",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert!(notify.metadata.question.starts_with("A bot asked it"));
 }

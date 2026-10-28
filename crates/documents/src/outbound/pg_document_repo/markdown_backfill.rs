@@ -2,11 +2,24 @@
 
 use anyhow::Context as _;
 use model_owner::Owner;
+use sqlx::PgPool;
 
 use crate::domain::markdown_backfill::{MarkdownBackfillCandidate, MarkdownBackfillRepo};
-use crate::outbound::pg_document_repo::PgDocumentRepo;
 
-impl MarkdownBackfillRepo for PgDocumentRepo {
+/// PostgreSQL-backed markdown backfill repository.
+#[derive(Clone)]
+pub struct PgMarkdownBackfillRepo {
+    pool: PgPool,
+}
+
+impl PgMarkdownBackfillRepo {
+    /// Create a new repository backed by the given connection pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl MarkdownBackfillRepo for PgMarkdownBackfillRepo {
     #[tracing::instrument(err, skip(self))]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn fetch_markdown_backfill_candidates(

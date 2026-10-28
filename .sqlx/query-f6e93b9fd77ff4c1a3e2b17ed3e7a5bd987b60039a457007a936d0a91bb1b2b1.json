@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                github_key,\n                repository,\n                number,\n                base_ref,\n                base_sha,\n                head_ref,\n                head_sha,\n                files,\n                additions,\n                deletions,\n                patch_blob_key,\n                patch_bytes,\n                truncated,\n                captured_at\n            FROM github_pull_request_changeset\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "github_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "repository",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "base_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "base_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "head_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "head_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "files",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "additions",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "deletions",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "patch_blob_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "patch_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "truncated",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "captured_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f6e93b9fd77ff4c1a3e2b17ed3e7a5bd987b60039a457007a936d0a91bb1b2b1"
+}

@@ -1,7 +1,9 @@
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
+import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
+  OpenSplitResult,
   ReferredFrom,
   SplitContent,
   SplitHandle,
@@ -51,15 +53,16 @@ export function calendarViewContent(
     id: CALENDAR_VIEW_ID,
     ...(params ? { params: { ...params } } : {}),
     entryMetadata: {
-      route: {
-        matches: [{ id: CALENDAR_ROUTE_ID, params: { period } }],
-      },
+      route: paneRoute({ id: CALENDAR_ROUTE_ID, params: { period } }),
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
     },
   };
 }
 
-/** Open the singleton Calendar route, or retarget its existing split. */
+/**
+ * Open the singleton Calendar route, or retarget its existing split. Returns
+ * false when there was nowhere to open it.
+ */
 export function openCalendarView(
   target: CalendarRouteTarget = {},
   options: {
@@ -68,10 +71,26 @@ export function openCalendarView(
     openInNewSplit?: boolean;
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
+    onApplied?: VoidFunction;
+    /** False retargets an open Calendar split without taking focus from the caller. */
+    activate?: boolean;
   } = {}
-): void {
+): boolean {
   const manager = options.manager ?? globalSplitManager();
-  if (!manager) return;
+  if (!manager) return false;
+
+  let onApplied = options.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
 
   const content = calendarViewContent(target);
   const existing = manager.getSplitByContent('component', CALENDAR_VIEW_ID);
@@ -81,15 +100,19 @@ export function openCalendarView(
       mergeHistory: options.mergeHistory ?? true,
       referredFrom: options.referredFrom,
     });
-    existing.activate();
-    return;
+    if (options.activate !== false) existing.activate();
+    reportApplied();
+    return true;
   }
 
-  manager.openWithSplit(content, {
-    activate: true,
+  const result = manager.openWithSplit(content, {
+    activate: options.activate !== false,
     referredFrom: options.referredFrom ?? null,
     preferNewSplit: options.openInNewSplit,
     handle: options.handle,
     mergeHistory: options.mergeHistory,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
   });
+  reportImmediateResult(result);
+  return result !== undefined && result.status !== 'unavailable';
 }

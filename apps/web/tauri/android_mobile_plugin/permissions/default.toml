@@ -1,0 +1,3 @@
+[default]
+description = "Android window insets, share intake, clipboard staging and file exports."
+permissions = ["allow-register-listener", "allow-remove-listener", "allow-getInsets", "allow-getPendingShares", "allow-clearShares", "allow-stageClipboardImage", "allow-beginExport", "allow-appendExport", "allow-finishExport", "allow-discardExport"]

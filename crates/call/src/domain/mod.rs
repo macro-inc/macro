@@ -20,3 +20,10 @@ pub mod service;
 
 /// Persistent meeting invitations and guest models.
 pub mod meetings;
+
+/// Provider-independent durable call entities and optional resources.
+pub mod records;
+
+/// Authorized ingestion and owner-scoped reads of imported calls.
+#[cfg(feature = "ports")]
+pub mod imports;

@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"ok\":true,\"channels\":[{\"id\":\"C0000000001\",\"name\":\"example-public\",\"is_channel\":true,\"is_private\":false,\"is_im\":false,\"is_mpim\":false,\"is_archived\":false,\"is_member\":true,\"num_members\":3,\"context_team_id\":\"T0000000001\",\"purpose\":{\"value\":\"Synthetic public channel\"}},{\"id\":\"C0000000002\",\"name\":\"example-private\",\"is_channel\":true,\"is_private\":true,\"is_im\":false,\"is_mpim\":false,\"is_archived\":false,\"is_member\":true,\"num_members\":1,\"context_team_id\":\"T0000000001\",\"purpose\":{\"value\":\"\"}}],\"response_metadata\":{\"next_cursor\":\"\"}}"
+    }
+  ],
+  "isError": false
+}

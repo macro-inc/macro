@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_billing_period_allowance AS allowance\n            SET billed_users = excised.users,\n                included_cents_by_user = excised.cents,\n                included_cost_cents_by_user = CASE\n                    WHEN cardinality(allowance.included_cost_cents_by_user)\n                         = cardinality(allowance.billed_users)\n                    THEN excised.cost_cents\n                END,\n                updated_at = NOW()\n            FROM (\n                SELECT\n                    COALESCE(\n                        array_agg(seat.billed_user ORDER BY seat.ordinality)\n                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),\n                        ARRAY[]::text[]\n                    )::text[] AS users,\n                    COALESCE(\n                        array_agg(seat.included_cents ORDER BY seat.ordinality)\n                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),\n                        ARRAY[]::bigint[]\n                    )::bigint[] AS cents,\n                    COALESCE(\n                        array_agg(seat.cost_cents ORDER BY seat.ordinality)\n                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),\n                        ARRAY[]::bigint[]\n                    )::bigint[] AS cost_cents\n                FROM ai_billing_period_allowance AS src\n                CROSS JOIN LATERAL unnest(\n                    src.billed_users, src.included_cents_by_user, src.included_cost_cents_by_user\n                ) WITH ORDINALITY AS seat(billed_user, included_cents, cost_cents, ordinality)\n                WHERE src.user_id = $1\n                  AND src.period_start = $2\n            ) AS excised\n            WHERE allowance.user_id = $1\n              AND allowance.period_start = $2\n              AND $3 = ANY (allowance.billed_users)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0090ad6b952f3c9c0cdd52c5edd45483da9f619a00204ff51ca739693936dc42"
+}

@@ -34,6 +34,8 @@ INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "http://localhost:8092"
 DSS_URL = "http://localhost:8086"
 DSS_INTERNAL_AUTH_KEY = "local"
+LEXICAL_SERVICE_URL = "http://localhost:8096"
+LEXICAL_SERVICE_AUTH_KEY = "local"
 # Tags exported spans with deployment.environment=local, matching the
 # Datadog agent's DD_ENV so the env:local trace/log views include them.
 ENVIRONMENT = "local"
@@ -63,6 +65,7 @@ DOCUMENT_PERMISSIONS_SECRET = "local"
 ENVIRONMENT = "development"
 SPS_URL = "https://dev-gateway.macro.com/search-processing"
 DSS_URL = "https://dev-gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://dev-gateway.macro.com/lexical"
 
 [env.playground.durable_objects]
 bindings = [
@@ -103,6 +106,7 @@ ENVIRONMENT = "development"
 OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-dev.macroverse.workers.dev/i/otlp"
 SPS_URL = "https://dev-gateway.macro.com/search-processing"
 DSS_URL = "https://dev-gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://dev-gateway.macro.com/lexical"
 
 [env.dev.durable_objects]
 bindings = [
@@ -143,6 +147,7 @@ ENVIRONMENT = "production"
 OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-prod.macroverse.workers.dev/i/otlp"
 SPS_URL = "https://gateway.macro.com/search-processing"
 DSS_URL = "https://gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://gateway.macro.com/lexical"
 
 [env.prod.durable_objects]
 bindings = [

@@ -124,13 +124,6 @@ pub const CODEX_HANDLE: &str = "codex";
 /// Display name for Codex.
 pub const CODEX_NAME: &str = "Codex";
 
-/// Stable identity for the per-owner Claude cloud agent.
-pub const CLAUDE_BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(0xc1a0));
-/// Mention handle for Claude.
-pub const CLAUDE_HANDLE: &str = "claude";
-/// Display name for Claude.
-pub const CLAUDE_NAME: &str = "Claude";
-
 /// Stable handle for the autonomous Macro platform principal.
 pub const MACRO_SYSTEM_HANDLE: &str = "macro-system";
 
@@ -190,12 +183,6 @@ pub const SYSTEM_BOTS: &[SystemBot] = &[
         handle: CODEX_HANDLE,
         has_agent: true,
     },
-    SystemBot {
-        id: CLAUDE_BOT_ID,
-        name: CLAUDE_NAME,
-        handle: CLAUDE_HANDLE,
-        has_agent: true,
-    },
     // Posts as itself for autonomous platform operations, but nothing mentions
     // it and it opens no sessions.
     SystemBot {
@@ -218,10 +205,40 @@ pub fn system_bot_by_handle(handle: &str) -> Option<&'static SystemBot> {
     SYSTEM_BOTS.iter().find(|bot| bot.handle == handle)
 }
 
+/// The handle users type to reach the bot `id`, whose own handle is `handle`.
+///
+/// Macro's agent-session bot is reached through `@macro`; its own handle,
+/// [`MACRO_NEW_HANDLE`], only tells it apart from the classic bot.
+#[must_use]
+pub fn mention_handle(id: BotId, handle: &str) -> &str {
+    if id == MACRO_NEW_BOT_ID {
+        MACRO_AI_HANDLE
+    } else {
+        handle
+    }
+}
+
 /// Whether `id` is a first-party bot, and so has no `bots` row.
 #[must_use]
 pub fn is_system_bot(id: BotId) -> bool {
     system_bot(id).is_some()
+}
+
+/// A bot id that is not in [`SYSTEM_BOTS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NonSystemBotId(BotId);
+
+impl NonSystemBotId {
+    /// Accept `id` only when it is not a first-party bot.
+    #[must_use]
+    pub fn new(id: BotId) -> Option<Self> {
+        (!is_system_bot(id)).then_some(Self(id))
+    }
+
+    /// Return the underlying bot id.
+    pub const fn get(self) -> BotId {
+        self.0
+    }
 }
 
 /// A bot id UUID.

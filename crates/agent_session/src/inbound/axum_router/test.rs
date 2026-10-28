@@ -1,34 +1,116 @@
 use super::*;
-use crate::domain::model::SessionStatus;
+use crate::domain::model::{SessionStatus, session_owner_user};
 use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;
 use macro_authorization::{
-    BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
-    BotScope, HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessAuthentication,
-    HarnessAuthorizationOwner, HarnessAuthorizer, InternalAuthConfig, JwtValidator,
-    MacroAuthorizationError, MacroAuthorizationServiceImpl, MacroUserAuthentication,
-    NoUserApiKeyAuthorizer, ValidatedIdentity,
+    BOT_FOR_MACRO_USER_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims,
+    BotAuthentication, BotAuthorizer, BotScope, HARNESS_FOR_MACRO_USER_ID_HEADER,
+    HARNESS_TOKEN_HEADER, HarnessAuthentication, HarnessAuthorizationOwner, HarnessAuthorizer,
+    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
+    MacroUserAuthentication, NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
+#[tokio::test]
+async fn admission_maps_to_shared_public_http_contract_on_create_and_control() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for (error, status) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            AiAdmissionError::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+    ] {
+        let responses = [
+            AgentSessionApiError::Domain(error.into()).into_response(),
+            CreateSessionApiError::Domain(error.into()).into_response(),
+            AgentSessionApiError::Domain(AgentSessionError::from(
+                rootcause::report!(error).into_dynamic(),
+            ))
+            .into_response(),
+        ];
+        for response in responses {
+            assert_eq!(response.status(), status);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                value,
+                serde_json::json!({"error": error.to_string(), "code": error.code()})
+            );
+        }
+    }
+}
+
+#[test]
+fn openapi_documents_session_admission_failures() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(create_agent_session_handler, control_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    for path in ["/agent-sessions", "/agent-sessions/{session_id}/control"] {
+        let responses = &schema["paths"][path]["post"]["responses"];
+        for status in ["402", "503"] {
+            assert_eq!(
+                responses[status]["content"]["application/json"]["schema"]["$ref"],
+                "#/components/schemas/AiAdmissionErrorBody"
+            );
+        }
+    }
+    assert_eq!(
+        schema["paths"]["/agent-sessions/{session_id}/control"]["post"]["responses"]["503"]["content"]
+            ["text/plain"]["schema"]["type"],
+        "string"
+    );
+    assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
+}
+
+/// A read answers "not yours" and "not there" differently, and says so in the
+/// contract: a client that cannot tell them apart has no way to know a
+/// refusal of a session it has only just created is worth trying again.
+#[test]
+fn openapi_separates_a_missing_session_from_a_refused_one() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(get_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    let responses = &schema["paths"]["/agent-sessions/{session_id}"]["get"]["responses"];
+    assert!(responses["401"].is_object());
+    assert!(responses["404"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";
 const STRANGER: &str = "macro|stranger@example.com";
+const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 
 #[derive(Clone, Default)]
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -42,17 +124,35 @@ impl BotAuthorizer for SelfBotAuthorizer {
         &self,
         bot_token: &str,
         bot_scope: BotScope,
-        _acting_user: Option<BotActingUserClaims>,
+        acting_user: Option<BotActingUserClaims>,
     ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
         if bot_token != BOT_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
+        let acting_user = match acting_user.and_then(|claims| claims.user_id) {
+            Some(user_id) => {
+                let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
+                    .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
+                Some(MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
+                    macro_user_id,
+                    user_context: model_user::UserContext {
+                        user_id,
+                        fusion_user_id: "fusion-owner".to_owned(),
+                        permissions: None,
+                        organization_id: None,
+                    },
+                })
+            }
+            None => None,
+        };
         Ok(BotAuthentication {
             bot_id: BotId::TEST_A,
             token_id: Uuid::new_v4(),
             bot_scope,
-            team_id: None,
-            acting_user: None,
+            team_id: Some(TEAM_ID),
+            acting_user,
         })
     }
 }
@@ -82,6 +182,8 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
+                agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -102,15 +204,26 @@ struct RecordingOpener {
 }
 
 impl SessionOpener for RecordingOpener {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        session_owner_user(&request.owner)?;
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
@@ -128,6 +241,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.opened.lock().unwrap().push(request);
         Ok(session)
@@ -137,6 +252,7 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenManagedSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        session_owner_user(&request.owner)?;
         let bot_id = request
             .profile
             .as_ref()
@@ -144,8 +260,10 @@ impl SessionOpener for RecordingOpener {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_parent: None,
@@ -163,6 +281,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.managed.lock().unwrap().push(request);
         Ok(session)
@@ -359,8 +479,10 @@ impl ExternalSessionRequester for RecordingRequester {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             owner_id: Owner::User(request.owner.clone()),
             thread_id: None,
             thread_parent: None,
@@ -381,6 +503,8 @@ impl ExternalSessionRequester for RecordingRequester {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.requested.lock().unwrap().push(request);
         Ok(session)
@@ -395,6 +519,15 @@ fn router_with_requests(
     opener: Arc<RecordingOpener>,
     bots: OneBotDirectory,
     requests: Arc<RecordingRequester>,
+) -> Router {
+    router_with_gate(opener, bots, requests, NonUserOwners::Disabled)
+}
+
+fn router_with_gate(
+    opener: Arc<RecordingOpener>,
+    bots: OneBotDirectory,
+    requests: Arc<RecordingRequester>,
+    non_user_owners: NonUserOwners,
 ) -> Router {
     let service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
@@ -411,6 +544,7 @@ fn router_with_requests(
         Arc::new(bots),
         requests,
         MacroAuthorizationState::new(Arc::new(service)),
+        non_user_owners,
     ))
 }
 
@@ -433,12 +567,18 @@ fn body(bot_id: Option<Uuid>, workspace: &str, owner: Option<&str>) -> String {
 }
 
 fn as_bot(request_body: String) -> Request<Body> {
-    Request::post("/")
+    as_bot_for("user", None, request_body)
+}
+
+fn as_bot_for(scope: &str, acting_user: Option<&str>, request_body: String) -> Request<Body> {
+    let mut builder = Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(BOT_TOKEN_HEADER, BOT_TOKEN)
-        .header(BOT_SCOPE_HEADER, "user")
-        .body(Body::from(request_body))
-        .unwrap()
+        .header(BOT_SCOPE_HEADER, scope);
+    if let Some(acting_user) = acting_user {
+        builder = builder.header(BOT_FOR_MACRO_USER_ID_HEADER, acting_user);
+    }
+    builder.body(Body::from(request_body)).unwrap()
 }
 
 fn as_harness(request_body: String) -> Request<Body> {
@@ -670,6 +810,164 @@ async fn a_bot_caller_must_claim_an_owner() {
 }
 
 #[tokio::test]
+async fn a_bot_acting_for_a_verified_user_owns_the_session_for_that_user() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for(
+        "user",
+        Some(STRANGER),
+        body(None, "/srv/agent", Some(OWNER)),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == STRANGER));
+}
+
+#[tokio::test]
+async fn a_team_bot_may_still_claim_a_user_owner() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", Some(OWNER)));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    assert!(matches!(&opened[0].owner, Owner::User(user) if user.as_ref() == OWNER));
+}
+
+#[tokio::test]
+async fn a_team_bot_without_a_claim_needs_an_owner_while_the_gate_is_off() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", None));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"owner is required for bot callers");
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_team_bot_without_a_claim_resolves_to_a_bot_owner_when_the_gate_is_on() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_bot_for("team", None, body(None, "/srv/agent", None));
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::external_agent(),
+        Arc::new(RecordingRequester::default()),
+        NonUserOwners::Enabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_team_bot_selecting_a_persona_is_refused_as_a_bot_owner() {
+    let opener = Arc::new(RecordingOpener::default());
+    let requests = Arc::new(RecordingRequester::default());
+    let request = as_bot_for(
+        "team",
+        None,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_with_gate(
+        opener.clone(),
+        OneBotDirectory::managed_agent(),
+        requests.clone(),
+        NonUserOwners::Enabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+    assert!(opener.opened.lock().unwrap().is_empty());
+    assert!(opener.managed.lock().unwrap().is_empty());
+    assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_bot_owner_is_refused_with_an_explicit_message() {
+    let response =
+        CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot))
+            .into_response();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"a session cannot be owned by a bot; sessions run as a user"
+    );
+}
+
+#[tokio::test]
+async fn a_taken_id_says_the_id_is_taken() {
+    let response =
+        CreateSessionApiError::Domain(AgentSessionError::SessionIdTaken(AgentSessionId::TEST_A))
+            .into_response();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"this id is already taken");
+}
+
+#[tokio::test]
+async fn an_unknown_owner_is_a_422() {
+    let response = CreateSessionApiError::Domain(AgentSessionError::UnknownOwner).into_response();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), b"owner is not a known user");
+}
+
+#[tokio::test]
 async fn a_relative_workspace_is_rejected() {
     let opener = Arc::new(RecordingOpener::default());
     let request = as_bot(body(None, "code/agent", Some(OWNER)));
@@ -852,6 +1150,8 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
             "id": minted,
             "botId": BotId::TEST_A.as_uuid(),
             "model": "claude-opus-5",
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "main",
         })
         .to_string(),
     );
@@ -872,6 +1172,10 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
         let requested = requests.requested.lock().unwrap();
         assert_eq!(requested.len(), 1);
         assert_eq!(requested[0].bot_id, BotId::TEST_A);
+        assert_eq!(
+            requested[0].repo_url.as_deref(),
+            Some("https://github.com/org/project")
+        );
         assert_eq!(requested[0].owner.as_ref(), OWNER);
         assert_eq!(requested[0].session_id.as_uuid(), minted);
         assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
@@ -1040,6 +1344,8 @@ async fn an_external_open_carries_its_instructions() {
     );
 }
 
+mod coding_preferences;
+mod owned_purge;
 mod read;
 mod user_cleanup;
 
@@ -1077,6 +1383,7 @@ fn an_unnamed_control_request_omits_the_field() {
     let body = serde_json::to_value(ControlRequest {
         action_id: None,
         action: AgentAction::Stop,
+        context: None,
     })
     .expect("a control request serializes");
 
@@ -1144,4 +1451,67 @@ async fn invalid_repository_branch_is_rejected_before_opening() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn macrod_rejects_an_unsupported_base_before_dispatch() {
+    let requests = Arc::new(RecordingRequester::default());
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(as_user(
+        OWNER,
+        serde_json::json!({
+            "botId": BotId::TEST_A.as_uuid(),
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "feature/other"
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+mod tool_actions;
+
+#[tokio::test]
+async fn internal_notifications_use_the_session_mount_once() {
+    use crate::inbound::notifications::{NotificationRouterState, notification_router};
+    let authorization = MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".into(),
+            default_user_id: None,
+        },
+        SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    )));
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://user:password@localhost/macrodb")
+        .unwrap();
+    let service = Arc::new(crate::domain::notifications::NotificationService(Arc::new(
+        crate::outbound::notifications::PgNotificationStore(pool),
+    )));
+    let app = Router::new().nest(
+        "/agent-sessions",
+        notification_router(NotificationRouterState {
+            authorization,
+            service,
+        }),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agent-sessions/internal/notifications")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

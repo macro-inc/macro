@@ -4,6 +4,7 @@
 
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,11 +48,10 @@ afterEach(() => {
 
 describe('agent model discovery', () => {
   it('constructs every available target in parallel without waiting for another target', async () => {
-    const targets = buildAgentModelTargets(
-      true,
-      [{ id: 'harness-a' }, { id: 'harness-b' }],
-      true
-    );
+    const targets = buildAgentModelTargets(true, [
+      { id: 'harness-a' },
+      { id: 'harness-b' },
+    ]);
     const pending = new Promise<never>(() => {});
     vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
       pending
@@ -61,7 +61,7 @@ describe('agent model discovery', () => {
 
     await vi.waitFor(() => {
       expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
-        5
+        4
       );
     });
     expect(
@@ -70,7 +70,6 @@ describe('agent model discovery', () => {
         .mock.calls.map(([request]) => request)
     ).toEqual([
       { harness: 'in-memory' },
-      { harness: 'claude-cloud' },
       { harness: 'cursor' },
       { harness: 'macrod', harnessId: 'harness-a' },
       { harness: 'macrod', harnessId: 'harness-b' },
@@ -78,27 +77,53 @@ describe('agent model discovery', () => {
   });
 
   it('omits Cursor when it is not registered', () => {
-    expect(buildAgentModelTargets(false, [{ id: 'harness-a' }], true)).toEqual([
+    expect(buildAgentModelTargets(false, [{ id: 'harness-a' }])).toEqual([
       { harness: 'in-memory' },
-      { harness: 'claude-cloud' },
       { harness: 'macrod', harnessId: 'harness-a' },
     ]);
   });
 
-  it('does not query Claude when its feature flag is off', async () => {
-    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
-      new Promise<never>(() => {})
+  it('keeps a loaded catalog across remounts', async () => {
+    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockResolvedValue(
+      ok({
+        status: 'available',
+        models: [],
+      })
     );
+
     renderHook(() =>
-      useAgentModelsQueries(() => buildAgentModelTargets(true, [], false))
+      useAgentModelsQueries(() => [
+        { harness: 'in-memory' },
+        { harness: 'cursor' },
+      ])
     );
-    await vi.waitFor(() =>
-      expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => {
+      expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
+        2
+      );
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .every((query) => query.state.status === 'success')
+      ).toBe(true);
+    });
+
+    dispose?.();
+    renderHook(() =>
+      useAgentModelsQueries(() => [
+        { harness: 'in-memory' },
+        { harness: 'cursor' },
+      ])
     );
-    expect(
-      vi
-        .mocked(agentHarnessServiceClient.loadAgentModels)
-        .mock.calls.map(([request]) => request)
-    ).toEqual([{ harness: 'in-memory' }, { harness: 'cursor' }]);
+    await vi.waitFor(() => {
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .every((query) => query.state.status === 'success')
+      ).toBe(true);
+    });
+    expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2);
   });
 });

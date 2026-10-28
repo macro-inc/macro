@@ -1,0 +1,16 @@
+id: tsx-skeleton-shimmer
+language: tsx
+severity: error
+message: Loading placeholders use the shared shimmer (`ListSkeleton.Bar`, or `skeleton-shimmer bg-skeleton`), never a pulsing box with its own fill.
+note: |-
+  Rule FE-68 in .agents/rules/web/design-system.md. Pulsing `bg-hover`,
+  `bg-ink/*`, or `bg-surface` boxes drift from every other loader. Use
+  `ListSkeleton.Bar` (pill by default; pass a size and radius), and build view
+  skeletons from `ViewSkeleton` so they mirror the view's header.
+files:
+  - apps/web/src/**
+rule:
+  kind: string_fragment
+  all:
+    - regex: (^|\s)(motion-safe:)?animate-pulse(\s|$)
+    - regex: (^|\s)bg-(hover|skeleton|surface|ink-placeholder|ink/\S+)(\s|$)

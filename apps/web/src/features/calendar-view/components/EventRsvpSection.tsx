@@ -1,11 +1,11 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { toast } from '@core/component/Toast/Toast';
-import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
-import type { CalendarRsvpScope } from '@service-email/client';
+import { OutlookRsvpAction } from '@app/features/calendar/views/event-replacement';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import { EventRsvpScopeDialog } from './EventRsvpScopeDialog';
+import { createMemo, For, Show } from 'solid-js';
+import { EventRsvpScopeDialog } from '../../calendar/components/EventRsvpScopeDialog';
+import { createCalendarRsvpController } from '../../calendar/hooks/create-calendar-rsvp-controller';
 
 type RsvpResponse = Exclude<AttendeeResponseStatus, 'needs_action'>;
 
@@ -38,82 +38,77 @@ export function EventRsvpSection(props: {
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
   const canRespond = () =>
+    props.event.viewerCan.rsvp &&
     selfAttendee() !== undefined &&
-    !props.event.isReadOnly &&
     !props.event.isCancelled;
 
-  const [pendingResponse, setPendingResponse] = createSignal<RsvpResponse>();
-  const [scope, setScope] = createSignal<CalendarRsvpScope>('this_event');
-
-  const rsvp = useRsvpCalendarEventMutation({
-    onError: (error) => {
-      toast.failure('Failed to update RSVP', { subtext: error.message });
-    },
-  });
-
-  const submit = (
-    response: RsvpResponse,
-    effectiveScope: CalendarRsvpScope
-  ) => {
-    rsvp.mutate({
-      eventId: props.event.eventId,
-      response,
-      scope: effectiveScope,
-      recurrenceId:
-        effectiveScope === 'all'
-          ? undefined
-          : (props.event.recurrenceId ?? props.event.occurrenceKey),
-      occurrenceKey:
-        effectiveScope === 'all' ? undefined : props.event.occurrenceKey,
-    });
-  };
-
-  const respond = (response: RsvpResponse) => {
-    // A single occurrence is its own series, so there is nothing to scope.
-    if (!isRecurring()) {
-      submit(response, 'all');
-      return;
-    }
-    setScope('this_event');
-    setPendingResponse(response);
-  };
-
-  const confirm = () => {
-    const response = pendingResponse();
-    if (response === undefined) return;
-    submit(response, scope());
-    setPendingResponse(undefined);
-  };
+  const rsvp = createCalendarRsvpController(() =>
+    canRespond()
+      ? {
+          eventId: props.event.eventId,
+          respondingEmail: selfAttendee()?.email,
+          occurrenceKey: props.event.occurrenceKey,
+          recurrenceId: props.event.recurrenceId,
+          recurring: isRecurring(),
+        }
+      : undefined
+  );
 
   return (
     <Show when={canRespond()}>
-      <div class="border-edge-muted flex items-center gap-3 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
-        <span>Going?</span>
+      <div class="border-edge-muted flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
+        <span class="flex shrink-0 items-center gap-2">
+          Going?
+          <span role="status" class="size-3.5">
+            <Show when={rsvp.pending()}>
+              <SpinnerIcon
+                aria-hidden="true"
+                class="size-3.5 animate-spin motion-reduce:animate-none"
+              />
+              <span class="sr-only">Saving response…</span>
+            </Show>
+          </span>
+        </span>
         <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
           <For each={RSVP_OPTIONS}>
             {(option) => (
               <Button
                 variant="ghost"
                 size={props.buttonSize ?? 'sm'}
-                depth={3}
-                class="rounded-lg bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11 mobile:rounded-full"
+                class="bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11"
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
                 }
-                onClick={() => respond(option.response)}
+                onClick={() => rsvp.respond(option.response)}
               >
                 {option.label}
               </Button>
             )}
           </For>
         </div>
+        <Show when={rsvp.error()}>
+          {(error) => (
+            <p role="alert" class="basis-full text-xs text-failure">
+              {error()}
+            </p>
+          )}
+        </Show>
       </div>
+      <Show when={props.event.calendar.provider === 'outlook'}>
+        <OutlookRsvpAction
+          target={{
+            eventId: props.event.eventId,
+            calendarId: props.event.calendarId,
+            recurrenceId: props.event.recurrenceId,
+          }}
+        />
+      </Show>
       <EventRsvpScopeDialog
-        open={pendingResponse() !== undefined}
-        scope={scope()}
-        onScopeChange={setScope}
-        onClose={() => setPendingResponse(undefined)}
-        onConfirm={confirm}
+        open={rsvp.scopeOpen()}
+        scope={rsvp.scope()}
+        onScopeChange={rsvp.setScope}
+        onClose={rsvp.closeScope}
+        onConfirm={rsvp.confirmScope}
       />
     </Show>
   );

@@ -21,6 +21,8 @@ export interface ArchiveThreadOptions {
   /** Disable automatic list navigation when the host handles it. */
   navigate?: boolean;
   navigateBack?: () => void;
+  /** Checked just before archiving; a send undone first is not marked done. */
+  cancelled?: () => boolean;
 }
 
 /** Domain snapshots and request progress; query keys and cursors stay in the adapter. */
@@ -42,6 +44,7 @@ export interface EmailThreadCommands {
   canMarkThreadNotDone: Accessor<boolean>;
   markThreadNotDone(): boolean;
   isThreadMarkedUnread: Accessor<boolean>;
+  isThreadMarkedRead: Accessor<boolean>;
   markThreadUnread(): boolean;
   markThreadRead(): boolean;
   blockSender(): boolean;
@@ -55,7 +58,6 @@ export interface EmailThreadContext {
   viewerEmail: Accessor<string | undefined>;
   viewerLoading: Accessor<boolean>;
   isTouch: Accessor<boolean>;
-  isMobile: Accessor<boolean>;
   createCommands(
     thread: Accessor<EmailThread | undefined>
   ): EmailThreadCommands;
@@ -66,14 +68,26 @@ export interface EmailThreadListNavigation {
   canNext: Accessor<boolean>;
   previous(): void;
   next(): void;
-  markDone(archiveThread: EmailThreadCommands['archiveThread']): void;
+  afterReminderSaved?(): Promise<void>;
+  /**
+   * Archives through `archiveThread` and opens the next email. With
+   * `threadId`, only while that thread is the open one. Resolves whether it
+   * archived: false when the host was busy, closed, or showing another thread.
+   */
+  markDone(
+    archiveThread: EmailThreadCommands['archiveThread'],
+    threadId?: string
+  ): Promise<boolean>;
 }
 
 /** Host behavior is optional. A thread can render without a block or router. */
 export interface EmailThreadHost {
+  /** Close an embedded thread without navigating the containing split's history. */
+  returnToList?: () => void;
   listNavigation?: EmailThreadListNavigation;
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;
   targetMessageId?: Accessor<string | undefined>;
+  targetRequest?: Accessor<string | undefined>;
   focusContainer?: () => void;
 }

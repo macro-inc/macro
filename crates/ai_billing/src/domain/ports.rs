@@ -1,15 +1,53 @@
 //! Ports: what the billing service needs from the outside world, and what it
 //! offers inbound adapters.
 
+use super::financial::FundingPeriod;
 use super::ledger::SettlementPolicy;
 use super::models::{
-    AllowanceDecision, AllowanceStore, BillingPeriod, BillingSettings, Entitlement,
-    OpenPeriodStart, OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatGeneration, SeatUsage, UsageSnapshot,
+    AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingPeriod, BillingSettings,
+    CreditReloadStatus, Entitlement, OpenPeriodStart, OverageChargeStatus, PeriodAllowance,
+    PeriodLedger, Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope,
+    UsageSnapshot,
 };
+use super::policy::UsageAllocation;
+use ai_usage::domain::financial::{
+    BeginInvocation, FundingAuthorization, InvocationId, InvocationRecord, PendingInvocations,
+    RateSnapshot,
+};
+use ai_usage::domain::ports::FinancialFuture;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+
+/// Durable V1 funding transactions. All mutations serialize on the existing payer
+/// account row, including legacy settlement, settings and credit purchases. Replays
+/// compare immutable request/rate/authorization/evidence facts before returning success.
+pub trait FundingRepo: Send + Sync + 'static {
+    /// Resolve the recorded seat policy at occurrence time, never today's role/catalog.
+    fn period(
+        &self,
+        seat: MacroUserIdStr<'static>,
+        at: DateTime<Utc>,
+    ) -> FinancialFuture<'_, Option<FundingPeriod>>;
+    /// Insert immutable verified facts. Reject overlapping or contradictory bindings.
+    fn record_period(&self, period: FundingPeriod) -> FinancialFuture<'_, ()>;
+    /// Reserve the entire execution ceiling before acknowledging authorization.
+    /// Funding denials are durable for this identity: later purchases/settings require
+    /// a new attempt ID, never retroactive authorization of blocked history.
+    fn authorize(
+        &self,
+        request: BeginInvocation,
+        rate: RateSnapshot,
+    ) -> FinancialFuture<'_, FundingAuthorization>;
+    /// Persist handoff once, then allocate in payer sequence, not completion order.
+    fn finalize(&self, record: InvocationRecord) -> FinancialFuture<'_, ()>;
+    /// Read recorded source consumption, never recalculate from current settings.
+    fn allocation(&self, id: InvocationId) -> FinancialFuture<'_, Option<UsageAllocation>>;
+    /// Discover unresolved and ready-but-unallocated work, including old periods.
+    fn pending(&self, query: PendingInvocations) -> FinancialFuture<'_, Vec<InvocationId>>;
+    /// Process a bounded prefix at the allocation watermark; unresolved work retains holds.
+    fn reconcile(&self, payer: MacroUserIdStr<'static>) -> FinancialFuture<'_, ()>;
+}
 
 /// Resolves who a user is billed as.
 pub trait EntitlementSource: Send + Sync + 'static {
@@ -34,14 +72,17 @@ pub trait EntitlementSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>>> + Send;
 }
 
-/// Reads recorded, metered AI usage at Macro's list rate.
+/// Reads recorded, metered AI usage at provider cost.
 pub trait UsageReader: Send + Sync + 'static {
-    /// List-rate usage for each of `users` within `period`.
+    /// Usage since the latest new-highest-plan baseline in cost cents for each seat.
+    /// Historical plan changes supply an explicit cumulative liability for settlement.
     ///
-    /// [`NON_BILLABLE_AI_FEATURES`](super::models::NON_BILLABLE_AI_FEATURES)
-    /// remain in `ai_usage` for cost tracking but do not consume a user's
-    /// allowance, credits, or overage.
-    fn list_rate_usage_cents_by_user(
+    /// Only rows with the persisted `count_usage = TRUE` decision consume a user's
+    /// allowance, credits, or overage. Historical and uncounted rows remain available
+    /// for cost tracking. The period is inclusive at the start and exclusive at the end;
+    /// users with no counted rows or prior overage are omitted, and an empty list
+    /// returns no rows. Upgrade history does not delete or reclassify recorded costs.
+    fn usage_cost_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
@@ -53,11 +94,33 @@ pub trait UsageReader: Send + Sync + 'static {
 pub struct PendingCharge {
     /// The `ai_overage_charge` row.
     pub id: Uuid,
-    /// Amount to collect, list-rate cents.
+    /// Amount to collect, customer cents.
     pub amount_cents: i64,
     /// The Stripe invoice an earlier attempt opened for this charge, if any.
     /// A retry pays that invoice instead of opening a second one.
     pub stripe_invoice_id: Option<String>,
+}
+
+/// An automatic credit reload reserved in the ledger that still has to be
+/// collected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingReload {
+    /// The `ai_credit_reload` row.
+    pub id: Uuid,
+    /// Amount to collect and then book as credits, customer cents.
+    pub amount_cents: i64,
+    /// The Stripe invoice an earlier attempt opened for this reload, if any.
+    /// A retry pays that invoice instead of opening a second one.
+    pub stripe_invoice_id: Option<String>,
+}
+
+/// A credit reload whose Stripe invoice outcome just changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedReload {
+    /// Who the credits belong to.
+    pub payer: MacroUserIdStr<'static>,
+    /// Amount collected (or not), customer cents.
+    pub amount_cents: i64,
 }
 
 /// What a settlement booked.
@@ -71,11 +134,36 @@ pub struct SettlementOutcome {
 
 /// The billing tables.
 pub trait BillingRepo: Send + Sync + 'static {
+    /// Exclude recorded V1 seats from legacy analytics/settlement for this period.
+    /// A mixed-policy payer must retain only its legacy seats on this path.
+    fn legacy_seats(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period: BillingPeriod,
+        seats: Vec<SeatAllowance>,
+    ) -> impl Future<Output = Result<Vec<SeatAllowance>>> + Send;
+
+    /// Record an immutable transition, including downgrades, for chronological
+    /// metering. Replays preserve the original facts and subsequent usage.
+    fn record_plan_change(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        record: super::plan_change::RecordedPlanChange,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The payer's settings (defaults when no row exists).
     fn settings(
         &self,
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<BillingSettings>> + Send;
+
+    /// Reload commitments charged against a UTC calendar-month cap. Includes
+    /// pending reloads and failed invoices that may still collect; excludes manual purchases.
+    fn credit_reload_committed_cents(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        month: BillingPeriod,
+    ) -> impl Future<Output = Result<i64>> + Send;
 
     /// Set overage on/off and the cap. Clears any suspension.
     fn update_overage(
@@ -85,7 +173,9 @@ pub trait BillingRepo: Send + Sync + 'static {
         limit_cents: i64,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the subscription period synced from Stripe.
+    /// Record the legacy subscription anchor synced from Stripe. A correction
+    /// to the current start's end is allowed; older/overlapping starts cannot
+    /// replace it. This does not rewrite allowance or financial period history.
     fn set_period(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -105,7 +195,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Current prepaid balance, list-rate cents.
+    /// Current prepaid balance, customer cents.
     fn credit_balance_cents(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -125,6 +215,20 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PeriodAllowance>>> + Send;
+
+    /// Starts of the periods frozen for this payer that began at or after
+    /// `since` and before `before`, oldest first.
+    ///
+    /// A frozen period is one that was observed while open, so it is keyed
+    /// exactly as the ledger entries and charges booked against it. These are
+    /// the closed periods settlement can still reconcile without inventing a
+    /// period start.
+    fn frozen_period_starts(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<DateTime<Utc>>>> + Send;
 
     /// Record each seat's allowance for the open period when `observed` is still
     /// the payer's seat generation.
@@ -163,11 +267,16 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// Atomically settle a period: under the payer's row lock, re-read the
     /// ledger, run [`plan_settlement`](super::ledger::plan_settlement) with the
     /// stored overage settings, book credit consumption, and reserve a
-    /// pending overage charge. `chargeable_cents` is the sum of each seat's
-    /// usage beyond its own allowance. The overage policy is read inside the lock, with
-    /// `charge_threshold_cents` and `period_ended` taken from `policy`.
+    /// pending overage charge. `chargeable_customer_cents` is the period's
+    /// cumulative usage beyond each seat's own allowance, already converted to
+    /// customer cents at the overage markup
+    /// ([`extra_customer_cents`](super::pricing::extra_customer_cents)). The
+    /// overage policy is read inside the lock, with `charge_threshold_cents` and
+    /// `period_ended` taken from `policy`.
     ///
-    /// A charge that was reserved earlier but never collected is handed back
+    /// When `policy.overage_active` is false, neither new nor historical charges
+    /// are returned. The service always selects this credit-only policy.
+    /// A legacy charge that was reserved earlier but never collected is handed back
     /// before anything new is reserved, so retries reuse its id (and so its
     /// Stripe idempotency keys and invoice) rather than billing the same
     /// usage twice:
@@ -184,7 +293,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        chargeable_cents: i64,
+        chargeable_customer_cents: i64,
         policy: SettlementPolicy,
     ) -> impl Future<Output = Result<SettlementOutcome>> + Send;
 
@@ -213,6 +322,77 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<OverageChargeStatus>>> + Send;
+
+    /// Set the stored reload opt-in and optionally its thresholds. The service
+    /// supplies zero for the retired direct-charge cap.
+    /// `None` thresholds keep the stored ones. Clears both the overage and the
+    /// reload suspension.
+    fn update_auto_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        enabled: bool,
+        overage_limit_cents: i64,
+        thresholds: Option<&AutoReloadThresholds>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Atomically decide whether to reload credits: under the payer's row
+    /// lock, read the balance and the period ledger, run
+    /// [`plan_reload`](super::ledger::plan_reload) with the stored thresholds
+    /// against the usage `chargeable_customer_cents` that credits or charges
+    /// have not yet covered, and reserve a pending reload. Reloads in the UTC
+    /// calendar month containing `now` that Stripe may still collect (pending,
+    /// paid, or failed with an invoice) count against the monthly limit.
+    ///
+    /// `None` unless [`BillingSettings::auto_reload_active`] holds. A reload
+    /// reserved earlier whose collection never finished is handed back so the
+    /// retry reuses its id, Stripe idempotency keys, and invoice: a pending
+    /// reload with no invoice that went stale, or a failed reload whose
+    /// invoice is still open (returned as pending again). Any other pending
+    /// reload blocks a new one until Stripe resolves it.
+    fn reserve_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        chargeable_customer_cents: i64,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<PendingReload>>> + Send;
+
+    /// Record the result of collecting a reserved reload.
+    fn finish_credit_reload(
+        &self,
+        reload_id: Uuid,
+        stripe_invoice_id: Option<&str>,
+        status: CreditReloadStatus,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Book a collected reload as purchased credits. Returns `false` when
+    /// `stripe_invoice_id` was already booked (collector and webhook both
+    /// reported it).
+    fn record_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        stripe_invoice_id: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Update a reload by its Stripe invoice (webhook). Returns the payer and
+    /// amount when the invoice was one of ours *and* the status changed.
+    /// `Paid` is terminal: a late or duplicate failure event never un-pays a
+    /// reload, and re-reporting the current status is a no-op.
+    /// A transition to `Paid` atomically books the purchased credits, deduplicated
+    /// by invoice, so a failed credit write leaves the status retryable.
+    fn resolve_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        status: CreditReloadStatus,
+    ) -> impl Future<Output = Result<Option<ResolvedReload>>> + Send;
+
+    /// Pause automatic reloads after a failed collection. Overage itself
+    /// stays as it was.
+    fn suspend_auto_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// A one-off credit purchase to start.
@@ -222,7 +402,7 @@ pub struct CreditCheckoutRequest {
     pub customer_id: String,
     /// The payer, stamped on the session so the webhook can book it.
     pub payer: MacroUserIdStr<'static>,
-    /// Pack size, list-rate cents.
+    /// Pack size, customer cents.
     pub amount_cents: i64,
     /// Where Stripe returns the user after paying.
     pub success_url: String,
@@ -238,10 +418,30 @@ pub struct OverageChargeRequest {
     /// The reserved charge; doubles as the idempotency key, so opening the
     /// same charge twice yields the same invoice.
     pub charge_id: Uuid,
-    /// Amount, list-rate cents.
+    /// Amount, customer cents.
     pub amount_cents: i64,
     /// Line description shown on the invoice.
     pub description: String,
+    /// Which subscription pays this charge.
+    pub scope: SubscriptionScope,
+}
+
+/// An automatic credit reload to invoice.
+#[derive(Debug, Clone)]
+pub struct CreditReloadRequest {
+    /// The payer's Stripe customer.
+    pub customer_id: String,
+    /// The payer, stamped on the invoice so the webhook can book the credits.
+    pub payer: MacroUserIdStr<'static>,
+    /// The reserved reload; doubles as the idempotency key, so opening the
+    /// same reload twice yields the same invoice.
+    pub reload_id: Uuid,
+    /// Amount, customer cents.
+    pub amount_cents: i64,
+    /// Line description shown on the invoice.
+    pub description: String,
+    /// Which subscription pays this reload.
+    pub scope: SubscriptionScope,
 }
 
 /// The payment provider.
@@ -252,23 +452,70 @@ pub trait PaymentGateway: Send + Sync + 'static {
         request: CreditCheckoutRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Open a finalized invoice for exactly this overage chunk (and nothing
-    /// else pending on the customer). Returns the invoice id. Idempotent on
-    /// `charge_id`.
+    /// Retired direct usage billing capability. Adapters must reject opening
+    /// these invoices without creating payment-provider objects.
     fn open_overage_invoice(
         &self,
         request: OverageChargeRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Attempt to collect an open overage invoice now. `Ok(true)` when it is
-    /// paid, `Ok(false)` when the card was declined and the invoice stays
-    /// open for Stripe's own retries (the webhook reports the outcome), `Err`
-    /// when the provider could not be reached or rejected the request.
+    /// Open a finalized invoice for exactly this credit reload, excluding other
+    /// pending items. [`CreditReloadRequest::scope`] selects the active or trialing
+    /// subscription. Ambiguous routing fails. Missing subscription routing fails
+    /// unless a retry finds an invoice with a stored payment method. Returns the invoice id;
+    /// idempotent on `reload_id`.
+    fn open_credit_reload_invoice(
+        &self,
+        request: CreditReloadRequest,
+    ) -> impl Future<Output = Result<String>> + Send;
+
+    /// Collect an automatic credit reload invoice. Historical direct usage
+    /// invoices must be rejected. `charge_id` is the reload id and only keeps
+    /// the idempotency key unique. `scope` is the
+    /// payer's current subscription scope. A scope stamped on the invoice
+    /// overrides it. Invoices without that stamp use `scope`. Distinct
+    /// effective methods in the chosen scope fail with
+    /// [`BillingError::Payment`](super::BillingError::Payment).
+    /// If no active or trialing subscription matches, an invoice-stored
+    /// payment method may still collect the existing debt.
+    ///
+    /// `Ok(true)` when it is paid, `Ok(false)` when the card was declined and
+    /// the invoice stays open for the provider's own retries (the webhook
+    /// reports the outcome), `Err` when the provider could not be reached or
+    /// rejected the request.
     fn pay_overage_invoice(
         &self,
         charge_id: Uuid,
         invoice_id: &str,
+        scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The current period of the customer's subscription in `scope`. Active or
+    /// trialing subscriptions win over past-due or unpaid ones. `Ok(None)` when
+    /// no non-canceled subscription exists or the gateway cannot read
+    /// subscriptions. Chosen subscriptions that disagree on the period are a
+    /// [`BillingError::Payment`](super::BillingError::Payment).
+    fn subscription_period(
+        &self,
+        customer_id: &str,
+        scope: SubscriptionScope,
+    ) -> impl Future<Output = Result<Option<BillingPeriod>>> + Send;
+}
+
+/// Finds whose settlement may be outstanding, for the periodic sweep in the
+/// service that owns Stripe ([`SettlementSweep`](super::sweep::SettlementSweep)).
+pub trait SettlementCandidates: Send + Sync + 'static {
+    /// Users and payers worth settling: anyone who recorded counted usage at
+    /// or after `since`, payers holding a credit reload that was reserved but
+    /// never collected, and payers whose anchored subscription period began
+    /// or ended at or after `since` (so a period that just closed is booked
+    /// even when nobody uses AI afterwards). Deduplicated; the order is
+    /// unspecified.
+    fn candidates(
+        &self,
+        since: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
 }
 
 /// Asks whoever owns Stripe to settle a payer. Fire-and-forget: services that
@@ -287,16 +534,30 @@ impl SettlementTrigger for NoOpSettlementTrigger {
     fn request_settlement(&self, _payer: MacroUserIdStr<'static>) {}
 }
 
-/// The use cases offered to inbound adapters and other services.
+/// Existing billing use cases offered to inbound adapters and other services.
+///
+/// Admission and aggregate settlement here retain legacy semantics. Activated
+/// public-allowance traffic must instead use the awaited financial funding port
+/// (`ai_usage::domain::ports::InvocationFunding`) backed by the reservation and
+/// allocation rules in [`super::policy`]. It must never also enter legacy settlement.
 pub trait BillingService: Send + Sync + 'static {
+    /// Apply a verified transition. Only a new highest plan in the billing
+    /// period resets usage;
+    /// recorded costs, prepaid credits and existing charges remain intact.
+    fn change_plan(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        change: super::plan_change::PlanChange,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// May `user` start another AI request?
     ///
     /// Admission is a read of the position at this instant; usage is
     /// metered after the completion, so requests that are in flight together
     /// can each be admitted against the same headroom. The overshoot is
-    /// bounded by one completion per concurrent request, is billed at list
-    /// rate like everything else, and can only exceed the payer's overage cap
-    /// by that much. Reserving capacity per request would need a second
+    /// bounded by one completion per concurrent request, is priced at the
+    /// same markup as everything else, and can only exceed the payer's overage
+    /// cap by that much. Reserving capacity per request would need a second
     /// ledger write on every completion; the gate deliberately does not.
     fn check_allowance(
         &self,
@@ -310,19 +571,34 @@ pub trait BillingService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
     /// Book each seat's usage beyond its own allowance for the payer of `user`
-    /// (previous and current period) from shared credits and then shared
-    /// overage, collecting overage via the payment gateway. The previous
-    /// period is settled against the per-seat allowances frozen while it was
-    /// open, not the live plan or seat list.
+    /// from shared prepaid credits. Settles the current period and, before
+    /// it, every closed period still inside the reconciliation window
+    /// ([`RECONCILED_CLOSED_PERIODS`](super::service::RECONCILED_CLOSED_PERIODS)),
+    /// so usage that ran past a period boundary is booked without a customer
+    /// action. Only the current period may trigger an automatic credit
+    /// reload. A closed period is settled against the per-seat allowances
+    /// frozen while it was open, not the live plan or seat list.
     fn settle(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
 
-    /// Turn overage on/off with a per-period cap. Payer only. Re-enabling
-    /// retries collection.
+    /// Retired direct usage opt-in. Enabling is rejected; disabling remains
+    /// supported for older clients. Payer only.
     fn update_overage(
         &self,
         user: &MacroUserIdStr<'_>,
         enabled: bool,
         limit_cents: i64,
+    ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
+
+    /// Turn automatic credit reloads on with
+    /// `thresholds` or off. Payer only. Enabling validates the thresholds,
+    /// clears the retired direct-charge cap and both
+    /// suspensions, and settles right away, so a balance already under the
+    /// minimum reloads immediately. Disabling keeps the stored thresholds.
+    fn update_auto_reload(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        enabled: bool,
+        thresholds: AutoReloadThresholds,
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
     /// Start a credit-pack purchase. Payer only. Returns the Checkout URL.
@@ -343,17 +619,29 @@ pub trait BillingService: Send + Sync + 'static {
         stripe_reference: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the payer's subscription period (webhook).
+    /// Record the payer's explicit subscription interval. Optional verified item
+    /// facts feed the gated renewal use case; bare anchors remain legacy-only.
     fn sync_period(
         &self,
         payer: &MacroUserIdStr<'_>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        verified: Option<super::period::SubscriptionPeriod>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record the outcome of an overage invoice (webhook). Unknown invoices
     /// are ignored.
     fn mark_overage_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        paid: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record the outcome of a credit reload invoice (webhook). Unknown
+    /// invoices are ignored. A paid invoice books its credits once, even when
+    /// the collector already did, and settles; a failed one pauses automatic
+    /// reloads.
+    fn mark_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
         paid: bool,

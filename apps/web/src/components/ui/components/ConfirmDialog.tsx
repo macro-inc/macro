@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { ActionDialogShell } from './ActionDialogShell';
-import { Button } from './Button';
+import { Button, type ButtonVariant } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 import {
   type ManagedDialogProps,
@@ -18,6 +18,10 @@ export type ConfirmDialogDisplayProps = {
   /** Dialog copy. `children` is used when `body` is omitted. */
   body?: JSX.Element;
   children?: JSX.Element;
+  /** Phone-only artwork above centered copy and a single full-width action.
+   * Dismiss with the handle, backdrop, or Escape instead of a cancel button.
+   */
+  mobileHero?: JSX.Element;
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
   tone?: 'default' | 'danger' | 'success';
@@ -25,13 +29,9 @@ export type ConfirmDialogDisplayProps = {
   position?: DialogProps['position'];
   /** Dialog presentation only; the mobile drawer ignores it. */
   class?: string;
+  /** Lets the owning surface restore focus after a programmatic confirmation. */
+  onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
 };
-
-const TONE_VARIANT = {
-  default: 'accent',
-  danger: 'danger',
-  success: 'success',
-} as const;
 
 export type ConfirmDialogProps = ManagedDialogProps &
   ConfirmDialogDisplayProps & {
@@ -41,6 +41,11 @@ export type ConfirmDialogProps = ManagedDialogProps &
 
 /** Controlled confirmation UI: a dialog on desktop, a drawer on mobile. */
 export function ConfirmDialog(props: ConfirmDialogProps) {
+  const confirmVariant = (): ButtonVariant => {
+    if (props.tone === 'danger') return 'danger';
+    if (props.tone === 'success') return 'success';
+    return 'primary';
+  };
   return (
     <Show
       when={isMobile()}
@@ -48,6 +53,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         <Dialog
           open={props.open}
           onOpenChange={(open) => !props.pending && props.onOpenChange(open)}
+          onCloseAutoFocus={props.onCloseAutoFocus}
           position={props.position ?? 'center'}
           class={cn('w-110', props.class)}
           visibleScrim
@@ -65,8 +71,6 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               <Button
                 type="button"
                 variant="ghost"
-                depth={2}
-                class="rounded-lg"
                 disabled={props.pending}
                 onClick={() => props.onOpenChange(false)}
               >
@@ -74,9 +78,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               </Button>
               <Button
                 type="button"
-                variant={TONE_VARIANT[props.tone ?? 'default']}
-                depth={2}
-                class="rounded-lg"
+                variant={confirmVariant()}
                 disabled={props.pending}
                 onClick={props.onConfirm}
               >

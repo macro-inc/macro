@@ -105,3 +105,120 @@ async fn a_failed_one_shot_completion_marks_its_chat_span() {
     assert!(string_attribute(chat, attr::INPUT_MESSAGES).is_some());
     assert_eq!(string_attribute(chat, attr::OUTPUT_MESSAGES), None);
 }
+
+/// A minimal valid 1x1 PNG.
+#[rustfmt::skip]
+const ONE_BY_ONE_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+    0x0C, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+    0x00, 0x03, 0x01, 0x01, 0x00, 0xC9, 0xFE, 0x92, 0xEF, 0x00, 0x00, 0x00,
+    0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+];
+
+#[test]
+fn image_user_message_sends_the_instruction_and_a_webp() {
+    use rig_core::message::{DocumentSourceKind, ImageMediaType, UserContent};
+
+    let message =
+        image_user_message("Describe this image.", ONE_BY_ONE_PNG.to_vec()).expect("a valid png");
+    let Message::User { content } = message else {
+        panic!("expected a user message");
+    };
+    let blocks: Vec<_> = content.into_iter().collect();
+    assert_eq!(blocks.len(), 2);
+
+    let UserContent::Text(text) = &blocks[0] else {
+        panic!("expected the instruction first");
+    };
+    assert_eq!(text.text, "Describe this image.");
+
+    let UserContent::Image(image) = &blocks[1] else {
+        panic!("expected the image second");
+    };
+    assert_eq!(image.media_type, Some(ImageMediaType::WEBP));
+    assert!(matches!(image.data, DocumentSourceKind::Base64(_)));
+}
+
+#[test]
+fn image_user_message_rejects_bytes_that_are_not_an_image() {
+    image_user_message("Describe this image.", b"not an image".to_vec())
+        .expect_err("non-image bytes");
+}
+
+#[tokio::test]
+async fn one_shot_history_preserves_provider_parameters_and_traces_the_response() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let telemetry = GenAiContext::new(None, "extract".to_owned(), ContentPolicy::enabled(), true);
+    let mock = MockCompletionModel::new([MockTurn::text(r#"{"body":"hello"}"#)]);
+    let model = TracedModel::new(mock.clone(), telemetry.clone());
+    let params = serde_json::json!({
+        "reasoning_effort": "none",
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "Draft", "schema": {"type": "object"}
+        }}
+    });
+    let response = prompt_with_history(
+        model,
+        "extract JSON",
+        vec![Message::user("hello")],
+        telemetry,
+        Some(params.clone()),
+    )
+    .await
+    .expect("completion succeeds");
+    assert_eq!(response.output, r#"{"body":"hello"}"#);
+    assert_eq!(mock.requests()[0].additional_params, Some(params));
+    assert_eq!(mock.requests()[0].max_tokens, Some(ONE_SHOT_MAX_TOKENS));
+    assert_eq!(chat_spans(&finished(&exporter, &provider)).len(), 1);
+}
+
+#[tokio::test]
+async fn activated_one_shots_fail_before_routing_without_financial_capability() {
+    use ai_usage::financial::{FinancialCapability, FinancialMode};
+    use ai_usage::{AiFeature, NoOpUsageRecorder};
+
+    let usage = UsageContext::system(AiFeature::DynamicCompletionsApi);
+    let metering = MeteringContext::new(
+        FinancialMode::Activated,
+        FinancialCapability::Unavailable,
+        usage.clone(),
+        vec![],
+    );
+    metering
+        .scope(async {
+            let error = complete(
+                "unknown/model",
+                "system",
+                "hello",
+                &NoOpUsageRecorder,
+                usage.clone(),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+            let error = complete_with_history(
+                "unknown/model",
+                "system",
+                vec![Message::user("hello")],
+                &NoOpUsageRecorder,
+                usage.clone(),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+            let error = complete_with_history_and_params(
+                "unknown/model",
+                "system",
+                vec![Message::user("hello")],
+                Some(serde_json::json!({"reasoning_effort": "none"})),
+                &NoOpUsageRecorder,
+                usage,
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.to_string(), "financial capability unavailable");
+        })
+        .await;
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_funding_reservation (invocation_id, authorization_id, payer_id, sequence, user_id, period_start,\n                 admission, included_hold, prepaid_hold, postpaid_hold) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Timestamptz",
+        "Jsonb",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "928cb329088ea58f1d95f4b6a8d67ff1e160773a15198159a00656b3f8f5d827"
+}

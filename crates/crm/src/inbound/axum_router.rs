@@ -28,6 +28,9 @@ pub mod get_contact;
 /// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
+/// Search the caller's team's CRM contacts by email or name.
+pub mod search_contacts;
+
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
@@ -36,9 +39,6 @@ pub mod create_company;
 
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
-
-/// Comment threads on a `crm_companies` / `crm_contacts` row.
-pub mod comments;
 
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
@@ -54,7 +54,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, patch, post, put},
+    routing::{get, post, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
@@ -156,6 +156,10 @@ where
                 .post(create_contact::handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/contacts",
+            get(search_contacts::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/contacts/by-email",
             get(get_contact_by_email::handler::<C, St, Eas, Auth>),
         )
@@ -170,16 +174,6 @@ where
         .route(
             "/contacts/{contact_id}/name",
             put(set_contact_name::handler::<C, St, Eas, Auth>),
-        )
-        .route(
-            "/comments/{entity_type}/{entity_id}",
-            get(comments::list_handler::<C, St, Eas, Auth>)
-                .post(comments::create_handler::<C, St, Eas, Auth>),
-        )
-        .route(
-            "/comment/{comment_id}",
-            patch(comments::edit_handler::<C, St, Eas, Auth>)
-                .delete(comments::delete_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/settings",
@@ -207,24 +201,6 @@ impl IntoResponse for CrmError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "crm contact not found for team".into(),
-                }),
-            ),
-            CrmError::ThreadNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "crm comment thread not found".into(),
-                }),
-            ),
-            CrmError::CommentNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "crm comment not found".into(),
-                }),
-            ),
-            CrmError::CommentNotOwned => (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse {
-                    message: "you can only modify your own crm comments".into(),
                 }),
             ),
             CrmError::InvalidRequest(message) => (

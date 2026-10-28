@@ -1,6 +1,7 @@
 use crate::outbound::email_api::GmailApi;
 use crate::pubsub::util::publish_email_event;
 use anyhow::{Context, anyhow};
+use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
@@ -22,12 +23,13 @@ use uuid::Uuid;
 mod test;
 
 /// Syncs user's contacts with gmail
-pub async fn sync_contacts<B: MacroEventBroker>(
+pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress>(
     link: &Link,
     db: &PgPool,
     email_api: &GmailApi,
     sqs_client: &SQS,
     macro_event_broker: &B,
+    contacts_ingress: &I,
 ) -> anyhow::Result<()> {
     // 1. Get existing sync tokens from our DB
     let (contacts_sync_token, other_contacts_sync_token) =
@@ -44,6 +46,9 @@ pub async fn sync_contacts<B: MacroEventBroker>(
 
     // 3. If we received any new/updated contacts, process and store them.
     if !new_contacts.is_empty() {
+        // Connect the user to their address book before storing it, so a failed
+        // enqueue leaves the sync tokens untouched and the next sync retries.
+        connect_address_book(contacts_ingress, link, &new_contacts).await?;
         Box::pin(process_and_store_contacts(
             db,
             sqs_client,
@@ -60,6 +65,54 @@ pub async fn sync_contacts<B: MacroEventBroker>(
         .with_context(|| format!("Unable to insert new sync tokens for link_id: {}", link.id))?;
 
     Ok(())
+}
+
+/// The connections from the link's owner to each distinct, non-automated
+/// address in `contacts`.
+fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactConnection> {
+    let own_email = link.email_address.0.as_ref().to_ascii_lowercase();
+    let mut seen: HashSet<String> = HashSet::new();
+    contacts
+        .iter()
+        .filter_map(|contact| contact.email_address.as_deref())
+        .map(|email| email.trim().to_ascii_lowercase())
+        .filter(|email| {
+            !email.is_empty()
+                && *email != own_email
+                && !email_utils::is_generic_email(email)
+                && seen.insert(email.clone())
+        })
+        .filter_map(|email| match MacroUserIdStr::try_from_email(&email) {
+            Ok(contact) => Some(ContactConnection::new(link.macro_id.clone(), contact)),
+            Err(error) => {
+                // One malformed address must not drop the rest of the address book.
+                tracing::warn!(error = ?error, "skipping invalid address-book email");
+                None
+            }
+        })
+        .collect()
+}
+
+/// Connects the link's owner to everyone in their synced address book, so the
+/// people they know, not only the people they have emailed, show up wherever
+/// Macro suggests or @mentions a contact.
+async fn connect_address_book<I: ContactsIngress>(
+    contacts_ingress: &I,
+    link: &Link,
+    contacts: &[Contact],
+) -> anyhow::Result<()> {
+    if cfg!(not(feature = "contacts_sync")) {
+        return Ok(());
+    }
+    contacts_ingress
+        .enqueue_contact_connections(address_book_connections(link, contacts))
+        .await
+        .map_err(|error| {
+            anyhow!("{error:?}").context(format!(
+                "Unable to connect address book contacts for link_id: {}",
+                link.id
+            ))
+        })
 }
 
 /// Retrieves the current contact and other_contact sync tokens from the database for a given link.
@@ -126,7 +179,12 @@ async fn fetch_new_contacts_from_google(
     {
         Ok(contact_list) => {
             new_other_contacts_token = Some(contact_list.next_sync_token);
-            all_new_contacts.extend(contact_list.contacts);
+            all_new_contacts.extend(
+                contact_list
+                    .contacts
+                    .into_iter()
+                    .map(normalize_other_contact),
+            );
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");
@@ -146,6 +204,18 @@ async fn fetch_new_contacts_from_google(
 enum ContactListKind {
     Primary,
     Other,
+}
+
+/// Google builds "other contacts" from mail headers, not from anything the
+/// user saved, so their names get the same treatment as header names at
+/// message ingest. Without it, a shared sender such as `notifications@cal.com`
+/// keeps the name of the first person who wrote through it, and the address
+/// book then pins that person onto every message the address sends.
+fn normalize_other_contact(mut contact: Contact) -> Contact {
+    if let Some(email) = &contact.email_address {
+        contact.name = email_utils::normalize_contact_name(email, contact.name.as_deref());
+    }
+    contact
 }
 
 /// Lists one contact collection, retrying once from scratch when the stored

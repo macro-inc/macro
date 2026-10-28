@@ -22,24 +22,27 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// Per-user iOS push delivery targets.
+/// Per-user push delivery targets. Legacy names preserve queued iOS messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserApnsEndpoints {
     /// The iOS device endpoint ARNs for this user.
     pub endpoints: Vec<String>,
+    /// Android endpoints share the user's delivery/fallback decision with iOS.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub android_endpoints: Vec<String>,
     /// State machine data if the ingress decision was indeterminate for this user.
     #[serde(default)]
     pub digest_state: Option<Box<BatchSend<PushNotificationsEnabled>>>,
 }
 
-/// APNS push notification targets.
+/// Mobile push targets using the existing APNS content template and queue format.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct APNSTargets<T> {
     /// The APNS notification payload.
     pub notif: APNSPushNotification<T>,
     /// The APNS message attributes.
     pub attributes: MessageAttributes,
-    /// Per-user iOS device endpoints and optional state machine data.
+    /// Per-user iOS/Android endpoints and one shared fallback decision.
     pub ios_device_endpoints: HashMap<MacroUserIdStr<'static>, UserApnsEndpoints>,
 }
 
@@ -67,6 +70,9 @@ pub struct EmailNotification<'a> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EmailCreateBundle {
+    /// A connected address verified by the producing domain, for a single recipient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    destination: Option<MacroUserIdStr<'static>>,
     /// The email content (subject and body).
     content: EmailContent,
 
@@ -83,20 +89,27 @@ impl EmailCreateBundle {
         let rate_limit_key = notif.rate_limit_key();
         let content = notif.format_email();
         EmailCreateBundle {
+            destination: None,
             content,
             rate_limit_config,
             rate_limit_key,
         }
     }
 
+    pub(crate) fn with_destination(mut self, destination: MacroUserIdStr<'static>) -> Self {
+        self.destination = Some(destination);
+        self
+    }
+
     pub(crate) fn with_recipient<'a>(self, to: MacroUserIdStr<'a>) -> EmailNotification<'a> {
         let EmailCreateBundle {
+            destination,
             content,
             rate_limit_config,
             rate_limit_key,
         } = self;
         EmailNotification {
-            to,
+            to: destination.unwrap_or(to),
             content,
             rate_limit_config,
             rate_limit_key,
@@ -228,7 +241,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
 /// The delivery channel variants.
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum NotificationChannel<'a, T, U> {
-    /// Delivering to an iOS device with APNS.
+    /// Mobile push delivery; the legacy variant name preserves queued messages.
     Ios(Box<APNSTargets<U>>),
     /// Delivering to a user's email inbox.
     Email(EmailNotification<'a>),
@@ -332,6 +345,11 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
 }
 
 impl<'a, T, U> QueueMessage<'a, T, U> {
+    /// The notification type this message delivers.
+    pub(crate) fn message_type(&self) -> &str {
+        &self.message_type
+    }
+
     /// Consume the message and return its content.
     pub(crate) fn into_inner(self) -> NotificationChannel<'a, T, U> {
         self.content
@@ -435,6 +453,8 @@ pub struct RawQueueMessage {
 pub enum DeliverySuccess {
     /// Delivered via iOS push.
     Ios,
+    /// Delivered via Android push.
+    Android,
     /// Delivered via connection gateway (WebSocket).
     ConnGateway,
     /// Delivered via email.
@@ -450,9 +470,9 @@ pub enum DeliveryFailure {
     /// a timeout limit was reached trying to deliver the notif
     #[error("A timeout was reached")]
     Timeout,
-    /// a delivery error occurred with apns
-    #[error("An apns delivery error occurred")]
-    Ios,
+    /// A mobile push delivery error occurred with APNS or FCM.
+    #[error("A mobile push delivery error occurred")]
+    Mobile,
     /// A delivery error occurred.
     #[error("A delivery error occured")]
     Other,

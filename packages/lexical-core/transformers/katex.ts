@@ -2,7 +2,12 @@ import type {
   MultilineElementTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
-import type { TextNode } from 'lexical';
+import {
+  $isLineBreakNode,
+  $isTextNode,
+  type LexicalNode,
+  type TextNode,
+} from 'lexical';
 import {
   $createEquationNode,
   $isEquationNode,
@@ -82,6 +87,35 @@ export const E_INLINE_EQUATION_NODE: TextMatchTransformer = {
 
 // External Block Equation Node
 
+function isBlankText(node: LexicalNode): boolean {
+  return $isTextNode(node) && node.getTextContent().trim() === '';
+}
+
+/**
+ * Whether other content sits on the same line as `node` inside its parent.
+ * The match has already been split into its own text node, so anything
+ * between the nearest line breaks other than blank text is neighbouring
+ * prose.
+ */
+function $sharesLineWithContent(node: TextNode): boolean {
+  const scan = (
+    step: (current: LexicalNode) => LexicalNode | null
+  ): boolean => {
+    for (
+      let sibling = step(node);
+      sibling !== null && !$isLineBreakNode(sibling);
+      sibling = step(sibling)
+    ) {
+      if (!isBlankText(sibling)) return true;
+    }
+    return false;
+  };
+  return (
+    scan((current) => current.getPreviousSibling()) ||
+    scan((current) => current.getNextSibling())
+  );
+}
+
 export const E_BLOCK_EQUATION_NODE: TextMatchTransformer = {
   dependencies: [EquationNode],
   type: 'text-match',
@@ -100,7 +134,12 @@ export const E_BLOCK_EQUATION_NODE: TextMatchTransformer = {
     try {
       const [equationMatch] = match;
       const equation = equationMatch.replace(/^\$\$|\$\$$/g, '');
-      const equationNode = $createEquationNode(equation, false);
+      // `$$…$$` is display math only when it has the line to itself. Models
+      // routinely wrap amounts in `$$…$$` mid-sentence, and a centred block
+      // with vertical margins inside a line of prose renders far above the
+      // text around it.
+      const inline = $sharesLineWithContent(node);
+      const equationNode = $createEquationNode(equation, inline);
       node.replace(equationNode);
     } catch (e) {
       console.error('Error creating equation node:', e);

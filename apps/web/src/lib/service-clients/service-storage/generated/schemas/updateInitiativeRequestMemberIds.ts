@@ -6,6 +6,6 @@
  */
 
 /**
- * Full replacement member list when present.
+ * Full replacement collaborator list when present. Only the owner may send this field.
  */
 export type UpdateInitiativeRequestMemberIds = string[] | null;

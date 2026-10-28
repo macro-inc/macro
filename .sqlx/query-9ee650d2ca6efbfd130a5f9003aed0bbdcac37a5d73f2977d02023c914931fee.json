@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_transfers SET lease_until=now()+interval '5 minutes' WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND state='cleanup'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ee650d2ca6efbfd130a5f9003aed0bbdcac37a5d73f2977d02023c914931fee"
+}

@@ -17,6 +17,10 @@ const SERVICE_NAMES = [
   'email-service',
   'document-cognition',
   'agent-harness-service',
+  'preview-gateway',
+  'slack-import-worker',
+  'lexical-service',
+  'whatsapp-session-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {

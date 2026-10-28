@@ -18,6 +18,8 @@ export type BulkUpdateEntityPropertyOptionsParams = {
   entityType: EntityType;
   properties: Array<{
     property: Property | PropertyDefinitionDomain;
+    /** Preserve assignment identity without losing the definition's TAG data type. */
+    assignmentId?: string;
     currentOptionIds: string[];
     nextOptionIds: string[];
   }>;
@@ -41,9 +43,8 @@ function propertyDefinitionIdOf(
 }
 
 /**
- * Optimistic overlay for a tag source a mutation cannot write through: query
- * results, and soup rows whose property record does not exist yet (an entity's
- * first tag from a set has no assignment id until the server answers). Returns
+ * Optimistic overlay for sources outside the mutation's normalized cache and
+ * edits waiting for their turn in the per-entity mutation scope. Returns
  * the option ids an in-flight update is applying, or `undefined` when nothing is
  * in flight for the property, so callers fall back to the persisted value. On
  * settle the mutation leaves `pending` and the overlay disappears — no manual

@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
+import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
 import type { NotifEventOneOfTwooneTag } from './notifEventOneOfTwooneTag';
 
 /**
- * A linked inbox's grant died and must be reconnected.
+ * A user sent a message in a channel.
  */
 export type NotifEventOneOfTwoone = {
-  /** A linked inbox's grant died and must be reconnected. */
-  content: InboxReauthRequiredMetadata;
+  /** A user sent a message in a channel. */
+  content: ChannelMessageSendMetadata;
   tag: NotifEventOneOfTwooneTag;
 };

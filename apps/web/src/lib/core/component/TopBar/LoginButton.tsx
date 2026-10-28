@@ -16,18 +16,16 @@ export function LoginButton() {
   return (
     <div class="flex gap-2 justify-center w-max items-center">
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
-        class="rounded-xs"
         onClick={() => navigate(`/login${window.location.search}`)}
       >
         Login
       </Button>
       <span class="text-xs text-ink-muted italic">or</span>
       <Button
-        variant="accent"
+        variant="primary"
         size="sm"
-        class="rounded-xs"
         onClick={() => navigate(`/welcome${window.location.search}`)}
       >
         Sign Up

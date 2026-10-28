@@ -11,6 +11,7 @@ export function SettingsSelect(props: {
   disabled?: boolean;
   placeholder?: string;
   class?: string;
+  triggerClass?: string;
 }) {
   return (
     <Select<SettingsOption>
@@ -24,7 +25,10 @@ export function SettingsSelect(props: {
       placeholder={props.placeholder}
       disallowEmptySelection
     >
-      <Select.Trigger aria-label={props.label} class="settings-input w-full">
+      <Select.Trigger
+        aria-label={props.label}
+        class={props.triggerClass ?? 'settings-input w-full'}
+      >
         <Select.Value<SettingsOption>>
           {(state) => state.selectedOption().name}
         </Select.Value>

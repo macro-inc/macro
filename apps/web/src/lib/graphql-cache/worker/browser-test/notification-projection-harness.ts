@@ -1,3 +1,8 @@
+import {
+  ChannelDetailSoupDocument,
+  ChannelUnreadPresenceDocument,
+} from '@service-storage/graphql/generated/graphql';
+import { print } from 'graphql';
 import { createWorkerCacheHost } from '../../host/worker-host';
 
 const node = document.querySelector<HTMLElement>('#result');
@@ -16,7 +21,7 @@ const ids = [
 const nil = '00000000-0000-0000-0000-000000000000';
 const snapshotQuery = `query Snapshot {
   user { id soup(input: { initial: { limit: 20 } }) { items {
-    __typename id cacheProjection
+    __typename id cacheProjection isFavorited
     properties { id }
     notifications { id entityId entityType state }
     ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
@@ -101,6 +106,7 @@ const snapshot = (
             id: entityId,
             cacheProjection: null,
             properties: [],
+            isFavorited: false,
             ownerId: 'macro|viewer@example.com',
             parentId: null,
             createdAt: '2025-01-01T00:00:00Z',
@@ -136,6 +142,77 @@ const markDone = (id: string) =>
   );
 
 try {
+  if (channel) {
+    const sidebar = {
+      query: print(ChannelUnreadPresenceDocument),
+      variables: { input: { initial: { limit: 20 } } },
+    };
+    const staleChannels = [projectId, ids[1]].map((id, index) => ({
+      __typename: 'GraphqlSoupChannel',
+      id,
+      unreadNotifications: [{ id: ids[index], state: 'UNSEEN' }],
+    }));
+    await host.writeQuery({
+      ...sidebar,
+      data: { user: { id: 'viewer', soup: { items: staleChannels } } },
+    });
+    const initial = await host.readQuery(sidebar);
+    if (initial.kind !== 'hit') throw new Error('unread sidebar missed');
+    report.push('Before opening: two cached unread conversations');
+
+    // Another device read the first conversation, but this client missed its
+    // realtime patch. Opening must repair the sidebar with this response alone.
+    await host.writeQuery({
+      query: print(ChannelDetailSoupDocument),
+      variables: {
+        input: {
+          initial: {
+            limit: 1,
+            filters: { channelFilter: { literal: { channelId: projectId } } },
+          },
+        },
+      },
+      data: {
+        user: {
+          id: 'viewer',
+          soup: {
+            items: [
+              {
+                __typename: 'GraphqlSoupChannel',
+                id: projectId,
+                notifications: [],
+                sidebarUnreadNotifications: [],
+              },
+            ],
+          },
+        },
+      },
+    });
+    const reconciled = await host.readQuery(sidebar);
+    const expected = {
+      user: {
+        id: 'viewer',
+        soup: {
+          items: [
+            { ...staleChannels[0], unreadNotifications: [] },
+            staleChannels[1],
+          ],
+        },
+      },
+    };
+    if (
+      reconciled.kind !== 'hit' ||
+      JSON.stringify(reconciled.data) !== JSON.stringify(expected)
+    ) {
+      throw new Error(
+        `Opening did not reconcile unread dots: ${JSON.stringify(reconciled)}`
+      );
+    }
+    report.push(
+      'Open remotely read conversation: its dot clears; other dot stays'
+    );
+    await host.clear();
+  }
   await seed();
   await expectCount('Secondary edges preserve local filtering', 'UNSEEN', 1);
   if (channel) {

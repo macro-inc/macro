@@ -1,67 +1,31 @@
+import { t } from '@app/lib/i18n';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import {
   useForegroundMobileView,
   useMobileNavNavigate,
 } from '@components/app/mobile/use-mobile-nav';
-import { hapticImpact } from '@core/mobile/haptics';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
-import XIcon from '@phosphor/x.svg';
-import { cn } from '@ui';
-import { createEffect, on } from 'solid-js';
+import { lazyNamed } from '@core/util/lazyNamed';
+import XIcon from '@icon/system/regular/x.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { CommandMenuSearchInput } from '@ui';
+import { createSignal, Show, Suspense } from 'solid-js';
+import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { SearchState } from './mobileSearchState';
-import { openMobileAskAi } from './open-mobile-ask-ai';
 
-// This component only writes the global session state. The active split's
-// bridge effect (see soup-view-context) mirrors the session into its own
-// search text — the input lives in the app chrome outside every split and
-// stays mounted for the whole session, so switching scope views never
-// remounts (and thereby blurs) it. It mounts and unmounts only with the
-// session itself (see MobileDockRow's search layout).
+const MobileUniversalInput = lazyNamed(
+  () => import('../../universal-input/universal-input'),
+  'MobileUniversalInput'
+);
 
-/**
- * Sends the current query to a new AI conversation and ends the search session.
- */
-function submitAskAi() {
-  const query = SearchState.query().trim();
-  if (!query) return;
-  openMobileAskAi(query);
-  SearchState.close();
-}
-
-/**
- * "Ask AI" island shown beside the search input while a session is active
- * (see MobileDockRow's search layout).
- */
-export function MobileAskAiButton() {
-  const hasQuery = () => SearchState.query().trim().length > 0;
-
-  return (
-    <button
-      type="button"
-      // Tapping it must not drop the keyboard before the action runs.
-      data-keep-keyboard
-      class={cn(
-        'island pointer-events-auto flex h-11 shrink-0 items-center rounded-full px-3 text-xs font-medium',
-        hasQuery() ? 'bg-accent text-chrome' : 'text-ink-extra-muted'
-      )}
-      onPointerDown={(e) => {
-        // Keep the input focused while tapping.
-        e.preventDefault();
-        hapticImpact('light');
-      }}
-      onClick={() => submitAskAi()}
-    >
-      Ask AI
-    </button>
-  );
-}
-
-/**
- * The dock search bar ("Search or ask AI..."). Focusing it opens the search
- * session while the current view stays visible; a typed term feeds the
- * selected view's own soup search directly.
- */
+// The input lives in app chrome, outside result/category boundaries, and stays
+// mounted throughout the session so switching categories preserves the keyboard.
 export function MobileSearchInput() {
-  let containerRef: HTMLDivElement | undefined;
+  const [container, setContainer] = createSignal<HTMLDivElement>();
+  const inputSize = createElementSize(container);
+  let inputRef: HTMLTextAreaElement | undefined;
+  const universalInputEnabled = useUniversalInputEnabled();
+  const [sending, setSending] = createSignal(false);
 
   const foregroundView = useForegroundMobileView();
   const navigate = useMobileNavNavigate();
@@ -69,76 +33,105 @@ export function MobileSearchInput() {
   // iOS ends the editing session (dropping the keyboard) while processing
   // button taps even when pointerdown is cancelled. This keeps the input
   // focused for taps on its own buttons and on [data-keep-keyboard] regions —
-  // notably the pill rows, so switching search scope keeps the keyboard up.
-  usePreserveFocusOnButtonTaps(() => containerRef);
+  // notably the category pills, so switching categories keeps the keyboard up.
+  usePreserveFocusOnButtonTaps(container);
 
-  const hasQuery = () => SearchState.query().trim().length > 0;
-
-  // Opening an entity ends the session (and with it the view's search
-  // filter). Pill navigation between views keeps it —
-  // and a session started while an entity is already foregrounded stays too
-  // (both sides undefined).
-  createEffect(
-    on(foregroundView, (view, prevView) => {
-      if (!SearchState.isOpen()) return;
-      if (prevView !== undefined && view === undefined) SearchState.close();
-    })
-  );
-
-  // The X is how search mode ends (besides opening a result): close() resets
+  // The X explicitly ends search: close() resets
   // the query and unmounts the search row with its input (dropping the
-  // keyboard). The All view only exists for searching, so exiting from it
+  // keyboard). The Search view only exists for searching, so exiting from it
   // returns to the default view.
   const handleClear = () => {
+    if (universalInputEnabled() && SearchState.session().universalInputActive())
+      SearchState.session().setQuery('');
     SearchState.close();
     if (foregroundView() === 'search') navigate('home');
   };
 
   return (
-    <div
-      ref={(el) => {
-        containerRef = el;
-      }}
-      class="island pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-1 rounded-full pr-1 pl-4"
-    >
-      <input
-        id="mobile-search-input"
-        type="text"
-        enterkeyhint="search"
-        class="h-full min-w-0 flex-1 border-0 bg-transparent text-ink outline-none ring-0 placeholder:text-ink-placeholder focus:outline-none focus:ring-0"
-        placeholder="Search or ask AI..."
-        value={SearchState.query()}
-        onFocus={() => {
-          if (!SearchState.isOpen()) SearchState.open();
-          // With nothing typed a search starts from the everything ("All")
-          // view; an existing term keeps its current scope.
-          if (!hasQuery() && foregroundView() !== 'search') navigate('search');
-        }}
-        // Blurring never ends the session — the keyboard drops but search
-        // mode stays until the X is pressed (or a result opens).
-        onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          // Enter (the keyboard's Search key) drops the keyboard; the view is
-          // already live-filtering. Not while an IME composition is being
-          // confirmed.
-          if (e.key !== 'Enter' || e.isComposing) return;
-          e.currentTarget.blur();
-        }}
-      />
-      {/* The input only mounts while a session is open, so the X is always
-          available as the exit. */}
-      <button
-        type="button"
-        class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
-        aria-label="Close search"
-        onPointerDown={(e) => {
-          e.preventDefault();
-          hapticImpact('light');
-        }}
-        onClick={handleClear}
+    <>
+      <Show
+        when={
+          universalInputEnabled() &&
+          SearchState.session().universalInputActive() &&
+          SearchState.session()
+        }
+        keyed
       >
-        <XIcon class="size-4" />
-      </button>
-    </div>
+        {(session) => (
+          <Suspense>
+            <MobileUniversalInput
+              text={session.query()}
+              editor={null}
+              onTextChange={session.setQuery}
+              onSendingChange={setSending}
+              onComplete={() => {
+                session.setQuery('');
+                if (SearchState.isOpen()) inputRef?.focus();
+              }}
+              onNavigate={() => {
+                session.setQuery('');
+                SearchState.close();
+              }}
+              layout={(parts) => (
+                <FloatRegion region="accessory" priority={101}>
+                  <div
+                    data-keep-keyboard
+                    aria-label="Suggested action"
+                    class="pointer-events-auto px-(--mobile-chrome-gutter)"
+                    style={{
+                      '--universal-input-max-height': `max(0px, calc(var(--dvh, 1dvh) * 100 - var(--mobile-content-inset-top, 0px) - ${inputSize.height ?? 44}px - var(--mobile-chrome-gutter) * 3 - var(--safe-bottom, 0px)))`,
+                      '--universal-input-body-overflow': 'auto',
+                    }}
+                  >
+                    {parts.fields}
+                    {parts.result}
+                  </div>
+                </FloatRegion>
+              )}
+            />
+          </Suspense>
+        )}
+      </Show>
+      <div
+        ref={setContainer}
+        class="island pointer-events-auto flex min-h-11 min-w-0 flex-1 items-end gap-1 rounded-[22px] py-1 pr-1 pl-4"
+      >
+        <CommandMenuSearchInput
+          as="textarea"
+          ref={inputRef}
+          id="mobile-search-input"
+          aria-label={
+            universalInputEnabled()
+              ? t('commandMenu.mobileSearchOrCreate')
+              : t('commandMenu.hintSearch')
+          }
+          readOnly={sending()}
+          aria-busy={sending()}
+          enterkeyhint="enter"
+          class="min-h-9 max-h-32 py-1.5 text-base text-ink"
+          placeholder={t('commandMenu.mobileSearchPlaceholder')}
+          value={SearchState.query()}
+          // Blurring never ends the session — the keyboard drops but search
+          // mode stays until the X is pressed or navigation covers this entry.
+          onInput={(e) => {
+            if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
+          }}
+          onCompositionEnd={(e) => SearchState.setQuery(e.currentTarget.value)}
+        />
+        {/* The input only mounts while a session is open, so the X is always
+          available as the exit. */}
+        <button
+          type="button"
+          class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+          aria-label={t('commandMenu.closeSearch')}
+          onPointerDown={(e) => {
+            e.preventDefault();
+          }}
+          onClick={handleClear}
+        >
+          <XIcon class="size-4" />
+        </button>
+      </div>
+    </>
   );
 }

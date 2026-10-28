@@ -103,6 +103,8 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::Call
             | EntityType::AgentSession
             | EntityType::Initiative
+            | EntityType::Database
+            | EntityType::ExternalChat
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
     }
@@ -110,8 +112,9 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
 }
 
 /// Load actual owner, current membership and canonical state under the shared guard.
-/// Threads and sessions without permissions read as NULL/revision zero without creating rows.
-/// Tasks and snippets use Document, and active calls take precedence during archive.
+/// Threads, sessions and databases without permissions read as NULL/revision zero
+/// without creating rows.
+/// Tasks and snippets use Document; calls resolve their durable entity.
 pub async fn load_facts(
     transaction: &mut Transaction<'_, Postgres>,
     entity: &Entity<'_>,
@@ -143,17 +146,20 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             LEFT JOIN "EmailThreadPermission" tp ON tp."threadId" = t.id::text
             WHERE $2 = 'email_thread' AND t.id = $3
             UNION ALL
-            SELECT c.created_by, c.share_permission_id FROM calls c
+            SELECT c.user_id, c.share_permission_id FROM call_entities c
             WHERE $2 = 'call' AND c.id = $3
-            UNION ALL
-            SELECT c.created_by, c.share_permission_id FROM call_records c
-            WHERE $2 = 'call' AND c.id = $3 AND NOT EXISTS (SELECT 1 FROM calls WHERE id = $3)
             UNION ALL
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
             UNION ALL
+            SELECT g.user_id, g.share_permission_id FROM external_chat g
+            WHERE $2 = 'external_chat' AND g.id = $3
+            UNION ALL
             SELECT s.owner_id, s.share_permission_id FROM agent_session s
             WHERE $2 = 'agent_session' AND s.id = $3
+            UNION ALL
+            SELECT d.user_id, d.share_permission_id FROM database_entities d
+            WHERE $2 = 'database' AND d.database_id = $3
         )
         SELECT e.owner AS "owner!", e.permission_id,
             sp.id AS "stored_permission_id?",
@@ -179,7 +185,7 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
         && (row.permission_id.is_some()
             || !matches!(
                 entity.entity_type,
-                EntityType::EmailThread | EntityType::AgentSession
+                EntityType::EmailThread | EntityType::AgentSession | EntityType::Database
             ))
     {
         return Err(report!(TeamShareError::InvalidState));
@@ -333,6 +339,9 @@ pub async fn restore_cleared(
             SELECT 1 FROM "Project" WHERE $2 = 'project' AND id = $1 AND "deletedAt" IS NOT NULL
             UNION ALL
             SELECT 1 FROM "Chat" WHERE $2 = 'chat' AND id = $1 AND "deletedAt" IS NOT NULL
+            UNION ALL
+            SELECT 1 FROM database_entities
+            WHERE $2 = 'database' AND database_id::text = $1 AND trashed_at IS NOT NULL
         ) AS "deleted!""#,
         previous.entity.entity_id.as_ref(),
         previous.entity.entity_type.as_ref(),
@@ -374,6 +383,20 @@ pub async fn initialize(
         .resolve(state.facts.owner_team_id)
         .context(TeamShareError::InvalidState)?;
     if target.is_none() {
+        return Ok(());
+    }
+    if let Some(target) = target
+        && state.facts.owner_team_id == Some(target.team_id)
+        && direct_level(
+            transaction.as_mut(),
+            &entity_uuid(entity)?,
+            entity.entity_type,
+            target.team_id,
+        )
+        .await
+        .context(TeamShareError::Infrastructure)?
+            == Some(AccessLevel::Owner)
+    {
         return Ok(());
     }
     reject_untracked(transaction.as_mut(), &state.facts, target).await?;

@@ -3,7 +3,7 @@ import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 
 /**
- * A vertical nav row rendered as a navigation {@link Button}: the shared base/active
+ * A vertical nav row rendered as a ghost {@link Button}: the shared base/active
  * styling for sidebar-style rows (icon + label). Used by the settings `SideNav`
  * and the app sidebar's row components so the row visuals live in one place.
  *
@@ -17,7 +17,7 @@ export const NavRow = (props: NavRowProps) => {
   const [local, rest] = splitProps(props, ['active', 'class']);
   return (
     <Button
-      variant="navigation"
+      variant="ghost"
       {...rest}
       class={cn(
         'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 px-2 text-ink-extra-muted',

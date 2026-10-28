@@ -13,6 +13,14 @@ use crate::domain::ports::MockSurfaceInitializer;
 
 const SECRET: &str = "test-secret";
 
+mod ensure;
+mod form_ids;
+mod form_surfaces;
+mod namespace;
+mod owned;
+mod owned_state;
+mod tokens;
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).unwrap()
 }
@@ -44,11 +52,35 @@ fn edit_permission() -> EntityPermission {
     }
 }
 
-/// In-memory repo: one optional surface plus operation flags.
+/// In-memory repo: one optional surface plus operation flags. Also stands in
+/// for the document namespace and the forms domain's ids.
 #[derive(Default)]
 struct MemRepo {
     surface: std::sync::Mutex<Option<CollabSurface>>,
     soft_deleted: AtomicBool,
+    /// Whether every id reads as naming an existing document.
+    document_ids: AtomicBool,
+    /// How many times the document namespace was consulted.
+    document_lookups: AtomicUsize,
+    /// How many upcoming `mark_ready` calls fail.
+    mark_ready_failures: AtomicUsize,
+    /// The ids that name a form, live or trashed.
+    form_ids: std::sync::Mutex<Vec<Uuid>>,
+    /// How many times the forms domain's ids were consulted.
+    form_lookups: AtomicUsize,
+}
+
+impl MemRepo {
+    /// A repo already holding `surface`, as an earlier ensure left it.
+    fn holding(surface: CollabSurface) -> Arc<Self> {
+        let repo = Arc::new(Self::default());
+        *repo.surface.lock().unwrap() = Some(surface);
+        repo
+    }
+
+    fn stored(&self) -> Option<CollabSurface> {
+        self.surface.lock().unwrap().clone()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -82,6 +114,13 @@ impl CollabSurfaceRepo for Arc<MemRepo> {
     }
 
     async fn mark_ready(&self, _id: Uuid) -> Result<(), MemErr> {
+        if self
+            .mark_ready_failures
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(MemErr);
+        }
         if let Some(s) = self.surface.lock().unwrap().as_mut() {
             s.state = SurfaceState::Ready;
         }
@@ -92,344 +131,128 @@ impl CollabSurfaceRepo for Arc<MemRepo> {
         self.soft_deleted.store(true, Ordering::SeqCst);
         Ok(())
     }
+
+    async fn is_deleted(&self, id: Uuid) -> Result<bool, MemErr> {
+        Ok(self.soft_deleted.load(Ordering::SeqCst)
+            && self
+                .surface
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|s| s.id == id))
+    }
 }
 
-fn service_with(
-    repo: Arc<MemRepo>,
-    initializer: MockSurfaceInitializer,
-) -> CollabSurfaceServiceImpl<Arc<MemRepo>, MockSurfaceInitializer> {
-    CollabSurfaceServiceImpl::new(Arc::new(repo), Arc::new(initializer), SECRET.to_string())
+impl DocumentIds for Arc<MemRepo> {
+    async fn is_document_id(&self, _id: Uuid) -> Result<bool, rootcause::Report> {
+        self.document_lookups.fetch_add(1, Ordering::SeqCst);
+        Ok(self.document_ids.load(Ordering::SeqCst))
+    }
 }
 
-#[tokio::test]
-async fn ensure_creates_initializes_then_marks_ready() {
-    let repo = Arc::new(MemRepo::default());
+impl FormIds for Arc<MemRepo> {
+    async fn is_form_id(&self, id: Uuid) -> Result<bool, rootcause::Report> {
+        self.form_lookups.fetch_add(1, Ordering::SeqCst);
+        Ok(self.form_ids.lock().unwrap().contains(&id))
+    }
+}
+
+type TestService =
+    CollabSurfaceServiceImpl<Arc<MemRepo>, MockSurfaceInitializer, Arc<MemRepo>, Arc<MemRepo>>;
+
+fn service_with(repo: Arc<MemRepo>, initializer: MockSurfaceInitializer) -> TestService {
+    CollabSurfaceServiceImpl::new(
+        Arc::new(repo.clone()),
+        Arc::new(initializer),
+        Arc::new(repo.clone()),
+        SECRET.to_string(),
+    )
+    .with_form_ids(Arc::new(repo))
+}
+
+/// An initializer that finds no session under any id yet.
+fn no_sessions() -> MockSurfaceInitializer {
     let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    init.expect_session_exists()
+        .returning(|_| Box::pin(async { Ok(false) }));
+    init
+}
 
-    let svc = service_with(repo.clone(), init);
-    let receipt = receipt_for(
+/// A pending surface an earlier ensure left behind.
+fn pending_surface(id: Uuid) -> CollabSurface {
+    let now = chrono::Utc::now();
+    CollabSurface {
+        id,
+        parent: EntityType::Channel.with_entity_string("chan-1".to_string()),
+        state: SurfaceState::Pending,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+fn channel_receipt() -> EntityAccessReceipt<AnyEntityPermission> {
+    receipt_for(
         "macro|a@b.c",
         EntityType::Channel,
         "chan-1",
         edit_permission(),
-    );
-    let id = surface_id();
-    let surface = svc
-        .ensure_surface(&user("macro|a@b.c"), receipt, id, "# hi".to_string())
-        .await
-        .unwrap();
-
-    assert_eq!(surface.id, id);
-    assert_eq!(surface.state, SurfaceState::Ready);
-    assert_eq!(
-        repo.surface.lock().unwrap().as_ref().unwrap().state,
-        SurfaceState::Ready
-    );
+    )
 }
 
-#[tokio::test]
-async fn ensure_is_idempotent_for_a_ready_surface() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    // Exactly one initialization across both ensures: the second sees a
-    // ready surface and does not touch the initializer.
-    init.expect_initialize()
-        .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-
-    let svc = service_with(repo.clone(), init);
-    let id = surface_id();
-    let make_receipt = || {
-        receipt_for(
-            "macro|a@b.c",
-            EntityType::Channel,
-            "chan-1",
-            edit_permission(),
-        )
-    };
-
-    let first = svc
-        .ensure_surface(&user("macro|a@b.c"), make_receipt(), id, "# hi".to_string())
-        .await
-        .unwrap();
-    let second = svc
-        .ensure_surface(
-            &user("macro|a@b.c"),
-            make_receipt(),
-            id,
-            "# different seed, ignored".to_string(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(first.id, second.id);
-    assert_eq!(second.state, SurfaceState::Ready);
+fn initiative_parent(id: Uuid) -> Entity<'static> {
+    EntityType::Initiative.with_entity_string(id.to_string())
 }
 
-#[tokio::test]
-async fn ensure_retries_init_for_a_pending_surface() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    // First ensure: init fails, row stays pending. Second ensure: init
-    // succeeds and the surface becomes ready.
-    let calls = Arc::new(AtomicUsize::new(0));
-    let calls_in_mock = calls.clone();
-    init.expect_initialize().times(2).returning(move |_, _| {
-        let call = calls_in_mock.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async move {
-            if call == 0 {
-                Err(CollabSurfaceError::Internal(
-                    rootcause::Report::new(MemErr).into_dynamic(),
-                ))
-            } else {
-                Ok(())
-            }
-        })
-    });
-
-    let svc = service_with(repo.clone(), init);
-    let id = surface_id();
-    let make_receipt = || {
-        receipt_for(
-            "macro|a@b.c",
-            EntityType::Channel,
-            "chan-1",
-            edit_permission(),
-        )
-    };
-
-    let err = svc
-        .ensure_surface(&user("macro|a@b.c"), make_receipt(), id, String::new())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::Internal(_)));
-    // The row survives as pending — no unwind.
-    assert_eq!(
-        repo.surface.lock().unwrap().as_ref().unwrap().state,
-        SurfaceState::Pending
-    );
-
-    let surface = svc
-        .ensure_surface(&user("macro|a@b.c"), make_receipt(), id, String::new())
-        .await
-        .unwrap();
-    assert_eq!(surface.state, SurfaceState::Ready);
-}
-
-#[tokio::test]
-async fn ensure_maps_insert_conflict_on_deleted_id_to_gone() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-
-    let svc = service_with(repo.clone(), init);
-    let id = surface_id();
-    let make_receipt = || {
-        receipt_for(
-            "macro|a@b.c",
-            EntityType::Channel,
-            "chan-1",
-            edit_permission(),
-        )
-    };
-
-    svc.ensure_surface(&user("macro|a@b.c"), make_receipt(), id, String::new())
-        .await
-        .unwrap();
-    svc.delete_surface(&user("macro|a@b.c"), make_receipt(), id)
-        .await
-        .unwrap();
-
-    let err = svc
-        .ensure_surface(&user("macro|a@b.c"), make_receipt(), id, String::new())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::Gone));
-}
-
-#[tokio::test]
-async fn ensure_rejects_mismatched_parent() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-    let svc = service_with(repo, init);
-    let id = surface_id();
-
-    let chan1_receipt = receipt_for(
+fn initiative_receipt(id: Uuid) -> EntityAccessReceipt<AnyEntityPermission> {
+    receipt_for(
         "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
+        EntityType::Initiative,
+        &id.to_string(),
         edit_permission(),
-    );
-    svc.ensure_surface(&user("macro|a@b.c"), chan1_receipt, id, String::new())
-        .await
-        .unwrap();
-
-    // Ensuring the same id against a different parent must fail: the id is
-    // bound to chan-1, and a receipt for chan-2 proves nothing about it.
-    let chan2_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-2",
-        edit_permission(),
-    );
-    let err = svc
-        .ensure_surface(&user("macro|a@b.c"), chan2_receipt, id, String::new())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+    )
 }
 
-#[tokio::test]
-async fn ensure_rejects_receipt_for_other_user() {
-    let repo = Arc::new(MemRepo::default());
-    let svc = service_with(repo, MockSurfaceInitializer::new());
-    let receipt = receipt_for(
-        "macro|other@b.c",
-        EntityType::Channel,
-        "chan-1",
-        edit_permission(),
-    );
-    let err = svc
-        .ensure_surface(&user("macro|a@b.c"), receipt, surface_id(), String::new())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+/// A ready surface its parent initiative's domain owns, with the initiative's id.
+fn ready_initiative_surface(id: Uuid) -> CollabSurface {
+    let now = chrono::Utc::now();
+    CollabSurface {
+        id,
+        parent: initiative_parent(id),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    }
 }
 
-#[tokio::test]
-async fn mint_token_maps_channel_role_to_edit() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-    let svc = service_with(repo, init);
-
-    let channel_role = EntityPermission::ChannelRole {
-        role: ParticipantRole::Member,
-    };
-    let create_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
-        channel_role.clone(),
-    );
-    let surface = svc
-        .ensure_surface(
-            &user("macro|a@b.c"),
-            create_receipt,
-            surface_id(),
-            String::new(),
-        )
-        .await
-        .unwrap();
-
-    let mint_receipt = receipt_for("macro|a@b.c", EntityType::Channel, "chan-1", channel_role);
-    let token = svc
-        .mint_token(&user("macro|a@b.c"), mint_receipt, surface.id)
-        .await
-        .unwrap();
-
-    let claims: model::document::DocumentPermissionsToken =
-        macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
-    assert_eq!(claims.document_id, surface.id.to_string());
-    assert_eq!(claims.access_level, AccessLevel::Edit);
+fn form_parent(id: Uuid) -> Entity<'static> {
+    EntityType::Form.with_entity_string(id.to_string())
 }
 
-#[tokio::test]
-async fn mint_token_rejects_receipt_for_wrong_parent() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-    let svc = service_with(repo, init);
-
-    let create_receipt = receipt_for(
+fn form_receipt(id: Uuid, access_level: AccessLevel) -> EntityAccessReceipt<AnyEntityPermission> {
+    receipt_for(
         "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
-        edit_permission(),
-    );
-    let surface = svc
-        .ensure_surface(
-            &user("macro|a@b.c"),
-            create_receipt,
-            surface_id(),
-            String::new(),
-        )
-        .await
-        .unwrap();
-
-    // Receipt proves access to a different channel than the surface's parent.
-    let wrong_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-2",
-        edit_permission(),
-    );
-    let err = svc
-        .mint_token(&user("macro|a@b.c"), wrong_receipt, surface.id)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+        EntityType::Form,
+        &id.to_string(),
+        EntityPermission::AccessLevel { access_level },
+    )
 }
 
-#[tokio::test]
-async fn delete_requires_edit_capable_permission() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
-    init.expect_initialize()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
-    let svc = service_with(repo.clone(), init);
+/// A ready surface its parent form's domain owns, with the form's id.
+fn ready_form_surface(id: Uuid) -> CollabSurface {
+    let now = chrono::Utc::now();
+    CollabSurface {
+        id,
+        parent: form_parent(id),
+        state: SurfaceState::Ready,
+        created_at: now,
+        updated_at: now,
+    }
+}
 
-    let create_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
-        edit_permission(),
-    );
-    let surface = svc
-        .ensure_surface(
-            &user("macro|a@b.c"),
-            create_receipt,
-            surface_id(),
-            String::new(),
-        )
-        .await
-        .unwrap();
-
-    // View-only presence cannot delete.
-    let view_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
-        EntityPermission::ChannelViewOnly,
-    );
-    let err = svc
-        .delete_surface(&user("macro|a@b.c"), view_receipt, surface.id)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::AccessDenied));
-
-    // Member can.
-    let member_receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Channel,
-        "chan-1",
-        EntityPermission::ChannelRole {
-            role: ParticipantRole::Member,
-        },
-    );
-    svc.delete_surface(&user("macro|a@b.c"), member_receipt, surface.id)
-        .await
-        .unwrap();
-
-    // Deleted surfaces read as absent.
-    let gone = svc.get_parent(surface.id).await.unwrap_err();
-    assert!(matches!(gone, CollabSurfaceError::NotFound));
+/// The current unix time in seconds, for checking a token's expiry window.
+fn unix_now() -> usize {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize
 }

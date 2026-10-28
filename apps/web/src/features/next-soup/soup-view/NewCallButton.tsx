@@ -2,19 +2,22 @@ import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
-export function NewCallButton() {
+export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -82,7 +85,13 @@ export function NewCallButton() {
 
   return (
     <>
-      <NewMeetingButton onChannelCall={() => setIsOpen(true)} />
+      <NewMeetingButton
+        presentation={
+          isTouchDevice() ? undefined : (props.presentation ?? 'toolbar')
+        }
+        onChannelCall={() => setIsOpen(true)}
+        onInstantCall={() => navigate('/meet/new')}
+      />
       <Dialog
         open={isOpen()}
         onOpenChange={(open) => {
@@ -96,7 +105,7 @@ export function NewCallButton() {
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                  <XIcon />
+                  <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   New Call
@@ -114,7 +123,7 @@ export function NewCallButton() {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="outline"
+                    variant="primary"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

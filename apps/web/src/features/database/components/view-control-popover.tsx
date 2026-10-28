@@ -1,0 +1,65 @@
+import XIcon from '@icon/system/regular/x.svg';
+import { Popover } from '@kobalte/core/popover';
+import { Button } from '@ui/components/Button';
+import { ButtonGroup } from '@ui/components/ButtonGroup';
+import { type JSX, Show } from 'solid-js';
+
+export function ToolbarPopover(props: {
+  label: string;
+  count?: number;
+  compact?: boolean;
+  grouped?: boolean;
+  icon: JSX.Element;
+  children: JSX.Element;
+}) {
+  return (
+    <Popover
+      placement="bottom-end"
+      gutter={6}
+      fitViewport
+      overlap
+      overflowPadding={8}
+    >
+      <Popover.Trigger
+        aria-label={`${props.label}${props.count ? ` ${props.count}` : ''}`}
+        as={props.grouped ? ButtonGroup.Button : Button}
+        variant="ghost"
+        size={props.compact && !props.count ? 'icon-md' : 'md'}
+        class={props.count ? 'text-accent' : undefined}
+        tooltip={props.label}
+      >
+        {props.icon}
+        <Show when={!props.compact}>{props.label}</Show>
+        <Show when={props.count}>
+          <span class="flex min-w-4 items-center justify-center rounded bg-accent/10 px-1 text-[10px] font-medium text-accent">
+            {props.count}
+          </span>
+        </Show>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          class="menu-surface relative z-action-menu flex min-h-0 max-w-[calc(100vw-2rem)] flex-col text-sm outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+          style={{
+            'max-height':
+              'min(36rem, var(--kb-popper-content-available-height, calc(100dvh - 1rem)), calc(100dvh - 1rem))',
+          }}
+        >
+          <div class="flex shrink-0 items-center gap-5 px-3 pt-3 pb-3 pr-10">
+            <Popover.Title class="flex-1 font-medium text-sm">
+              {props.label}
+            </Popover.Title>
+          </div>
+          <div class="min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
+            {props.children}
+          </div>
+          <Popover.CloseButton
+            aria-label={`Close ${props.label.toLowerCase()}`}
+            class="absolute right-3 top-3 rounded p-1 text-ink-muted hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+          >
+            <XIcon class="size-3.5" />
+          </Popover.CloseButton>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
+  );
+}

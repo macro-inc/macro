@@ -6,8 +6,11 @@
 mod test;
 
 pub mod channel_share;
+pub mod direct_share;
+pub mod source_grants;
 pub mod team_share;
 
+pub use channel_share::get_direct_channel_grants;
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
 use model_owner::Owner;
@@ -16,6 +19,7 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+pub use source_grants::delete_source_grants;
 use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
@@ -195,12 +199,12 @@ pub async fn delete_entity_access_rows(
     Ok(())
 }
 
-/// Grant call-only view access to an active participant of a standalone call.
+/// Grant call-only comment access to an active participant of a standalone call.
 ///
 /// The participant must already have been admitted by the call domain. The query
 /// cannot grant access to other entities, channel calls, or nonparticipants, and
 /// preserves stronger grants. It does not commit the caller's transaction.
-pub async fn ensure_call_participant_view_access<'e, E>(
+pub async fn ensure_call_participant_comment_access<'e, E>(
     executor: E,
     call_id: &macro_uuid::Uuid,
     user_id: MacroUserIdStr<'_>,
@@ -210,12 +214,13 @@ where
 {
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           SELECT c.id, 'call', p.user_id, 'user', 'view'
+           SELECT c.id, 'call', p.user_id, 'user', 'comment'
            FROM calls c JOIN call_participants p ON p.call_id = c.id
            WHERE c.id = $1 AND c.channel_id IS NULL AND p.user_id = $2 AND p.left_at IS NULL
            ON CONFLICT (entity_id, entity_type, source_id, source_type)
            WHERE granted_from_project_id IS NULL
-           DO NOTHING"#,
+           DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = now()
+           WHERE entity_access.access_level = 'view'"#,
         call_id,
         user_id.as_ref(),
     )
@@ -397,7 +402,10 @@ pub async fn update_entity_access_channel_share_permissions(
             // Reminders and scheduled actions are never channel-shared: they
             // are private to one user.
             | EntityType::Reminder
-            | EntityType::ScheduledAction => {
+            | EntityType::ScheduledAction
+            // A database row is shared only through its database.
+            | EntityType::DatabaseRow
+            => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -431,12 +439,16 @@ pub async fn update_entity_access_channel_share_permissions(
                 .execute(transaction.as_mut())
                 .await?;
             }
-            EntityType::AgentSession
+            EntityType::Database
+            | EntityType::CrmPipeline
+            | EntityType::Form
+            | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 sqlx::query!(
                     r#"
                     DELETE FROM entity_access
@@ -469,7 +481,10 @@ pub async fn update_entity_access_channel_share_permissions(
             // Reminders and scheduled actions are never channel-shared: they
             // are private to one user.
             | EntityType::Reminder
-            | EntityType::ScheduledAction => {
+            | EntityType::ScheduledAction
+            // A database row is shared only through its database.
+            | EntityType::DatabaseRow
+            => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));
@@ -545,12 +560,16 @@ pub async fn update_entity_access_channel_share_permissions(
                     qb.build().execute(transaction.as_mut()).await?;
                 }
             }
-            EntityType::AgentSession
+            EntityType::Database
+            | EntityType::CrmPipeline
+            | EntityType::Form
+            | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 let entity_type_str = entity_type.as_ref();
 
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

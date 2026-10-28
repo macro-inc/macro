@@ -12,9 +12,10 @@ import type {
 import {
   EMPTY_TASK_FACET_CONTEXT,
   getTaskFacetOption,
+  resolveTaskPersonId,
   type TaskFacetContext,
 } from '../filters/task-facets';
-import type { TaskTab } from '../types';
+import type { TaskReferenceScope, TaskTab } from '../types';
 
 const nonTaskFilters: EntityFilters = {
   calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
@@ -26,7 +27,6 @@ const nonTaskFilters: EntityFilters = {
   email_filters: { email_thread_ids: [NIL_UUID] },
   foreign_entity_filters: { ids: [NIL_UUID] },
   project_filters: { project_ids: [NIL_UUID] },
-  reminder_filters: { ids: [NIL_UUID] },
 };
 
 const selectedCreators = (
@@ -34,7 +34,16 @@ const selectedCreators = (
   tab: TaskTab,
   userId: string | undefined
 ): string[] | undefined => {
-  const selected = [...new Set(selection['created-by'] ?? [])];
+  const selected = [
+    ...new Set(
+      (selection['created-by'] ?? []).map((id) =>
+        resolveTaskPersonId(id, {
+          ...EMPTY_TASK_FACET_CONTEXT,
+          viewerId: userId,
+        })
+      )
+    ),
+  ];
   if (tab !== 'created-by-me') {
     return selected.length > 0 ? selected : undefined;
   }
@@ -85,8 +94,12 @@ export function buildTaskSearchRequest(options: {
   userId: string | undefined;
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
+  reference?: TaskReferenceScope;
 }): SearchSoupQueryArgs {
-  const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
+  const facetContext = {
+    ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
+    viewerId: options.userId,
+  };
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
 
   if (options.tab === 'my-tasks') {
@@ -96,9 +109,16 @@ export function buildTaskSearchRequest(options: {
       entity_ids: [options.userId ?? NIL_UUID],
     });
   }
+  if (options.reference) {
+    propertyFilters.push({
+      property_definition_id: options.reference.propertyDefinitionId,
+      entity_type: 'TASK',
+      entity_ids: [options.reference.entityId],
+    });
+  }
 
   const owners = selectedCreators(options.facets, options.tab, options.userId);
-  // Like the list query, a selected tag that no longer exists stops filtering.
+  // Saved views supply stored bindings even when tag labels are unavailable.
   const tagOptionIds = [...new Set(options.facets.tags ?? [])].filter((id) =>
     facetContext.tagPropertyDefinitionByOptionId.has(id)
   );

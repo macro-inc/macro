@@ -4,16 +4,21 @@
  * `/component/agent-ui`.
  */
 
+import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
+import {
+  initialValues,
+  validate,
+} from '@app/features/agent-interactions/state/elicitation-form';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
 import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
-import FileText from '@phosphor/file-text.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Terminal from '@phosphor/terminal.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import type {
   ElicitationSchema,
   FoldedMessage,
@@ -26,7 +31,6 @@ import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
 import { ReplyToSelection } from '../component/ReplyToSelection';
-import { initialValues, validate } from '../state/elicitation-form';
 import {
   ActionLine,
   AgentInput,
@@ -39,6 +43,8 @@ import {
   FailureNoticeCard,
   PierreDiff,
   QuestionAnswers,
+  type QueuedPromptItem,
+  QueuedPrompts,
   type QuoteInsert,
   TextShimmer,
   Thought,
@@ -118,8 +124,8 @@ const FIXTURE_MODELS: ModelOption[] = [
  * every option arrives named after its own slug.
  */
 const FIXTURE_INMEM_MODELS: ModelOption[] = [
-  'anthropic/claude-sonnet-5',
-  'anthropic/claude-opus-5',
+  'anthropic/claude-sonnet-5-5',
+  'anthropic/claude-opus-5-5',
   'anthropic/claude-haiku-4-5',
   'openai/gpt-5.5',
   'openai/gpt-5-mini',
@@ -185,6 +191,76 @@ function ReplyToSelectionDemo() {
         registerQuoteInsert={(insert) => {
           quoteInsert = insert;
         }}
+      />
+    </div>
+  );
+}
+
+/**
+ * An in-flight turn with a queue: each row can steer, and the empty composer
+ * shows the ringed flush control instead of stop.
+ */
+function QueuedInFlightDemo() {
+  const [items, setItems] = createSignal<QueuedPromptItem[]>([
+    {
+      actionId: 'older',
+      kind: 'prompt',
+      prompt: 'Summarize the queue design',
+    },
+    {
+      actionId: 'newer',
+      kind: 'prompt',
+      prompt: 'Also mention the flush control',
+    },
+    {
+      actionId: 'refused',
+      kind: 'prompt',
+      prompt: 'This steer was refused, so it stays queued',
+      sendFailed: true,
+    },
+  ]);
+  const [note, setNote] = createSignal(
+    'Steer jumps that message ahead. With the box empty, the ringed arrow flushes the queue.'
+  );
+
+  return (
+    <div class="flex max-w-xl flex-col gap-2">
+      <p class="text-xs text-ink-muted">{note()}</p>
+      <QueuedPrompts
+        items={items()}
+        onEdit={(id, prompt) =>
+          setItems((current) =>
+            current.map((item) =>
+              item.actionId === id ? { ...item, prompt } : item
+            )
+          )
+        }
+        onRemove={(id) =>
+          setItems((current) => current.filter((item) => item.actionId !== id))
+        }
+        onSteer={(id) => {
+          setItems((current) => {
+            const index = current.findIndex((item) => item.actionId === id);
+            if (index < 0) return current;
+            const next = current.slice();
+            const [entry] = next.splice(index, 1);
+            if (!entry) return current;
+            next.unshift(entry);
+            return next;
+          });
+          setNote(`Steered “${id}” to the front of the queue.`);
+        }}
+      />
+      <AgentInput
+        busy
+        hasQueuedMessages={items().length > 0}
+        onSend={() => setNote('Typed text still sends as a new queued prompt.')}
+        onStop={() =>
+          setNote('Flush stops the turn so the queue drains, oldest first.')
+        }
+        onSendNext={() =>
+          setNote('Flush stops the turn so the queue drains, oldest first.')
+        }
       />
     </div>
   );
@@ -337,6 +413,9 @@ function ToolReplayDemo() {
     agentSessionId: 'tool-replay',
     requestId: null,
     pending: false,
+    segments: [],
+    phase: null,
+    postedAt: null,
     turn: 0,
     author: { kind: 'agent' },
     stop: inFlight() ? null : { kind: 'end_turn' },
@@ -384,6 +463,9 @@ function DisplayResultsDemo() {
     agentSessionId: 'display-results-demo',
     requestId: null,
     pending: false,
+    segments: [],
+    phase: null,
+    postedAt: null,
     turn: 0,
     author: { kind: 'agent' },
     stop: pending() ? null : { kind: 'end_turn' },
@@ -451,6 +533,9 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
   turn: 0,
   author: { kind: 'agent' },
   stop: { kind: 'end_turn' },
@@ -697,6 +782,9 @@ const FIXTURE_IN_FLIGHT: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
   turn: 1,
   author: { kind: 'agent' },
   stop: null,
@@ -740,6 +828,9 @@ const FIXTURE_UNCLOSED: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
   turn: 2,
   author: { kind: 'agent' },
   stop: null,
@@ -806,6 +897,9 @@ function PromptAuthorDemo() {
     agentSessionId: 'demo',
     requestId: null,
     pending: false,
+    segments: [],
+    phase: null,
+    postedAt: null,
     turn: 0,
     author: { kind: 'user', userId },
     stop: null,
@@ -915,12 +1009,18 @@ const GALLERY_CHIP_HEADER = {
 };
 
 /** The chip through a turn: booting, writing, and done. */
-function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
+function MagicChipStateDemo(props: {
+  presentation: MagicChipPresentation;
+  pullRequestUrl?: string;
+}) {
   return (
     <MagicChipView
       agentSessionId="gallery"
       presentation={props.presentation}
-      header={GALLERY_CHIP_HEADER}
+      header={{
+        ...GALLERY_CHIP_HEADER,
+        pullRequestUrl: props.pullRequestUrl,
+      }}
       onOpen={() => console.log('[gallery] open session')}
     />
   );
@@ -1021,6 +1121,13 @@ export default function AgentUiGallery() {
                   '**Fixed.** The incremental machine now handles the replay; `cargo test -p agent_fold` passes.',
               }}
             />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'settled',
+                markdown: 'Opened a pull request.',
+              }}
+              pullRequestUrl="https://github.com/macro-inc/macro/pull/7045"
+            />
           </Item>
 
           <Item label="MagicChip asking (form, url, tool draft)">
@@ -1048,11 +1155,29 @@ export default function AgentUiGallery() {
                   },
                   attendees: [],
                   recurrenceLines: [],
-                  addGoogleMeet: false,
+                  addConference: false,
                   eventType: 'default',
                 },
                 schema: FIXTURE_ELICITATION,
               }}
+            />
+          </Item>
+
+          <Item label="PermissionCard (native Herdr session)">
+            <PermissionCard
+              action="Run command"
+              detail="cargo test -p coding_agent_worker"
+              options={[
+                { id: 'allow', name: 'Allow once', kind: 'allow_once' },
+                {
+                  id: 'always',
+                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  kind: 'allow_always',
+                },
+                { id: 'reject', name: 'Reject', kind: 'reject_once' },
+              ]}
+              canAnswer
+              onSelect={() => {}}
             />
           </Item>
 
@@ -1070,7 +1195,7 @@ export default function AgentUiGallery() {
               detail="no credentials configured for provider openai"
             />
             <ActionLine
-              label="An error was encountered with your session. Send another message to continue — Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              label="An error was encountered with your session. Send another message to continue"
               detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
               failed
             />
@@ -1235,6 +1360,10 @@ export default function AgentUiGallery() {
 
           <Item label="Reply to selection">
             <ReplyToSelectionDemo />
+          </Item>
+
+          <Item label="Queued messages (steer and flush)">
+            <QueuedInFlightDemo />
           </Item>
 
           <Item label="AgentInput (idle / busy)">

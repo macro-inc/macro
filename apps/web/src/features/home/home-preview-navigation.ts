@@ -1,3 +1,7 @@
+import { agentDetailSearch } from '@app/features/block-agent/agent-route';
+import { callDetailSearch } from '@app/features/block-call/call-route';
+import { markdownDetailSearch } from '@app/features/block-md/markdown-route';
+import { pdfDetailSearch } from '@app/features/block-pdf/pdf-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import {
@@ -14,6 +18,7 @@ import {
   driveSearch,
   driveSearchCodec,
 } from '@app/features/drive-view/primitives/drive-search';
+import { emailDetailSearch } from '@app/features/email-view/email-route';
 import type { SerializedSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
@@ -46,6 +51,11 @@ export function homeDetailSearch(
   } = {}
 ): DetailSearch {
   return {
+    [agentDetailSearch.namespace]: undefined,
+    [callDetailSearch.namespace]: undefined,
+    [markdownDetailSearch.namespace]: undefined,
+    [pdfDetailSearch.namespace]: undefined,
+    [emailDetailSearch.namespace]: undefined,
     [channelsSearch.namespace]: detail.channel,
     [driveSearch.namespace]: detail.document,
     [CALENDAR_SEARCH_NAMESPACE]: detail.calendar,

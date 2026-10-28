@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, on, onCleanup } from 'solid-js';
 import { type PagerDirection, usePager } from './Pager';
 
@@ -192,7 +193,7 @@ export function PagerSwipeGestures(props: PagerSwipeGesturesProps) {
         }
 
         const direction: PagerDirection = offset < 0 ? 'next' : 'previous';
-        void pager.commitDrag(direction);
+        fireAndForget(pager.commitDrag(direction), 'pager');
       };
 
       const handleTouchCancel = animateBackAfterInterruption;

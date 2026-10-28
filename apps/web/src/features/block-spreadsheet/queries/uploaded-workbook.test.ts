@@ -32,6 +32,17 @@ describe('uploaded workbook retrieval', () => {
     expect(query().queryKey).not.toEqual(query('xlsx', 2).queryKey);
     expect(query().queryKey).not.toEqual(query('csv').queryKey);
   });
+  it.each(['xlsm', 'XLSM'])(
+    'decodes a macro-enabled %s upload with the Excel worker',
+    async (fileType) => {
+      const signal = new AbortController().signal;
+      vi.mocked(platformFetch).mockResolvedValueOnce(
+        new Response(new Uint8Array([4, 5]))
+      );
+      await query(fileType).queryFn({ signal });
+      expect(excel).toHaveBeenCalledWith(new Uint8Array([4, 5]), signal);
+    }
+  );
   it('opens CSV text as safe typed cells, without invoking the Excel worker', async () => {
     vi.mocked(platformFetch).mockResolvedValueOnce(
       new Response('ID,Amount\r\n00123,12.5')
@@ -44,8 +55,8 @@ describe('uploaded workbook retrieval', () => {
     expect(excel).not.toHaveBeenCalled();
   });
   it.each([
-    ['xlsx', 5 * 1024 * 1024 + 1],
-    ['csv', 1_000_001],
+    ['xlsx', 50 * 1024 * 1024 + 1],
+    ['csv', 20 * 1024 * 1024 + 1],
   ] as const)(
     'rejects declared oversize %s before buffering the response',
     async (type, size) => {
@@ -65,8 +76,8 @@ describe('uploaded workbook retrieval', () => {
     const cancel = vi.fn();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(new Uint8Array(700_000));
-        controller.enqueue(new Uint8Array(700_000));
+        controller.enqueue(new Uint8Array(15_000_000));
+        controller.enqueue(new Uint8Array(15_000_000));
       },
       cancel,
     });

@@ -1,6 +1,8 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
+import { type Accessor, untrack } from 'solid-js';
 
 const CACHE_REFRESH_INTERVAL_MS = 250;
 
@@ -15,7 +17,8 @@ const CACHE_REFRESH_INTERVAL_MS = 250;
  */
 export function subscribeToVisibleCacheChanges(
   host: Pick<CacheHost, 'onCacheChanged'>,
-  refresh: () => void | Promise<unknown>
+  refresh: () => void | Promise<unknown>,
+  options?: { searchBuckets: Accessor<readonly string[]> }
 ): () => void {
   let dirty = false;
   let disposed = false;
@@ -40,12 +43,17 @@ export function subscribeToVisibleCacheChanges(
   };
   const scheduled = leadingAndTrailing(
     throttle,
-    () => void runRefresh(),
+    () => fireAndForget(runRefresh(), 'visible-cache-refresh'),
     CACHE_REFRESH_INTERVAL_MS
   );
   const unsubscribe = host.onCacheChanged(
-    () => {
+    (_revision, changes) => {
       if (disposed) return;
+      const changedBuckets = changes?.searchChangedBuckets;
+      if (options && changedBuckets !== undefined) {
+        const watched = untrack(options.searchBuckets);
+        if (!changedBuckets.some((bucket) => watched.includes(bucket))) return;
+      }
       dirty = true;
       if (isVisible()) scheduled();
     },

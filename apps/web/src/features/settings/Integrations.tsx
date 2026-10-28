@@ -6,10 +6,10 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PlugIcon from '@icon/system/regular/plug.svg?component-solid';
+import PlusIcon from '@icon/system/regular/plus.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import {
   useAddMcpServerMutation,
   useDeleteMcpServerMutation,
@@ -91,7 +91,7 @@ function AddServerForm(props: {
       class="w-100"
     >
       <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
+        <Panel.Header class="p-6">
           <span class="text-ink text-sm font-semibold">Add MCP Server</span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">
@@ -134,9 +134,8 @@ function AddServerForm(props: {
 
           <div class="flex justify-end gap-2 pt-1">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              depth={3}
               onClick={() => {
                 reset();
                 props.onOpenChange(false);
@@ -145,9 +144,8 @@ function AddServerForm(props: {
               Cancel
             </Button>
             <Button
-              variant="accent"
+              variant="secondary"
               size="sm"
-              depth={3}
               disabled={
                 !name().trim() || !url().trim() || addMutation.isPending
               }
@@ -281,9 +279,8 @@ function ServerRow(props: { server: ServerResponse }) {
           </span>
         </Show>
         <Button
-          variant="accent"
+          variant="primary"
           size="sm"
-          depth={3}
           disabled={authMutation.isPending}
           onClick={handleAuth}
         >
@@ -311,18 +308,16 @@ function ServerRow(props: { server: ServerResponse }) {
         fallback={
           <div class="flex items-center gap-1">
             <Button
-              variant="danger"
+              variant="secondary"
               size="sm"
-              depth={3}
               disabled={deleteMutation.isPending}
               onClick={handleDelete}
             >
               {deleteMutation.isPending ? 'Removing...' : 'Confirm'}
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              depth={3}
               onClick={() => setConfirmDelete(false)}
             >
               Cancel
@@ -331,9 +326,8 @@ function ServerRow(props: { server: ServerResponse }) {
         }
       >
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          depth={3}
           tooltip="Remove"
           onClick={() => setConfirmDelete(true)}
         >
@@ -413,9 +407,8 @@ export function IntegrationsSection() {
       description="Connect MCP servers to give Macro's agent access to the tools your team already uses."
       actions={
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          depth={3}
           onClick={() => setShowAddDialog(true)}
         >
           <PlusIcon class="size-4" />
@@ -428,9 +421,8 @@ export function IntegrationsSection() {
           <div class="px-6 py-8 text-center text-sm text-ink-muted">
             Failed to load integrations.
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
-              depth={3}
               onClick={() => serversQuery.refetch()}
               class="ml-2"
             >

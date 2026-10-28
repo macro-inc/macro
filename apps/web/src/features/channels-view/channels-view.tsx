@@ -1,15 +1,23 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
+import { ChannelLoading } from '@channel/Channel/ChannelLoading';
+import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { useIsAuthenticated } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { useFavoritesData } from '@queries/favorites/favorites';
 import {
   createContext,
   createEffect,
@@ -22,14 +30,21 @@ import {
 } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
+import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createChannelDetail } from './primitives/create-channel-detail';
 import {
+  type ChannelsSources,
   deduplicateChannels,
   resolveSelectedChannel,
-  useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelDetailSource } from './queries/channel-detail-source';
+import { useChannelListSearchPool } from './queries/channel-list-search-pool';
+import { createChannelSearchSource } from './queries/channel-search-source';
+import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -41,20 +56,106 @@ export type ChannelsViewProps = {
   initialState?: ChannelsViewStateOptions;
 };
 
+// Mounted inside the mobile list's Suspense boundary.
+function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const listChannels = useChannelListSearchPool();
+  const mobileSearchText = () => '';
+  const mobileSearchSource = createChannelSearchSource({
+    additionalLocalChannels: listChannels,
+    text: mobileSearchText,
+    scope: () => 'recents',
+    source: () => props.sources.recents,
+  });
+  const favoritesData = useFavoritesData({ entityType: ['channel'] });
+  // Recents carry the latest message and unread state; the channel list
+  // covers favorites that have not surfaced in Recents yet.
+  const pinned = createMemo(() => {
+    const channelsById = new Map(
+      deduplicateChannels([props.sources.recents.items(), listChannels()]).map(
+        (channel) => [channel.id, channel]
+      )
+    );
+    return (favoritesData()?.favorites ?? [])
+      .filter((favorite) => favorite.entityType === 'channel')
+      .flatMap((favorite) => channelsById.get(favorite.entityId) ?? [])
+      .slice(0, MAX_PINNED_CHANNELS);
+  });
+  return (
+    <ChannelsMobileView
+      source={mobileSearchSource}
+      pinned={pinned()}
+      searchQuery={mobileSearchText()}
+      onClearSearch={() => SearchState.setQuery('')}
+    />
+  );
+}
+
+function DesktopChannelsRail(props: {
+  sources: ChannelsSources;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
+}) {
+  const listChannels = useChannelListSearchPool();
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchSource = createChannelSearchSource({
+    additionalLocalChannels: listChannels,
+    text: searchQuery,
+    enabled: () => props.searchOpen,
+    scope: () => 'search',
+    source: () => props.sources.search,
+  });
+  return (
+    <ChannelsRail
+      sources={{ ...props.sources, search: searchSource }}
+      searchQuery={searchQuery()}
+      onSearchQueryChange={setSearchQuery}
+      searchOpen={props.searchOpen}
+      onSearchOpenChange={props.onSearchOpenChange}
+    />
+  );
+}
+
+function DesktopChannelThreads(props: { sources: ChannelsSources }) {
+  const { threadsChannelId, setTab, setSelectedChannel } = useChannelsView();
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        deduplicateChannels([
+          props.sources.threads.items(),
+          props.sources.channels.items(),
+          props.sources.direct_messages.items(),
+          props.sources.recents.items(),
+        ]).map((channel) => [channel.id, channel])
+      )
+  );
+
+  return (
+    <ChannelThreadsView
+      channelId={threadsChannelId()}
+      resolveChannel={(channelId) => channelsById().get(channelId)}
+      onOpenThread={(thread) => {
+        setTab('browse');
+        setSelectedChannel(thread);
+      }}
+    />
+  );
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
+  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
+  const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
     (scope) => {
-      if (mobileLayout())
-        return scope !== 'search' && state.mobileTab === scope;
+      if (mobileLayout()) return scope === 'recents';
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return state.tab === 'recents';
-      return state.tab === 'browse';
+      if (scope === 'recents') return tab() === 'recents';
+      if (scope === 'threads') return tab() === 'threads';
+      return tab() === 'browse';
     },
     (group) => state.sortBy[group]
   );
@@ -72,7 +173,9 @@ function ChannelsViewRoot() {
                   <ViewShell.Root
                     asidePreferenceKey="channels"
                     // The empty state only points at the rail, so keep it open.
-                    asideRequired={selectedChannel() === undefined}
+                    asideRequired={
+                      threadsTab() || selectedChannel() === undefined
+                    }
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -81,8 +184,17 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <DebugSuspense name="ChannelsView.rail">
-                        <ChannelsRail
+                      <DebugSuspense
+                        name="ChannelsView.rail"
+                        fallback={
+                          <SpinnerIcon
+                            aria-hidden={false}
+                            aria-label="Loading channels"
+                            class="size-5 animate-spin"
+                          />
+                        }
+                      >
+                        <DesktopChannelsRail
                           sources={sources}
                           searchOpen={railSearchOpen()}
                           onSearchOpenChange={setRailSearchOpen}
@@ -90,32 +202,42 @@ function ChannelsViewRoot() {
                       </DebugSuspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <ChannelSourcesContext.Provider value={sources}>
-                        <DebugSuspense name="ChannelsView.outlet">
-                          <SplitRouter.Outlet
-                            fallback={() => (
-                              <>
-                                <ViewShell.TopBar>
-                                  <span class="text-sm font-semibold">
-                                    Chat
-                                  </span>
-                                </ViewShell.TopBar>
-                                <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                  <div class="flex max-w-sm flex-col gap-2">
-                                    <h2 class="text-base font-semibold text-ink">
-                                      Select a conversation
-                                    </h2>
-                                    <p class="text-sm leading-5 text-ink-muted">
-                                      Choose a channel or person from the
-                                      sidebar to open the conversation here.
-                                    </p>
+                      <ViewTour tour={channelsTour} />
+                      <Show
+                        when={!threadsTab()}
+                        fallback={
+                          <DebugSuspense name="ChannelsView.threads">
+                            <DesktopChannelThreads sources={sources} />
+                          </DebugSuspense>
+                        }
+                      >
+                        <ChannelSourcesContext.Provider value={sources}>
+                          <DebugSuspense name="ChannelsView.outlet">
+                            <SplitRouter.Outlet
+                              fallback={() => (
+                                <>
+                                  <ViewShell.TopBar>
+                                    <ViewSidebar.Title caret={false}>
+                                      Chat
+                                    </ViewSidebar.Title>
+                                  </ViewShell.TopBar>
+                                  <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                    <div class="flex max-w-sm flex-col gap-2">
+                                      <h2 class="text-base font-semibold text-ink">
+                                        Select a conversation
+                                      </h2>
+                                      <p class="text-sm leading-5 text-ink-muted">
+                                        Choose a channel or person from the
+                                        sidebar to open the conversation here.
+                                      </p>
+                                    </div>
                                   </div>
-                                </div>
-                              </>
-                            )}
-                          />
-                        </DebugSuspense>
-                      </ChannelSourcesContext.Provider>
+                                </>
+                              )}
+                            />
+                          </DebugSuspense>
+                        </ChannelSourcesContext.Provider>
+                      </Show>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>
@@ -127,17 +249,14 @@ function ChannelsViewRoot() {
                   fallback={
                     <div class="grid size-full place-items-center text-ink-muted">
                       <SpinnerIcon
+                        aria-hidden={false}
                         aria-label="Loading channels"
                         class="size-5 animate-spin"
                       />
                     </div>
                   }
                 >
-                  <ChannelsMobileView
-                    source={sources[state.mobileTab]}
-                    tab={state.mobileTab}
-                    onTabChange={setMobileTab}
-                  />
+                  <MobileChannelsList sources={sources} />
                 </DebugSuspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>
@@ -151,7 +270,18 @@ function ChannelsViewRoot() {
 function ChannelDetailRouteContent() {
   const { selectedChannel } = useChannelsView();
   const notificationSource = useGlobalNotificationSource();
-  const channelId = () => selectedChannel()?.id;
+  const channelId = createMemo(() => selectedChannel()?.id);
+  const authenticated = useIsAuthenticated();
+  const target = createMemo(() => selectedChannel()?.target);
+  createEffect(
+    on([channelId, target, authenticated], ([id, destination, signedIn]) => {
+      if (!id || !destination || signedIn !== true) return;
+      fireAndForget(
+        prefetchChannelTarget(id, destination),
+        'channel-target-prefetch'
+      );
+    })
+  );
   const sources = useContext(ChannelSourcesContext);
   const loaded = createMemo(() =>
     resolveSelectedChannel(
@@ -166,79 +296,72 @@ function ChannelDetailRouteContent() {
         : []
     )
   );
-  const needsFullEdge = createMemo(
-    on(
-      channelId,
-      () =>
-        loaded() === undefined ||
-        (loaded()?.unreadNotifications?.length ?? 0) > 0
-    )
-  );
-  const query = useChannelByIdQuery(
+  const source = createChannelDetailSource({
     channelId,
-    () =>
-      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
-  );
-  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
-    const selection = selectedChannel();
-    if (!selection || selection.type !== 'channel') return;
-    const cached = loaded();
-    if (cached && !needsFullEdge())
-      return { ...cached, target: selection.target, notifications: () => [] };
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error
-    ) {
-      return previous?.id === selection.id ? previous : undefined;
-    }
-    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
-    if (!full) return;
+    cached: loaded,
+    createQuery: useChannelByIdQuery,
+  });
+  const detail = createChannelDetail({
+    selection: selectedChannel,
+    cached: loaded,
+    source,
+    markRead: (channel) =>
+      markChannelNotificationsSeenOnOpen(
+        withEntityNotifications(channel, notificationSource),
+        notificationSource,
+        { channelReadScope: 'top-level' }
+      ),
+  });
+  const visibleChannel = createMemo(() => {
+    const view = detail.view();
+    if (view.status !== 'ready') return;
     return withEntityNotifications(
-      { ...full, target: selection.target },
+      { ...view.channel, target: selectedChannel()?.target },
       notificationSource
     );
   });
-  const unavailable = () =>
-    Boolean(query.error) ||
-    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {
-      await query.refresh();
+      await detail.refresh();
     } catch {
-      /* Query state presents the failure. */
+      /* The source presents the failure. */
     }
   };
-  const readyId = createMemo(() => hydrated()?.id);
-  createEffect(
-    on(readyId, () => {
-      const channel = hydrated();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource);
-    })
-  );
 
   return (
-    <DebugSuspense name="ChannelsView.detail-content">
+    <DebugSuspense
+      name="ChannelsView.detail-content"
+      fallback={<ChannelLoading />}
+    >
       <Show
-        when={hydrated()}
+        when={visibleChannel()}
         fallback={
-          <div class="flex size-full flex-col items-center justify-center gap-2 text-ink-muted">
-            <h2>
-              {unavailable()
-                ? 'Conversation unavailable'
-                : 'Loading conversation'}
-            </h2>
-            <Show when={unavailable()}>
-              <button type="button" onClick={retry}>
-                Retry
-              </button>
+          <>
+            <ViewShell.TopBar>
+              <span class="truncate text-sm font-semibold">
+                {loaded()?.name ?? 'Conversation'}
+              </span>
+            </ViewShell.TopBar>
+            <Show when={unavailable()} fallback={<ChannelLoading />}>
+              <div
+                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
+                role="status"
+              >
+                <h2>Conversation unavailable</h2>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </div>
             </Show>
-          </div>
+          </>
         }
       >
-        {(channel) => <ChannelDetailView channel={channel()} />}
+        {(channel) => (
+          <div class="flex size-full min-h-0 flex-col">
+            <ChannelDetailView channel={channel()} target={detail.target()} />
+          </div>
+        )}
       </Show>
     </DebugSuspense>
   );
@@ -246,7 +369,10 @@ function ChannelDetailRouteContent() {
 
 export function ChannelDetailRouteView() {
   return (
-    <DebugSuspense name="ChannelsView.detail-route">
+    <DebugSuspense
+      name="ChannelsView.detail-route"
+      fallback={<ChannelLoading />}
+    >
       <ChannelDetailRouteContent />
     </DebugSuspense>
   );

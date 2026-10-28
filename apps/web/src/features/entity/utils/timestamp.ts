@@ -107,7 +107,7 @@ export function formatCompactRelativeTimestamp(value: string): string {
 
 /**
  * Formats a date + time in a single concise line, e.g. "Apr 15, 2:30 PM" or
- * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. automation
+ * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. routine
  * next-run times).
  */
 export function formatDateAndTime(date: DateValue): string {

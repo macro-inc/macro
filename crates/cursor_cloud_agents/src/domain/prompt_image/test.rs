@@ -7,7 +7,7 @@ fn text(value: &str) -> ContentBlock {
 
 #[test]
 fn a_pasted_image_link_is_taken_whole() {
-    let url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4G_j3ulyJepZSNOD8TeEs_ZOvjgALc0aQ_lneOFUMgS86F_iCZcnR8PtQ&s=10";
+    let url = "https://cdn.example/images?q=thumbnail&size=10";
     let blocks = vec![text(&format!("look at {url} please"))];
     assert_eq!(linked_image_urls(&blocks), vec![url.to_owned()]);
 }
@@ -79,7 +79,8 @@ fn magic_bytes_name_the_image_when_the_type_does_not() {
         Some("image/jpeg")
     );
     assert_eq!(detect_mime(Some("text/html"), b"<html>"), None);
-    assert_eq!(detect_mime(Some("image/jpg"), b""), Some("image/jpeg"));
+    assert_eq!(detect_mime(Some("image/jpg"), b""), None);
+    assert_eq!(detect_mime(Some("image/png"), b"<svg>"), None);
     assert_eq!(detect_mime(Some("image/svg+xml"), b"<svg>"), None);
 }
 
@@ -96,4 +97,23 @@ fn a_fetched_image_is_an_acp_image_frame_named_by_its_url() {
     assert_eq!(frame.data, "aW1n");
     assert_eq!(frame.mime_type, "image/png");
     assert_eq!(frame.uri.as_deref(), Some("https://cdn.example/a.png"));
+}
+
+#[test]
+fn plain_http_word_does_not_hide_a_later_url() {
+    assert_eq!(
+        linked_image_urls(&[text("use http with https://cdn.example/pic")]),
+        vec!["https://cdn.example/pic"]
+    );
+}
+
+#[test]
+fn duplicate_links_and_fetch_count_are_bounded() {
+    let blocks = vec![text(
+        "https://cdn.example/0 https://cdn.example/0 https://cdn.example/1 https://cdn.example/2 https://cdn.example/3 https://cdn.example/4 https://cdn.example/5 https://cdn.example/6 https://cdn.example/7 https://cdn.example/8",
+    )];
+    let urls = linked_image_urls(&blocks);
+    assert_eq!(urls.len(), MAX_LINK_FETCHES);
+    assert_eq!(urls[0], "https://cdn.example/0");
+    assert_eq!(urls[7], "https://cdn.example/7");
 }

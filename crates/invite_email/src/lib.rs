@@ -2,14 +2,18 @@
 //! Domain models for invitation email notifications.
 //!
 //! Contains the [`InviteToMacro`] referral notification, the [`InviteToTeamMetadata`] team
-//! invitation notification, the [`ChannelInviteMetadata`] channel invitation, and the
-//! [`ReferralCode`] newtype.
+//! invitation notification and its [`InviteePlan`], the [`ChannelInviteMetadata`] channel
+//! invitation, the [`ColleagueJoinedMacro`] colleague join email, and the [`ReferralCode`]
+//! newtype.
 
 #[cfg(test)]
 mod test;
 
 mod call_invite;
 pub use call_invite::CallInvite;
+
+mod colleague_joined;
+pub use colleague_joined::ColleagueJoinedMacro;
 
 use askama::Template;
 use macro_env::Environment;
@@ -138,6 +142,17 @@ pub struct ChannelInviteMetadata {
     #[serde(default)]
     #[serde(alias = "channel_name")]
     pub channel_name: String,
+    /// Whether this is a direct message rather than a channel invitation.
+    /// Older notification payloads retain channel-invitation wording.
+    #[serde(default)]
+    pub is_direct_message: bool,
+    /// Stable DM message identity used while building the email delivery key.
+    /// The serialized email bundle carries the key; notification metadata does not.
+    #[serde(skip)]
+    pub message_id: Option<Uuid>,
+    /// Destination used while building a separate email retry key per recipient.
+    #[serde(skip)]
+    pub email_recipient: Option<MacroUserIdStr<'static>>,
     /// Message content to show in the invite email, when the invite was triggered by a message.
     #[serde(default)]
     pub message_content: Option<String>,
@@ -167,10 +182,14 @@ impl NotificationTitle for ChannelInviteMetadata {
     ) -> Result<String, rootcause::Report> {
         let email = self.invited_by.email_part();
         let sender = email.email_str();
-        Ok(format!(
-            "{sender} invited you to join #{}",
-            self.channel_name
-        ))
+        if self.is_direct_message {
+            Ok(format!("{sender} sent you a message"))
+        } else {
+            Ok(format!(
+                "{sender} invited you to join #{}",
+                self.channel_name
+            ))
+        }
     }
 
     fn format_body(
@@ -185,7 +204,11 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     fn format_email(&self) -> EmailContent {
         let sender = self.sender_display();
         EmailContent {
-            subject: format!("{sender} has invited you to join #{}", self.channel_name),
+            subject: if self.is_direct_message {
+                format!("{sender} sent you a message on Macro")
+            } else {
+                format!("{sender} has invited you to join #{}", self.channel_name)
+            },
             body: self
                 .render()
                 .expect("ChannelInviteMetadata template render failed in format_email"),
@@ -200,6 +223,14 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
+        if self.is_direct_message
+            && let Some(message_id) = self.message_id
+        {
+            return RateLimitKey::builder(&Self::TYPE_NAME)
+                .append(&message_id)
+                .append(&self.email_recipient)
+                .finish();
+        }
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.invited_by)
             .append(&self.channel_name)
@@ -241,6 +272,8 @@ impl NotificationExtIos for ChannelInviteMetadata {
             push_notification_data: PushNotificationData {
                 notification_id,
                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                recipient_id: None,
+                navigation: None,
             },
         })
     }
@@ -271,7 +304,30 @@ pub struct InviteToTeamMetadata {
     #[serde(default)]
     #[schema(value_type = Option<String>)]
     pub sender_profile_picture_url: Option<Url>,
+
+    /// What the invitee gets by joining, as the team stood when the invite was sent.
+    #[serde(default, alias = "invitee_plan")]
+    pub invitee_plan: InviteePlan,
+
+    /// Whether this email reminds the invitee of an invite they have not answered.
+    #[serde(default)]
+    pub reminder: bool,
 }
+
+/// What a team invitee gets by joining.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteePlan {
+    /// Macro's free plan. Invites sent before the plan was recorded read as
+    /// this, which stays true: joining a team never costs the invitee anything.
+    #[default]
+    Free,
+    /// A Pro seat that a paying, trialing, or enterprise team covers.
+    Premium,
+}
+
+/// Longest team name that still fits on the email's join button.
+const MAX_BUTTON_TEAM_NAME_CHARS: usize = 24;
 
 impl InviteToTeamMetadata {
     /// Returns the team invite URL for the current environment.
@@ -285,6 +341,19 @@ impl InviteToTeamMetadata {
 
         url
     }
+
+    fn inviter(&self) -> &str {
+        self.invited_by.email_str()
+    }
+
+    /// Names the team on the button unless the name would crowd it.
+    fn join_label(&self) -> String {
+        if self.team_name.chars().count() <= MAX_BUTTON_TEAM_NAME_CHARS {
+            format!("Join {}", self.team_name)
+        } else {
+            "Join team".to_string()
+        }
+    }
 }
 
 impl Notification for InviteToTeamMetadata {
@@ -295,8 +364,9 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: format!(
-                "{} has invited you to the {} team on Macro",
-                self.invited_by.email_part().as_ref(),
+                "{}{} invited you to join {} on Macro",
+                if self.reminder { "Reminder: " } else { "" },
+                self.inviter(),
                 self.team_name
             ),
             body: self
@@ -306,17 +376,20 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     }
 
     fn rate_limit_config() -> RateLimitConfig {
-        const TWO_DAYS: u64 = 24 * 2;
+        // Long enough to stop repeat mail to one address, short enough that an
+        // inviter can resend when someone says the email never came.
         RateLimitConfig {
             max_count: 1,
-            window: Duration::from_hours(TWO_DAYS),
+            window: Duration::from_hours(1),
         }
     }
 
+    /// One bucket per invite (one invite per recipient per team), so inviting
+    /// several teammates at once emails each of them. Resends reuse the invite.
     fn rate_limit_key(&self) -> RateLimitKey {
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.team_id)
-            .append(&self.invited_by.as_ref())
+            .append(&self.team_invite_id)
             .finish()
     }
 }

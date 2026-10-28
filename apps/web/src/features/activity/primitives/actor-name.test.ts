@@ -53,7 +53,7 @@ describe('createActorName', () => {
     );
   });
 
-  it('never says "Automation" for ids it cannot parse', () => {
+  it('never says "Routine" for ids it cannot parse', () => {
     expect(nameOf(context, 'system:nightly')).toBe('Unknown');
   });
 });

@@ -83,6 +83,8 @@ impl From<MessageLabel> for ApiMessageLabel {
 #[derive(Debug, Serialize, ToSchema)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
 pub struct ApiMessageAttachment {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference_url: Option<String>,
     pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub filename: Option<String>,
@@ -105,6 +107,7 @@ impl From<MessageAttachment> for ApiMessageAttachment {
             sfs_id: a.sfs_id,
             content_id: a.content_id,
             data_url: None,
+            reference_url: a.reference_url,
         }
     }
 }
@@ -120,6 +123,9 @@ pub struct ApiAttachmentDraft {
     pub sha: String,
     pub size: i32,
     pub s3_key: String,
+    pub upload_pending: bool,
+    pub content_id: Option<String>,
+    pub is_inline: bool,
 }
 
 impl From<AttachmentDraft> for ApiAttachmentDraft {
@@ -132,6 +138,9 @@ impl From<AttachmentDraft> for ApiAttachmentDraft {
             sha: a.sha,
             size: a.size,
             s3_key: a.s3_key,
+            upload_pending: a.upload_pending,
+            content_id: a.content_id,
+            is_inline: a.is_inline,
         }
     }
 }
@@ -167,6 +176,12 @@ impl From<AttachmentForwarded> for ApiAttachmentForwarded {
 #[derive(Debug, Serialize, ToSchema)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
 pub struct ApiMessage {
+    /// Draft edit generation; changes at send and cancellation boundaries.
+    pub draft_generation: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_status: Option<super::ApiMessageOperation>,
+    #[schema(required = false)]
+    pub calendar_invitations: Vec<crate::domain::models::calendar_invitation::CalendarInvitation>,
     pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub thread_db_id: Uuid,
@@ -187,6 +202,9 @@ pub struct ApiMessage {
     pub has_attachments: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheduled_send_time: Option<DateTime<Utc>>,
+    /// Delivery state, including failures and unresolved provider outcomes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_send_status: Option<crate::domain::models::ScheduledSendStatus>,
     pub from: Option<ApiContactInfo>,
     pub to: Vec<ApiContactInfo>,
     pub cc: Vec<ApiContactInfo>,
@@ -207,6 +225,9 @@ pub struct ApiMessage {
 impl From<Message> for ApiMessage {
     fn from(m: Message) -> Self {
         ApiMessage {
+            draft_generation: m.draft_generation,
+            operation_status: m.operation_status.map(Into::into),
+            calendar_invitations: m.calendar_invitations,
             db_id: m.db_id,
             provider_id: m.provider_id,
             thread_db_id: m.thread_db_id,
@@ -226,6 +247,7 @@ impl From<Message> for ApiMessage {
             is_draft: m.is_draft,
             has_attachments: m.has_attachments,
             scheduled_send_time: m.scheduled_send_time,
+            scheduled_send_status: m.scheduled_send_status,
             from: m.from.map(ApiContactInfo::from),
             to: m.to.into_iter().map(ApiContactInfo::from).collect(),
             cc: m.cc.into_iter().map(ApiContactInfo::from).collect(),

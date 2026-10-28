@@ -8,7 +8,6 @@ export interface SyncServiceConfig {
   baseUrl: string;
   internalAuthKey: string;
   timeout?: number;
-  serviceFetcher?: Fetcher;
 }
 
 export class SyncServiceClient {
@@ -26,32 +25,14 @@ export class SyncServiceClient {
     try {
       const path = `/document/${docId}/raw`;
 
-      let response: Response;
-
-      if (this.config.serviceFetcher) {
-        // How can this be correct??? the url would be https://sync-service/document/<docid>/raw ?????
-        response = await this.config.serviceFetcher.fetch(
-          `https://sync-service${path}`,
-          {
-            method: 'GET',
-            headers: {
-              'x-internal-auth-key': this.config.internalAuthKey,
-              'content-type': 'application/json',
-            },
-          }
-        );
-      } else {
-        // Fallback to HTTP fetch for cross-zone or local development
-        const url = `${this.config.baseUrl}${path}`;
-        response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'x-internal-auth-key': this.config.internalAuthKey,
-            'content-type': 'application/json',
-          },
-          signal: AbortSignal.timeout(5000),
-        });
-      }
+      const response = await fetch(`${this.config.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          'x-internal-auth-key': this.config.internalAuthKey,
+          'content-type': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000),
+      });
 
       if (!response.ok) {
         const responseText = await response.text();

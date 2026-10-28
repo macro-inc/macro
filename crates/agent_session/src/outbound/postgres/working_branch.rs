@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::repository_branch::RepositoryBranch;
 use crate::domain::working_branch::{SessionWorkingBranchRepo, WorkingBranchWrite};
 
-impl SessionWorkingBranchRepo for PgAgentSessionRepo {
+impl<B: BotFacts + 'static> SessionWorkingBranchRepo for PgAgentSessionRepo<B> {
     async fn record_working_branch(
         &self,
         session: AgentSessionId,

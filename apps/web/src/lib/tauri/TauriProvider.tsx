@@ -1,12 +1,18 @@
 import { NativeCallProvider } from '@channel/Call/native-call-state';
 import { useCallKitSetup } from '@channel/Call/use-callkit';
+import { useAndroidBack } from '@core/mobile/androidBack';
+import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
+import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
+import { queryPersistence } from '@queries/client';
 import type { RouteSectionProps } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
+import { Dialog, Surface } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -17,12 +23,14 @@ import {
   onMount,
   useContext,
 } from 'solid-js';
-import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
+import {
+  createNativeUpdates,
+  type NativeUpdateStatus,
+  nativeUpdateDescription,
+} from './native-updates';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
-
-type NotAndroid = 'not-android';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -42,8 +50,11 @@ export type BundleUpdateStatus =
 
 interface TauriContextValue {
   os: OsType;
-  runtimeInsets: Accessor<Insets | NotAndroid>;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
+  nativeUpdateStatus: Accessor<NativeUpdateStatus>;
+  nativeUpdatePreparing: Accessor<boolean>;
+  restartNativeUpdate: () => Promise<void>;
+  registerNativeUpdatePreparation: (save: () => Promise<void>) => () => void;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
@@ -68,10 +79,9 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
 }
 
 function TauriProvider(props: { children: JSX.Element }) {
-  // we only care about this value on android.
-  // ios should use the env(safe-area-inset-top) css properties
-  // this css is not reliably set on android
-  const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
+  const nativeUpdates = createNativeUpdates(queryPersistence.flush);
+  useAndroidWindowInsets();
+  useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
   const [
@@ -98,12 +108,15 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
-  if (isTauri() && isPlatform('ios')) useCallKitSetup();
+  useCallKitSetup();
 
   const value: TauriContextValue = {
-    runtimeInsets: insets,
     os: osType(),
     bundleUpdateStatus,
+    nativeUpdateStatus: nativeUpdates.status,
+    nativeUpdatePreparing: nativeUpdates.preparing,
+    restartNativeUpdate: nativeUpdates.restart,
+    registerNativeUpdatePreparation: nativeUpdates.registerPreparation,
   };
 
   onMount(() => {
@@ -121,35 +134,16 @@ function TauriProvider(props: { children: JSX.Element }) {
       );
     }
     // Fetch current status since events emitted before the listener registered are missed
-    invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
-      setBundleUpdateStatus(status);
-    });
+    invoke<BundleUpdateStatus>('get_bundle_update_status')
+      .then((status) => {
+        setBundleUpdateStatus(status);
+      })
+      .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     onCleanup(() => {
-      unlistenPromise.then((unlisten) => unlisten());
+      unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     });
-
-    if (value.os === 'android') {
-      getInsets().then((insets) => {
-        setInsets(insets);
-        // Set CSS variables for Tauri insets
-        document.documentElement.style.setProperty(
-          '--tauri-inset-top',
-          `${insets.top}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-bottom',
-          `${insets.bottom}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-left',
-          `${insets.left}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-right',
-          `${insets.right}px`
-        );
-      });
-    }
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);
@@ -177,9 +171,36 @@ function TauriProvider(props: { children: JSX.Element }) {
   return (
     <TauriContext.Provider value={value}>
       <ShareTargetProvider os={value.os}>{props.children}</ShareTargetProvider>
+      <Dialog
+        open={nativeUpdates.preparing()}
+        onOpenChange={() => {}}
+        class="w-[90%] max-w-120"
+        position="center"
+      >
+        <Surface depth={2}>
+          <div class="flex flex-col gap-2 px-4 py-5">
+            <Dialog.Title class="text-lg font-semibold text-ink">
+              Restarting Macro
+            </Dialog.Title>
+            <Dialog.Description class="text-sm text-ink-extra-muted">
+              Saving your changes before installing the app update…
+            </Dialog.Description>
+          </div>
+        </Surface>
+      </Dialog>
       <NativeAppUpdateRequiredDialog
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
+        description={
+          isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
+            ? nativeUpdateDescription(nativeUpdates.status())
+            : undefined
+        }
+        onRestart={
+          nativeUpdates.status().status === 'Ready'
+            ? () => fireAndForget(nativeUpdates.restart(), 'native-updates')
+            : undefined
+        }
       />
     </TauriContext.Provider>
   );

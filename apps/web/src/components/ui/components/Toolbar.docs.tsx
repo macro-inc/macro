@@ -1,10 +1,10 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import ArrowCounterClockwiseIcon from '@phosphor/arrow-counter-clockwise.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import ZoomOutIcon from '@phosphor/magnifying-glass-minus.svg';
-import ZoomInIcon from '@phosphor/magnifying-glass-plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import ZoomOutIcon from '@icon/system/regular/magnifying-glass-minus.svg';
+import ZoomInIcon from '@icon/system/regular/magnifying-glass-plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { createSignal } from 'solid-js';
 import { Toolbar } from './Toolbar';
 
@@ -13,21 +13,25 @@ function BasicDemo() {
   return (
     <Toolbar size="icon-sm">
       <Toolbar.Group>
-        <Toolbar.Button label="Undo">
+        <Toolbar.Button aria-label="Undo" tooltip="Undo">
           <ArrowCounterClockwiseIcon />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
       <Toolbar.Group>
-        <Toolbar.Button label="Copy">
+        <Toolbar.Button aria-label="Copy" tooltip="Copy">
           <CopyIcon />
         </Toolbar.Button>
-        <Toolbar.Button label="Copy link">
+        <Toolbar.Button aria-label="Copy link" tooltip="Copy link">
           <LinkIcon />
         </Toolbar.Button>
       </Toolbar.Group>
       <Toolbar.Divider />
-      <Toolbar.Button label="Delete" class="text-failure-ink">
+      <Toolbar.Button
+        aria-label="Delete"
+        tooltip="Delete"
+        class="text-failure-ink"
+      >
         <TrashIcon />
       </Toolbar.Button>
     </Toolbar>
@@ -47,8 +51,9 @@ function MediumDemo() {
       <Toolbar.Divider />
       <Toolbar.Group>
         <Toolbar.Button
+          aria-label="Zoom out"
+          tooltip="Zoom out"
           size="icon-md"
-          label="Zoom out"
           onClick={() => setZoom((value) => Math.max(25, value - 25))}
         >
           <ZoomOutIcon />
@@ -57,8 +62,9 @@ function MediumDemo() {
           {zoom()}%
         </Toolbar.Button>
         <Toolbar.Button
+          aria-label="Zoom in"
+          tooltip="Zoom in"
           size="icon-md"
-          label="Zoom in"
           onClick={() => setZoom((value) => Math.min(200, value + 25))}
         >
           <ZoomInIcon />
@@ -73,7 +79,7 @@ export default defineDoc({
   name: 'Toolbar',
   category: 'Actions',
   description:
-    'A floating surface for compact actions. It owns the frame and shares button size and variant defaults with its children.',
+    'A floating surface for compact actions. It owns the frame and gives contained buttons small corners, with shared size and variant defaults.',
   status: 'stable',
   exports: ['Toolbar'],
   import: "import { Toolbar } from '@ui';",

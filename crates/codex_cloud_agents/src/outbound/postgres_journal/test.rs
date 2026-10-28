@@ -1,6 +1,11 @@
 use super::*;
 use uuid::Uuid;
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 #[sqlx::test(migrations = false)]
 async fn journal_survives_takeover_and_rejects_stale_or_foreign_attachments(pool: PgPool) {
     tables(&pool).await;
@@ -114,6 +119,10 @@ async fn journal_survives_takeover_and_rejects_stale_or_foreign_attachments(pool
 }
 
 async fn tables(pool: &PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::raw_sql("CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL)")
         .execute(pool).await.unwrap();
     sqlx::raw_sql(include_str!(

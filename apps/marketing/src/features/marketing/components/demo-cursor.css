@@ -1,0 +1,66 @@
+/* Shared operating pointer; editor collaborators use the caret variant. */
+.demo-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 8;
+  font-size: 20px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.25));
+  transition: transform 520ms cubic-bezier(.25, .75, .25, 1);
+}
+
+.demo-cursor > svg {
+  display: block;
+  width: 20px;
+  height: 23px;
+  overflow: visible;
+}
+
+.demo-cursor > svg path {
+  fill: #151515;
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.demo-cursor > span {
+  position: absolute;
+  top: 16px;
+  left: 15px;
+  padding: 3px 8px;
+  border-radius: 4px 10px 10px;
+  background: oklch(1 0 0);
+  color: oklch(0.17 0.002 250);
+  font: 500 11px Inter, sans-serif;
+  white-space: nowrap;
+}
+
+.demo-cursor[data-clicking='true'] > svg {
+  animation: demo-cursor-click 180ms ease both;
+  transform-origin: 1px 1px;
+}
+
+@keyframes demo-cursor-click {
+  55% {
+    transform: scale(0.92);
+  }
+}
+
+.demo-cursor[data-caret='true'] { filter: none; transition: none; }
+.demo-cursor[data-caret='true'] > svg { display: none; }
+.demo-cursor[data-caret='true']::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 19px;
+  background: #9caeff;
+  bottom: 0;
+}
+.demo-cursor[data-caret='true'] > span { top: -38px; left: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-cursor {
+    display: none;
+  }
+}

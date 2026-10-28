@@ -1,4 +1,8 @@
-import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
+import type {
+  AgentMode,
+  CodingPreferencesBody,
+  SandboxSize,
+} from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
@@ -21,6 +25,14 @@ export class AgentSessionNamespace {
   }
 
   /**
+   * Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
+   * (`'code'`), as the app's Auto mode decides before starting a session.
+   */
+  chooseMode(prompt: string): Promise<AgentMode> {
+    return AgentSession.chooseMode(this.client, prompt);
+  }
+
+  /**
    * The GitHub repositories the caller can hand a managed session, with the
    * branch each one's sessions start on by default.
    */
@@ -37,6 +49,14 @@ export class AgentSessionNamespace {
     return AgentSession.repositoryBranches(this.client, repoUrl);
   }
 
+  /**
+   * The sessions linked to the GitHub pull request at `url` that the caller
+   * can view.
+   */
+  forPullRequest(url: string): Promise<AgentSession[]> {
+    return AgentSession.forPullRequest(this.client, url);
+  }
+
   /** The caller's default sandbox size for new `@coder` sessions. */
   defaultSandboxSize(): Promise<SandboxSize> {
     return AgentSession.defaultSandboxSize(this.client);
@@ -45,5 +65,17 @@ export class AgentSessionNamespace {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     return AgentSession.setDefaultSandboxSize(this.client, size);
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  codingPreferences(): Promise<CodingPreferencesBody> {
+    return AgentSession.codingPreferences(this.client);
+  }
+
+  /** Replace the caller's coding preferences. */
+  setCodingPreferences(
+    preferences: CodingPreferencesBody,
+  ): Promise<CodingPreferencesBody> {
+    return AgentSession.setCodingPreferences(this.client, preferences);
   }
 }

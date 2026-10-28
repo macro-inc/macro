@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH taken AS (\n                SELECT 1 FROM github_pull_request WHERE github_key = $2\n            ),\n            removed AS (\n                DELETE FROM github_pull_request\n                WHERE github_key = $1 AND EXISTS (SELECT 1 FROM taken)\n            )\n            UPDATE github_pull_request\n            SET github_key = $2, updated_at = NOW()\n            WHERE github_key = $1 AND NOT EXISTS (SELECT 1 FROM taken)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ed57b03ee6be255aa5088514879e783020c679ffd30c72ccdfcbb6e1c5a04bf"
+}

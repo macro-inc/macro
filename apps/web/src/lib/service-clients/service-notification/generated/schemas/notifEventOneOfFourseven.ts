@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionWaitingForInputMetadata } from './agentSessionWaitingForInputMetadata';
+import type { GithubReviewRequested } from './githubReviewRequested';
 import type { NotifEventOneOfFoursevenTag } from './notifEventOneOfFoursevenTag';
 
 /**
- * An agent is blocked on a question for the session's owner.
+ * The user's review was requested on a GitHub pull request.
  */
 export type NotifEventOneOfFourseven = {
-  /** An agent is blocked on a question for the session's owner. */
-  content: AgentSessionWaitingForInputMetadata;
+  /** The user's review was requested on a GitHub pull request. */
+  content: GithubReviewRequested;
   tag: NotifEventOneOfFoursevenTag;
 };

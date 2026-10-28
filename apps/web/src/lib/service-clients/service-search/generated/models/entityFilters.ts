@@ -13,10 +13,11 @@ import type { ChatFilters } from './chatFilters';
 import type { CrmCompanyFilters } from './crmCompanyFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
+import type { EntityFiltersFavoritesOnly } from './entityFiltersFavoritesOnly';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
+import type { InitiativeFilters } from './initiativeFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
-import type { ReminderFilters } from './reminderFilters';
 import type { TagFilterMode } from './tagFilterMode';
 
 /**
@@ -41,14 +42,16 @@ export interface EntityFilters {
   document_filters?: DocumentFilters;
   /** the bundled [EmailFilters] */
   email_filters?: EmailFilters;
+  /** Restrict results to the authenticated viewer's favorites when true. */
+  favorites_only?: EntityFiltersFavoritesOnly;
   /** the bundled [ForeignEntityFilters] */
   foreign_entity_filters?: ForeignEntityFilters;
+  /** Initiative filters. Initiatives are opt-in. */
+  initiative_filters?: InitiativeFilters;
   /** the bundled [ProjectFilters] */
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */
   property_filters?: PropertyFilter[];
-  /** the bundled [ReminderFilters] */
-  reminder_filters?: ReminderFilters;
   /** How the `tag_option_ids` combine: `any` (default) matches entities
 holding at least one selected tag, `all` requires every selected tag. */
   tag_filter_mode?: TagFilterMode;

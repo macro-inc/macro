@@ -1,5 +1,7 @@
 import { isListViewID } from '@app/constants/list-views';
+import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
   type CalendarEventTime,
@@ -13,8 +15,9 @@ import {
   CALENDAR_VIEW_ID,
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
+import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
-import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { projectRouteId } from '@app/features/projects/core/route';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -22,18 +25,13 @@ import {
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
-import { isRecord } from '@app/lib/split-router/utils';
+import { replacePaneSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
-import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
-  getChannelParams,
   goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
   ReferredFrom,
   SplitContent,
@@ -56,7 +54,8 @@ import {
 } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import { compareDateDesc, type DateValue } from '@core/util/date';
+import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
@@ -78,32 +77,33 @@ import {
   isSearchEntity,
   isWithNotification,
   queryKeys,
-  type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
   type WithNotification,
   type WithSearch,
 } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import {
   compositeEntity,
   documentCommentLocation,
   getChannelNotificationParams,
   getDocumentCommentLocation,
   getDocumentCommentNotification,
-  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
+import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
-import { fetchAndCacheThread } from '@queries/email/thread';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -116,10 +116,6 @@ import {
   snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
 import {
-  invalidateRemindersById,
-  setReminderCompleted,
-} from '@queries/reminders/reminders';
-import {
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -127,9 +123,13 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
+import {
+  searchLocationTarget,
+  searchLocationUpdates,
+} from './search-navigation';
 
 export { scopeChannelNotificationsForEntity };
 
@@ -261,19 +261,6 @@ export const openEntityInNewTab = ({
   location?: SearchLocation;
 }) => {
   location ??= getRowClickFallbackLocation(entity);
-  // A reminder opens its own editor — a `reminder-view` component split with a
-  // URL of its own — the same as the split paths, even a standalone one that
-  // references nothing.
-  if (entity.type === 'reminder') {
-    openExternalUrl(
-      new URL(
-        `/app/component/reminder-view~${entity.id}`,
-        window.location.origin
-      ).href
-    );
-    return;
-  }
-
   // Build URL for the entity
   let entityPath: string;
   if (entity.type === 'calendar_event') {
@@ -288,7 +275,7 @@ export const openEntityInNewTab = ({
   ) {
     entityPath = `/app/channel/${entity.channelId}`;
   } else {
-    entityPath = `/app/${entity.type}/${entity.id}`;
+    entityPath = `/app/${entity.type === 'agent_session' ? 'agent' : entity.type}/${entity.id}`;
   }
 
   // Add location params if present
@@ -299,76 +286,25 @@ export const openEntityInNewTab = ({
       calendarFocusedEventSearchKey(),
       calendarViewTargetForEntity(entity).eventId ?? entity.id
     );
-  } else if (
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  ) {
-    entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
-    if (entity.threadId) {
-      entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
-    }
-  } else if (location) {
-    switch (location.type) {
-      case 'agent':
-        for (const [key, value] of Object.entries(
-          agentMessageParams(location)
-        )) {
-          entityUrl.searchParams.set(key, value);
-        }
-        break;
-      case 'channel':
-        if (location.messageId) {
-          entityUrl.searchParams.set(
-            CHANNEL_PARAMS.message,
-            location.messageId
-          );
-        }
-        if (location.threadId) {
-          entityUrl.searchParams.set(CHANNEL_PARAMS.thread, location.threadId);
-        }
-        break;
-      case 'email':
-        if (location.messageId) {
-          entityUrl.searchParams.set('email_message_id', location.messageId);
-        }
-
-        break;
-      case 'md':
-        if (location.nodeId) {
-          entityUrl.searchParams.set('node_id', location.nodeId);
-        }
-        break;
-      case 'pdf':
-        if (location.searchPage !== undefined) {
-          entityUrl.searchParams.set(
-            'search_page',
-            location.searchPage.toString()
-          );
-        }
-        if (location.searchRawQuery) {
-          entityUrl.searchParams.set(
-            'search_raw_query',
-            location.searchRawQuery
-          );
-        }
-        if (location.highlightTerms) {
-          entityUrl.searchParams.set(
-            'search_highlight_terms',
-            JSON.stringify(location.highlightTerms)
-          );
-        }
-        if (location.searchSnippet) {
-          entityUrl.searchParams.set('search_snippet', location.searchSnippet);
-        }
-        break;
-      case 'call_record':
-        if (location.transcriptId) {
-          entityUrl.searchParams.set(
-            CALL_PARAMS.transcriptId,
-            location.transcriptId
-          );
-        }
-        break;
+  } else {
+    const channelTarget = getChannelEntityTarget(entity);
+    const target =
+      location ??
+      (channelTarget?.kind === 'message'
+        ? {
+            type: 'channel' as const,
+            messageId: channelTarget.messageId,
+            threadId: channelTarget.threadId,
+          }
+        : undefined);
+    if (target) {
+      const { namespace, params } = searchLocationTarget(
+        getEntitySplitContent(entity).id,
+        target
+      );
+      replacePaneSearchParams(entityUrl.searchParams, [
+        { [namespace]: params },
+      ]);
     }
   }
 
@@ -429,6 +365,10 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
+  /** Default: notification. Explicit message targets always take precedence. */
+  channelNavigation?: 'latest' | 'notification';
+  /** Default: inbox-row. Top-level includes mentions and reactions outside threads. */
+  channelReadScope?: 'top-level' | 'inbox-row';
 }
 
 /**
@@ -521,7 +461,9 @@ export function channelIdForPreviewNavigation(
 
 export function getChannelEntityTarget(
   entity: EntityData | ChannelPreviewSelection,
-  options: { scopeChannelThreads?: boolean } = {}
+  {
+    channelNavigation = 'notification',
+  }: { channelNavigation?: 'latest' | 'notification' } = {}
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -548,15 +490,11 @@ export function getChannelEntityTarget(
           threadId: entity.threadId,
         };
 
-  if (!isWithNotification(entity)) return fallback;
+  if (channelNavigation === 'latest' || !isWithNotification(entity))
+    return fallback;
 
   const notifications = entity.notifications?.() ?? [];
-  const scoped =
-    options.scopeChannelThreads === false
-      ? [...notifications].sort((a, b) =>
-          compareDateDesc(a.created_at, b.created_at)
-        )
-      : scopeChannelNotificationsForEntity(entity, notifications);
+  const scoped = scopeChannelNotificationsForEntity(entity, notifications);
   for (const notification of scoped) {
     // For a whole-`channel` row, ignore notifications you have already read:
     // the row stands for the entire channel, so once read it should open at
@@ -748,7 +686,20 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
+  // Latest opens do not need notifications to choose their destination. Snapshot
+  // the list row before navigation can dispose its Solid store, and hydrate only
+  // after the open is accepted. Inbox notification-targeted opens still wait.
+  const deferredChannel =
+    entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    options.channelNavigation === 'latest'
+      ? { ...entity }
+      : undefined;
+  if (
+    entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    !deferredChannel
+  ) {
     try {
       entity = await hydrateChannelNotificationSelection(
         entity,
@@ -763,33 +714,31 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  const channelTarget = getChannelEntityTarget(entity);
+  const channelTarget = getChannelEntityTarget(entity, {
+    channelNavigation: options.channelNavigation,
+  });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
-  if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
-  }
-
-  let params: Record<string, string> | undefined;
-  if (entity.type === 'agent_session' && location?.type === 'agent') {
-    params = agentMessageParams(location);
-  } else if (entity.type === 'channel' && location?.type === 'channel') {
-    params = getChannelParams(location.messageId, location.threadId);
-  } else if (channelMessageTarget) {
-    params = getChannelParams(
-      channelMessageTarget.messageId,
-      channelMessageTarget.threadId
-    );
-  } else if (entity.type === 'call' && location?.type === 'call_record') {
-    params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
-  }
+  const target =
+    location ??
+    (channelMessageTarget
+      ? {
+          type: 'channel' as const,
+          messageId: channelMessageTarget.messageId,
+          threadId: channelMessageTarget.threadId,
+        }
+      : undefined);
+  // A row keeps pointing at its comment notification until that notification is
+  // done, so on touch — where the thread is a drawer over the whole page, not a
+  // margin card beside the text — the row would cover the document with the
+  // same comment on every open. A tap on a document row asks for the document;
+  // the notification list still opens the comment itself.
   const commentParams =
-    !location && entity.type === 'document'
+    !target && entity.type === 'document' && !isTouchDevice()
       ? getDocumentCommentTarget(entity)?.params
       : undefined;
-  params ??= commentParams;
 
   const sourceContent =
     splitHandle?.content() ?? splitManager.activeSplit()?.content();
@@ -804,35 +753,64 @@ export const openEntityInSplitFromUnifiedList = async (
   // legacy blocks. Comment targets keep their document block.
   const hostedContent =
     reviewsHostedContent(content) ??
+    callsHostedContent(content) ??
     driveHostedContent(content, {
       allowDocuments: !isTouchDevice() && !commentParams,
     });
-  let splitContent: SplitContent = hostedContent ?? { ...content, params };
-  const callTranscriptId =
-    entity.type === 'call' && location?.type === 'call_record'
-      ? location.transcriptId
-      : undefined;
-  if (callTranscriptId) {
-    splitContent = {
-      ...splitContent,
-      entryMetadata: {
-        ...(isRecord(splitContent.entryMetadata)
-          ? splitContent.entryMetadata
-          : {}),
-        search: {
-          'call-detail': {
-            transcriptId: [callTranscriptId],
-            seek: [`${Date.now()}-${Math.random()}`],
-          },
-        },
-      },
-    };
-  }
+  let splitContent: SplitContent = hostedContent ?? {
+    ...content,
+    params: commentParams,
+  };
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
+  const hydrateNotificationsAndMarkSeen = async (
+    channel: ChannelEntity,
+    notificationSource: NotificationSource
+  ) => {
+    try {
+      const hydrated = await hydrateChannelNotificationSelection(
+        channel,
+        notificationSource.withLocalOverrides
+      );
+      const view = splitManager.findOpenView(content);
+      // A late response must not mark a closed conversation or a mobile pane
+      // that the user has already left. Hydration never reopens or retargets it.
+      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
+      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+        channelReadScope: options.channelReadScope,
+      });
+    } catch (error) {
+      console.error('Failed to load conversation notifications after opening', {
+        channelId: channel.id,
+        error,
+      });
+    }
+  };
+
+  let markedNotifications = false;
+  const markNotificationsSeen = () => {
+    if (markedNotifications) return;
+    markedNotifications = true;
+    if (!options.notificationSource) return;
+    if (deferredChannel) {
+      fireAndForget(
+        hydrateNotificationsAndMarkSeen(
+          deferredChannel,
+          options.notificationSource
+        ),
+        'open-entity-in-split'
+      );
+      return;
+    }
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      channelReadScope: options.channelReadScope,
+    });
+  };
   const result = splitManager.openWithSplit(splitContent, {
+    search: target ? searchLocationUpdates(content.id, target) : undefined,
+    onApplied: markNotificationsSeen,
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
@@ -849,41 +827,24 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
-  // Routed calls have no block handle. Update a reused split's route search
-  // instead of waiting for a legacy block method that will never register.
-  if (location?.type === 'call_record') {
-    if (result.status === 'reused' && result.split && callTranscriptId) {
-      result.split.replace({
-        next: {
-          ...result.split.content(),
-          entryMetadata: splitContent.entryMetadata,
-        },
-        mergeHistory: true,
-      });
-    } else if (result.status === 'reused' && !result.split) {
-      await navigateToLocation(content.id, location, blockOrchestrator);
+  if (result.status === 'opened' || result.status === 'reused') {
+    markNotificationsSeen();
+  }
+
+  // The split is already open; a failed in-block navigation leaves it at its
+  // default position, so report it rather than rejecting every caller.
+  try {
+    if (commentParams && entity.type === 'document') {
+      // An already-open document ignores new split params.
+      await navigateDocumentEntityToComment(entity, blockOrchestrator);
+    } else if (!target && openChannelAtLatest) {
+      // Force the scroll-to-bottom even when the channel is already open in a
+      // (preview) split, where reopen: 'latest' only reactivates the parked
+      // split without re-pinning it to the newest message.
+      await goToChannelLatest(blockOrchestrator, content.id);
     }
-  } else if (location) {
-    await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (channelMessageTarget) {
-    // NOTE: This will force target message navigation in case the split is already open.
-    await navigateToLocation(
-      content.id,
-      {
-        type: 'channel',
-        messageId: channelMessageTarget.messageId,
-        threadId: channelMessageTarget.threadId,
-      },
-      blockOrchestrator
-    );
-  } else if (commentParams && entity.type === 'document') {
-    // An already-open document ignores new split params.
-    await navigateDocumentEntityToComment(entity, blockOrchestrator);
-  } else if (openChannelAtLatest) {
-    // Force the scroll-to-bottom even when the channel is already open in a
-    // (preview) split, where reopen: 'latest' only reactivates the parked
-    // split without re-pinning it to the newest message.
-    await goToChannelLatest(blockOrchestrator, content.id);
+  } catch (error) {
+    Telemetry.error(error, { surface: 'open-entity-in-split' });
   }
 };
 
@@ -894,11 +855,15 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges.
+ * while the configured mutation updates GraphQL edges. Chat opens the whole
+ * conversation's top-level messages; Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  {
+    channelReadScope = 'inbox-row',
+  }: { channelReadScope?: 'top-level' | 'inbox-row' } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -909,8 +874,13 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: true,
-  }).filter((notification) => !notificationIsRead(notification));
+    scopeChannelThreads: channelReadScope === 'inbox-row',
+  }).filter(
+    (notification) =>
+      !notificationIsRead(notification) &&
+      (channelReadScope === 'inbox-row' ||
+        isTopLevelChannelNotification(notification))
+  );
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
@@ -919,28 +889,15 @@ export function markChannelNotificationsSeenOnOpen(
 }
 
 /**
- * Mark a reminder's notification read when the user opens it.
- *
- * Every other entity type gets this for free from the block it opens into,
- * which mounts `DebouncedNotificationReadMarker`. A reminder has no block of
- * its own — it navigates to whatever it references, and that block's marker
- * clears the referenced entity's notifications, not the reminder's. So opening
- * is the only signal we get, and without this the row keeps its unread dot
- * forever.
- *
- * Seen, not done: the reminder stays in Signal until the user dismisses it.
+ * Clear the dots of rows whose opened view has no block that marks the row's
+ * loaded notifications read: calendar events and agent sessions.
  */
-export function markReminderSeenOnOpen(
-  entity: EntityData,
+export function markRowNotificationsSeenOnOpen(
+  entity: EntityWithRawNotifications<EntityData>,
   notificationSource: NotificationSource
 ) {
-  // Calendar events share the reminder situation: they open the calendar
-  // component split, which has no block to clear the notification either.
-  if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
-  void markNotificationsForEntityAsReadInBackground(notificationSource, {
-    type: entity.type,
-    id: entity.id,
-  });
+  markCalendarNotificationSeenOnOpen(entity, notificationSource);
+  markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**
@@ -1003,35 +960,14 @@ export function calendarViewTargetForEntity(
   };
 }
 
-/**
- * The entity a reminder references, as block content. A reminder itself opens
- * its own `reminder-view` editor (see `getEntitySplitContent`); this is only
- * the reference, used where the reference is shown directly (PreviewPanel).
- * `undefined` for a standalone reminder, which points at nothing.
- *
- * `fileType`/`subType` come resolved from the server, so a referenced document
- * lands on its real block rather than 'unknown'.
- */
-export type ReminderPreviewSelection = Pick<
-  ReminderEntity,
-  'id' | 'type' | 'referencedEntity'
->;
-
-export function reminderSplitTarget(entity: ReminderPreviewSelection) {
-  const referenced = entity.referencedEntity;
-  if (!referenced) return undefined;
-  return {
-    type: fileTypeToBlockName(
-      referenced.subType ?? referenced.fileType ?? referenced.type
-    ),
-    id: referenced.id,
-  };
-}
-
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);
@@ -1057,16 +993,6 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'crm_contact' }, (entity) => {
         return { type: 'contact' as const, id: entity.id };
       })
-      .with({ type: 'reminder' }, (entity) => {
-        // A reminder has no block of its own; it opens its editor as a
-        // component split. The reminder id rides in the content id (component
-        // params are dropped on URL restore, and split identity is keyed on the
-        // id, so each reminder needs a distinct one) — see `resolveComponent`.
-        return {
-          type: 'component' as const,
-          id: `reminder-view~${entity.id}`,
-        };
-      })
       // Calendar events open the singleton Calendar application view; the open
       // path branches before reaching here, so this only serves duplicate checks.
       .with({ type: 'calendar_event' }, () => {
@@ -1076,61 +1002,6 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: entity.type, id: entity.id };
       })
   );
-}
-
-/**
- * Navigates to a specific location within a block.
- */
-async function navigateToLocation(
-  entityId: string,
-  location: SearchLocation,
-  blockOrchestrator: BlockOrchestrator
-): Promise<void> {
-  const blockHandle = await blockOrchestrator.getBlockHandle(entityId);
-  if (!blockHandle) return;
-
-  switch (location.type) {
-    case 'agent': {
-      await blockHandle.goToLocationFromParams(agentMessageParams(location));
-      break;
-    }
-    case 'channel': {
-      // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
-      await blockHandle.goToLocationFromParams(
-        getChannelParams(location.messageId, location.threadId)
-      );
-      break;
-    }
-    case 'email': {
-      await blockHandle.goToLocationFromParams({
-        [EMAIL_PARAMS.messageId]: location.messageId,
-      });
-      break;
-    }
-    case 'md': {
-      await blockHandle.goToLocationFromParams({
-        [MD_PARAMS.nodeId]: location.nodeId,
-      });
-      break;
-    }
-    case 'pdf': {
-      await blockHandle.goToLocationFromParams({
-        [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-        [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-        [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-          location.highlightTerms
-        ),
-        [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-      });
-      break;
-    }
-    case 'call_record': {
-      await blockHandle.goToLocationFromParams({
-        [CALL_PARAMS.transcriptId]: location.transcriptId,
-      });
-      break;
-    }
-  }
 }
 
 async function _archiveEmail(
@@ -1198,19 +1069,17 @@ async function _archiveEmail(
 type TrashEmailsHandle = {
   /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
   done: Promise<void>;
-  /** Optimistically restores all entities and calls the API to remove the TRASH label. */
+  /** Optimistically restores all entities and asks the API to restore them from trash. */
   undo: () => Promise<void>;
 };
 
 export type TrashEmailTarget = { id: string; linkId?: string };
 
-type TrashLabel = { id: string; linkId?: string };
-
 /**
  * Trash one or more email threads.
  *
  * Optimistically removes them from the soup and from all email queries,
- * then resolves the TRASH label and calls the API. If anything fails, rolls
+ * then sends the desired trash state to the API. If anything fails, rolls
  * back the optimistic update.
  *
  * Returns synchronously so the caller can show the undo toast immediately.
@@ -1247,106 +1116,15 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
     }
   };
 
-  // Map each thread id to the TRASH label used to trash it, so undo can remove
-  // the same label. Populated only once every thread has trashed successfully.
-  const threadTrashLabelIds = new Map<string, string>();
-
-  // Seed known linkIds from the explicit targets and the cached email lists.
-  const threadLinkIds = new Map<string, string>();
-  for (const target of targets) {
-    if (target.linkId) {
-      threadLinkIds.set(target.id, target.linkId);
-    }
-  }
-  for (const [, data] of previousEmail) {
-    if (!data?.pages) continue;
-    for (const page of data.pages) {
-      if (!page?.items) continue;
-      for (const item of page.items) {
-        if (
-          item?.id &&
-          idSet.has(item.id) &&
-          !threadLinkIds.has(item.id) &&
-          'linkId' in item &&
-          item.linkId
-        ) {
-          threadLinkIds.set(item.id, item.linkId);
-        }
-      }
-    }
-  }
-
-  // Resolve the TRASH label belonging to a thread's own inbox. The labels
-  // endpoint returns every inbox's labels, so a multi-inbox user must trash
-  // with the label whose linkId matches the thread. The single-label fallback
-  // applies only when the inbox is unknown — a known inbox with no matching
-  // label fails rather than trashing into the wrong one.
-  const resolveTrashLabelId = async (
-    id: string,
-    trashLabels: TrashLabel[]
-  ): Promise<string> => {
-    let linkId = threadLinkIds.get(id);
-    if (!linkId) {
-      const threadData = queryClient.getQueryData<{
-        link_id?: string;
-        pages?: Array<{ link_id?: string }>;
-      }>(emailKeys.threadMessages(id).queryKey);
-      linkId = threadData?.link_id ?? threadData?.pages?.[0]?.link_id;
-    }
-    if (!linkId && trashLabels.length > 1) {
-      const fetched = await fetchAndCacheThread(id);
-      if (!fetched.isErr()) {
-        linkId = fetched.value.thread.link_id;
-      }
-    }
-
-    const matchedLabelId = linkId
-      ? trashLabels.find((label) => label.linkId === linkId)?.id
-      : undefined;
-    const labelId =
-      matchedLabelId ??
-      (linkId
-        ? undefined
-        : trashLabels.length === 1
-          ? trashLabels[0]?.id
-          : undefined);
-    if (!labelId) {
-      throw new Error('TRASH label not found');
-    }
-    return labelId;
-  };
-
   const done = (async () => {
     try {
-      const labelsData = await queryClient.fetchQuery({
-        queryKey: emailKeys.labels.queryKey,
-        queryFn: async () =>
-          throwOnErr(async () => await emailClient.getUserLabels()),
-        staleTime: 5 * 60 * 1000,
-      });
-      const trashLabels =
-        labelsData?.labels.filter((l) => l.providerLabelId === 'TRASH') ?? [];
-      if (trashLabels.length === 0) {
-        throw new Error('TRASH label not found');
-      }
-
-      // Resolve every thread's label before trashing any of them, so a lookup
-      // failure can't leave part of the batch trashed on the server while the
-      // rest is rolled back locally.
-      const labelIds = await Promise.all(
-        ids.map((id) => resolveTrashLabelId(id, trashLabels))
-      );
-
-      // updateThreadLabel resolves an Err on HTTP failure rather than
-      // rejecting, so throwOnErr turns a failed trash into a real rejection.
-      // Settle every call so a partial failure can be compensated instead of
-      // leaving the server disagreeing with the rolled-back UI.
+      // Settle every request so a partial failure can be compensated.
       const outcomes = await Promise.allSettled(
-        ids.map((id, i) =>
+        ids.map((id) =>
           throwOnErr(() =>
-            emailClient.updateThreadLabel({
+            updateEmailThreadState({
               thread_id: id,
-              label_id: labelIds[i]!,
+              field: 'trashed',
               value: true,
             })
           )
@@ -1362,9 +1140,9 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             outcomes[i]?.status === 'fulfilled'
               ? [
                   throwOnErr(() =>
-                    emailClient.updateThreadLabel({
+                    updateEmailThreadState({
                       thread_id: id,
-                      label_id: labelIds[i]!,
+                      field: 'trashed',
                       value: false,
                     })
                   ),
@@ -1374,9 +1152,6 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
         );
         throw (failure as PromiseRejectedResult).reason;
       }
-
-      // Every thread trashed — remember the labels so undo can remove them.
-      ids.forEach((id, i) => threadTrashLabelIds.set(id, labelIds[i]!));
     } catch (err) {
       rollback();
       throw err;
@@ -1394,7 +1169,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
   return {
     done,
     undo: async () => {
-      // Wait for the trash calls to finish so we know the label IDs. On any
+      // Wait for the trash calls to finish before restoring the threads. On any
       // failure `done` has already rolled back and reverted the server, so
       // there is nothing left to undo.
       try {
@@ -1408,12 +1183,10 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       try {
         await Promise.all(
           ids.map((id) => {
-            const labelId = threadTrashLabelIds.get(id);
-            if (!labelId) return Promise.resolve();
             return throwOnErr(() =>
-              emailClient.updateThreadLabel({
+              updateEmailThreadState({
                 thread_id: id,
-                label_id: labelId,
+                field: 'trashed',
                 value: false,
               })
             );
@@ -1441,6 +1214,10 @@ export type MarkEntitiesDoneContext = {
   reapply: () => void;
   /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
   applyUndone: () => void;
+  /** Release GraphQL intent only after mounted cache readers acknowledge it. */
+  settle: (notificationIds?: readonly string[]) => void;
+  /** After a partial inverse failure, let authoritative GraphQL state reconcile. */
+  releaseGraphql: () => void;
 };
 
 function notificationsForMarkDone(
@@ -1474,19 +1251,13 @@ export function resolveMarkEntitiesDoneVariables(args: {
    * channel_thread mark-done only targets that thread's stack.
    */
   scopeChannelNotificationsToEntity?: boolean;
-}): { emailIds: string[]; notificationIds: string[]; reminderIds: string[] } {
+}): { emailIds: string[]; notificationIds: string[] } {
   const {
     entities,
     notificationSource,
     scopeChannelNotificationsToEntity = false,
   } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
-  // A reminder's done state is its own column, not its notification's: a
-  // reminder that has not fired yet has no notification to mark, and the
-  // Reminders view filters on the column.
-  const reminderIds = entities
-    .filter((e) => e.type === 'reminder')
-    .map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
     // GraphQL Soup rows carry their own notification edge. Prefer that edge
     // over the global notification query, which may not have paged far enough
@@ -1511,7 +1282,6 @@ export function resolveMarkEntitiesDoneVariables(args: {
   return {
     emailIds: [...new Set(emailIds)],
     notificationIds: [...new Set(notificationIds)],
-    reminderIds: [...new Set(reminderIds)],
   };
 }
 
@@ -1525,9 +1295,16 @@ export function applyEntitiesDoneOptimistic(args: {
   entityIds: string[];
   emailIds: string[];
   notificationIds: string[];
-  reminderIds?: string[];
+  scopeChannelThreads?: boolean;
 }): MarkEntitiesDoneContext {
-  const { entityIds, emailIds, notificationIds, reminderIds = [] } = args;
+  const { entityIds, emailIds, notificationIds } = args;
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return applyGraphqlDoneOptimistic({
+      entityIds,
+      notificationIds,
+      scopeChannelThreads: args.scopeChannelThreads,
+    });
+  }
   const emailIdSet = new Set(emailIds);
   const entityIdSet = new Set(entityIds);
 
@@ -1599,8 +1376,6 @@ export function applyEntitiesDoneOptimistic(args: {
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   let emailRowTxns: { rollback: () => void }[] = [];
-  let reminderRowTxns: { rollback: () => void }[] = [];
-  const completedStamp = new Date().toISOString();
 
   const reapply = () => {
     // Remove the marked entities from done-filtered soup queries (inbox,
@@ -1618,25 +1393,11 @@ export function applyEntitiesDoneOptimistic(args: {
         frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
       })
     );
-    // Stamping `completedAt` is what drops a reminder out of the Active and
-    // Scheduled tabs, both of which require `!entity.completedAt` — so this
-    // takes effect before any refetch, whether or not it had already fired.
-    reminderRowTxns = reminderIds.map((id) =>
-      optimisticUpdateSoupEntity({
-        tag: 'reminder',
-        data: { id, completedAt: completedStamp },
-        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
-      })
-    );
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
 
   const rollbackSoup = () => {
-    for (const txn of [...reminderRowTxns].reverse()) {
-      txn.rollback();
-    }
-    reminderRowTxns = [];
     for (const txn of [...emailRowTxns].reverse()) {
       txn.rollback();
     }
@@ -1662,7 +1423,13 @@ export function applyEntitiesDoneOptimistic(args: {
 
   reapply();
 
-  return { rollback, reapply, applyUndone };
+  return {
+    rollback,
+    reapply,
+    applyUndone,
+    settle: () => {},
+    releaseGraphql: () => {},
+  };
 }
 
 /**
@@ -1674,19 +1441,15 @@ export function applyEntitiesDoneOptimistic(args: {
 export function applyEntitiesNotDoneOptimistic(args: {
   emailIds: string[];
   notificationIds: string[];
-  reminderIds?: string[];
-}): { rollback: () => void } {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
-  // Clearing `completedAt` is what returns a reminder to Active or Scheduled
-  // (whichever its `nextRunAt` puts it in); both predicates require it unset.
-  const reminderRowTxns = reminderIds.map((id) =>
-    optimisticUpdateSoupEntity({
-      tag: 'reminder',
-      data: { id, completedAt: null },
-      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
-    })
-  );
-
+}): { rollback: () => void; settle: () => void } {
+  const { emailIds, notificationIds } = args;
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return applyGraphqlDoneOptimistic({
+      entityIds: emailIds,
+      notificationIds,
+      done: false,
+    });
+  }
   const emailRowTxns = emailIds.map((id) =>
     optimisticUpdateSoupEntity({
       tag: 'emailThread',
@@ -1697,10 +1460,8 @@ export function applyEntitiesNotDoneOptimistic(args: {
   setDoneOverride(notificationIds, false);
 
   return {
+    settle: () => {},
     rollback: () => {
-      for (const txn of [...reminderRowTxns].reverse()) {
-        txn.rollback();
-      }
       for (const txn of [...emailRowTxns].reverse()) {
         txn.rollback();
       }
@@ -1710,19 +1471,31 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Flip the reminders' own `completed` column. One PATCH each — the reminders
- * API has no bulk endpoint, and a mark-done selection is normally one row.
+ * A write receipt is delivered even when another write in the action fails.
+ * ID-scoped notification receipts keep the explicit requested scope (including
+ * durably queued writes); the backend atomically updates its owned, non-deleted
+ * matches in one statement. Entity-scoped receipts instead carry returned rows
+ * so Undo can discover exact IDs without including later notifications.
+ *
+ * A rejected response is not proof of no persistence: post-commit push-cleanup
+ * lookups can fail, and transport responses can be lost. Retire unacknowledged
+ * display intent; do not guess additional inverse IDs from those failures.
  */
-function setRemindersCompleted(
-  reminderIds: string[],
-  completed: boolean
-): Promise<unknown>[] {
-  return reminderIds.map((id) => setReminderCompleted(id, completed));
-}
+export type MarkDoneWriteOutcome =
+  | {
+      kind: 'email';
+      id: string;
+      result: PromiseSettledResult<EmailArchiveDisposition>;
+    }
+  | { kind: 'notifications'; result: PromiseSettledResult<string[]> }
+  | {
+      kind: 'entity-notifications';
+      result: PromiseSettledResult<UnifiedNotification[]>;
+    };
 
 /**
- * Fires archive, selective ID-scoped notification, entity-scoped notification,
- * and reminder completion writes. Returns the authoritative notification IDs
+ * Fires archive, selective ID-scoped notification, and entity-scoped notification
+ * writes. Returns the authoritative notification IDs
  * produced by the entity write. Throws on any failure; the caller owns rollback
  * through the context returned by `applyEntitiesDoneOptimistic`.
  */
@@ -1730,53 +1503,65 @@ export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
   notificationEntities?: NotificationEntityRef[];
-  reminderIds?: string[];
+  onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
 }): Promise<string[]> {
-  const {
-    emailIds,
-    notificationIds,
-    notificationEntities = [],
-    reminderIds = [],
-  } = args;
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-  ]);
+  const { emailIds, notificationIds, notificationEntities = [] } = args;
+  const graphql = isFeatureEnabled(enableGraphqlSoup);
+  if (!graphql) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+    ]);
+  }
 
-  let authoritativeNotificationIds: string[] = [];
-  const results = await Promise.allSettled([
-    ...emailIds.map((id) => archiveEmailThread({ value: true, id })),
-    notificationIds.length > 0
-      ? bulkMarkNotificationsAsDone(notificationIds)
-      : Promise.resolve(),
-    notificationEntities.length > 0
-      ? updateNotificationsForEntities({
-          entities: notificationEntities,
-          operation: 'MARK_DONE',
-        }).then((notifications) => {
-          authoritativeNotificationIds = notifications.map(
-            (notification) => notification.id
-          );
-        })
-      : Promise.resolve(),
-    ...setRemindersCompleted(reminderIds, true),
-  ]);
+  const writeNotificationIds = async () => {
+    if (notificationIds.length > 0)
+      await bulkMarkNotificationsAsDone(notificationIds);
+    return notificationIds;
+  };
+  const writeNotificationEntities = async () => {
+    if (notificationEntities.length === 0) return [];
+    return await updateNotificationsForEntities({
+      entities: notificationEntities,
+      operation: 'MARK_DONE',
+    });
+  };
+  const [emailResults, [notificationResult], [entityResult]] =
+    await Promise.all([
+      archiveEmailThreads(emailIds, true),
+      Promise.allSettled([writeNotificationIds()]),
+      Promise.allSettled([writeNotificationEntities()]),
+    ]);
+  const report = args.onWriteSettled ?? (() => {});
+  for (const [index, result] of emailResults.entries())
+    report({ kind: 'email', id: emailIds[index], result });
+  if (notificationIds.length > 0)
+    report({ kind: 'notifications', result: notificationResult });
+  if (notificationEntities.length > 0)
+    report({ kind: 'entity-notifications', result: entityResult });
 
-  const hasQueuedEmail = results
-    .slice(0, emailIds.length)
-    .some(
-      (result) => result.status === 'fulfilled' && result.value === 'queued'
-    );
+  const authoritativeNotificationIds =
+    entityResult.status === 'fulfilled'
+      ? entityResult.value.map(({ id }) => id)
+      : [];
+  const results = [...emailResults, notificationResult, entityResult];
+  const hasQueuedEmail = emailResults.some(
+    (result) => result.status === 'fulfilled' && result.value === 'queued'
+  );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
 
+  if (graphql) {
+    // Email/notification writers own normalized rollback and revalidation.
+    if (rejected) throw rejected.reason ?? new Error('Failed to mark as done');
+    return authoritativeNotificationIds;
+  }
+
   if (rejected) {
     // Real refetch to reconcile server state with the UI after the caller
-    // rolls back its optimistic cache writes. `allSettled` means some
-    // reminders may have been written even though the caller rolls all of
-    // them back, so they have to be reconciled too, not just the emails.
-    invalidateRemindersById(reminderIds, { refetch: true });
+    // rolls back its optimistic cache writes. Some email or notification
+    // writes may have succeeded before another operation failed.
     await Promise.all([
       ...(!hasQueuedEmail
         ? [
@@ -1785,12 +1570,10 @@ export async function executeMarkEntitiesDone(args: {
           ]
         : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to mark as done');
   }
 
-  invalidateRemindersById(reminderIds);
   await Promise.all([
     // A shared REST list can contain both committed and queued threads. Do
     // not fetch its pre-write server state over any queued optimistic row.
@@ -1819,37 +1602,56 @@ export async function executeMarkEntitiesDone(args: {
 export async function executeMarkEntitiesUndone(args: {
   emailIds: string[];
   notificationIds: string[];
-  reminderIds?: string[];
+  /** Report each write before reconciliation, so bulk actions can settle or
+   * roll back just that thread even when a sibling write fails. */
+  onEmailSettled?: (
+    id: string,
+    result: PromiseSettledResult<EmailArchiveDisposition>
+  ) => void;
+  onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
 }): Promise<EmailArchiveDisposition> {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-  ]);
+  const { emailIds, notificationIds } = args;
+  const graphql = isFeatureEnabled(enableGraphqlSoup);
+  if (!graphql) {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
+    ]);
+  }
 
-  const results = await Promise.allSettled([
-    ...emailIds.map((id) => archiveEmailThread({ value: false, id })),
-    notificationIds.length > 0
-      ? bulkMarkNotificationsAsUndone(notificationIds)
-      : Promise.resolve(),
-    ...setRemindersCompleted(reminderIds, false),
+  const writeNotificationIds = async () => {
+    if (notificationIds.length > 0)
+      await bulkMarkNotificationsAsUndone(notificationIds);
+    return notificationIds;
+  };
+  const [emailResults, [notificationResult]] = await Promise.all([
+    archiveEmailThreads(emailIds, false),
+    Promise.allSettled([writeNotificationIds()]),
   ]);
-
-  const hasQueuedEmail = results
-    .slice(0, emailIds.length)
-    .some(
-      (result) => result.status === 'fulfilled' && result.value === 'queued'
-    );
+  for (const [index, result] of emailResults.entries()) {
+    args.onEmailSettled?.(emailIds[index], result);
+    args.onWriteSettled?.({ kind: 'email', id: emailIds[index], result });
+  }
+  if (notificationIds.length > 0)
+    args.onWriteSettled?.({
+      kind: 'notifications',
+      result: notificationResult,
+    });
+  const results = [...emailResults, notificationResult];
+  const hasQueuedEmail = emailResults.some(
+    (result) => result.status === 'fulfilled' && result.value === 'queued'
+  );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
 
+  if (graphql) {
+    if (rejected) throw rejected.reason ?? new Error('Failed to undo');
+    return hasQueuedEmail ? 'queued' : 'committed';
+  }
+
   if (rejected) {
-    // `allSettled`, so some of these may have succeeded even though the caller
-    // rolls every optimistic transaction back. Reconcile both kinds against the
-    // server or their Soup rows keep the state the rollback restored — an
-    // unarchived thread would sit there still showing as done.
-    invalidateRemindersById(reminderIds, { refetch: true });
+    // REST retains its legacy batch rollback/reconciliation.
     await Promise.all([
       ...(!hasQueuedEmail
         ? [
@@ -1858,12 +1660,9 @@ export async function executeMarkEntitiesUndone(args: {
           ]
         : []),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
   }
-
-  invalidateRemindersById(reminderIds);
 
   await Promise.all([
     ...(!hasQueuedEmail
@@ -1887,5 +1686,3 @@ export async function executeMarkEntitiesUndone(args: {
   ]);
   return hasQueuedEmail ? 'queued' : 'committed';
 }
-
-import { agentMessageParams } from '@app/features/block-agent/core/search-location';

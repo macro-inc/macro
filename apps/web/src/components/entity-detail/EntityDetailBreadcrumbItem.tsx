@@ -1,4 +1,6 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
+import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -7,6 +9,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useItemRawName } from '@queries/preview';
 import type { ItemEntity } from '@queries/preview/types';
 import { Show } from 'solid-js';
+import { DocumentTitleHoverCard } from './DocumentTitleHoverCard';
 import type {
   EntityDetailNavigationEntry,
   EntityDetailTarget,
@@ -18,16 +21,15 @@ function breadcrumbIcon(target: EntityDetailTarget): EntityIconSelector {
       target.fileType ??
       'unknown') as EntityIconSelector;
   }
-  if (
-    target.type === 'channel' ||
-    target.type === 'channel_message' ||
-    target.type === 'channel_thread'
-  ) {
-    return 'channel';
-  }
   return fileTypeToBlockName(target.type, true);
 }
 
+function breadcrumbChannelId(target: EntityDetailTarget): string | undefined {
+  if (target.type === 'channel') return target.id;
+  if (target.type === 'channel_message' || target.type === 'channel_thread') {
+    return target.channelId;
+  }
+}
 function fallbackBreadcrumbName(target: EntityDetailTarget) {
   if (target.fallbackName) return target.fallbackName;
 
@@ -48,7 +50,37 @@ function BreadcrumbItem(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
   name: string;
+  setsSplitDisplayName?: boolean;
 }) {
+  useSplitDisplayName(() =>
+    props.setsSplitDisplayName ? props.name : undefined
+  );
+
+  const button = (item: { isActive: () => boolean; onSelect: () => void }) => (
+    <ViewBreadcrumbs.Button
+      class="gap-1.5"
+      isActive={item.isActive()}
+      onClick={item.onSelect}
+      tooltip={props.entry.data.type === 'document' ? undefined : props.name}
+    >
+      <Show
+        when={breadcrumbChannelId(props.entry.data)}
+        fallback={
+          <EntityIcon
+            targetType={breadcrumbIcon(props.entry.data)}
+            size="xs"
+            class="shrink-0"
+          />
+        }
+      >
+        {(channelId) => (
+          <ChannelTitleIcon channelId={channelId()} suppressClick />
+        )}
+      </Show>
+      <span class="truncate">{props.name}</span>
+    </ViewBreadcrumbs.Button>
+  );
+
   return (
     <ViewBreadcrumbs.Item
       value={props.entry.value}
@@ -56,19 +88,17 @@ function BreadcrumbItem(props: {
       order={props.order}
     >
       {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={props.name}
+        <Show
+          when={props.entry.data.type === 'document'}
+          fallback={button(item)}
         >
-          <EntityIcon
-            targetType={breadcrumbIcon(props.entry.data)}
-            size="xs"
-            class="shrink-0"
-          />
-          <span class="truncate">{props.name}</span>
-        </ViewBreadcrumbs.Button>
+          <DocumentTitleHoverCard
+            documentId={props.entry.data.id}
+            name={props.name}
+          >
+            {button(item)}
+          </DocumentTitleHoverCard>
+        </Show>
       )}
     </ViewBreadcrumbs.Item>
   );
@@ -78,6 +108,7 @@ function LiveBreadcrumbItem(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
   previewItem: ItemEntity;
+  setsSplitDisplayName?: boolean;
 }) {
   const currentName = useItemRawName(() => props.previewItem);
   const name = () => {
@@ -88,39 +119,31 @@ function LiveBreadcrumbItem(props: {
   };
 
   return (
-    <BreadcrumbItem entry={props.entry} order={props.order} name={name()} />
+    <BreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      name={name()}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
   );
 }
 
 export function EntityDetailBreadcrumbItem(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
+  setsSplitDisplayName?: boolean;
 }) {
   return (
-    <Show
-      when={
-        props.entry.data.type === 'reminder'
-          ? undefined
-          : ({
-              id: props.entry.data.id,
-              type: props.entry.data.type,
-            } satisfies ItemEntity)
-      }
-      fallback={
-        <BreadcrumbItem
-          entry={props.entry}
-          order={props.order}
-          name={fallbackBreadcrumbName(props.entry.data)}
-        />
-      }
-    >
-      {(previewItem) => (
-        <LiveBreadcrumbItem
-          entry={props.entry}
-          order={props.order}
-          previewItem={previewItem()}
-        />
-      )}
-    </Show>
+    <LiveBreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      previewItem={{
+        id: breadcrumbChannelId(props.entry.data) ?? props.entry.data.id,
+        type: breadcrumbChannelId(props.entry.data)
+          ? 'channel'
+          : props.entry.data.type,
+      }}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
   );
 }

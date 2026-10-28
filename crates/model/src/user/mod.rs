@@ -1,4 +1,5 @@
 pub use model_user::{
-    ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserContext, UserInfo,
-    UserInfoWithMacroUserId, UserName, UserNames, UserPermission, UserProfilePicture,
+    Language, ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserContext,
+    UserInfo, UserInfoWithMacroUserId, UserLanguage, UserName, UserNames, UserPermission,
+    UserProfilePicture,
 };

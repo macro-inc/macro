@@ -538,7 +538,7 @@ service_url! {
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
-            local: "http://localhost:8085",
+            local: "http://localhost:8101/cognition",
             dev: "https://dev-gateway.macro.com/cognition",
             prod: "https://gateway.macro.com/cognition",
         },
@@ -554,6 +554,15 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Browser-facing static file base that file links are stamped with.
+        /// [`StaticFileServiceUrl`] is the address services call; on a local
+        /// stack the two differ, since containers reach the service
+        /// in-network while browsers go through the frontend proxy.
+        pub StaticFilePublicUrl {
+            local: "http://localhost:8100",
+            dev: "https://static-file-service-dev.macro.com",
+            prod: "https://static-file-service.macro.com",
+        },
         /// Agent harness service API URL. Serves the agent-session control
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {
@@ -563,7 +572,7 @@ service_url! {
         },
         /// Scheduled action service API URL.
         pub ScheduledActionServiceUrl {
-            local: "http://localhost:8099",
+            local: "http://localhost:8101/scheduled-action",
             dev: "https://dev-gateway.macro.com/scheduled-action",
             prod: "https://gateway.macro.com/scheduled-action",
         },
@@ -577,9 +586,21 @@ service_url! {
         },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
-            local: "http://localhost:8080",
+            local: "http://localhost:8101",
             dev: "https://dev-gateway.macro.com/mcp",
             prod: "https://gateway.macro.com/mcp",
+        },
+        /// Public MCP OAuth issuer and callback base, distinct from gateway transport routing.
+        pub McpPublicUrl {
+            local: "http://localhost:8101",
+            dev: "https://mcp-server-dev.macro.com",
+            prod: "https://mcp-server.macro.com",
+        },
+        /// Public integration callback base, preserving registered OAuth redirect URIs.
+        pub CognitionPublicUrl {
+            local: "http://localhost:8101/cognition",
+            dev: "https://document-cognition-dev.macro.com",
+            prod: "https://document-cognition.macro.com",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
@@ -616,8 +637,8 @@ service_url! {
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {
             local: "http://localhost:8096",
-            dev: "https://lexical-service-dev.macroverse.workers.dev",
-            prod: "https://lexical-service-prod.macroverse.workers.dev",
+            dev: "https://dev-gateway.macro.com/lexical",
+            prod: "https://gateway.macro.com/lexical",
         },
         /// Sync service API URL.
         pub SyncServiceUrl {
@@ -631,5 +652,14 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Control and internal MCP surface of the live preview service.
+    pub struct PreviewGatewayUrl {
+        local: "http://localhost:8101/preview",
+        dev: "https://dev-gateway.macro.com/preview",
+        prod: "https://gateway.macro.com/preview",
     }
 }

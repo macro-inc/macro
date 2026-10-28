@@ -12,7 +12,7 @@ type ToolEntry = {
   output: string;
 };
 
-/** Shape of `crates/ai_tools/schemas/tools.json`. */
+/** Shape of `crates/ai_tools/schemas/mcp-tools.json`. */
 type ToolSchemaFile = {
   $defs: Record<string, JsonSchema>;
   tools: ToolEntry[];
@@ -29,7 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(docsDir, '../..');
 const aiToolsDir = path.join(repoRoot, 'crates', 'ai_tools');
-const toolJsonPath = path.join(aiToolsDir, 'schemas', 'tools.json');
+const toolJsonPath = path.join(aiToolsDir, 'schemas', 'mcp-tools.json');
 const outputDir = path.join(docsDir, 'AI', 'mcp', 'tools');
 const navOutputPath = path.join(docsDir, 'config', 'tool-pages.json');
 const docsJsonPath = path.join(docsDir, 'docs.json');
@@ -147,8 +147,17 @@ function describeProp(
   return '';
 }
 
+/** Schema descriptions are Markdown text, not MDX expressions or JSX. */
+function escapeMdx(text: string) {
+  // Preserve existing escapes and code enclosed by matching backtick runs.
+  return text.replace(
+    /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)|\\[\s\S]|[<{]/g,
+    (match) => (match === '<' || match === '{' ? `\\${match}` : match)
+  );
+}
+
 function escapeCell(text: string) {
-  return text.replaceAll('\n', ' ').replaceAll('|', '\\|').trim();
+  return escapeMdx(text).replaceAll('\n', ' ').replaceAll('|', '\\|').trim();
 }
 
 function renderParamsTable(
@@ -177,10 +186,9 @@ ${rows.join('\n')}`;
 }
 
 async function buildAndRunSchemaGenerator() {
-  await $`cd ${repoRoot} && SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`;
-  await $`rm -rf ${path.join(aiToolsDir, 'schemas')}`.quiet();
+  await $`SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`.cwd(repoRoot);
   const binaryPath = path.join(repoRoot, 'target', 'debug', 'gen_tool_schemas');
-  await $`cd ${aiToolsDir} && ${binaryPath}`;
+  await $`${binaryPath} --mcp`.cwd(aiToolsDir);
 }
 
 async function loadSchemas(): Promise<ToolSchemaFile> {
@@ -223,17 +231,27 @@ function renderToolPage(tool: ResolvedTool, defs: Record<string, JsonSchema>) {
   const description =
     tool.description ?? 'Generated from the Macro Rust tool registry.';
   const paramsTable = renderParamsTable(tool.inputSchema, defs);
+  // Metadata is a summary; the complete tool instructions belong in the body.
+  const summary = description.trim().split(/\n\s*\n|(?<=[.!?])\s/)[0];
+  const descriptionLines: string[] = [];
+  for (const word of summary.split(/\s+/)) {
+    const last = descriptionLines.length - 1;
+    if (last < 0 || descriptionLines[last].length + word.length + 1 > 78)
+      descriptionLines.push(word);
+    else descriptionLines[last] += ` ${word}`;
+  }
 
   return {
     slug,
     body: `---
 title: ${tool.name}
-description: "${description.replaceAll('\n', ' ').replaceAll('"', '\\"')}"
+description: >-
+${descriptionLines.map((line) => `  ${line}`).join('\n')}
 ---
 
 # ${tool.name}
 
-${description}
+${escapeMdx(description)}
 ${paramsTable ? `\n## Parameters\n\n${paramsTable}\n` : ''}`,
   };
 }
@@ -294,7 +312,9 @@ async function writeNavigation(navPages: string[]) {
 
 async function main() {
   const file = await loadSchemas();
-  const tools = resolveTools(file).sort((a, b) => a.name.localeCompare(b.name));
+  // Public MCP schemas omit historical frontend compatibility and private tools.
+  const tools = resolveTools(file)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   await resetGeneratedPages();
 

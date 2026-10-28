@@ -1,5 +1,5 @@
 import { useAiDataConsent } from '@core/context/user';
-import CloseIcon from '@phosphor/x.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { Button, Dialog, Surface } from '@ui';
@@ -42,8 +42,13 @@ export function useAiDataConsentGate() {
             <div class="flex flex-row items-center justify-between px-2 h-10 gap-2 border-b border-b-edge-muted">
               <div class="flex flex-row items-center gap-2">
                 <Dialog.CloseButton>
-                  <Button label="Close" variant="ghost" size="icon-sm">
-                    <CloseIcon />
+                  <Button
+                    aria-label="Close"
+                    tooltip="Close"
+                    variant="ghost"
+                    size="icon-sm"
+                  >
+                    <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                 </Dialog.CloseButton>
                 <Dialog.Title>AI Data Sharing</Dialog.Title>
@@ -56,10 +61,10 @@ export function useAiDataConsentGate() {
                 data is not retained or used for training.
               </p>
               <div class="flex justify-end mt-4 gap-2">
-                <Button variant="outline" onClick={denyConsent}>
+                <Button variant="ghost" onClick={denyConsent}>
                   Cancel
                 </Button>
-                <Button variant="outline" onClick={grantConsent}>
+                <Button variant="secondary" onClick={grantConsent}>
                   Accept
                 </Button>
               </div>

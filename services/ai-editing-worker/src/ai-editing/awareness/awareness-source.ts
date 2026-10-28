@@ -20,6 +20,22 @@ import {
 import { match } from 'ts-pattern';
 import type { Awareness } from '../queue';
 
+/**
+ * Marks a cursor as an AI writer's. The web client keys off this suffix to keep
+ * the cursor's name tag pinned while the writer works (remote-cursor.tsx), so
+ * every AI label — pooled or persona — must end with it.
+ */
+export const AI_NAME_SUFFIX = '(AI)';
+/** Longest editor name shown on a cursor; anything past this is cut, not rejected. */
+const MAX_EDITOR_NAME_LENGTH = 64;
+
+/** The cursor label for an AI writer named `name`, e.g. `Macro (AI)`. */
+export function aiLabel(name: string): string {
+  const shown = name.trim().slice(0, MAX_EDITOR_NAME_LENGTH).trimEnd();
+  return shown.endsWith(AI_NAME_SUFFIX) ? shown : `${shown} ${AI_NAME_SUFFIX}`;
+}
+
+/** Labels writers draw when the caller names no editor. */
 export const AI_NAMES = [
   'Wolf',
   'Teo',
@@ -34,7 +50,7 @@ export const AI_NAMES = [
   'Jacob',
   'Aiden',
   'Hutch',
-].map((n) => `${n} (AI)`);
+].map(aiLabel);
 /** Palette names must resolve to `--color-<name>` (see collaboration/color.ts). */
 export const COLORS = ['cyan', 'red', 'yellow', 'green', 'violet', 'pink'];
 

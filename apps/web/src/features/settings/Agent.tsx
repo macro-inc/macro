@@ -1,5 +1,5 @@
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
-import { SettingsPage } from './primitives';
+import { SettingsPage, SettingsSection } from './primitives';
 
 /**
  * The "MCP server" tab: setup instructions for pointing other agents and MCP
@@ -13,7 +13,9 @@ export function Agent() {
       title="Macro MCP server"
       description="Connect other agents and tools to your Macro workspace."
     >
-      <McpSetupCards class="max-w-none" />
+      <SettingsSection title="Connect a client">
+        <McpSetupCards class="max-w-none" />
+      </SettingsSection>
     </SettingsPage>
   );
 }

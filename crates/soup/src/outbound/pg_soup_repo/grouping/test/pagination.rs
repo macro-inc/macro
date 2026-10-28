@@ -107,22 +107,6 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
             grouping.clone(),
         )
         .await;
-        if matches!(
-            grouping.field,
-            GroupByField::Property {
-                entity_type: Some(_),
-                ..
-            }
-        ) {
-            // Existing API binds $10 as text, but compares it to a PostgreSQL
-            // enum without a cast. Preserve this baseline error in this perf-only change.
-            let error = result.unwrap_err();
-            assert_eq!(
-                error.as_database_error().and_then(|e| e.code()).as_deref(),
-                Some("42883")
-            );
-            continue;
-        }
         let initial = result?.collect::<Vec<_>>();
         assert_eq!(initial.len(), 33); // Three full bins plus three unset items, not a global limit of 2.
         for key in ["", "a", "b", "c"] {

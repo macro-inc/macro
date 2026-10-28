@@ -1,11 +1,15 @@
 import { getPropertyOptionLabel } from '@entity/utils/task-properties';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
-import type { Property, PropertyOptionValue } from '../types';
+import type { DateRangeValue, Property, PropertyOptionValue } from '../types';
 
 type PropertyValueUnion = string | number | Date | boolean;
 
+const NUMBER_FORMAT = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: NUMBER_DECIMAL_PLACES,
+});
+
 /**
- * Format a number to show up to 4 decimal places
+ * Format a number with thousands separators and up to 4 decimal places
  * Uses exponential notation for numbers beyond safe integer range
  */
 export function formatNumber(value: number): string {
@@ -16,20 +20,42 @@ export function formatNumber(value: number): string {
   }
   // Round to 4 decimal places and remove trailing zeros
   const rounded = parseFloat(value.toFixed(NUMBER_DECIMAL_PLACES));
-  return rounded.toString();
+  return NUMBER_FORMAT.format(rounded === 0 ? 0 : rounded);
 }
+
+// One formatter for every date: toLocaleDateString builds one per call,
+// which a table of a thousand dates pays for a thousand times.
+const DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 
 /**
  * Format a date value for display
  */
 export function formatDate(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value;
+  return DATE_FORMAT.format(date);
+}
 
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/**
+ * A time range, compact where its ends share a day, month or year: all day
+ * `Oct 9 – 13, 2026`; timed `Oct 9, 9:00 AM – 5:00 PM` or
+ * `Oct 9, 9:00 AM – Oct 13, 5:00 PM`.
+ */
+export function formatTimeRange(range: DateRangeValue): string {
+  return (range.allDay ? DATE_FORMAT : DATE_TIME_FORMAT).formatRange(
+    range.start,
+    range.end
+  );
 }
 
 /**

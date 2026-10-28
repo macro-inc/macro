@@ -13,8 +13,10 @@ use base64::Engine as _;
 use futures::StreamExt as _;
 use futures::future::BoxFuture;
 use reqwest::Url;
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use reqwest::header::{CONTENT_TYPE, LOCATION};
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// How long one link may take, redirects included.
@@ -41,10 +43,12 @@ impl HttpPromptImageFetcher {
     fn build(allow_loopback: bool) -> Self {
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .dns_resolver(Arc::new(PublicResolver { allow_loopback }))
             .timeout(FETCH_TIMEOUT)
             .user_agent("macro-cursor-acp")
             .build()
-            .expect("reqwest client");
+            .expect("the prompt image client uses a valid static TLS configuration");
         Self {
             http,
             allow_loopback,
@@ -69,26 +73,41 @@ impl HttpPromptImageFetcher {
 
 impl PromptImageFetcher for HttpPromptImageFetcher {
     fn fetch_image<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Option<CursorPromptImage>> {
-        Box::pin(async move { self.fetch(url).await })
+        Box::pin(async move {
+            tokio::time::timeout(FETCH_TIMEOUT, self.fetch(url))
+                .await
+                .ok()
+                .flatten()
+        })
     }
 }
 
 impl HttpPromptImageFetcher {
+    #[tracing::instrument(name = "cursor.prompt_image.fetch", skip_all, fields(image.bytes = tracing::field::Empty))]
     async fn fetch(&self, url: &str) -> Option<CursorPromptImage> {
         let mut current = url.to_owned();
-        for _ in 0..MAX_REDIRECTS {
-            if !self.is_public(&current).await {
-                tracing::info!(url = %current, "skipping a prompt link that is not a public http url");
+        for redirects in 0..=MAX_REDIRECTS {
+            if !self.is_public(&current) {
+                tracing::debug!("skipping a non-public prompt link");
                 return None;
             }
-            let response = match self.http.get(&current).send().await {
+            let mut headers = reqwest::header::HeaderMap::new();
+            macro_tower_layers::inject_trace_headers(&mut headers);
+            let response = match self.http.get(&current).headers(headers).send().await {
                 Ok(response) => response,
                 Err(error) => {
-                    tracing::info!(url = %current, error = %error, "prompt link could not be fetched");
+                    tracing::debug!(
+                        timeout = error.is_timeout(),
+                        connect = error.is_connect(),
+                        "prompt link could not be fetched"
+                    );
                     return None;
                 }
             };
             if response.status().is_redirection() {
+                if redirects == MAX_REDIRECTS {
+                    return None;
+                }
                 let Some(next) = response
                     .headers()
                     .get(LOCATION)
@@ -101,7 +120,7 @@ impl HttpPromptImageFetcher {
                 continue;
             }
             if !response.status().is_success() {
-                tracing::info!(url = %current, status = %response.status(), "prompt link was not an image");
+                tracing::debug!(status = %response.status(), "prompt link was not an image");
                 return None;
             }
             let content_type = response
@@ -116,7 +135,7 @@ impl HttpPromptImageFetcher {
                 .content_length()
                 .is_some_and(|len| len > prompt_image::MAX_IMAGE_BYTES as u64)
             {
-                tracing::info!(url = %current, "prompt image is over Cursor's size cap");
+                tracing::debug!("prompt image exceeds the size cap");
                 return None;
             }
             let bytes = read_capped(response).await?;
@@ -124,6 +143,7 @@ impl HttpPromptImageFetcher {
             if bytes.is_empty() || bytes.len() > prompt_image::MAX_IMAGE_BYTES {
                 return None;
             }
+            tracing::Span::current().record("image.bytes", bytes.len());
             return Some(CursorPromptImage {
                 data: base64::engine::general_purpose::STANDARD.encode(&bytes),
                 mime_type: mime.to_owned(),
@@ -133,41 +153,22 @@ impl HttpPromptImageFetcher {
         None
     }
 
-    async fn is_public(&self, raw: &str) -> bool {
+    fn is_public(&self, raw: &str) -> bool {
         let Ok(url) = Url::parse(raw) else {
             return false;
         };
-        if url.scheme() != "http" && url.scheme() != "https" {
+        if !matches!(url.scheme(), "http" | "https")
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
             return false;
         }
-        let Some(host) = url.host_str() else {
-            return false;
-        };
-        if is_blocked_name(host) {
-            return false;
+        match url.host() {
+            Some(url::Host::Ipv4(ip)) => ip_allowed(IpAddr::V4(ip), self.allow_loopback),
+            Some(url::Host::Ipv6(ip)) => ip_allowed(IpAddr::V6(ip), self.allow_loopback),
+            Some(url::Host::Domain(host)) => !is_blocked_name(host),
+            None => false,
         }
-        if let Ok(ip) = host.parse::<IpAddr>() {
-            return self.ip_allowed(ip);
-        }
-        let port = url.port_or_known_default().unwrap_or(80);
-        let Ok(addrs) = tokio::net::lookup_host((host, port)).await else {
-            return false;
-        };
-        let mut saw_one = false;
-        for addr in addrs {
-            saw_one = true;
-            if !self.ip_allowed(addr.ip()) {
-                return false;
-            }
-        }
-        saw_one
-    }
-
-    fn ip_allowed(&self, ip: IpAddr) -> bool {
-        if self.allow_loopback && ip.is_loopback() {
-            return true;
-        }
-        !is_private_ip(ip)
     }
 }
 
@@ -180,6 +181,41 @@ fn is_blocked_name(host: &str) -> bool {
         || host == "metadata.google.internal"
 }
 
+// Resolve and validate the very addresses reqwest connects to, rather than
+// validating a separate DNS lookup which can change before the connection.
+struct PublicResolver {
+    allow_loopback: bool,
+}
+
+impl Resolve for PublicResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        let allow_loopback = self.allow_loopback;
+        Box::pin(async move {
+            let addresses: Vec<SocketAddr> =
+                tokio::net::lookup_host((name.as_str(), 0)).await?.collect();
+            if addresses.is_empty()
+                || addresses
+                    .iter()
+                    .any(|addr| !ip_allowed(addr.ip(), allow_loopback))
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "non-public image address",
+                )
+                .into());
+            }
+            Ok(Box::new(addresses.into_iter()) as Addrs)
+        })
+    }
+}
+
+fn ip_allowed(ip: IpAddr, allow_loopback: bool) -> bool {
+    if allow_loopback && ip.is_loopback() {
+        return true;
+    }
+    !is_private_ip(ip)
+}
+
 fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
@@ -188,7 +224,12 @@ fn is_private_ip(ip: IpAddr) -> bool {
                 || v4.is_link_local()
                 || v4.is_unspecified()
                 || v4.is_broadcast()
+                || v4.is_multicast()
+                || v4.is_documentation()
                 || v4.octets()[0] == 0
+                || v4.octets()[0] >= 240
+                || (v4.octets()[0] == 100 && (64..=127).contains(&v4.octets()[1]))
+                || (v4.octets()[0] == 198 && matches!(v4.octets()[1], 18 | 19))
         }
         IpAddr::V6(v6) => {
             if let Some(mapped) = v6.to_ipv4_mapped() {
@@ -198,6 +239,9 @@ fn is_private_ip(ip: IpAddr) -> bool {
                 || v6.is_unspecified()
                 || v6.is_unique_local()
                 || v6.is_unicast_link_local()
+                || v6.is_multicast()
+                || (v6.segments()[0] & 0xe000) != 0x2000
+                || (v6.segments()[0] == 0x2001 && v6.segments()[1] == 0x0db8)
         }
     }
 }

@@ -23,10 +23,10 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::SoupItemDataLoader,
+    loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
-        GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage,
-        SoupPatch,
+        GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
+        SoupEntityEdges, SoupPage, SoupPatch,
     },
 };
 
@@ -46,7 +46,9 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
-    let loader = ctx.data_opt::<SoupItemDataLoader>().cloned();
+    let loader = ctx
+        .data_opt::<PrimarySoupItemLoader>()
+        .map(|loader| loader.0.clone());
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
 
@@ -99,10 +101,18 @@ where
     ))
 }
 
-/// Resolve one email thread through the existing user-scoped Soup item loader.
+/// Resolve one email thread through the Soup item loader, whose email
+/// hydration settles access with entity access receipts: the rule the REST
+/// thread route applies, so a thread reached through a team's CRM, a project,
+/// or a share opens even though it lives in a teammate's inbox.
 ///
-/// A missing or inaccessible thread is represented as `None` by the loader's
-/// filtered Soup request.
+/// A missing or inaccessible thread is represented as `None`.
+#[tracing::instrument(
+    name = "soup.resolve_email_thread",
+    skip_all,
+    fields(thread_id = %thread_id),
+    err(Debug)
+)]
 pub async fn resolve_soup_email_thread<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -123,6 +133,48 @@ where
             "Soup returned a non-email entity for an email-thread request",
         )),
     }
+}
+
+/// Fetch one agent session the viewer can see, through the same access
+/// filter the Soup list uses, so a session outside their grants reads as
+/// absent rather than as an error. Reads the primary: see
+/// [`AgentSessionEntityLoader`].
+pub async fn resolve_soup_agent_session<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    session_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupAgentSession<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
+    let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
+    let Some(item) = loader.load_one((user_id, entity)).await? else {
+        return Ok(None);
+    };
+
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+        GraphqlSoupEntity::AgentSession(session) => Ok(Some(session)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-agent-session entity for an agent-session request",
+        )),
+    }
+}
+
+/// Fetch one Soup entity the viewer can see, through the same access filter
+/// the Soup list uses, so an inaccessible or missing entity reads as absent.
+/// Reads the primary: see [`PrimarySoupItemLoader`].
+pub async fn resolve_soup_entity<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Option<GraphqlSoupEntity<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = &ctx.data::<PrimarySoupItemLoader>()?.0;
+    let item = loader.load_one((user_id, entity)).await?;
+    Ok(item.map(GraphqlSoupEntity::<Edges>::new_with_projection))
 }
 
 /// Mutation-output adapter that reloads the canonical Soup email-thread object.

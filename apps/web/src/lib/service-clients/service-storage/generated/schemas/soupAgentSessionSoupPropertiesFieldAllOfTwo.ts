@@ -4,6 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { AgentSessionSource } from './agentSessionSource';
+import type { AgentSessionVisibility } from './agentSessionVisibility';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestId';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestState';
 import type { SoupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl } from './soupAgentSessionSoupPropertiesFieldAllOfTwoPullRequestUrl';
@@ -23,6 +26,8 @@ export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
   harness: string;
   /** The agent session uuid */
   id: string;
+  /** Whether the session is archived and read-only. */
+  isArchived: boolean;
   /** The user-facing name of the session */
   name: string;
   /** Who the session belongs to */
@@ -36,6 +41,8 @@ export type SoupAgentSessionSoupPropertiesFieldAllOfTwo = {
   repoBranch?: SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoBranch;
   /** The repository the session works with, when one was selected. */
   repoUrl?: SoupAgentSessionSoupPropertiesFieldAllOfTwoRepoUrl;
+  /** Who started the session */
+  source?: AgentSessionSource;
   /** The session's last known status.
 
 `no_messages` until the first system event arrives, `disconnected` if
@@ -50,6 +57,8 @@ of the most recent system event (for example `session/end`). */
   updatedAt: string;
   /** The time the session was last viewed by the requesting user */
   viewedAt?: SoupAgentSessionSoupPropertiesFieldAllOfTwoViewedAt;
+  /** Where the session is shown */
+  visibility?: AgentSessionVisibility;
   /** Last captured working branch, when the runtime has reported one. */
   workingBranch?: SoupAgentSessionSoupPropertiesFieldAllOfTwoWorkingBranch;
 };

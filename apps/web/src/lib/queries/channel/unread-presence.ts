@@ -4,12 +4,17 @@ import {
   type ChannelUnreadPresenceQuery,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { type Accessor, onCleanup } from 'solid-js';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
 } from '../soup/graphql/active-queries';
+
+import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 function unreadWitnesses(data: ChannelUnreadPresenceQuery) {
   return data.user.soup.items.flatMap((item) =>
@@ -32,19 +37,33 @@ export function createChannelUnreadQuery(
     select: unreadWitnesses,
   }));
   onCleanup(
-    registerGraphqlSoupRevalidations(() =>
-      enabled() ? [{ document: ChannelUnreadPresenceDocument, variables }] : []
+    registerGraphqlSoupRevalidations(
+      () =>
+        enabled()
+          ? [{ document: ChannelUnreadPresenceDocument, variables }]
+          : [],
+      getGraphqlSoupClient,
+      // Unread is read from each witness's cached state.
+      hasGraphqlCacheHost
     )
   );
+  const refresh = registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    queries: [{ document: ChannelUnreadPresenceDocument, variables }],
+    reader: {
+      enabled: enabled(),
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isSuccess
+        ? (query.data ?? []).map((n) => n.id)
+        : [],
+    },
+  }));
   onCleanup(
     registerActiveGraphqlSoupQuery({
       isEnabled: enabled,
-      refresh: async () => {
-        await query.refetch({
-          requestPolicy: 'network-only',
-          throwOnError: true,
-        });
-      },
+      refresh,
+      cacheMaintained: hasGraphqlCacheHost,
     })
   );
   return query;

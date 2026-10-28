@@ -1,0 +1,57 @@
+/* Inter 4.1: https://rsms.me/inter/ (license: public/fonts/Inter-LICENSE.txt).
+   Shared by the client and prerendered first paint.
+   Apple resolves its native San Francisco face; other platforms use the
+   bundled variable Inter. No system-ui fallback precedes Inter off Apple. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-variable.woff2?v=4.1') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-variable-italic.woff2?v=4.1') format('woff2');
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  /* Linear's public homepage: regular copy, medium display/CTA, semibold UI. */
+  --font-weight-regular: 400;
+  --font-weight-medium: 510;
+  --font-weight-semibold: 590;
+  --tracking-heading: -0.022em;
+  --tracking-body: -0.011em;
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-feature-settings: 'cv01', 'ss03';
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-weight: var(--font-weight-regular);
+}
+
+h1, h2 {
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-heading);
+}
+
+h3, h4, h5, h6, strong, b {
+  font-weight: var(--font-weight-semibold);
+}
+
+p {
+  letter-spacing: var(--tracking-body);
+}
+
+input, button, textarea, select {
+  font-family: var(--font-sans);
+  font-feature-settings: inherit;
+}

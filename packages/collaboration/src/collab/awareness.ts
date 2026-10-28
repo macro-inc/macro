@@ -4,7 +4,13 @@ import {
   type PeerID,
   type Value,
 } from 'loro-crdt';
-import { type Accessor, createSignal, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  getOwner,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { getRandomPaletteColor } from '../internal/palette';
 import type { RawUpdate } from './shared';
 
@@ -95,6 +101,15 @@ export function createAwareness<
   const store = new EphemeralStore<
     Record<string, PeerAwarenessRaw<EncodedSelection> | undefined>
   >(options?.timeout ?? DEFAULT_AWARENESS_TIMEOUT);
+  let disposed = false;
+  if (getOwner())
+    onCleanup(() =>
+      queueMicrotask(() => {
+        disposed = true;
+        store.destroy();
+        store.inner.free();
+      })
+    );
 
   // Initialize user awareness with a random color
   const color = getRandomPaletteColor();
@@ -166,6 +181,7 @@ export function createAwareness<
     id: PeerID,
     selection: DecodedSelection | undefined
   ) => {
+    if (disposed) return;
     if (selection === undefined) {
       store.set(id, undefined);
       return;
@@ -197,10 +213,12 @@ export function createAwareness<
   };
 
   const importRemoteAwareness = (update: RawUpdate) => {
+    if (disposed) return;
     store.apply(update);
   };
 
   const getEncodedLocalAwareness = () => {
+    if (disposed) return new Uint8Array();
     return store.encode(peerId);
   };
 
@@ -209,6 +227,7 @@ export function createAwareness<
     // HACK: loro-crdt has a bug with [`EphemeralStore.subscribe`] which breaks
     // recursive aliasing. This is a workaround for now.
     queueMicrotask(() => {
+      if (disposed) return;
       updateAwarenessSignals(update);
     });
   });

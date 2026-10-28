@@ -1,7 +1,9 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
+import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
@@ -23,6 +25,15 @@ type MakeMuteActionOptions = {
 export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const muteMutation = useMuteItemMutation();
   const unmuteMutation = useUnmuteItemMutation();
+
+  const snooze = (entities: EntityData[]) => {
+    openSnoozeNotifications(
+      entities.flatMap((entity) => {
+        const item = muteItemForEntity(entity);
+        return item ? [item] : [];
+      })
+    );
+  };
 
   const canExecute = (entity: EntityData): boolean =>
     muteItemForEntity(entity) !== undefined;
@@ -57,24 +68,37 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
 
     // Each mutation rolls its own optimistic change back on failure, so report
     // what actually happened rather than an all-or-nothing result.
-    const verb = shouldUnmute ? 'Unmuted' : 'Muted';
     const failed = results.filter((r) => r.status === 'rejected').length;
     const succeeded = results.length - failed;
     if (failed === 0) {
       toast.success(
         succeeded > 1
-          ? `${verb} notifications for ${succeeded} items`
-          : `${verb} notifications`
+          ? t(
+              shouldUnmute
+                ? 'entityActions.toastUnmutedCount'
+                : 'entityActions.toastMutedCount',
+              { count: succeeded }
+            )
+          : t(
+              shouldUnmute
+                ? 'entityActions.toastUnmuted'
+                : 'entityActions.toastMuted'
+            )
       );
     } else if (succeeded === 0) {
       toast.failure(
         shouldUnmute
-          ? 'Failed to unmute notifications'
-          : 'Failed to mute notifications'
+          ? t('entityActions.toastUnmuteFailed')
+          : t('entityActions.toastMuteFailed')
       );
     } else {
       toast.failure(
-        `${verb} ${succeeded} of ${results.length} items; ${failed} failed`
+        t(
+          shouldUnmute
+            ? 'entityActions.toastUnmutedSome'
+            : 'entityActions.toastMutedSome',
+          { succeeded, count: results.length, failed }
+        )
       );
     }
   };
@@ -86,5 +110,5 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     await execute(entities);
   };
 
-  return { canExecute, isMuted, execute, executeWithSoup };
+  return { canExecute, isMuted, execute, executeWithSoup, snooze };
 };

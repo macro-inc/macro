@@ -1,7 +1,7 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ThrownResultError } from '@core/util/result';
 import LogoIcon from '@icon/macro-logo.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useUserInfo } from '@queries/auth';
 import { useJoinChannelByCodeMutation } from '@queries/channel/join-links';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
@@ -89,9 +89,9 @@ function InvalidInviteLink() {
         This channel invitation is invalid or no longer available.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={() => navigate('/')}
       >
         Go to Home
@@ -108,9 +108,9 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         Sign in or create an account to accept this channel invitation.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onLogin}
       >
         Sign In to Continue
@@ -132,9 +132,9 @@ function JoinConfirmation(props: { onJoin: () => void }) {
         </p>
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onJoin}
       >
         Join Channel
@@ -151,9 +151,9 @@ function ServerError(props: { onRetry: () => void }) {
         Something went wrong while joining the channel. Please try again.
       </p>
       <Button
-        variant="outline"
+        variant="secondary"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onRetry}
       >
         Try Again

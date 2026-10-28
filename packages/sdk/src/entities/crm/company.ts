@@ -1,20 +1,52 @@
-import type {
-  CreateCrmCommentRequest,
-  DeleteCrmCommentResult,
-  GetCompanyResponses,
-} from '../../../generated/storage/types.gen';
-import { MacroError, unwrap } from '../../utils';
+import type { GetCompanyResponses } from '../../../generated/storage/types.gen';
+import type { RichMessage } from '../../mentions';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { entitySearch } from '../search';
 import { Team } from '../teams/team';
-import { CrmComment, type CrmThreadWithComments } from './comment';
+import {
+  CrmComment,
+  type CrmCommentParent,
+  type CrmCommentThread,
+  listCrmCommentThreads,
+  postCrmComment,
+} from './comment';
 import { Contact } from './contact';
 
 type CompanyDetail = GetCompanyResponses[200];
 
 /** A CRM company: an organization the team has interacted with. */
 export class Company extends PropertiedEntity<CompanyDetail> {
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'crm_company', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<CrmComment>) {
+    return timeline(
+      this.client,
+      { type: 'crm_company', entity: this },
+      (record) =>
+        CrmComment.from(
+          this.client,
+          { type: 'crm_company', id: this.id },
+          record,
+        ),
+      selection,
+    );
+  }
+
   /** Favorites identify CRM companies as `crm_company`. */
   readonly entityType = 'crm_company';
 
@@ -148,51 +180,31 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return Contact.from(this.client, contact);
   }
 
-  /** The comment threads attached to this company, with comments oldest first. */
-  async comments(): Promise<CrmThreadWithComments[]> {
-    const threads = unwrap(
-      await this.client.storage.listCrmComments({
-        path: { entity_type: 'crm_company', entity_id: this.id },
-      }),
-    );
-    return threads.map(({ thread, comments }) => ({
-      thread,
-      comments: comments.map((c) => CrmComment.from(this.client, c)),
-    }));
+  /** The CRM record this company's discussions hang off. */
+  private get commentParent(): CrmCommentParent {
+    return { type: 'crm_company', id: this.id };
   }
 
-  /** Add a comment: starts a new thread unless `body.threadId` targets an existing one. */
-  async comment(body: CreateCrmCommentRequest): Promise<CrmComment> {
-    const { comments } = await this.mutate((c) =>
-      c.storage.createCrmComment({
-        path: { entity_type: 'crm_company', entity_id: this.id },
-        body,
-      }),
-    );
-    const created = comments.reduce<(typeof comments)[number] | undefined>(
-      (a, b) => (!a || b.createdAt > a.createdAt ? b : a),
-      undefined,
-    );
-    if (!created)
-      throw new MacroError('create comment returned an empty thread');
-    return CrmComment.from(this.client, created);
+  /** The comment threads on this company, newest thread first. */
+  async comments(): Promise<CrmCommentThread[]> {
+    return listCrmCommentThreads(this.client, this.commentParent);
   }
 
-  /** Replace a comment's text (markdown). */
-  async editComment(comment: CrmComment, text: string): Promise<CrmComment> {
-    const record = await this.mutate((c) =>
-      c.storage.editCrmComment({
-        path: { comment_id: comment.id },
-        body: { text },
-      }),
-    );
-    return CrmComment.from(this.client, record);
+  /**
+   * Add a comment. Starts a new thread, or replies to an existing one when
+   * `threadId` (the thread's root comment id) is given.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   */
+  async comment(
+    body: string | RichMessage,
+    opts?: { threadId?: string },
+  ): Promise<CrmComment> {
+    return postCrmComment(this.client, this.commentParent, body, opts);
   }
 
-  /** Soft-delete a comment; the thread goes too when it was the last live one. */
-  async deleteComment(comment: CrmComment): Promise<DeleteCrmCommentResult> {
-    return this.mutate((c) =>
-      c.storage.deleteCrmComment({ path: { comment_id: comment.id } }),
-    );
+  /** A handle to one of this company's comments by id. */
+  commentById(id: string): CrmComment {
+    return CrmComment.byId(this.client, this.commentParent, id);
   }
 }

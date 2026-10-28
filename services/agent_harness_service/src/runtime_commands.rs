@@ -116,13 +116,23 @@ where
                     RuntimeCommandTarget::Harness(_) => false,
                 };
                 if selected {
-                    harness_service
+                    // The forwarding replica answered its caller the moment it
+                    // published, so this is the only record that the command
+                    // arrived anywhere and what became of it. Logged on
+                    // success too: a session whose queue never drains is
+                    // debugged by asking whether its commands reached the
+                    // replica that manages it.
+                    match harness_service
                         .execute_forwarded(session, request.into_command())
                         .await
-                        .inspect_err(|error| {
+                    {
+                        Ok(outcome) => {
+                            tracing::info!(%session, ?outcome, "executed a forwarded command");
+                        }
+                        Err(error) => {
                             tracing::error!(error = ?error, %session, "forwarded command failed");
-                        })
-                        .ok();
+                        }
+                    }
                 }
             }
             .instrument(span),

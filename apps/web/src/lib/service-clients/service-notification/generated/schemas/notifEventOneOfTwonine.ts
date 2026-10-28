@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
+import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
 import type { NotifEventOneOfTwonineTag } from './notifEventOneOfTwonineTag';
 
 /**
- * A calendar event alarm came due.
+ * A linked inbox's grant died and must be reconnected.
  */
 export type NotifEventOneOfTwonine = {
-  /** A calendar event alarm came due. */
-  content: CalendarEventReminderMetadata;
+  /** A linked inbox's grant died and must be reconnected. */
+  content: InboxReauthRequiredMetadata;
   tag: NotifEventOneOfTwonineTag;
 };

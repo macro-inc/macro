@@ -15,7 +15,10 @@ vi.mock('@queries/storage/attachment-references', () => ({
 vi.mock(
   '@app/features/email-thread/context/email-thread-state-context',
   () => ({
-    useEmailThreadState: () => ({ permissions: () => ({ isOwner: true }) }),
+    useEmailThreadState: () => ({
+      permissions: () => ({ isOwner: true }),
+      thread: () => undefined,
+    }),
   })
 );
 vi.mock('@app/features/activity/views/entity-activity-section', () => ({
@@ -42,6 +45,7 @@ vi.mock('@components/app/side-panel', () => ({
       </span>
     ),
     Loading: () => null,
+    Footer: (props: ParentProps) => <footer>{props.children}</footer>,
   },
 }));
 
@@ -69,6 +73,7 @@ describe('email optional references', () => {
         <Suspense fallback={<div data-testid="loading" />}>
           <div data-testid="email">
             Cached body
+            <textarea aria-label="Draft" value="Unsaved reply" />
             <EmailSidePanelSections threadId="thread" title="Subject" />
           </div>
         </Suspense>
@@ -77,11 +82,13 @@ describe('email optional references', () => {
     expect(screen.getByTestId('email').textContent).toContain('Cached body');
     expect(screen.queryByTestId('loading')).toBeNull();
     expect(screen.queryByText('Reference details')).toBeNull();
+    const editor = screen.getByRole('textbox');
     response.resolve([{}, {}]);
     await waitFor(() =>
       expect(screen.getByText('References (2)')).toBeTruthy()
     );
     expect(screen.getByText('Reference details')).toBeTruthy();
+    expect(screen.getByRole('textbox')).toBe(editor);
     expect(screen.queryByTestId('loading')).toBeNull();
   });
 });

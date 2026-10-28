@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import {
   type DraftLifecycleChange,
@@ -53,6 +54,7 @@ export function deriveEmailDraftLifecycle(input: {
       type: 'scheduled',
       ...identity,
       sendTime: message.scheduled_send_time,
+      deliveryStatus: message.scheduled_send_status ?? undefined,
     };
   }
   return { type: 'editing', ...identity };
@@ -182,8 +184,8 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         // Background failures remain query errors and retry on the next event/poll.
       }
     };
-    const unsubscribe = subscribeToDraftLifecycleChanges(
-      (event) => void refreshFromEvent(event)
+    const unsubscribe = subscribeToDraftLifecycleChanges((event) =>
+      fireAndForget(refreshFromEvent(event), 'email-compose')
     );
     onCleanup(unsubscribe);
 

@@ -1,7 +1,11 @@
 import type { AgentModelSelectorProps } from '@app/features/block-agent/ui/AgentModelSelector';
-import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import {
+  ModelCatalogPicker,
+  type ModelRowProps,
+} from '@core/component/AI/component/input/ModelCatalogPicker';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import type { JSX } from 'solid-js';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { Component, JSX } from 'solid-js';
 
 export type ModelChoice = {
   id: string;
@@ -16,13 +20,16 @@ export function ModelSelector(props: {
   label: JSX.Element;
   options: ModelChoice[];
   disabled?: boolean;
+  modelRow?: Component<ModelRowProps>;
   pending?: boolean;
   onSelect: (id: string) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   children?: JSX.Element;
   emptyMessage?: string;
 }) {
   return (
     <ModelCatalogPicker
+      onCloseAutoFocus={props.onCloseAutoFocus}
       value={props.model ?? null}
       options={props.options.map((option) => ({
         id: option.id,
@@ -32,12 +39,15 @@ export function ModelSelector(props: {
       }))}
       triggerLabel={props.label}
       placeholder={modelLabel(props.model)}
-      triggerClass="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder [&_svg]:size-[15px]"
+      triggerSize="md"
+      triggerClass="min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
+      contentClass="w-[min(42rem,calc(100vw-2rem))] rounded-2xl border-0"
       ariaLabel="Model"
       placement="top-end"
       disabled={props.disabled}
       pending={props.pending}
       onSelect={props.onSelect}
+      modelRow={props.modelRow}
       emptyMessage={
         props.emptyMessage ?? 'Waiting for the agent to report its models.'
       }
@@ -52,11 +62,18 @@ export function SessionModelSelector(props: AgentModelSelectorProps) {
   const shown = () => props.changingTo ?? props.model ?? undefined;
   return (
     <ModelSelector
+      onCloseAutoFocus={props.onCloseAutoFocus}
       model={shown()}
-      label={modelLabel(
-        shown(),
-        props.options.find((option) => option.id === shown())?.name
-      )}
+      label={[
+        modelLabel(
+          shown(),
+          props.options.find((option) => option.id === shown())?.name
+        ),
+        isTouchDevice() ? props.effortLabel : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+      modelRow={props.modelRow}
       options={props.options.map((option) => ({
         id: option.id,
         name: option.name,
