@@ -1,5 +1,6 @@
+import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { ZoomDetail } from '../core/camera';
 import type { BoardPerson } from '../core/people';
@@ -51,39 +52,44 @@ export function PersonCard(props: {
           </Show>
         </header>
         <ol class="flex min-w-0 flex-col gap-2">
-          <For each={lines()}>
+          {/* Keyed by message: the person is rebuilt on every clock tick and
+              read, and a remounted line would drop focus. */}
+          <Key
+            each={lines()}
+            by={(line) => `${line.itemKey}:${line.message.id}`}
+          >
             {(line, index) => (
               <li class="min-w-0">
                 <button
                   type="button"
                   class="group/line flex w-full min-w-0 flex-col items-start gap-1 rounded-xl text-left outline-none focus-visible:outline-2 focus-visible:outline-accent"
-                  onClick={() => props.onOpenLine(line.itemKey)}
+                  onClick={() => props.onOpenLine(line().itemKey)}
                 >
                   <span class="flex max-w-full min-w-0 items-center gap-1 px-1 text-[11px] text-ink-muted group-hover/line:text-ink">
                     <Dynamic
-                      component={kindGlyph(line.itemKind)}
+                      component={kindGlyph(line().itemKind)}
                       class="size-3 shrink-0"
                     />
-                    <span class="truncate">{line.itemTitle}</span>
+                    <span class="truncate">{line().itemTitle}</span>
                     <span aria-hidden="true">·</span>
                     <AgeLabel
-                      at={line.message.at}
+                      at={line().message.at}
                       now={props.now}
                       class="text-ink-extra-muted"
                     />
                   </span>
                   <SpeechBubble
-                    text={line.message.text}
+                    text={line().message.text}
                     tone="incoming"
                     tail={index() === lines().length - 1}
                     lines={2}
-                    unread={line.message.unread}
+                    unread={line().message.unread}
                     class="transition-[filter] group-hover/line:brightness-110"
                   />
                 </button>
               </li>
             )}
-          </For>
+          </Key>
         </ol>
       </div>
       <Show when={props.detail === 'far'}>

@@ -73,6 +73,20 @@ test('opens a conversation in a modal and returns focus to it', async ({
   );
 });
 
+test('a line on a person card opens its conversation and gets focus back', async ({
+  page,
+}) => {
+  await openBoard(page, 'v1e');
+  const line = page.getByRole('button', { name: /bring the speakers/ });
+  await line.click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Office is open late Friday'
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(line).toBeFocused();
+});
+
 test('moves a card by hand, remembers it, and tidies it back', async ({
   page,
 }) => {

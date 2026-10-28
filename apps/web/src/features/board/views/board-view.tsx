@@ -73,12 +73,11 @@ export function BoardView(props: {
     scene,
     memory,
     onOpen: (key) => {
+      // Before marking it seen, which can re-render what was clicked.
+      const active = document.activeElement;
       memory.markSeen(key, board.now());
       if (board.open(key) !== 'modal') return;
-      opener =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : undefined;
+      opener = active instanceof HTMLElement ? active : undefined;
       setOpenKey(key);
     },
     onDismiss: (key, activityAt) => {
