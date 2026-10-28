@@ -459,6 +459,8 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop::macrod::macrod_stop,
             #[cfg(desktop)]
             desktop::macrod::macrod_status,
+            #[cfg(desktop)]
+            desktop::pasteboard::stage_desktop_pasteboard_files,
         ])
         .setup(move |app| {
             #[cfg(desktop)]
