@@ -211,6 +211,9 @@ Shared diff and Changes views expand files with at most 40 additions + deletions
 by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
+Project grouping in Soup and its live cache projection uses the system Project
+property (initiative membership), with an empty key labeled No Project.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
