@@ -253,6 +253,9 @@ export function ChannelInput(props: ChannelInputProps) {
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
+  // Assigned once applySnapshot exists. Send clears before the request, so a
+  // failure has to put the same draft back into the editor.
+  let restoreFailedSend = (_snapshot: InputSnapshot) => {};
 
   const {
     inputState,
@@ -267,6 +270,7 @@ export function ChannelInput(props: ChannelInputProps) {
     callbacks: props,
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
+    restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
@@ -313,6 +317,9 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => {
       acceptTyping = true;
     });
+  };
+  restoreFailedSend = (snapshot) => {
+    applySnapshot(snapshot, { focus: false });
   };
 
   const flushPendingRestore = () => {

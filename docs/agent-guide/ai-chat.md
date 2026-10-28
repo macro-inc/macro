@@ -633,6 +633,11 @@ the shimmer.
   changes the model of an idle native session after native confirmation and
   displays the model identified by the session (Codex's live footer, or native
   transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  When a background command, subagent, or monitor that Claude Code started
+  reports back, the reply opens with a quiet one-line row per report, such as
+  `Background command "Run tests" completed (exit code 0)`, red when it failed,
+  never a prompt bubble of `<task-notification>` XML. Claude still receives the
+  full report.
   For Codex, open the current model's submenu to select **Reasoning effort**.
   Choices come from the installed Codex catalog; the selected effort is confirmed
   from the native session and shown beside the model. Local Herdr changes and

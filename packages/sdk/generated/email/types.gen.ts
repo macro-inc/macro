@@ -1191,8 +1191,9 @@ export type ForwardCalendarEventRecipient = {
  */
 export type ForwardCalendarEventRequest = {
     /**
-     * The email's plain-text body. Without one, it names the event and
-     * says the recipient won't be on the organizer's guest list.
+     * A plain-text summary of the event the email opens with; the title
+     * when absent. The email ends with a note saying what the recipient
+     * can do with the forward.
      */
     bodyText?: string | null;
     /**

@@ -252,6 +252,7 @@ function CalendarTeamOooSection() {
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Header>
           <Checkbox
+            size="sm"
             checked={calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)}
             onChange={(visible) =>
               calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible)
@@ -259,7 +260,7 @@ function CalendarTeamOooSection() {
             title="Show on calendar"
             class="h-full shrink-0 pr-1 pl-(--sidebar-item-inset)"
           >
-            <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+            <Checkbox.Control />
             <Checkbox.Label class="absolute inset-0">
               <span class="sr-only">
                 Show team out of office on the calendar

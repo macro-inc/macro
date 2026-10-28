@@ -68,3 +68,25 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   and the corresponding state-mix direction. Reset runtime material assignments
   at theme boundaries so previews resolve their own palette. Do not persist
   derived Button tokens in authored theme data.
+
+## Selection controls
+
+- Use `Checkbox` for independent values, `RadioGroup` for one choice among values,
+  and `ToggleSwitch` for a setting that takes effect immediately. Retain their
+  native inputs, accessible labels, controlled/uncontrolled state, and keyboard behavior.
+- Keep unchecked checkbox and radio faces transparent. Checked and indeterminate
+  controls use the accent fill. Checkbox marks and radio indicators share the
+  primary Button's `button-primary-ink` token.
+- Set checkbox/radio size on the root: `sm` is 14px, `md` (default) is 16px,
+  and `lg` is 20px. `ToggleSwitch` tracks use `xs` 28×14px, `sm` (default)
+  32×16px, and `md` 40×20px. Do not resize internal SVGs or override selection
+  colors from callers or enclosing pages; checked controls use the theme accent.
+- Render `Checkbox.Control` or `RadioGroup.ItemControl` once per value; each
+  includes its native input and default indicator. Do not add a second Input slot.
+- Use `InlineCheckbox` only as an aria-hidden decoration for an interactive row
+  or selection control that owns selection, focus, and input semantics. Entity
+  list selection uses it inside `MultiSelectCheckbox` to retain shift-click and
+  full-cell hit targets. Single-select menus retain their trailing
+  `SingleSelectCheck`, not a checkbox.
+- Keep checkbox draw/retract and switch press motion CSS-only and respect reduced
+  motion. Preserve selection-control focus indicators independently of Button styling.

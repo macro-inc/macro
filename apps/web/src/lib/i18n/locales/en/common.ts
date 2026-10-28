@@ -11,5 +11,6 @@ export default {
   rename: 'Rename',
   more: 'More',
   search: 'Search',
+  selectItem: 'Select item',
   settings: 'Settings',
 };

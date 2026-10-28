@@ -22,8 +22,10 @@ tools — hexagonal, heavily feature-gated.
 - Owns: email/thread domain logic, scheduled delivery, reminders/followups,
   calendar invitation extraction and resolution, adding a forwarded
   event (`METHOD:PUBLISH`) to the viewer's calendar (`domain/invitation_import.rs`),
-  and forwarding one of the viewer's events as that same file from the inbox
-  holding their copy (`domain/event_forward.rs`).
+  and forwarding one of the viewer's events from the inbox holding their copy
+  (`domain/event_forward.rs`): that same file, or, for an organizer outside
+  Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
+  body to the recipients and the organizer, whichever the calendar decides.
 - Not here: raw provider API calls → `email_api_client`; HTML
   parsing/sanitization → `email_utils`; SQLx queries over email tables →
   `email_db_client`.
@@ -67,7 +69,11 @@ tools — hexagonal, heavily feature-gated.
   `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
   attachment rows, then the send. `DraftAttachmentSender` adds Macro documents
   as the source of those files for `SendEmail`; a caller that already holds
-  the bytes, such as an event forward's `.ics`, uses `send_with_files`.
+  the bytes, such as an event forward's `.ics`, uses `send_with_files`. A
+  `SourcedAttachment` with `is_inline` (no Content-ID) is staged inline and
+  becomes the message's `text/calendar` body at delivery (see
+  `email_api_client`'s `SendRequest::build_mime`); use it only for an
+  invitation's calendar part.
 - Saved invitation snapshots are JSONB and never re-extracted. `recurrence`
   is `None` on snapshots saved before it was recorded, where a series looks
   like a single event, so those cannot be added to a calendar.

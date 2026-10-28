@@ -578,8 +578,13 @@ scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its footer wraps when a phone is too narrow for one row: the
 `Share with <team name>` switch keeps the left corner and `Create More` and
-`Create Task` move to a right-aligned row below it. `Create Task` shows no
-keyboard shortcut on touch. Desktop uses the centered composer dialog.
+`Create Task` move to a right-aligned row below it. When the keyboard leaves
+too little room for the whole composer, the footer pins to the bottom of the
+sheet (with a solid background only while pinned over content), so
+`Create Task` stays visible above the keyboard. `Create Task` shows no
+keyboard shortcut on touch. While the keyboard is up, the tag picker opens
+above its trigger so its search results stay above the keyboard. Desktop uses
+the centered composer dialog.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus

@@ -20,6 +20,10 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Agent image attachments preserve external and inline image URLs; only configured
+static-file endpoints receive thumbnail sizing. The backend-free regression is
+`bunx playwright test --config src/features/block-agent/browser-test/attachments.playwright.config.ts`.
+
 Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
@@ -87,6 +91,12 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Share message image paste, file selection, drop, removal during upload, and
+upload failure have desktop, phone, and tablet browser coverage:
+`bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
+Keep the shared uploader from restoring removed attachments or publishing after
+the composer is disposed. The Share button and shortcut use the same upload guard.
+
 Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
 in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and explicit type/name boosts. Task projects use the `initiative`
@@ -96,7 +106,7 @@ checks project ranking and insertion on desktop and phone.
 
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
-It types a draft, remounts the composer over it, and checks the blank lines survive.
+It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 
 Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
@@ -184,6 +194,9 @@ The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
 
+Route database row rename and delete through `renameDatabase` and
+`trashDatabase`; use the row grant for rename, delete, and sharing permissions.
+
 Shared diff and Changes views expand files with at most 40 additions + deletions
 by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
@@ -215,6 +228,10 @@ the user's newest account for that app from the last fifteen minutes.
 
 ### General
 
+- Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
+  preserve their native input semantics and use root sizing instead of internal
+  control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
@@ -235,7 +252,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   renderer. Phone settings show the preview with desktop-only editing. See the
   [signature walkthrough](../../docs/agent-guide/settings.md#email-signatures)
   for browser coverage. Keep signature commit callbacks on the mutation hook
-  so account-list remounts cannot leave an already-cleared draft behind.
+  so account-list remounts cannot leave an already-cleared draft behind. Offer
+  Gmail signature import only when the inbox provider is `GMAIL`, regardless of
+  its email domain; keep shared signature instructions provider-neutral.
 - Keep personal accounts and agent tool connections together in Settings → Integrations;
   preserve `agent-connections` as an alias for existing links.
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
@@ -613,6 +632,8 @@ payloads exhaustively, summarize outcomes without draft content, and keep the
 icon, truncated summary, timestamp, and optional subject action on one line on
 desktop and mobile.
 Keep Responding bound to the notification turn, including rejection and noop.
+Harness background-task reports are `task_notification` message parts, rendered
+as `ActionLine` rows in the agent reply (`TaskNotificationPart`).
 The backend-free desktop/mobile check is
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts`.
 The same suite covers stopping and reloading an agent reply inside a mention:
@@ -670,6 +691,10 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
 
-Agent image attachments preserve external and inline image URLs; only configured
-static-file endpoints receive thumbnail sizing. The backend-free regression is
-`bunx playwright test --config src/features/block-agent/browser-test/attachments.playwright.config.ts`.
+### Sidebar tag dragging
+
+Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+Keep existing tags and apply to the selected rows when the drop row is selected.
+Use the shared scoped drag helpers and overlayIcon for the tag chip.
+The backend-free browser regression is
+`bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.

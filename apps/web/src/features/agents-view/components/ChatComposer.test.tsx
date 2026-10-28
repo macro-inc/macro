@@ -52,6 +52,7 @@ const editor = vi.hoisted(() => ({
     | ((files: File[], directories: FileSystemDirectoryEntry[]) => void)
     | undefined,
   text: '',
+  readMarkdown: (): string => '',
 }));
 
 vi.mock(
@@ -90,7 +91,7 @@ vi.mock(
           clear: editor.clear,
           setMarkdown: editor.setMarkdown,
           focus: vi.fn(),
-          getMarkdown: () => editor.text,
+          getMarkdown: () => editor.readMarkdown(),
         },
         lexical: editor.lexical,
       };
@@ -156,7 +157,10 @@ beforeEach(() => {
   );
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
+  editor.clear.mockReset();
+  editor.setMarkdown.mockReset();
   editor.text = '';
+  editor.readMarkdown = () => editor.text;
   editor.enter = undefined;
   editor.change = undefined;
 });
@@ -195,6 +199,33 @@ describe('Chat session input', () => {
       }
     }
   );
+
+  it('does not write a sent prompt back into the editor', () => {
+    const [draft, setDraft] = createSignal('');
+    const [markdown, setMarkdown] = createSignal('');
+    editor.readMarkdown = markdown;
+    editor.clear.mockImplementation(() => setMarkdown(''));
+    editor.setMarkdown.mockImplementation((value: string) =>
+      setMarkdown(value)
+    );
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={send}
+        selector={<span />}
+      />
+    ));
+    setDraft('Hello agent');
+    setMarkdown('Hello agent');
+    editor.setMarkdown.mockClear();
+    editor.enter?.(undefined, 'Hello agent');
+    expect(send).toHaveBeenCalledWith('Hello agent', []);
+    expect(draft()).toBe('');
+    expect(markdown()).toBe('');
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Hello agent');
+  });
 
   it('preloads the fold only when focused without sending or changing the draft', () => {
     const send = vi.fn();

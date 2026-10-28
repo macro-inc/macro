@@ -704,7 +704,9 @@ details**, and the server's summary on query tool rows.
 or channels and change or remove their access, and an owner on a team sets
 **Team access** (view, comment, or edit for the owner's team; rows follow the
 database). Databases do not offer a public link. **Share** and viewer avatars (other people currently looking at the
-database) sit at the right of the split header, like other entities.
+database) sit at the right of the split header, like other entities. From Drive,
+the row context menu offers the same Share action, plus Rename (edit or owner),
+Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline

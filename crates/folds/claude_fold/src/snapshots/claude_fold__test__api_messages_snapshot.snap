@@ -89,5 +89,29 @@ expression: messages
     },
     "pending": false,
     "postedAt": null
+  },
+  {
+    "turn": 2,
+    "author": {
+      "kind": "agent"
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "task_notification",
+        "status": "failed",
+        "summary": "Background command \"Run tests\" failed with exit code 1",
+        "event": null
+      },
+      {
+        "kind": "text",
+        "text": "The tests failed."
+      }
+    ],
+    "stop": {
+      "kind": "end_turn"
+    },
+    "pending": false,
+    "postedAt": null
   }
 ]

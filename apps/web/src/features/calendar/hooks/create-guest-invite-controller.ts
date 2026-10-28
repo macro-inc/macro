@@ -18,7 +18,6 @@ import { eventForwardSummary } from '../utils/event-forward-summary';
 import {
   canForwardInvitation,
   FORWARD_INVITATION_INSTEAD,
-  FORWARDED_INVITATION_NOTE,
   GUEST_INVITES_RESTRICTED,
   GUEST_LIST_HIDDEN,
   guestInvitesRestrictedReason,
@@ -131,7 +130,9 @@ export function createGuestInviteController(
           email,
           name: name === email ? undefined : name,
         })),
-        bodyText: `${eventForwardSummary(current, preferences.timeFormat)}\n\n${FORWARDED_INVITATION_NOTE}`,
+        // The server ends the email with what the recipient can do, which
+        // depends on the kind of forward it decides to send.
+        bodyText: eventForwardSummary(current, preferences.timeFormat),
       }),
       (error) => error
     );

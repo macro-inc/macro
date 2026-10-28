@@ -1,39 +1,56 @@
 import { RadioGroup as KobalteRadioGroup } from '@kobalte/core/radio-group';
-import type { ComponentProps } from 'solid-js';
-import { splitProps } from 'solid-js';
+import {
+  type ComponentProps,
+  createContext,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 
-/*
-<RadioGroup value={...} onChange={...}>
-  <RadioGroup.Item value="a">
-    <RadioGroup.ItemControl />
-    <RadioGroup.ItemLabel>Option A</RadioGroup.ItemLabel>
-  </RadioGroup.Item>
-</RadioGroup>
-
-A bare <RadioGroup.ItemControl /> renders its own dot indicator. It also
-renders the hidden input, so don't add <RadioGroup.ItemInput /> yourself.
-*/
-
-export type RadioGroupProps = ComponentProps<typeof KobalteRadioGroup>;
+export type RadioGroupSize = 'sm' | 'md' | 'lg';
+export type RadioGroupProps = ComponentProps<typeof KobalteRadioGroup> & {
+  size?: RadioGroupSize;
+};
 type ItemProps = ComponentProps<typeof KobalteRadioGroup.Item>;
 type ItemControlProps = ComponentProps<typeof KobalteRadioGroup.ItemControl>;
+type ItemIndicatorProps = ComponentProps<
+  typeof KobalteRadioGroup.ItemIndicator
+>;
 type ItemLabelProps = ComponentProps<typeof KobalteRadioGroup.ItemLabel>;
 
-const CONTROL_CLASS = cn(
-  'inline-flex items-center justify-center size-4 shrink-0 rounded-full',
-  'bg-surface border-1 border-edge',
-  'data-checked:border-accent',
-  'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
-  'data-invalid:border-failure',
-  'peer-focus-visible:ring-2 peer-focus-visible:ring-accent'
-);
+const RadioGroupSizeContext = createContext((): RadioGroupSize => 'md');
+const radioSizes: Record<
+  RadioGroupSize,
+  { control: string; indicator: string }
+> = {
+  sm: { control: 'size-3.5', indicator: 'size-1.5' },
+  md: { control: 'size-4', indicator: 'size-2' },
+  lg: { control: 'size-5', indicator: 'size-2.5' },
+};
 
 function RadioGroupItem(props: ItemProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteRadioGroup.Item
-      class={cn('relative inline-flex items-center gap-2', local.class)}
+      class={cn(
+        'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+        local.class
+      )}
+      {...rest}
+    />
+  );
+}
+
+function RadioGroupItemIndicator(props: ItemIndicatorProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  const size = useContext(RadioGroupSizeContext);
+  return (
+    <KobalteRadioGroup.ItemIndicator
+      class={cn(
+        'rounded-full bg-button-primary-ink',
+        radioSizes[size()].indicator,
+        local.class
+      )}
       {...rest}
     />
   );
@@ -41,16 +58,19 @@ function RadioGroupItem(props: ItemProps) {
 
 function RadioGroupItemControl(props: ItemControlProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const size = useContext(RadioGroupSizeContext);
   return (
     <>
       <KobalteRadioGroup.ItemInput class="peer sr-only" />
       <KobalteRadioGroup.ItemControl
-        class={cn(CONTROL_CLASS, local.class)}
+        class={cn(
+          'inline-grid shrink-0 place-items-center rounded-full border border-border-secondary bg-transparent data-checked:border-accent data-checked:bg-accent data-disabled:cursor-not-allowed data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
+          radioSizes[size()].control,
+          local.class
+        )}
         {...rest}
       >
-        {local.children ?? (
-          <KobalteRadioGroup.ItemIndicator class="size-2 rounded-full bg-accent" />
-        )}
+        {local.children ?? <RadioGroupItemIndicator />}
       </KobalteRadioGroup.ItemControl>
     </>
   );
@@ -62,40 +82,34 @@ function RadioGroupItemLabel(props: ItemLabelProps) {
 }
 
 /**
- * A Kobalte radio group with the app's control styling, composed from slots so
- * the item label, description, and error message are yours to place.
+ * A single choice among related values, with native radio keyboard behavior.
  *
- * @do Give the group an `aria-label` (or a `RadioGroup.Label`) describing the
- *   choice.
- * @do Render a `RadioGroup.ItemLabel` for every item, even when the visible
- *   text sits elsewhere.
- * @dont Do not add `RadioGroup.ItemInput` yourself; `RadioGroup.ItemControl`
- *   already renders one.
- * @dont Do not use a radio group for two mutually exclusive actions inline —
- *   that is `Tabs`.
+ * @do Name the group with aria-label or RadioGroup.Label.
+ * @do Render an ItemLabel for each item, even when the visible text is elsewhere.
+ * @do Use the root size prop for compact or larger radio controls.
+ * @dont Add ItemInput yourself; ItemControl already renders one.
+ * @dont Use radios for view navigation; use Tabs.
  */
 export const RadioGroup = Object.assign(
   (props: RadioGroupProps) => {
-    const [local, rest] = splitProps(props, ['class']);
+    const [local, rest] = splitProps(props, ['class', 'size']);
     return (
-      <KobalteRadioGroup
-        class={cn('flex flex-col gap-2', local.class)}
-        {...rest}
-      />
+      <RadioGroupSizeContext.Provider value={() => local.size ?? 'md'}>
+        <KobalteRadioGroup
+          class={cn('flex flex-col gap-2', local.class)}
+          {...rest}
+        />
+      </RadioGroupSizeContext.Provider>
     );
   },
   {
-    Label:
-      KobalteRadioGroup.Label /* passthrough — styled via class at use sites */,
-    Description:
-      KobalteRadioGroup.Description /* passthrough — styled via class at use sites */,
-    ErrorMessage:
-      KobalteRadioGroup.ErrorMessage /* passthrough — styled via class at use sites */,
+    Label: KobalteRadioGroup.Label,
+    Description: KobalteRadioGroup.Description,
+    ErrorMessage: KobalteRadioGroup.ErrorMessage,
     Item: RadioGroupItem,
-    ItemInput:
-      KobalteRadioGroup.ItemInput /* passthrough — ItemControl already renders one */,
+    ItemInput: KobalteRadioGroup.ItemInput,
     ItemControl: RadioGroupItemControl,
-    ItemIndicator: KobalteRadioGroup.ItemIndicator,
+    ItemIndicator: RadioGroupItemIndicator,
     ItemLabel: RadioGroupItemLabel,
     ItemDescription: KobalteRadioGroup.ItemDescription,
   }
