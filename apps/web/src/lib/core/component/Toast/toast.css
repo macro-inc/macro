@@ -150,6 +150,14 @@
   color: color-mix(in oklch, var(--color-ink-muted) 70%, transparent);
 }
 
+/* The notch is smaller than the shared touch target, so extend its hit area
+   to the Button's 36px touch minimum without growing the visible notch. */
+html[data-touch-device='true'] .macro-toast .macro-toast-corner-close::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
 [data-theme-light='false'] .macro-toast .macro-toast-corner-close {
   border-color: color-mix(in oklch, var(--color-ink) 8%, transparent);
   background: color-mix(in oklch, var(--color-toast), var(--color-ink) 3%);
