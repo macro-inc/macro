@@ -210,6 +210,31 @@ export type AgentConversationsDto = {
 };
 
 /**
+ * Which kind of agent a prompt is sent to.
+ */
+export type AgentMode = 'chat' | 'code';
+
+/**
+ * Request body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceRequest = {
+    /**
+     * The prompt the composer is about to send.
+     */
+    prompt: string;
+};
+
+/**
+ * Response body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceResponse = {
+    /**
+     * Which kind of agent should receive the prompt.
+     */
+    mode: AgentMode;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -641,6 +666,13 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Editable fields for ai inference, before submission and identity resolution.
+ */
+export type AiSuggestions = {
+    [key: string]: never;
+};
+
+/**
  * Request body for answering a held tool call.
  */
 export type AnswerToolApprovalRequest = {
@@ -672,6 +704,63 @@ export type AppConnectedRequest = {
 };
 
 export type BotId = string;
+
+/**
+ * Editable fields for calendar inference, before submission and identity resolution.
+ */
+export type CalendarSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Event end as a local wall-clock value in the request's timezone.
+     */
+    end?: string | null;
+    /**
+     * Only populated when an invitation was explicitly requested.
+     */
+    guests?: Array<string>;
+    /**
+     * Human-readable event venue or meeting URL.
+     */
+    location?: string | null;
+    recurrence?: null | RecurrenceSuggestion;
+    /**
+     * Local wall-clock values, interpreted in the request's IANA timezone.
+     */
+    start?: string | null;
+    /**
+     * Verbatim clock phrase whose missing AM/PM required an editable assumption.
+     */
+    start_assumption?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
+
+/**
+ * Call search supports speakers, channels and attendance status.
+ */
+export type CallSearchSuggestions = {
+    /**
+     * Speaker names or supplied addresses.
+     */
+    from: Array<string>;
+    /**
+     * Channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Attendance display value, resolved against supported options by the client.
+     */
+    status?: string | null;
+};
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -799,6 +888,24 @@ export type ChangesetDto = {
 export type ChangesetSourceDto = 'github_pull_request';
 
 /**
+ * Message filters remain display names until resolved against the user's directory.
+ */
+export type ChannelSearchSuggestions = {
+    /**
+     * Explicit message sender names or addresses.
+     */
+    from: Array<string>;
+    /**
+     * Explicit channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+};
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -810,6 +917,34 @@ export type ChannelSharePermission = {
      * The channel id
      */
     channel_id: string;
+};
+
+/**
+ * A draft snapshot. Revisions are opaque to the server and echoed to the client.
+ */
+export type ClassifyInputRequest = {
+    /**
+     * Opaque client revision used to discard stale predictions.
+     */
+    revision: number;
+    /**
+     * Current draft text to classify without executing it.
+     */
+    text: string;
+};
+
+/**
+ * Ranked-type evidence for a particular client draft revision.
+ */
+export type ClassifyInputResponse = {
+    /**
+     * Revision echoed from the classification request.
+     */
+    revision: number;
+    /**
+     * Independent scores in the fixed intent-question order.
+     */
+    scores: Array<IntentScore>;
 };
 
 /**
@@ -1125,6 +1260,50 @@ export type ElicitationContentValue = string | boolean | number | number | Array
 export type ElicitationRequestId = number | string;
 
 /**
+ * Email search exposes importance and connected inbox addresses, not sender filters.
+ */
+export type EmailSearchSuggestions = {
+    /**
+     * Explicit importance wording, resolved by the client.
+     */
+    importance?: string | null;
+    /**
+     * Explicit connected inbox addresses, resolved by the client.
+     */
+    inboxes: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+};
+
+/**
+ * Editable fields for email inference, before submission and identity resolution.
+ */
+export type EmailSuggestions = {
+    /**
+     * Explicit blind-carbon-copy recipient names or supplied email addresses.
+     */
+    bcc?: Array<string>;
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Explicit carbon-copy recipient names or supplied email addresses.
+     */
+    cc?: Array<string>;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+    /**
+     * Suggested outgoing email subject.
+     */
+    subject?: string | null;
+};
+
+/**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
  */
 export type ExecutionActivity = {
@@ -1215,6 +1394,47 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * Draft snapshot and local context used to suggest editable destination fields.
+ */
+export type ExtractInputRequest = {
+    /**
+     * Destination whose fields should be extracted.
+     */
+    intent: InputIntent;
+    /**
+     * Available task fields and display values, never authorized entity IDs.
+     */
+    property_definitions?: Array<InputPropertyDefinition>;
+    /**
+     * Reference instant for interpreting relative dates.
+     */
+    reference_time: string;
+    /**
+     * Opaque client revision used to discard stale suggestions.
+     */
+    revision: number;
+    search_type?: null | SearchType;
+    /**
+     * Original draft text; inference must not execute its instructions.
+     */
+    text: string;
+    /**
+     * IANA timezone for interpreting local dates and clock times.
+     */
+    time_zone: string;
+};
+
+/**
+ * Validated suggestions for a particular client draft revision.
+ */
+export type ExtractInputResponse = InputSuggestions & {
+    /**
+     * Revision echoed from the extraction request.
+     */
+    revision: number;
+};
+
+/**
  * What happened to a file, on the wire.
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
@@ -1231,6 +1451,100 @@ export type GitRefDto = {
      * The commit, when known.
      */
     sha?: string | null;
+};
+
+/**
+ * A destination the composer can prepare, but never execute through inference.
+ */
+export type InputIntent = 'ai' | 'search' | 'email' | 'note' | 'task' | 'calendar' | 'message';
+
+/**
+ * A task property and the display values available for extraction.
+ */
+export type InputPropertyDefinition = {
+    /**
+     * Property display name from the client's catalog.
+     */
+    name: string;
+    /**
+     * Allowed display values; an empty list permits free-text suggestions.
+     */
+    options?: Array<string>;
+};
+
+/**
+ * Suggested display values to resolve against a real task-property catalog.
+ */
+export type InputPropertySuggestion = {
+    /**
+     * Property display name, never an authorized identifier.
+     */
+    name: string;
+    /**
+     * Suggested display values, never authorized entity identifiers.
+     */
+    values: Array<string>;
+};
+
+/**
+ * A single inferred destination together with only its applicable fields.
+ */
+export type InputSuggestions = {
+    intent: 'ai';
+    /**
+     * Editable ai fields.
+     */
+    suggestions: AiSuggestions;
+} | {
+    intent: 'search';
+    /**
+     * Editable search fields.
+     */
+    suggestions: SearchSuggestions;
+} | {
+    intent: 'email';
+    /**
+     * Editable email fields.
+     */
+    suggestions: EmailSuggestions;
+} | {
+    intent: 'note';
+    /**
+     * Editable note fields.
+     */
+    suggestions: NoteSuggestions;
+} | {
+    intent: 'task';
+    /**
+     * Editable task fields.
+     */
+    suggestions: TaskSuggestions;
+} | {
+    intent: 'calendar';
+    /**
+     * Editable calendar fields.
+     */
+    suggestions: CalendarSuggestions;
+} | {
+    intent: 'message';
+    /**
+     * Editable message fields.
+     */
+    suggestions: MessageSuggestions;
+};
+
+/**
+ * Independent yes/no probabilities; these do not sum to one.
+ */
+export type IntentScore = {
+    /**
+     * Destination evaluated by the classifier.
+     */
+    intent: InputIntent;
+    /**
+     * Independent probability between zero and one.
+     */
+    score: number;
 };
 
 /**
@@ -1340,9 +1654,51 @@ export type MessageParent = {
 };
 
 /**
+ * Editable fields for message inference, before submission and identity resolution.
+ */
+export type MessageSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+};
+
+/**
  * Harness names accepted by the model discovery endpoint.
  */
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
+ * Monthly ordinal weekday, such as the first Friday.
+ */
+export type MonthlyWeekday = {
+    /**
+     * One through five, or minus one for last.
+     */
+    ordinal: number;
+    /**
+     * Weekday selected by the ordinal.
+     */
+    weekday: WeekdayCode;
+};
+
+/**
+ * Editable fields for note inference, before submission and identity resolution.
+ */
+export type NoteSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
 
 /**
  * The decision carried by an [`AgentPermissionAction`].
@@ -1510,6 +1866,16 @@ export type PullRequestsSessionsResponse = {
 };
 
 /**
+ * A topic for search types without additional supported facets.
+ */
+export type QuerySearchSuggestions = {
+    /**
+     * Remaining keyword phrase after supported filters and instructions.
+     */
+    query?: string | null;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -1581,6 +1947,53 @@ export type RecordedToolCall = {
      * A started call that never replied has an unknown side-effect outcome.
      */
     status: RecordedCallStatus;
+};
+
+/**
+ * Resolved recurrence ending condition accepted by the shared calendar editor.
+ */
+export type RecurrenceEnd = {
+    kind: 'never';
+} | {
+    /**
+     * Positive occurrence count.
+     */
+    count: number;
+    kind: 'after';
+} | {
+    /**
+     * Date resolved against the request's clock and timezone.
+     */
+    date: string;
+    kind: 'on';
+};
+
+/**
+ * Repetition units supported by the shared calendar editor.
+ */
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+/**
+ * Resolved, editable repetition values; the existing calendar serializer builds RRULEs.
+ */
+export type RecurrenceSuggestion = {
+    /**
+     * Weekly weekday selectors.
+     */
+    by_day: Array<WeekdayCode>;
+    /**
+     * Resolved ending condition.
+     */
+    ends: RecurrenceEnd;
+    /**
+     * Repetition unit.
+     */
+    frequency: RecurrenceFrequency;
+    /**
+     * Positive interval.
+     */
+    interval: number;
+    monthly_by_day?: null | MonthlyWeekday;
 };
 
 /**
@@ -1772,6 +2185,34 @@ export type SandboxSizeBody = {
 };
 
 /**
+ * Only the selected type's fields can appear in a search suggestion.
+ */
+export type SearchSuggestions = (QuerySearchSuggestions & {
+    type: 'all';
+}) | (ChannelSearchSuggestions & {
+    type: 'channels';
+}) | (QuerySearchSuggestions & {
+    type: 'document-or-file';
+}) | (TaskSearchSuggestions & {
+    type: 'task';
+}) | (EmailSearchSuggestions & {
+    type: 'email';
+}) | (CallSearchSuggestions & {
+    type: 'calls';
+}) | (QuerySearchSuggestions & {
+    type: 'folders';
+}) | (QuerySearchSuggestions & {
+    type: 'agent';
+}) | (QuerySearchSuggestions & {
+    type: 'calendar';
+});
+
+/**
+ * Search indexes supported by the shared search editor.
+ */
+export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'email' | 'calls' | 'folders' | 'agent' | 'calendar';
+
+/**
  * The agent behind a session, as much of it as rendering a message needs.
  */
 export type SessionBot = {
@@ -1884,6 +2325,54 @@ export type StartFreshAgentConversationRequest = {
 };
 
 /**
+ * Task facets match the shared search editor; assignee and creator are distinct.
+ */
+export type TaskSearchSuggestions = {
+    /**
+     * Assigned people's names or supplied addresses.
+     */
+    assignees: Array<string>;
+    /**
+     * Task creators' names or supplied addresses.
+     */
+    created_by: Array<string>;
+    /**
+     * Priority display values for client-side option resolution.
+     */
+    priority: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Status display values for client-side option resolution.
+     */
+    status: Array<string>;
+};
+
+/**
+ * Editable fields for task inference, before submission and identity resolution.
+ */
+export type TaskSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Task deadline as a local ISO date.
+     */
+    due_date?: string | null;
+    /**
+     * Display names/values that the client resolves against available task fields.
+     */
+    properties?: Array<InputPropertySuggestion>;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
+
+/**
  * Which authenticated participant's access a tool call requests.
  */
 export type ToolActor = 'requester' | 'owner';
@@ -1939,6 +2428,11 @@ export type WarmAgentSessionRequest = {
 export type WarmAgentSessionResponse = {
     session?: null | AgentSessionResponse;
 };
+
+/**
+ * RFC weekday values used by the existing recurrence UI.
+ */
+export type WeekdayCode = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 
 /**
  * Just a session id, for the preview variants that carry nothing else.
@@ -2137,6 +2631,45 @@ export type RetryAgentConversationTurnResponses = {
 };
 
 export type RetryAgentConversationTurnResponse = RetryAgentConversationTurnResponses[keyof RetryAgentConversationTurnResponses];
+
+export type ChooseAgentModeData = {
+    body: AgentModeChoiceRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-mode-choice';
+};
+
+export type ChooseAgentModeErrors = {
+    /**
+     * The prompt is blank
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot start new AI work
+     */
+    402: unknown;
+    /**
+     * Auto mode is not enabled for the caller
+     */
+    403: unknown;
+    /**
+     * The classifier is unconfigured, failed, or timed out
+     */
+    503: unknown;
+};
+
+export type ChooseAgentModeResponses = {
+    /**
+     * The kind of agent the prompt goes to
+     */
+    200: AgentModeChoiceResponse;
+};
+
+export type ChooseAgentModeResponse = ChooseAgentModeResponses[keyof ChooseAgentModeResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -3190,3 +3723,67 @@ export type PresentSessionViewResponses = {
 };
 
 export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
+
+export type ClassifyData = {
+    body: ClassifyInputRequest;
+    path?: never;
+    query?: never;
+    url: '/universal_input/classify';
+};
+
+export type ClassifyErrors = {
+    /**
+     * Invalid input
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: unknown;
+    /**
+     * Detection unavailable
+     */
+    503: unknown;
+};
+
+export type ClassifyResponses = {
+    200: ClassifyInputResponse;
+};
+
+export type ClassifyResponse = ClassifyResponses[keyof ClassifyResponses];
+
+export type ExtractData = {
+    body: ExtractInputRequest;
+    path?: never;
+    query?: never;
+    url: '/universal_input/extract';
+};
+
+export type ExtractErrors = {
+    /**
+     * Invalid input
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: unknown;
+    /**
+     * Extraction unavailable
+     */
+    503: unknown;
+};
+
+export type ExtractResponses = {
+    200: ExtractInputResponse;
+};
+
+export type ExtractResponse = ExtractResponses[keyof ExtractResponses];

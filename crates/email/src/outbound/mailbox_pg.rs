@@ -211,11 +211,14 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
+        // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
+        // Without it, Postgres before 18 reads every backed-off row on each poll.
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT q.link_id,q.generation,q.provider_id FROM email_message_reconciliation q
                 JOIN email_links l ON l.id = q.link_id
                 WHERE q.generation = l.sync_generation AND l.is_sync_active AND l.provider = 'OUTLOOK'
+                    AND q.is_import IN (false,true)
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
             )

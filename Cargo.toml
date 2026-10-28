@@ -42,6 +42,7 @@ members = [
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
   "crates/jev",
+  "crates/universal_input",
   "crates/database_sql",
   "crates/database_webhooks",
   "crates/databases",
@@ -130,8 +131,13 @@ members = [
   "crates/task_dedup",
   "crates/unfurl",
   "crates/user_api_key",
+  "crates/user_language",
   "crates/webhook_signature",
+  "crates/whatsapp_e2e",
   "crates/whatsapp_fake_server",
+  "crates/external_chat",
+  "crates/whatsapp_linked",
+  "crates/whatsapp_store_pg",
   "crates/whatsmeow",
   "crates/whatsmeow_proto",
   "crates/whatsmeow_signal",
@@ -172,12 +178,14 @@ members = [
   "services/sha_cleanup_worker",
   "services/slack_import_worker",
   "services/static_file_service",
+  "crates/sync_router",
   "services/sync-service",
   "services/sync-service/bebop-schema",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
   "services/user_link_cleanup_handler",
+  "services/whatsapp_session_service",
   "services/worker_trigger",
   "tooling/native_app_server",
   "tooling/notification_sandbox",
@@ -441,6 +449,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
 zune-core = "0.5"

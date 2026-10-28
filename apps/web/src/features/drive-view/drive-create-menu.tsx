@@ -7,6 +7,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import FileIcon from '@icon/system/regular/file.svg';
@@ -18,15 +19,16 @@ import { For, Show } from 'solid-js';
 import { useDriveView } from './context/drive-context';
 import { driveCreateDestinationLabel } from './core/location-label';
 
-const creationDescriptions: Partial<Record<CreatableName, string>> = {
-  md: 'Write and collaborate on notes, plans, or longer documents.',
-  snippet: 'Save a reusable piece of text or code for later.',
-  spreadsheet: 'Work with tables, formulas, and structured numbers.',
-  canvas: 'Sketch ideas and arrange information on a shared canvas.',
-  code: 'Write and edit code in a dedicated file.',
-  project: 'Keep related files and work together in one place.',
-  database: 'Organize records with custom fields and views.',
-  form: 'Collect structured responses through a shareable form.',
+/** Each choice's description, translated where it renders. */
+const creationDescriptions: Partial<Record<CreatableName, TranslationKey>> = {
+  md: 'create.guideDocument',
+  snippet: 'create.guideSnippet',
+  spreadsheet: 'create.guideSpreadsheet',
+  canvas: 'create.guideCanvas',
+  code: 'create.guideCode',
+  project: 'create.guideFolderProject',
+  database: 'create.guideDatabase',
+  form: 'create.guideForm',
 };
 
 function SidebarTrigger(props: { label: string }) {
@@ -35,7 +37,7 @@ function SidebarTrigger(props: { label: string }) {
       <ViewSidebar.Icon>
         <PlusIcon class="size-4" />
       </ViewSidebar.Icon>
-      <span class="truncate">New</span>
+      <span class="truncate">{t('create.new')}</span>
       <ViewSidebar.Trailing>
         <CaretDownIcon class="size-3 shrink-0" />
       </ViewSidebar.Trailing>
@@ -47,7 +49,7 @@ function ToolbarTrigger(props: { label: string }) {
   return (
     <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
       <PlusIcon class="size-4" />
-      <span>New</span>
+      <span>{t('create.new')}</span>
       <CaretDownIcon class="size-3" />
     </Dropdown.Trigger>
   );
@@ -67,7 +69,8 @@ export function DriveCreateMenu(props: {
   const destination = () =>
     driveCreateDestinationLabel(state.projectId(), sidebar.folders());
 
-  const label = () => `New file or folder in ${destination()}`;
+  const label = () =>
+    t('create.newFileOrFolderIn', { destination: destination() });
 
   const options = () =>
     CREATABLE_BLOCKS.filter(
@@ -120,7 +123,7 @@ export function DriveCreateMenu(props: {
       <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
         <Dropdown.Group>
           <Dropdown.GroupLabel class="min-w-0 gap-1.5">
-            <span class="shrink-0">Create in</span>
+            <span class="shrink-0">{t('create.createIn')}</span>
             <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
             <span class="min-w-0 truncate font-medium text-ink-muted">
               {destination()}
@@ -131,10 +134,10 @@ export function DriveCreateMenu(props: {
               <CreateMenuItem
                 icon={option.icon ?? FileIcon}
                 title={option.label}
-                description={
+                description={t(
                   creationDescriptions[option.blockName] ??
-                  `Create a ${option.label.toLowerCase()} in this folder.`
-                }
+                    'create.guideInThisFolder'
+                )}
                 onSelect={() => select(option.blockName)}
               />
             )}
@@ -143,14 +146,14 @@ export function DriveCreateMenu(props: {
         <Dropdown.Group>
           <CreateMenuItem
             icon={UploadIcon}
-            title="Upload files"
-            description="Bring existing files from your computer into this folder."
+            title={t('create.uploadFiles')}
+            description={t('create.guideUploadFiles')}
             onSelect={actions.uploadFiles}
           />
           <CreateMenuItem
             icon={FolderIcon}
-            title="Upload folder"
-            description="Import a folder and the files inside it."
+            title={t('create.uploadFolder')}
+            description={t('create.guideUploadFolder')}
             onSelect={actions.uploadFolder}
           />
         </Dropdown.Group>

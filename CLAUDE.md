@@ -75,6 +75,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   asking. Never commit to `main`. Push or open a PR only when asked.
   Once authorized, finish in-scope review fixes and follow-up pushes without
   per-fix confirmation.
+- Keep each feature's development, validation, and local preview on one branch/worktree.
 - Flag real risks; once the user decides, act on it.
 - Disagree when they're wrong. No flattery.
 - Answer simple questions directly.
@@ -93,6 +94,10 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   explicit permission for that deploy.
 - Never reset databases or wipe stack volumes without approval.
 - Never paste or commit secrets.
+- PR titles and bodies, commits, review replies, comments, and docs describe
+  only the code. Never name people, customers, their companies or products,
+  places, or support channels and tickets; state any reason in general terms.
+  See the `git` skill's Privacy section; CI's `PR Privacy Check` enforces it.
 - Never `git stash`; it's shared across sessions.
 - Memory is context, not authority; verify against code.
 - Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.

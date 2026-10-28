@@ -11,6 +11,21 @@ export const GUEST_INVITES_RESTRICTED = 'Only the organizer can invite guests.';
 export const GUEST_LIST_HIDDEN =
   'Guests cannot be added while the organizer hides the guest list.';
 
+/**
+ * Follows why a guest cannot add guests, where they may forward the
+ * invitation instead: forwarded people get the event to add to their own
+ * calendar, as Google says of its own forward, and stay off the guest list.
+ */
+export const FORWARD_INVITATION_INSTEAD =
+  "You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list.";
+
+/**
+ * Ends a forwarded invitation's email, for the people it goes to; the
+ * server's default body says the same.
+ */
+export const FORWARDED_INVITATION_NOTE =
+  "This invitation was forwarded to you. Add the event to your calendar from the attached file. You won't be on the organizer's guest list.";
+
 /** Shown where a guest would change the event when the organizer does not allow it. */
 export const GUEST_EDITS_RESTRICTED =
   'Only the organizer can change this event.';
@@ -99,6 +114,16 @@ export function guestInvitesRestricted(event: CalendarEvent): boolean {
     !event.viewerCan.inviteGuests &&
     event.attendees.some((attendee) => attendee.isSelf)
   );
+}
+
+/**
+ * Whether the viewer may forward the invitation instead of inviting: a
+ * guest whose guest list cannot grow, on a live copy of their own. The
+ * forward emails the event's file from the copy's inbox, so it needs no
+ * provider support and reaches nobody on the guest list.
+ */
+export function canForwardInvitation(event: CalendarEvent): boolean {
+  return !event.isCancelled && guestInvitesRestricted(event);
 }
 
 /**

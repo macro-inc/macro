@@ -12,7 +12,7 @@ import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelInviteButton } from '@channel/channel-invite-button';
-import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
+import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -36,7 +36,6 @@ import {
 } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { Tabs } from '@ui';
 import {
   type Accessor,
@@ -104,18 +103,10 @@ type ChannelDetailHeaderProps = {
 
 export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
-  const channelType = useChannelType(props.channelId);
-  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
-  const participants = () =>
-    participantsQuery.isSuccess ? (participantsQuery.data ?? []) : [];
 
   return (
     <div class="ph-no-capture flex min-w-0 shrink items-center gap-2">
-      <ChannelTopIcon
-        channelId={props.channelId}
-        channelType={channelType()}
-        participants={participants()}
-      />
+      <ChannelTitleIcon channelId={props.channelId} />
       <span class="truncate text-sm font-semibold">
         {channelName() ?? 'New Channel'}
       </span>

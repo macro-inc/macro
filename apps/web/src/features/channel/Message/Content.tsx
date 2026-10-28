@@ -20,6 +20,7 @@ import {
 } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
 import { MentionedImages } from './MentionedImages';
+import { MentionedRoutineTemplates } from './MentionedRoutineTemplates';
 
 // Height (px) a long body is cut to while collapsed.
 const COLLAPSED_MAX_HEIGHT = 240;
@@ -56,6 +57,7 @@ export function Content(props: ContentProps) {
         rootRef={setMarkdownRoot}
       />
       <MentionedImages content={content()} />
+      <MentionedRoutineTemplates content={content()} />
     </>
   );
 

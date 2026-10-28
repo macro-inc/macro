@@ -111,7 +111,12 @@ async fn rpc(
     method: &str,
     mut params: serde_json::Value,
 ) -> (StatusCode, serde_json::Value) {
-    if method == "tools/call" && params["name"] != "DescribeCodeTools" {
+    if method == "tools/call"
+        && !matches!(
+            params["name"].as_str(),
+            Some("DescribeCodeTools" | "ReadCodeDocs")
+        )
+    {
         params["arguments"]["acting_as"] = serde_json::json!("owner");
     }
     let mut request = Request::builder()

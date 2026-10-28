@@ -6,6 +6,7 @@ function getMentionName(item: MentionItem): string {
   if (item.kind === 'group') return item.data.groupAlias;
   if (item.kind === 'bookingLink' || item.kind === 'calendarEvent')
     return item.data.title;
+  if (item.kind === 'externalChat') return item.data.name;
   return item.searchText;
 }
 
@@ -14,7 +15,8 @@ function getMentionTimestamps(item: MentionItem) {
     item.kind === 'date' ||
     item.kind === 'group' ||
     item.kind === 'bookingLink' ||
-    item.kind === 'calendarEvent'
+    item.kind === 'calendarEvent' ||
+    item.kind === 'externalChat'
   )
     return {};
   return item.timestamps;

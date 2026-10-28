@@ -92,6 +92,15 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+If the channel is already open in another split or preview, clicking a message
+or reply notification focuses that view and jumps to the specific message,
+without a **Content already open** warning. Verify with two splits and a reply
+in a different thread from the one currently displayed; repeat on touch.
+A Home URL containing only the channel `threadId` opens that thread's root,
+not the latest message. Reloading or opening the same URL on touch retains the
+target; an explicit reply `messageId` still takes precedence.
+
+![Thread-only Home URL targeting its root message](images/conversation-thread-target.png)
 
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
@@ -113,9 +122,10 @@ explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
 The Agents workspace uses a single left dot for activity and unread state in
-place of the sparkle. Opening a loaded session from Home or Agents marks its
-notifications read after the viewing delay, including notifications arriving
-while that session remains active.
+place of the sparkle. Clicking a session row in Home or the Agents sidebar
+clears the row's loaded unread dot immediately; a failed read write restores
+it. The opened session also marks its notifications read after the viewing
+delay, including notifications arriving while that session remains active.
 Other Home items have no title tooltips, and their timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
@@ -158,6 +168,14 @@ Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
 and Share groups. Touch previews retain their existing compact headers.
+
+Conversation breadcrumbs preserve identity: human DMs show the other participant's
+avatar, agent DMs show the persona avatar, and named channels show their picture
+or the channel glyph. Verify switching between these entries without reloading,
+including a reply-thread entry and a direct Home URL reload. Clicking an avatar
+inside a breadcrumb must select that breadcrumb, not open another DM.
+
+![Home DM breadcrumb with its participant avatar](images/home-conversation-identity.png)
 
 Document previews opened from Home expose **Share** and **Copy Share Link** before
 the details toggle, including tasks, snippets, skills, canvases, PDFs, images,

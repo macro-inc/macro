@@ -190,6 +190,7 @@ function typeLabel(type: ColumnType): string {
     .with({ type: 'number' }, () => 'Number')
     .with({ type: 'boolean' }, () => 'Checkbox')
     .with({ type: 'date' }, () => 'Date')
+    .with({ type: 'date_range' }, () => 'Time range')
     .with({ type: 'link' }, () => 'URL')
     .with({ type: 'select', multi: true }, () => 'Multi-select')
     .with({ type: 'select', multi: false }, () => 'Select')

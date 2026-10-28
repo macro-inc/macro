@@ -23,7 +23,7 @@
 
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, StreamPart, SystemPrompt};
+use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
@@ -65,11 +65,13 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__DecideReview",
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
 ];
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
@@ -127,8 +129,9 @@ impl RigTurnEngine {
 }
 
 /// Native tools never gated: asking the user something, and finding or
-/// loading a connected app's tools, spend nobody's access.
-const UNGATED_NATIVE_TOOLS: [&str; 3] = ["AskUser", "SearchTools", "LoadTools"];
+/// loading a connected app's tools, or reading the rest of a result the
+/// turn already got, spend nobody's access.
+const UNGATED_NATIVE_TOOLS: [&str; 4] = ["AskUser", "SearchTools", "LoadTools", "ReadToolResult"];
 
 /// A turn's tools, each call to one of Macro's own asked of the gate first.
 /// Remote MCP tools are left to the egress proxy, which gates them already.
@@ -231,6 +234,7 @@ fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
 struct InMemToolContext {
     base: ToolServiceContext,
     ask_user: AskUserContext,
+    tool_results: ToolResultLimit,
 }
 
 impl FromRef<InMemToolContext> for ToolServiceContext {
@@ -245,11 +249,19 @@ impl FromRef<InMemToolContext> for AskUserContext {
     }
 }
 
+impl FromRef<InMemToolContext> for ToolResultLimit {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.tool_results.clone()
+    }
+}
+
 fn tools_for_turn(
     base_tools: ai_tools::AiToolSet,
     supports_user_input: bool,
 ) -> AsyncToolCollection<InMemToolContext> {
-    let tools = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
+    let tools = AsyncToolCollection::<InMemToolContext>::new()
+        .add_subtoolset(base_tools)
+        .add_tool::<ReadToolResult, ToolResultLimit>();
     if supports_user_input {
         tools.add_tool::<AskUser, AskUserContext>()
     } else {
@@ -580,11 +592,16 @@ async fn drive_turn(
             .with_actor(identity.bot)
             .with_actor_name(&identity.name);
     }
+    // Results too long for the model to read whole are cut, the turn's as
+    // they arrive and earlier ones as history is replayed below, and kept
+    // here for `ReadToolResult`.
+    let tool_results = ToolResultLimit::default();
     let tool_context = InMemToolContext {
         base: tool_context,
         ask_user: AskUserContext {
             requester: user_input,
         },
+        tool_results: tool_results.clone(),
     };
 
     // GenAI telemetry stays off here: this runtime's turns and tool calls
@@ -595,7 +612,8 @@ async fn drive_turn(
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
-        .with_genai_telemetry(false);
+        .with_genai_telemetry(false)
+        .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
     // Macro's keys.
@@ -689,7 +707,7 @@ async fn drive_turn(
         }
     }));
 
-    let rig_messages = agent::to_rig_messages(&messages);
+    let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
         let mut turn_spoke = false;

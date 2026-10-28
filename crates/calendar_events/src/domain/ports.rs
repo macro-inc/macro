@@ -7,7 +7,7 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::copies::{CopyChange, CopyRefusal};
-use super::ics::{CalendarEventExport, CalendarEventIcs, EventSnapshot};
+use super::ics::{CalendarEventExport, CalendarEventForward, CalendarEventIcs, EventSnapshot};
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::meeting_links::{
     CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
@@ -1068,6 +1068,20 @@ pub trait CalendarSnapshotImporter: Send + Sync + 'static {
         snapshot: EventSnapshot,
         calendar_id: Option<Uuid>,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port reading what forwarding one of the requester's
+/// events by email sends, for the host that sends the email.
+pub trait CalendarEventForwardSource: Send + Sync + 'static {
+    /// The requester's own copy of `event_id` as an iCalendar document,
+    /// with the inbox holding that copy, which sends it. `None` when the
+    /// event is cancelled, unknown, or not held through one of their own
+    /// inboxes.
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
 /// Inbound service port creating events that carry a Macro call.

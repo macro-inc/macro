@@ -95,7 +95,7 @@ impl ServerHandler for InternalTools {
         );
         if self.code_mode.is_some() {
             info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode and macro_internal.DescribeCodeTools are available directly, without tool search. Follow their descriptions for the JavaScript main module, real SDK entity documentation, and persistent review workflow. Reuse entity documentation already expanded in context.",
+                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the JavaScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
             );
         }
         info
@@ -168,7 +168,10 @@ impl ServerHandler for InternalTools {
                 }),
         );
         for tool in &mut definitions {
-            if !matches!(tool.name.as_ref(), "DescribeCodeTools" | "ExecuteCode") {
+            if !matches!(
+                tool.name.as_ref(),
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+            ) {
                 ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
             }
         }
@@ -196,7 +199,10 @@ impl ServerHandler for InternalTools {
             .owner_user()
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let mut acting_user = owner.clone();
-        if !matches!(request.name.as_ref(), "ExecuteCode" | "DescribeCodeTools") {
+        if !matches!(
+            request.name.as_ref(),
+            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+        ) {
             let arguments = serde_json::Value::Object(request.arguments.take().unwrap_or_default());
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
                 Ok(selection) => selection,

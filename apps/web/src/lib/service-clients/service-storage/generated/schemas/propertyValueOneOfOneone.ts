@@ -4,19 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { EntityReference } from './entityReference';
 import type { PropertyValueOneOfOneoneType } from './propertyValueOneOfOneoneType';
 
 /**
- * Entity reference(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "EntityReference", "value": [{...}]} (length 0 or 1)
-Multi-select: {"type": "EntityReference", "value": [{...}, {...}, ...]} (length 0+)
+ * Select option(s) - always an array (check is_multi_select to determine if single or multi)
+Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
+Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+)
  */
 export type PropertyValueOneOfOneone = {
   type: PropertyValueOneOfOneoneType;
-  /** Entity reference(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "EntityReference", "value": [{...}]} (length 0 or 1)
-Multi-select: {"type": "EntityReference", "value": [{...}, {...}, ...]} (length 0+) */
-  value: EntityReference[];
+  /** Select option(s) - always an array (check is_multi_select to determine if single or multi)
+Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
+Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+) */
+  value: string[];
 };

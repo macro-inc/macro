@@ -36,8 +36,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectError, ProjectTree, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -335,6 +335,17 @@ where
                 }
             })
             .collect())
+    }
+
+    async fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> Result<ProjectTree, ProjectError> {
+        self.repo
+            .get_project_tree(&receipt.entity().entity_id, limit)
+            .await
+            .map_err(|error| internal_error(error, "unable to get project tree"))
     }
 
     async fn get_project_permissions(

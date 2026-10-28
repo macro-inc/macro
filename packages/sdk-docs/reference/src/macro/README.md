@@ -220,6 +220,42 @@ Re-exports [EntityReference](../entities/reference/type-aliases/EntityReference.
 
 ***
 
+### ExternalChat
+
+Re-exports [ExternalChat](../entities/external-chat/chat/classes/ExternalChat.md)
+
+***
+
+### ExternalChatContent
+
+Re-exports [ExternalChatContent](../entities/external-chat/chat/type-aliases/ExternalChatContent.md)
+
+***
+
+### ExternalChatMessage
+
+Re-exports [ExternalChatMessage](../entities/external-chat/message/classes/ExternalChatMessage.md)
+
+***
+
+### ExternalChatParticipant
+
+Re-exports [ExternalChatParticipant](../entities/external-chat/participant/classes/ExternalChatParticipant.md)
+
+***
+
+### ExternalChatSend
+
+Re-exports [ExternalChatSend](../entities/external-chat/send/classes/ExternalChatSend.md)
+
+***
+
+### ExternalChatUpload
+
+Re-exports [ExternalChatUpload](../entities/external-chat/upload/classes/ExternalChatUpload.md)
+
+***
+
 ### FoldedAgentSessionLog
 
 Re-exports [FoldedAgentSessionLog](../entities/agent-sessions/agent-session/type-aliases/FoldedAgentSessionLog.md)
@@ -619,6 +655,24 @@ Re-exports [ToolApproval](../entities/agent-sessions/tool-approval/classes/ToolA
 ### UserApiKey
 
 Re-exports [UserApiKey](../entities/api-keys/api-key/classes/UserApiKey.md)
+
+***
+
+### WhatsAppAccount
+
+Re-exports [WhatsAppAccount](../entities/whatsapp/account/classes/WhatsAppAccount.md)
+
+***
+
+### WhatsAppChat
+
+Re-exports [WhatsAppChat](../entities/whatsapp/chat/classes/WhatsAppChat.md)
+
+***
+
+### WhatsAppCommunity
+
+Re-exports [WhatsAppCommunity](../entities/whatsapp/chat/type-aliases/WhatsAppCommunity.md)
 
 ***
 

@@ -222,12 +222,12 @@ where
             .entities
             .into_iter()
             .map(|entity| {
-                entity
+                Ok(entity
                     .entity_type
-                    .into_model()
-                    .with_entity_string(entity.entity_id.0)
+                    .into_model()?
+                    .with_entity_string(entity.entity_id.0))
             })
-            .collect();
+            .collect::<async_graphql::Result<_>>()?;
         let service = ctx.data::<Arc<S>>()?;
         let notifications = service
             .update_notifications_for_entities(user_id, entities, input.operation.into())

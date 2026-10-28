@@ -170,3 +170,28 @@ async fn removing_a_connection_twice_does_not_wrap_the_count() {
         "only the removal that took the entry may decrement the count"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn binary_delivery_drops_a_full_connection_without_blocking_the_relay() {
+    let manager = ConnectionManager::new(UnusedRepo);
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    sender.try_send(OutgoingMessage::Binary(vec![1])).unwrap();
+    let forwarder = tokio::spawn(std::future::pending::<()>());
+    manager.connections.insert(
+        "connection".to_owned(),
+        Connection {
+            sender,
+            abort_handle: forwarder.abort_handle(),
+        },
+    );
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        manager.send_binary("connection", vec![2]),
+    )
+    .await
+    .expect("a stalled client must not block other clients' sync replies");
+    assert!(result.is_err());
+    assert!(!manager.has_connection("connection"));
+    assert!(forwarder.await.unwrap_err().is_cancelled());
+}

@@ -89,6 +89,15 @@ impl MacroAuthorizationService for FakeAuth {
             ..Default::default()
         })
     }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
     async fn authorize_internal(
         &self,
         _: &str,

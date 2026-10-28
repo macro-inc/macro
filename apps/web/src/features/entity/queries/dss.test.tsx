@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/component/FileList/itemOperations', () => ({
   deleteItem: mocks.deleteItem,
   copyItem: mocks.copyItem,
+  canDuplicateItemType: () => true,
   moveToFolder: mocks.moveToFolder,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({

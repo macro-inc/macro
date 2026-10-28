@@ -6,7 +6,7 @@ use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, messages, parse};
 
 use models_email::email::db::address::UpsertedRecipients;
-use models_email::email::service::thread;
+use models_email::email::service::{message, thread};
 use sqlx::types::Uuid;
 use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
@@ -156,14 +156,9 @@ pub async fn insert_thread(
     Ok(existing_id)
 }
 
-/// inserts a thread object into the database that has no metadata or rizz
-#[tracing::instrument(skip(pool), err)]
-pub async fn insert_blank_thread(
-    pool: &PgPool,
-    thread_provider_id: &str,
-    link_id: Uuid,
-) -> anyhow::Result<Uuid> {
-    let thread = thread::Thread {
+/// A thread row with no metadata yet, for writers that fill it in afterwards.
+fn blank_thread(thread_provider_id: &str, link_id: Uuid) -> thread::Thread {
+    thread::Thread {
         db_id: macro_uuid::generate_uuid_v7(),
         provider_id: Some(thread_provider_id.to_string()),
         link_id,
@@ -175,10 +170,61 @@ pub async fn insert_blank_thread(
         created_at: Default::default(),
         updated_at: Default::default(),
         messages: vec![],
-    };
+    }
+}
+
+/// Inserts a thread with no metadata, returning its id, or `None` when the
+/// mailbox already has the thread, including when a concurrent insert won.
+#[tracing::instrument(skip(pool), err)]
+pub async fn insert_blank_thread(
+    pool: &PgPool,
+    thread_provider_id: &str,
+    link_id: Uuid,
+) -> anyhow::Result<Option<Uuid>> {
+    let thread = blank_thread(thread_provider_id, link_id);
 
     let mut tx = pool.begin().await?;
     let id = insert_thread(&mut tx, &thread, link_id).await?;
     tx.commit().await?;
-    Ok(id)
+    Ok((id == thread.db_id).then_some(id))
+}
+
+/// Inserts a backfilled thread and all of its messages in one transaction,
+/// returning the thread id and the messages it skipped, or `None` when the
+/// mailbox already has the thread, including when a concurrent insert won;
+/// nothing is written then.
+///
+/// A message `is_unstorable` rejects is left out under its own savepoint while
+/// the rest commit. Any other failure leaves no thread behind, so a retried
+/// backfill writes the whole thread again. Thread metadata and `replying_to`
+/// links are left to the backfill's metadata step, as with
+/// [`insert_blank_thread`].
+#[tracing::instrument(skip(pool, messages, is_unstorable), fields(message_count = messages.len()), err)]
+pub async fn insert_backfilled_thread(
+    pool: &PgPool,
+    thread_provider_id: &str,
+    link_id: Uuid,
+    messages: &mut [message::Message],
+    is_unstorable: impl Fn(&anyhow::Error) -> bool,
+) -> anyhow::Result<Option<(Uuid, Vec<messages::insert::SkippedMessage>)>> {
+    let writer = messages::insert::BackfillMessageWriter {
+        pool,
+        link_id,
+        is_unstorable,
+    };
+    let mut skipped = Vec::new();
+    let recipients = writer.upsert_contacts(messages, &mut skipped).await?;
+    let thread = blank_thread(thread_provider_id, link_id);
+
+    let mut tx = pool.begin().await?;
+    let id = insert_thread(&mut tx, &thread, link_id).await?;
+    if id != thread.db_id {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+    writer
+        .insert_messages(&mut tx, id, messages, recipients, &mut skipped)
+        .await?;
+    tx.commit().await?;
+    Ok(Some((id, skipped)))
 }

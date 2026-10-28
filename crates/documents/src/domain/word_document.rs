@@ -1,16 +1,21 @@
 //! Reading and editing uploaded Word (`.docx`) documents for AI tools.
 //!
-//! A DOCX opened in Macro's editor has a live collaborative copy in the sync
-//! service; the editing worker reads and edits that copy, so people with the
-//! document open see an agent's edits as they land.
+//! A DOCX has a live collaborative copy in the sync service; the editing
+//! worker reads and edits that copy, so people with the document open see an
+//! agent's edits as they land. The first editor to open an upload seeds the
+//! copy; when an agent gets there first, this service seeds it the same way.
 
 mod models;
+mod seed;
 pub use models::*;
+pub use seed::seed_snapshot;
 
 use super::{
+    markdown_backfill::SyncServiceProbe,
     permission_token::encode_permission_token,
-    ports::{DocumentService, editing::EditingWorkerService},
+    ports::{DocumentService, editing::EditingWorkerService, markdown::SyncInitializeSnapshotPort},
 };
+use anyhow::Context;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -51,19 +56,54 @@ impl<D: DocumentService> WordDocumentLookup for D {
     }
 }
 
+/// Reads uploaded Word files. Object-safe so hosts can wire a store into an
+/// already-built tool context.
+#[async_trait::async_trait]
+pub trait WordDocumentFiles: Send + Sync + 'static {
+    /// The DOCX as uploaded, or `None` while the upload is still being
+    /// extracted.
+    async fn original(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>>;
+}
+
+/// Used where no file store is wired: seeding fails with a clear message.
+pub struct NoWordDocumentFiles;
+
+#[async_trait::async_trait]
+impl WordDocumentFiles for NoWordDocumentFiles {
+    async fn original(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        anyhow::bail!("Word documents nobody has opened yet cannot be prepared from this host")
+    }
+}
+
 /// Runs Word document workflows after the caller obtains the required receipt.
-pub struct WordDocumentService<D, W> {
+pub struct WordDocumentService<D, W, S> {
     documents: Arc<D>,
     worker: Arc<W>,
+    sync: Arc<S>,
+    files: Arc<dyn WordDocumentFiles>,
     token_secret: String,
 }
 
-impl<D: WordDocumentLookup, W: EditingWorkerService> WordDocumentService<D, W> {
-    /// Compose the domain service from document and execution ports.
-    pub fn new(documents: Arc<D>, worker: Arc<W>, token_secret: String) -> Self {
+impl<D, W, S> WordDocumentService<D, W, S>
+where
+    D: WordDocumentLookup,
+    W: EditingWorkerService,
+    S: SyncServiceProbe + SyncInitializeSnapshotPort,
+{
+    /// Compose the domain service from document, execution, sync and file
+    /// ports.
+    pub fn new(
+        documents: Arc<D>,
+        worker: Arc<W>,
+        sync: Arc<S>,
+        files: Arc<dyn WordDocumentFiles>,
+        token_secret: String,
+    ) -> Self {
         Self {
             documents,
             worker,
+            sync,
+            files,
             token_secret,
         }
     }
@@ -159,9 +199,47 @@ impl<D: WordDocumentLookup, W: EditingWorkerService> WordDocumentService<D, W> {
             &self.token_secret,
             Some(actor.to_owned()),
         )?;
+        self.ensure_live_copy(document_id).await?;
         self.worker
             .word_document(document_id, &token, &request)
             .await
+    }
+
+    /// Seed the live copy from the uploaded file unless someone already has.
+    #[tracing::instrument(
+        name = "word_document.ensure_live_copy",
+        skip(self),
+        fields(seeded, docx_bytes, snapshot_bytes),
+        err
+    )]
+    async fn ensure_live_copy(&self, document_id: &str) -> anyhow::Result<()> {
+        let exists = self.sync.exists(document_id).await?;
+        tracing::Span::current().record("seeded", !exists);
+        if exists {
+            return Ok(());
+        }
+        let Some(original) = self.files.original(document_id).await? else {
+            anyhow::bail!(
+                "This Word document is still being processed after upload. Try again in a few seconds."
+            );
+        };
+        tracing::Span::current().record("docx_bytes", original.len());
+        let snapshot = tokio::task::spawn_blocking(move || seed_snapshot(original))
+            .await?
+            .context("This Word document could not be opened for editing")?;
+        tracing::Span::current().record("snapshot_bytes", snapshot.len());
+        if let Err(error) = self
+            .sync
+            .initialize_from_snapshot(document_id, &snapshot)
+            .await
+        {
+            // Someone opening the document may have seeded it first; both
+            // seeds are the same document with the same ids.
+            if !self.sync.exists(document_id).await? {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 }
 

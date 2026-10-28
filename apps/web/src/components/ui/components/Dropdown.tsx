@@ -318,7 +318,7 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5 bg-menu', local.class)}
+      class={cn('flex flex-col p-1.5', local.class)}
       {...rest}
     />
   );

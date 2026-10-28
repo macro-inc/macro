@@ -6,7 +6,6 @@ import {
   type CalendarTimeFormat,
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   conferenceJoinUrl,
@@ -23,6 +22,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';

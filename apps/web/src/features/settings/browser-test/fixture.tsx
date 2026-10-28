@@ -3,6 +3,10 @@ import '../../../index.css';
 import { ViewShell } from '@app/components/view-shell';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
+import { UserContextProvider } from '@core/context/user';
+import { authKeys } from '@queries/auth/keys';
+import { teamKeys } from '@queries/team/keys';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -10,7 +14,7 @@ import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeColorTokens';
 import { Appearance } from '../Appearance';
-import { DesktopAppInfo } from '../components/desktop-app';
+import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
 import { SettingsSidebar } from '../components/settings-sidebar';
 import { SignatureForm } from '../components/signature-form';
@@ -49,7 +53,7 @@ function Fixture() {
   };
   onMount(() => applyTheme(false));
   const groups = SETTINGS_TAB_GROUPS.filter(
-    (group) => group.label !== 'Admin'
+    (group) => !group.items.some((item) => item.tab === 'Admin')
   ).map((group) => ({
     ...group,
     items: group.items.filter((item) => !item.searchOnly),
@@ -145,9 +149,12 @@ function Fixture() {
           when={page !== 'Desktop App'}
           fallback={
             <Show when={desktop()} fallback={<DesktopApp />}>
-              <DesktopAppInfo
+              <AppInfo
+                title="Desktop App (Alpha)"
+                description="Your installed version of Macro Alpha."
                 version="2.5.0"
                 buildDate={new Date('2026-10-01T16:30:00Z')}
+                bundleDate={new Date('2026-10-27T09:15:00Z')}
               />
             </Show>
           }
@@ -279,4 +286,20 @@ function FixtureSignature(props: { email: string }) {
   );
 }
 const root = document.getElementById('root');
-if (root) render(() => <Fixture />, root);
+// Appearance's Language section reads these; the fixture has no backend.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+});
+queryClient.setQueryData(authKeys.userLanguage.queryKey, { language: null });
+queryClient.setQueryData(teamKeys.currentTeam.queryKey, null);
+if (root)
+  render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <UserContextProvider>
+          <Fixture />
+        </UserContextProvider>
+      </QueryClientProvider>
+    ),
+    root
+  );

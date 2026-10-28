@@ -1,13 +1,24 @@
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useCopyLink } from '@core/util/useCopyLink';
 import AppStoreQr from '@design/app-store.svg';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { CopyButton } from '@ui';
+import { NativeAppInfo } from './NativeAppInfo';
 import { SettingsCard, SettingsPage } from './primitives';
 
 const APP_STORE_URL = 'https://apps.apple.com/us/app/macro-app/id6743133649';
 
+/** Native APIs are only read when mounted inside the mobile app. */
 export function MobileApp() {
+  if (isNativeMobilePlatform()) {
+    return (
+      <NativeAppInfo
+        title="Mobile app"
+        description="Your installed version of Macro."
+      />
+    );
+  }
   const copy = useCopyLink();
 
   return (

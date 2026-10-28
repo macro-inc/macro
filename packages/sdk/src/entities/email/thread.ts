@@ -267,6 +267,35 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
+  /**
+   * Archive many threads (or unarchive with `false`), sending one request per
+   * 100 threads. Resolves to the threads whose state could not change.
+   */
+  static async archiveMany(
+    client: MacroClient,
+    threads: EmailThread[],
+    archived = true,
+  ): Promise<EmailThread[]> {
+    const unchanged: EmailThread[] = [];
+    for (let start = 0; start < threads.length; start += 100) {
+      const batch = threads.slice(start, start + 100);
+      const result = unwrap(
+        await client.email.archiveThreads({
+          body: {
+            thread_ids: batch.map((thread) => thread.id),
+            value: archived,
+          },
+        }),
+      );
+      const failed = new Set(result.failed_thread_ids);
+      for (const thread of batch) {
+        thread.detail.clear();
+        if (failed.has(thread.id)) unchanged.push(thread);
+      }
+    }
+    return unchanged;
+  }
+
   /** Update provider-neutral read, trash, spam, or star state. */
   async updateState(request: UpdateThreadStateRequest): Promise<void> {
     await this.mutate((c) =>

@@ -94,6 +94,11 @@ export function DriveList() {
     list.selection.items().map((row) => row.entity)
   );
 
+  const viewedFolderId = () => {
+    const { location } = state.value();
+    return location.kind === 'folder' ? (location.id ?? undefined) : undefined;
+  };
+
   const actionContext = () =>
     resolveEntityActionViewContext({
       activeListView: 'documents',
@@ -412,6 +417,7 @@ export function DriveList() {
                                 list={actionState}
                                 selectedEntities={selected}
                                 viewContext={actionContext()}
+                                viewedProjectId={viewedFolderId()}
                                 onOpenChange={(open) => {
                                   if (!open) return;
 

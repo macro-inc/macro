@@ -29,6 +29,7 @@ export function commentNotification(
     id: notification.id,
     eventType: 'commented_on_document',
     entityType: 'DOCUMENT',
+    targetEntityType: 'DOCUMENT',
     entityId: docId,
     sent: true,
     state: notification.state ?? 'UNSEEN',

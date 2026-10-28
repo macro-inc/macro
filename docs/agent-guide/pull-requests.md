@@ -8,15 +8,27 @@ scope; desktop's default scope remains **Involves me**.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. An open PR that is not a draft, and whose checks
-have all finished with a success, skipped, or neutral conclusion, also shows a
-**Merge** button in the top bar beside **Changes**. It opens a confirmation with the repository, PR number,
-and title, then merges on GitHub as the signed-in user through their linked account.
-GitHub's permissions and branch protections decide; a refusal appears as a toast
-with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
-GitHub account the toast points to Settings. Draft PRs, PRs with no checks, and PRs
-whose checks are still running or failing have no Merge button. Merged and closed
-PRs have no Merge button. PRs are not tasks and do not appear in the Tasks list.
+side panel below the top bar. An open PR has a split button in the top bar
+beside **Changes** (`[data-pull-request-primary-action]` names its main action).
+For a draft the main action is **Ready for review**; otherwise it is **Merge**,
+disabled (with a tooltip) until every check has finished with a success, skipped,
+or neutral conclusion, so PRs with no checks or with running or failing checks
+cannot merge from it. The chevron beside it (**More pull request actions**) offers
+**Convert to draft** (non-drafts) and **Close pull request**; there is no
+confirmation for either. **Merge** opens a confirmation with the repository, PR
+number, and title, then merges on GitHub as the signed-in user through their
+linked account. GitHub's permissions and branch protections decide every change;
+a refusal appears as a toast with GitHub's reason, and a change refreshes the PR
+status in place. Without a linked GitHub account the toast points to Settings.
+Merged and closed PRs have no split button. PRs are not tasks and do not appear
+in the Tasks list. PRs cannot be favorited.
+The **Share** button has a **Copy Share Link** button beside it, like other
+items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
+`/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
+with **Merge** only once its checks pass, plus **Reopen pull request** for a
+closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
+GitHub link**, **Open on GitHub**, and **Copy branch name** when the head branch
+is stored.
 The metadata pills beneath the PR title include linked agent sessions, using the
 agent sparkle icon. A single session shows its name; several sessions show a
 count chip opening a session list. Selecting a session opens it, with Shift-click

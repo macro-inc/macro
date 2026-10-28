@@ -12,13 +12,13 @@ import {
   ShareRequestIcon,
   useShareRequestTrigger,
 } from '@app/features/access-requests/share-request-trigger';
+import { DirectAccessInvite } from '@app/features/access-requests/views/DirectAccessInvite';
 import type { MeetingAccessState } from '@app/features/calendar-notes/core/types';
 import { DocumentMeetingNotes } from '@app/features/calendar-notes/document-meeting-notes';
 import {
   updatePipelineSharePermissions,
   updatePipelineTeamShare,
 } from '@app/features/crm/sharing-adapter';
-import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -83,6 +83,7 @@ import {
   updateCallTeamShare,
   useCallRecordQuery,
 } from '@queries/call/call';
+import { updateExternalChatPermissions } from '@queries/external-chats/share-permissions';
 import { updateInitiativeSharePermissions } from '@queries/initiative/share-permissions';
 import {
   fetchSharePermissions,
@@ -174,17 +175,18 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
   itemType === 'crm_pipeline';
 
 /** Blocks, plus native entities that are shared without one. */
-type ShareBlockType = BlockName | BlockAlias | 'initiative';
+type ShareBlockType = BlockName | BlockAlias | 'initiative' | 'external_chat';
 
 function shareUrl(type: ShareBlockType, id: string): string {
-  if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
-  return buildSimpleEntityUrl({
-    type: 'component',
-    id: projectRouteId({ id, section: 'overview' }),
-  });
+  if (type === 'external_chat')
+    return buildSimpleEntityUrl({ type: 'external/whatsapp', id });
+  return buildSimpleEntityUrl({ type, id });
 }
 
-/** The levels a recipient can hold on an item; forms have no comments. */
+/**
+ * The levels a recipient can hold on an item: forms have no comments, and a
+ * external chat is read-only in Macro (sending follows provider membership).
+ */
 export function shareLevelsFor(
   itemType: ShareItemType,
   blockAlias?: ShareBlockType
@@ -193,6 +195,7 @@ export function shareLevelsFor(
   if (
     itemType === 'document' &&
     blockAlias &&
+    blockAlias !== 'external_chat' &&
     resolveBlockAlias(blockAlias) === 'md'
   ) {
     const levels: AccessLevel[] = ['view'];
@@ -200,6 +203,7 @@ export function shareLevelsFor(
     if (ENABLE_MARKDOWN_LIVE_COLLABORATION) levels.push('edit');
     return levels;
   }
+  if (itemType === 'external_chat') return ['view'];
   return undefined;
 }
 
@@ -210,6 +214,8 @@ const SHARE_LINK_SUBTEXT =
 // they may forward. Their links don't grant access to recipients either, so
 // copying skips SHARE_LINK_SUBTEXT.
 const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
+  external_chat:
+    'Only the owner can share access to this chat. Sending always requires your own connected account.',
   crm_pipeline:
     'Only editors can share this pipeline. You can copy a link for people who already have access.',
   agent_session:
@@ -248,6 +254,8 @@ function forwardTarget(
         `Could not share this ${blockAlias === 'pipeline' ? 'pipeline' : 'project'}`
       );
   };
+  if (blockAlias === 'external_chat')
+    throw new Error('External chats use direct people sharing');
   if (blockAlias === 'pipeline')
     return { blockId: id, blockName: blockAlias, prepareChannel };
   if (blockAlias !== 'initiative')
@@ -828,10 +836,23 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               display: effectiveActiveTab() === 'share' ? undefined : 'none',
             }}
           >
-            <Show when={!props.canForward}>
-              <p class="px-4 py-3 text-sm text-ink-muted">
-                {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
-              </p>
+            <Show
+              when={
+                props.itemType === 'external_chat' &&
+                props.userPermissions === Permissions.OWNER
+              }
+              fallback={
+                <Show when={!props.canForward}>
+                  <p class="px-4 py-3 text-sm text-ink-muted">
+                    {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+                  </p>
+                </Show>
+              }
+            >
+              <DirectAccessInvite
+                source={props.requests}
+                description="Invite someone to read this conversation. Sending requires their own connected account."
+              />
             </Show>
             <Show when={props.canForward}>
               <AfterFirstPaint fallback={<ShareFormSkeleton />}>
@@ -1067,7 +1088,8 @@ export function ShareModal(props: ShareModalProps) {
     enclosingBlockId === props.id &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
-    props.itemType !== 'crm_pipeline';
+    props.itemType !== 'crm_pipeline' &&
+    props.itemType !== 'external_chat';
   // Outside a block the dialog reads a cached query, which the Share trigger
   // warms on hover, so it opens with the roster already in hand.
   const queryClient = useQueryClient();
@@ -1156,10 +1178,12 @@ export function ShareModal(props: ShareModalProps) {
     props.userPermissions === Permissions.OWNER ||
     props.userPermissions === Permissions.CAN_EDIT;
   const canForward = () =>
-    props.itemType === 'crm_pipeline'
-      ? canSharePipeline()
-      : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
-        (Boolean(userId()) && props.owner === userId());
+    props.itemType === 'external_chat'
+      ? false
+      : props.itemType === 'crm_pipeline'
+        ? canSharePipeline()
+        : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
+          (Boolean(userId()) && props.owner === userId());
   const userPermissions = () =>
     props.itemType === 'agent_session' && !canForward()
       ? Permissions.CAN_VIEW
@@ -1169,10 +1193,14 @@ export function ShareModal(props: ShareModalProps) {
     props.itemType === 'crm_pipeline' && canSharePipeline()
       ? Permissions.OWNER
       : userPermissions();
+  const directSharingOwner = () =>
+    props.itemType === 'external_chat' &&
+    props.userPermissions === Permissions.OWNER;
   const editPermissionEnabled = () => {
     if (props.itemType === 'agent_session') return true;
     if (
       props.itemType === 'document' &&
+      props.blockAlias !== 'external_chat' &&
       resolveBlockAlias(props.blockAlias) === 'md'
     )
       return ENABLE_MARKDOWN_LIVE_COLLABORATION;
@@ -1248,7 +1276,20 @@ export function ShareModal(props: ShareModalProps) {
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
     if (recipientPermissions() !== Permissions.OWNER) return;
-    if (usesGraphqlSharePolicy(props.itemType)) {
+    // An external chat reaches a channel only by mention; its owner revokes it.
+    if (props.itemType === 'external_chat') {
+      const result = await updateExternalChatPermissions(props.id, {
+        channelSharePermissions: [{ operation: 'remove', channelId }],
+      });
+      if (result.isOk()) {
+        fireAndForget(refetch(), 'share-modal');
+        toast.success('Removed channel access');
+      } else {
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+      }
+    } else if (usesGraphqlSharePolicy(props.itemType)) {
       const result = await updateEntitySharePolicy(props.itemType, props.id, {
         channelSharePermissions: [{ operation: 'remove', channelId }],
       });
@@ -1407,7 +1448,11 @@ export function ShareModal(props: ShareModalProps) {
       accessLevel: AccessLevel,
       hideSuccessToast?: boolean
     ) => {
-      if (recipientPermissions() !== Permissions.OWNER) return;
+      if (
+        recipientPermissions() !== Permissions.OWNER ||
+        props.itemType === 'external_chat'
+      )
+        return;
 
       let result:
         | Result<any, ResultError<any>[]>
@@ -1556,7 +1601,12 @@ export function ShareModal(props: ShareModalProps) {
         getTeamShareScope(sharePermission.teamShareAccessLevel) !== 'NONE';
 
       let result: Result<unknown, ResultError<any>[]>;
-      if (props.itemType !== 'call' && usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'external_chat') {
+        result = await updateExternalChatPermissions(props.id, sharePermission);
+      } else if (
+        props.itemType !== 'call' &&
+        usesGraphqlSharePolicy(props.itemType)
+      ) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1667,7 +1717,9 @@ export function ShareModal(props: ShareModalProps) {
       const scope = getLinkShareScope(sharePermission.linkShare);
       let result: Result<any, ResultError<any>[]> | undefined;
 
-      if (usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'external_chat') {
+        result = await updateExternalChatPermissions(props.id, sharePermission);
+      } else if (usesGraphqlSharePolicy(props.itemType)) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1827,10 +1879,16 @@ export function ShareModal(props: ShareModalProps) {
                   </Dialog.Title>
                 </Panel.Header>
                 <Panel.Body>
-                  <Show when={!canForward()}>
+                  <Show when={!canForward() && !directSharingOwner()}>
                     <p class="px-4 py-3 text-sm text-ink-muted">
                       {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
                     </p>
+                  </Show>
+                  <Show when={directSharingOwner()}>
+                    <DirectAccessInvite
+                      source={requests}
+                      description="Invite someone to read this conversation. Sending requires their own connected account."
+                    />
                   </Show>
                   <Show when={canForward()}>
                     <AfterFirstPaint fallback={<ShareFormSkeleton />}>
@@ -2182,10 +2240,12 @@ export function ShareTrigger(props: {
     throw new Error('<ShareTrigger> requires an explicit block id');
   };
 
-  const itemType = (): ShareItemType =>
-    blockType() === 'initiative'
-      ? 'initiative'
-      : blockNameToItemType(blockType());
+  const itemType = (): ShareItemType => {
+    const type = blockType();
+    return type === 'initiative' || type === 'external_chat'
+      ? type
+      : blockNameToItemType(type);
+  };
 
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.

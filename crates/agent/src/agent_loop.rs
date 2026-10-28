@@ -9,6 +9,7 @@ use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
@@ -110,6 +111,7 @@ pub struct AgentLoop {
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
@@ -140,6 +142,7 @@ impl AgentLoop {
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
             user_tool_finisher: None,
+            result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
@@ -185,6 +188,14 @@ impl AgentLoop {
     /// mid-turn wants.
     pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
         self.user_tool_finisher = Some(finisher);
+        self
+    }
+
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
         self
     }
 
@@ -467,6 +478,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,

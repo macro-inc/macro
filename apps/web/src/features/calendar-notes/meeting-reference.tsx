@@ -1,8 +1,8 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { CalendarEventPreviewDetails } from '@core/component/DocumentPreview';
 import { ReferenceRow } from '@core/component/References';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { Telemetry } from '@macro-inc/observability';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import { Button, Dialog } from '@ui';

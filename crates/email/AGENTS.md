@@ -20,8 +20,10 @@ tools — hexagonal, heavily feature-gated.
 ## Scope
 
 - Owns: email/thread domain logic, scheduled delivery, reminders/followups,
-  calendar invitation extraction and resolution, and adding a forwarded
-  event (`METHOD:PUBLISH`) to the viewer's calendar (`domain/invitation_import.rs`).
+  calendar invitation extraction and resolution, adding a forwarded
+  event (`METHOD:PUBLISH`) to the viewer's calendar (`domain/invitation_import.rs`),
+  and forwarding one of the viewer's events as that same file from the inbox
+  holding their copy (`domain/event_forward.rs`).
 - Not here: raw provider API calls → `email_api_client`; HTML
   parsing/sanitization → `email_utils`; SQLx queries over email tables →
   `email_db_client`.
@@ -54,9 +56,18 @@ tools — hexagonal, heavily feature-gated.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
+- Gmail thread label writes stage each thread's DB change, then enqueue one
+  provider write per inbox holding only the messages whose labels changed
+  (`stage_thread_labels` / `commit_thread_label_write` in
+  `domain/service/thread_labels.rs`); route new label actions through them.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- A send with files staged before delivery goes through
+  `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
+  attachment rows, then the send. `DraftAttachmentSender` adds Macro documents
+  as the source of those files for `SendEmail`; a caller that already holds
+  the bytes, such as an event forward's `.ics`, uses `send_with_files`.
 - Saved invitation snapshots are JSONB and never re-extracted. `recurrence`
   is `None` on snapshots saved before it was recorded, where a series looks
   like a single event, so those cannot be added to a calendar.

@@ -45,6 +45,7 @@ fn inputs(
         register_loaded: register,
         tool_loads: ToolLoads::default(),
         user_tool_finisher,
+        result_limit: None,
     }
 }
 

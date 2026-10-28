@@ -42,6 +42,8 @@ import type {
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
@@ -78,6 +80,7 @@ import type { TeamInvitesResponse } from './generated/schemas/teamInvitesRespons
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -291,7 +294,8 @@ const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
   rejected: 'GitHub declined to merge the pull request',
 });
 
-const githubDraftErrorResponseHandler = githubChangeErrorResponseHandler({
+/** Shared by the draft and open/closed state routes, which fail the same ways. */
+const githubUpdateErrorResponseHandler = githubChangeErrorResponseHandler({
   noLink: 'Connect GitHub in Settings to change pull requests',
   rejected: 'GitHub declined to change the pull request',
 });
@@ -479,6 +483,21 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
+  async getUserLanguage() {
+    return (
+      await fetchWithAuth<UserLanguage>(`${authHost}/user/language`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+  async putUserLanguage(args: UserLanguage) {
+    return (
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/language`, {
+        method: 'PUT',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
   async getUserNames(args: PostGetNamesRequestBody) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names`, {
@@ -569,7 +588,19 @@ export const authServiceClient = {
       >(`${authHost}/github_pull_requests/draft`, {
         method: 'POST',
         body: JSON.stringify(args),
-        errorResponseHandler: githubDraftErrorResponseHandler,
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async setGithubPullRequestState(args: SetGithubPullRequestStateRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestStateResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/state`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
       })
     ).map((result) => result);
   },

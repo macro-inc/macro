@@ -905,6 +905,10 @@ impl CallRtcClient for NoOpCallRtcClient {
         Ok(())
     }
 
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
+    }
+
     async fn generate_token<'a>(
         &self,
         _room_name: &str,
@@ -2034,18 +2038,24 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
 >;
 
 /// Wire connector discovery at the composition boundary.
+///
+/// `native_servers` answers for overlaid apps, which connect through the
+/// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }

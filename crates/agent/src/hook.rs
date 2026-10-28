@@ -2,6 +2,7 @@
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_agent::agent::hook::{
     AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
@@ -142,6 +143,9 @@ pub struct BridgeInputs {
     pub tool_loads: ToolLoads,
     /// Finishes user tools mid-turn, when the host can.
     pub user_tool_finisher: Option<UserToolFinisher>,
+    /// Cuts results too long for the model to read whole, when the host
+    /// offers [`crate::ReadToolResult`] to page through them.
+    pub result_limit: Option<ToolResultLimit>,
 }
 
 /// The answer a user tool gives when it has not been finished.
@@ -178,6 +182,8 @@ pub struct StreamBridge {
     /// Finishes a user tool's pending answer before the model reads it, on
     /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
     user_tool_finisher: Option<UserToolFinisher>,
+    /// Cuts results too long for the model to read whole.
+    result_limit: Option<ToolResultLimit>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
 }
@@ -204,6 +210,7 @@ impl StreamBridge {
             register_loaded,
             tool_loads,
             user_tool_finisher,
+            result_limit,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -215,6 +222,7 @@ impl StreamBridge {
                 tool_loads,
                 searchable_catalog,
                 user_tool_finisher,
+                result_limit,
                 cancel,
             },
             rx,
@@ -408,6 +416,16 @@ impl StreamBridge {
             }
         }
 
+        // The stream carries the whole result; only the model's copy is cut.
+        // Images reach the model as images and are never cut as text.
+        let view = self
+            .result_limit
+            .as_ref()
+            .filter(|_| {
+                json.as_ref()
+                    .is_none_or(|json| json.get("modelMedia").is_none())
+            })
+            .and_then(|limit| limit.view(&id, &presentation.render()));
         let response = if let Some(json) = json {
             ToolResponse::Json {
                 id,
@@ -422,7 +440,7 @@ impl StreamBridge {
             }
         };
         let _ = self.tx.send(Ok(StreamPart::ToolResponse(response)));
-        ToolResultAction::Keep
+        view.map_or(ToolResultAction::Keep, ToolResultAction::rewrite)
     }
 
     pub(crate) fn handle_usage(&self, usage: rig_core::completion::Usage) -> ObservationAction {

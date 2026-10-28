@@ -319,6 +319,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       | 'number'
       | 'boolean'
       | 'date'
+      | 'date_range'
       | 'entity'
       | 'select_number'
       | 'select_string'
@@ -338,6 +339,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         | 'number'
         | 'boolean'
         | 'date'
+        | 'date_range'
         | 'select_number'
         | 'select_string'
         | 'link',
@@ -368,6 +370,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         return { type: 'boolean' };
       case 'date':
         return { type: 'date' };
+      case 'date_range':
+        return { type: 'date_range' };
       case 'link':
         return { type: 'link', multi: isMultiSelect() };
       case 'select_string':

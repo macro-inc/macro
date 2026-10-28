@@ -41,6 +41,8 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
+  /** The press before activation, for warming what the row opens. */
+  onPress?: (event: PointerEvent) => void;
 };
 
 /**
@@ -286,6 +288,7 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
+      onPointerDown={(event) => props.onPress?.(event)}
       onMouseDown={(event) => {
         if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}

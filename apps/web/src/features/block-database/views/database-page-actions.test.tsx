@@ -13,7 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '../../../lib/core/component/Toast/Toast';
 import { DatabaseTitle } from '../../database/components/database-title';
 import type { DatabaseEntityFailure } from '../../database/core/write-failure';
-import { DatabasePageActions } from './database-page-actions';
+import {
+  type DatabaseEntityActions,
+  DatabasePageActions,
+} from './database-page-actions';
 
 const mocks = vi.hoisted(() => ({
   download: vi.fn(),
@@ -49,7 +52,8 @@ function setup(
   grant: DatabaseDetail['grant'] = 'owner',
   remove = vi.fn(
     (): ResultAsync<void, DatabaseEntityFailure> => okAsync(undefined)
-  )
+  ),
+  entityActions?: DatabaseEntityActions
 ) {
   let editTitle: (() => void) | undefined;
   render(() => (
@@ -69,6 +73,7 @@ function setup(
           } as unknown as DatabaseDetail
         }
         table={{ table: { id: 'table', name: 'Contacts' } } as TableDetail}
+        entityActions={entityActions}
         onImported={vi.fn()}
         onRename={() => editTitle?.()}
         onDelete={remove}
@@ -214,6 +219,25 @@ describe('database page actions', () => {
       name: 'Table name',
     })) as HTMLInputElement;
     expect(name.value).toBe('Contacts 2');
+  });
+  it('offers link, ID and favorite actions to every grant', async () => {
+    const entityActions = {
+      favorited: true,
+      onToggleFavorite: vi.fn(),
+      onCopyLink: vi.fn(),
+      onCopyId: vi.fn(),
+    };
+    setup('view', undefined, entityActions);
+    for (const [item, handler] of [
+      ['Copy Link', entityActions.onCopyLink],
+      ['Copy ID', entityActions.onCopyId],
+      ['Unfavorite', entityActions.onToggleFavorite],
+    ] as const) {
+      await openMenu();
+      selectItem(item);
+      expect(handler).toHaveBeenCalledOnce();
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    }
   });
   it('confirms deletion and retains a failed dialog for retry', async () => {
     const remove = vi

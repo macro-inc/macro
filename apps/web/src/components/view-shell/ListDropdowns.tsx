@@ -2,6 +2,7 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
+import { t } from '@app/lib/i18n';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
@@ -105,16 +106,34 @@ export type ViewLayoutDropdownProps = Omit<
 };
 
 const VIEW_LAYOUT_OPTIONS: ListControlOption<ViewLayout>[] = [
-  { id: 'list', label: 'List', icon: () => <ListIcon /> },
-  { id: 'board', label: 'Board', icon: () => <BoardIcon /> },
-  { id: 'gantt', label: 'Gantt', icon: () => <GanttIcon /> },
+  {
+    id: 'list',
+    get label() {
+      return t('viewMenus.layoutList');
+    },
+    icon: () => <ListIcon />,
+  },
+  {
+    id: 'board',
+    get label() {
+      return t('viewMenus.layoutBoard');
+    },
+    icon: () => <BoardIcon />,
+  },
+  {
+    id: 'gantt',
+    get label() {
+      return t('viewMenus.layoutGantt');
+    },
+    icon: () => <GanttIcon />,
+  },
 ];
 
 export function ViewLayoutDropdown(props: ViewLayoutDropdownProps) {
   return (
     <SingleSelectDropdown
       {...props}
-      label={props.label ?? 'Layout'}
+      label={props.label ?? t('viewMenus.layout')}
       options={VIEW_LAYOUT_OPTIONS.filter(
         (option) => !props.layouts || props.layouts.includes(option.id)
       )}
@@ -147,7 +166,7 @@ export function ListSortDropdown<TId extends string>(
   return (
     <SingleSelectDropdown
       {...props}
-      label={props.label ?? 'Sort list'}
+      label={props.label ?? t('viewMenus.sortList')}
       icon={<SortIcon />}
     />
   );
@@ -166,7 +185,7 @@ export function ListGroupDropdown<TId extends string>(
   return (
     <SingleSelectDropdown
       {...props}
-      label={props.label ?? 'Group list'}
+      label={props.label ?? t('viewMenus.groupList')}
       icon={<GroupIcon />}
     />
   );
@@ -217,6 +236,7 @@ export type ListFilterDropdownProps<
   clearLabel?: string;
   class?: string;
   contentClass?: string;
+  footer?: JSX.Element;
 } & ListDropdownOpenProps;
 
 /**
@@ -304,7 +324,7 @@ export function ListFilterDropdown<
             variant="ghost"
             size={props.activeCount ? 'md' : 'icon-md'}
             class={props.class}
-            label={props.label ?? 'Filter list'}
+            label={props.label ?? t('viewMenus.filterList')}
           >
             <FilterIcon />
             <Show when={props.activeCount}>
@@ -398,11 +418,12 @@ export function ListFilterDropdown<
           {(onClear) => (
             <Dropdown.Group>
               <Dropdown.Item class="text-failure-ink" onSelect={onClear()}>
-                {props.clearLabel ?? 'Clear filters'}
+                {props.clearLabel ?? t('viewMenus.clearFilters')}
               </Dropdown.Item>
             </Dropdown.Group>
           )}
         </Show>
+        {props.footer}
       </Dropdown.Content>
     </Dropdown>
   );

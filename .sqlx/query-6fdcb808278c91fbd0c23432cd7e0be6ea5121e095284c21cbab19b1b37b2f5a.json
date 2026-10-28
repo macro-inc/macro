@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_jid, token_timestamp, nonce, value\n            FROM whatsapp_privacy_token\n            WHERE account_id = $1 AND user_jid = ANY($2)\n            ORDER BY token_timestamp DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "value",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6fdcb808278c91fbd0c23432cd7e0be6ea5121e095284c21cbab19b1b37b2f5a"
+}

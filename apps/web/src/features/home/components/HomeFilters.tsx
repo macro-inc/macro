@@ -213,18 +213,18 @@ export function HomeFilterDropdown() {
   });
 
   return (
-    <div class="relative ml-auto shrink-0">
+    <div class="relative shrink-0">
       <ListFilterDropdown
         label="Filter Home"
         customTrigger={
           <Dropdown.Trigger
             ref={tourTarget(HOME_TOUR.filter)}
             variant="ghost"
-            size="sm"
-            square
+            size="icon-sm"
+            class="size-(--sidebar-control-size)"
             label="Filter Home"
           >
-            <FilterIcon />
+            <FilterIcon class="size-4" />
           </Dropdown.Trigger>
         }
         groups={HOME_FILTER_GROUPS}

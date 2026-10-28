@@ -5,7 +5,6 @@ import AsteriskSimple from '@icon/system/regular/asterisk-simple.svg';
 import ChatCircleText from '@icon/system/regular/chat-circle-text.svg';
 import Check from '@icon/system/regular/check.svg';
 import Checks from '@icon/system/regular/checks.svg';
-import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import Eye from '@icon/system/regular/eye.svg';
 import EyeSlash from '@icon/system/regular/eye-slash.svg';
 import GitDiff from '@icon/system/regular/git-diff.svg';
@@ -174,7 +173,6 @@ export type DocxToolbarProps = {
   onComment: () => void;
   /** Open find (and replace). */
   onFind: () => void;
-  onDownload: () => void;
 };
 
 const INLINE: Array<{
@@ -623,12 +621,6 @@ export function DocxToolbar(props: DocxToolbarProps) {
           onClick={() => props.onFind()}
         >
           <MagnifyingGlass />
-        </Toolbar.Button>
-        <Toolbar.Button
-          label="Download .docx"
-          onClick={() => props.onDownload()}
-        >
-          <DownloadSimple />
         </Toolbar.Button>
       </Toolbar>
     </div>

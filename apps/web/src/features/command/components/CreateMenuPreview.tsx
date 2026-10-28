@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { pressedKeys } from '@core/hotkey/state';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import {
@@ -8,6 +9,7 @@ import {
   createCommandListController,
 } from '@ui';
 import { createMemo, createSignal, createUniqueId, Show } from 'solid-js';
+import { creatableId } from '../core/creatable';
 import {
   type CreateMenuSection,
   createMenuSearchText,
@@ -36,6 +38,7 @@ export function CreateMenuPreview(props: {
     const filtered = props.items.filter((item) => {
       const text = [
         item.label,
+        creatableId(item),
         item.launcherHint,
         ...(item.keywords ?? []),
         ...createMenuSearchText(item),
@@ -49,7 +52,7 @@ export function CreateMenuPreview(props: {
     if (props.layout === 'list' || query().trim())
       return [
         {
-          group: { id: 'other', label: 'Results', tagline: '' },
+          group: { id: 'other', label: t('create.results'), tagline: '' },
           items: filtered,
         },
       ];
@@ -61,7 +64,7 @@ export function CreateMenuPreview(props: {
   const c = createCommandListController({ items, onSelect: props.onChoose });
   const selected = c.selectedItem;
   const itemId = (item: CreatableBlock) =>
-    `${id}-${item.label.replaceAll(' ', '-')}`;
+    `${id}-${creatableId(item).replaceAll(' ', '-')}`;
   const changeQuery = (value: string) => {
     setQuery(value);
     c.setSelectedIndex(0);
@@ -132,10 +135,12 @@ export function CreateMenuPreview(props: {
       <CommandMenuShell.Header>
         <SearchIcon class="size-4 shrink-0 text-ink-extra-muted" />
         <CommandMenuSearchInput
-          aria-label={`Search ${props.layout} create options`}
+          aria-label={t('create.searchLayoutCreateOptions', {
+            layout: props.layout,
+          })}
           type="text"
           autocomplete="off"
-          placeholder="Search create options"
+          placeholder={t('create.searchCreateOptions')}
           value={query()}
           onInput={(event) => changeQuery(event.currentTarget.value)}
         />
@@ -144,13 +149,13 @@ export function CreateMenuPreview(props: {
         when={items().length}
         fallback={
           <div class="flex min-h-72 flex-1 flex-col items-center justify-center gap-3 px-5 text-sm text-ink-muted">
-            <p>No matches for “{query()}”</p>
+            <p>{t('create.noMatchesFor', { query: query() })}</p>
             <button
               type="button"
               class="rounded-md border border-edge-muted px-3 py-1.5 text-ink hover:bg-hover"
               onClick={() => changeQuery('')}
             >
-              Clear search
+              {t('create.clearSearch')}
             </button>
           </div>
         }
@@ -205,9 +210,9 @@ export function CreateMenuPreview(props: {
               : 'h-9'
           )}
         >
-          <span>↑ ↓ Navigate</span>
+          <span>↑ ↓ {t('create.navigate')}</span>
           <Show when={props.layout !== 'details'}>
-            <span>↵ Choose</span>
+            <span>↵ {t('create.choose')}</span>
           </Show>
           <Show when={props.layout === 'details' && items()[c.selectedIndex()]}>
             {(item) => (

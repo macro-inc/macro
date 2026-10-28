@@ -6,7 +6,11 @@ import { match } from 'ts-pattern';
 
 export const NO_LINK_SHARE = 'NONE' as const;
 
-export type ShareItemType = ItemType | 'initiative' | 'crm_pipeline';
+export type ShareItemType =
+  | ItemType
+  | 'initiative'
+  | 'crm_pipeline'
+  | 'external_chat';
 
 const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ShareItemType> =
   new Set<ShareItemType>([
@@ -18,6 +22,7 @@ const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ShareItemType> =
     'initiative',
     'crm_pipeline',
     'database',
+    'external_chat',
   ]);
 
 export function isTeamShareSupportedForItem(itemType: ShareItemType): boolean {
@@ -41,6 +46,7 @@ export function getShareItemNoun(itemType: ShareItemType): string {
     .with('channel_message', () => 'message')
     .with('channel_thread', () => 'thread')
     .with('foreign', () => 'item')
+    .with('external_chat', () => 'chat')
     .with(
       'document',
       'chat',
@@ -135,7 +141,7 @@ export function teamShareScopeOptionsForItem(itemType: ShareItemType) {
     return TEAM_SHARE_SCOPE_OPTIONS.filter(
       (option) => option.value === 'NONE' || option.value === 'edit'
     );
-  return itemType === 'call'
+  return itemType === 'call' || itemType === 'external_chat'
     ? CALL_TEAM_SHARE_SCOPE_OPTIONS
     : TEAM_SHARE_SCOPE_OPTIONS;
 }

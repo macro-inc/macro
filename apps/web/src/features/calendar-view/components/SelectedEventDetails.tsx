@@ -3,6 +3,7 @@ import { EventDetails } from '@app/features/calendar/components/EventDetails';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
   useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
   useCalendarMeetingNotesFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
@@ -193,7 +194,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -215,7 +217,10 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       onOpenChange={(open) => {
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);
@@ -497,7 +502,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -522,14 +528,21 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         // is open.
         if (
           !open &&
-          (deleteDialog.isOpen() || invites.editorOpen() || notesOpen())
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
         )
           return;
         props.onOpenChange(open);
       }}
       placement="right-start"
       gutter={8}
-      flip
+      // Flip only to the other side, never to an end alignment: sections
+      // that arrive after opening (join requests, meeting notes) change the
+      // height, and an end fallback would re-place the popover from below
+      // the event to above it. Slide keeps a tall popover in view instead.
+      flip="left-start"
       slide
       overlap
       fitViewport

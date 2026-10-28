@@ -2,6 +2,7 @@ import {
   SoupEntityActionDrawer,
   type SoupEntityDrawerActionGroup,
 } from '@app/features/soup/SoupEntityActionDrawer';
+import { t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
@@ -117,22 +118,37 @@ function projectMenuEntries(
     group.flatMap((item) =>
       match(item)
         .with('open-in-split', (id) =>
-          action(id, 'Open in new split', single(props.onOpenInNewSplit), {
-            shortcut: 'shift+enter',
-            // Without room for another split the open would replace this one.
-            disabled: !props.canOpenInNewSplit,
-          })
+          action(
+            id,
+            t('entityActions.openInNewSplit'),
+            single(props.onOpenInNewSplit),
+            {
+              shortcut: 'shift+enter',
+              // Without room for another split the open would replace this one.
+              disabled: !props.canOpenInNewSplit,
+            }
+          )
         )
-        .with('rename', (id) => action(id, 'Rename', single(props.onRename)))
-        .with('status', (id) => options(id, 'Set status', props.status))
-        .with('priority', (id) => options(id, 'Set priority', props.priority))
+        .with('rename', (id) =>
+          action(id, t('entityActions.rename'), single(props.onRename))
+        )
+        .with('status', (id) =>
+          options(id, t('entityActions.setStatus'), props.status)
+        )
+        .with('priority', (id) =>
+          options(id, t('entityActions.setPriority'), props.priority)
+        )
         .with('copy-link', (id) =>
-          action(id, 'Copy Link', single(props.onCopyLink))
+          action(id, t('entityActions.copyLink'), single(props.onCopyLink))
         )
-        .with('copy-id', (id) => action(id, 'Copy ID', single(props.onCopyId)))
-        .with('share', (id) => action(id, 'Share', single(props.onShare)))
+        .with('copy-id', (id) =>
+          action(id, t('entityActions.copyId'), single(props.onCopyId))
+        )
+        .with('share', (id) =>
+          action(id, t('entityActions.share'), single(props.onShare))
+        )
         .with('delete', (id) =>
-          action(id, 'Delete', () => props.onDelete(rows), {
+          action(id, t('entityActions.delete'), () => props.onDelete(rows), {
             destructive: true,
           })
         )
@@ -165,7 +181,10 @@ function drawerGroups(
             {
               items: entry.options.map((option) => ({
                 id: `${entry.id}:${option.id}`,
-                label: `${entry.property.displayName}: ${option.label}`,
+                label: t('entityActions.propertyOption', {
+                  property: entry.property.displayName,
+                  option: option.label,
+                }),
                 onClick: () => entry.choose(option.id),
               })),
             },
@@ -238,7 +257,7 @@ export function ProjectRowMenu(
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <ContextMenuContent
-              class="w-64 text-xs text-ink-muted"
+              class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
               <ProjectMenuItems {...props} />
@@ -253,10 +272,14 @@ export function ProjectRowMenu(
 export function ProjectMenuDropdown(props: ProjectMenuProps) {
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger variant="ghost" size="icon-sm" label="Project actions">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        label={t('entityActions.projectActions')}
+      >
         <DotsThreeIcon />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-64 text-xs text-ink-muted">
+      <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
         <Dropdown.Group>
           <ProjectMenuItems {...props} />
         </Dropdown.Group>
@@ -292,7 +315,7 @@ function ProjectMenuItems(props: ProjectMenuProps) {
                     <SubTrigger text={entry.label} />
                     <ContextMenuContent
                       submenu
-                      class="w-48 text-xs text-ink-muted"
+                      class="min-w-48 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
                     >
                       <For each={entry.options}>
                         {(option) => (

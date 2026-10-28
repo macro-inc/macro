@@ -33,6 +33,7 @@ import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
+import { openInNewTabMiddleware } from '@components/app/tab-layout/open-in-tab-middleware';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { match } from 'ts-pattern';
 import { decodeLegacyPair } from './legacy-route';
@@ -279,6 +280,9 @@ export function createAppSplitRouterMiddleware(
   state: AppMiddlewareState
 ): readonly SplitRouterMiddleware[] {
   return [
+    // First: a cmd+click becomes a tab with the proposed entry as-is; legacy
+    // redirects still run when that tab is activated.
+    openInNewTabMiddleware,
     (context) => redirectLegacyRoutes(context, state),
     redirectLegacyCrmPipeline,
     migrateLegacySearch,

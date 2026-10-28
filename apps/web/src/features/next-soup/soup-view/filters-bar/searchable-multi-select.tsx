@@ -58,6 +58,7 @@ type SearchableMultiSelectProps = {
     | 'left-start';
   gutter?: number;
   contentClass?: string;
+  portalScope?: 'local';
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
@@ -69,6 +70,10 @@ type SearchableMultiSelectProps = {
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
 };
+
+// Options use virtual focus. A native pointer focus would land on the enclosing
+// dialog, dismissing the combobox before its pointer-up selection handler runs.
+const keepComboboxFocus = (event: Event) => event.preventDefault();
 
 const SearchableMultiSelectItem = (itemProps: {
   item: CollectionNode<SearchableOption>;
@@ -82,6 +87,7 @@ const SearchableMultiSelectItem = (itemProps: {
     combobox.listState().selectionManager().toggleSelection(itemProps.item.key);
   return (
     <Combobox.Item
+      as="li"
       item={itemProps.item}
       ref={(element) => {
         itemProps.selectionIntent.track(element);
@@ -104,7 +110,7 @@ const SearchableMultiSelectItem = (itemProps: {
         makeEventListener(
           element,
           'pointerup',
-          (event) => {
+          (event: PointerEvent) => {
             if (
               !event.shiftKey ||
               isOnlyButton(event) ||
@@ -121,7 +127,7 @@ const SearchableMultiSelectItem = (itemProps: {
         makeEventListener(
           element,
           'click',
-          (event) => {
+          (event: MouseEvent) => {
             if (!event.shiftKey || isOnlyButton(event)) return;
             intercept(event);
             if (!selectedOnPointerUp) toggle();
@@ -132,7 +138,7 @@ const SearchableMultiSelectItem = (itemProps: {
         makeEventListener(
           element,
           'keydown',
-          (event) => {
+          (event: KeyboardEvent) => {
             if (
               !event.shiftKey ||
               isOnlyButton(event) ||
@@ -147,6 +153,8 @@ const SearchableMultiSelectItem = (itemProps: {
       }}
       aria-label={itemProps.item.rawValue.label}
       aria-keyshortcuts="Space Enter Shift+Enter"
+      onPointerDown={keepComboboxFocus}
+      onMouseDown={keepComboboxFocus}
       class={cn(
         'group relative rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left text-sm font-normal data-highlighted:bg-ink/5 cursor-default touch:min-h-11',
         itemProps.item.rawValue.id !== ACTION_ID && 'pr-14'
@@ -281,6 +289,7 @@ const useActiveOptions = (
 const getOptionId = (opt: SearchableOption) => opt.id;
 
 export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
+  const [portalAnchor, setPortalAnchor] = createSignal<HTMLDivElement>();
   const selectionIntent = createMultiSelectIntent();
   const [internalOpen, setInternalOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -378,7 +387,15 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         <Combobox.Input ref={selectionIntent.track} class="sr-only" />
       </Combobox.Control>
 
-      <Combobox.Portal>
+      <div class="hidden" ref={setPortalAnchor} />
+      <Combobox.Portal
+        mount={
+          props.portalScope === 'local'
+            ? (portalAnchor()?.closest<HTMLElement>('.portal-scope') ??
+              undefined)
+            : undefined
+        }
+      >
         <Layer depth={2}>
           <Combobox.Content
             ref={selectionIntent.track}

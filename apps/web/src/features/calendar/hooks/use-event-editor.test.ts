@@ -1066,7 +1066,8 @@ describe('guests of an event the viewer was invited to', () => {
     event: CalendarEvent,
     invitesEnabled: boolean,
     onDetailsLocked?: () => void,
-    syncedEvent?: () => CalendarEvent | undefined
+    syncedEvent?: () => CalendarEvent | undefined,
+    forwardEnabled = invitesEnabled
   ) {
     return createRoot((dispose) => ({
       editor: useEventEditor({
@@ -1075,6 +1076,7 @@ describe('guests of an event the viewer was invited to', () => {
         onSaved: vi.fn(),
         macroCallsEnabled: () => false,
         guestInvitesEnabled: () => invitesEnabled,
+        invitationForwardEnabled: () => forwardEnabled,
         onDetailsLocked,
       }),
       dispose,
@@ -1183,10 +1185,21 @@ describe('guests of an event the viewer was invited to', () => {
     }
   });
 
-  it('explains why a guest the organizer does not let invite cannot add guests', () => {
+  it('explains why a guest the organizer does not let invite cannot add guests, and offers the forward', () => {
     const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), true);
     try {
       expect(editor.disabledFields()?.guests).toBe(true);
+      expect(editor.guestsReadOnlyReason()).toBe(
+        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list."
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('explains without offering the forward while forwarding is off', () => {
+    const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), false);
+    try {
       expect(editor.guestsReadOnlyReason()).toBe(
         'Only the organizer can invite guests.'
       );

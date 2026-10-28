@@ -511,6 +511,8 @@ pub enum OutcomeKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// Select option ids; the caller labels them from the catalog.
     Select,
     /// Entity ids; the caller hydrates them.
@@ -601,6 +603,7 @@ pub(crate) fn describe(
                         ColumnKind::Number => OutcomeKind::Number,
                         ColumnKind::Boolean => OutcomeKind::Boolean,
                         ColumnKind::Date => OutcomeKind::Date,
+                        ColumnKind::DateRange => OutcomeKind::DateRange,
                         ColumnKind::Select { .. } => OutcomeKind::Select,
                         ColumnKind::Entity { .. } => OutcomeKind::Entity,
                     },

@@ -57,7 +57,10 @@ touch uses the global search overlay and creation uses the dock's New button.
 The **Folders** pill opens the folder overview and stays highlighted inside
 any folder; tapping it from inside a folder returns to the overview, and
 selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+`Shared with me`, collapsible Favorites, a collapsible Databases section
+listing every database the viewer owns or has been shared, by name (past ten,
+it scrolls within its own height; hidden when there are none or databases are
+disabled), and a searchable folder hierarchy.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
 **Import** (or a successful **Connect**) opens a new agent chat beside Drive
@@ -124,8 +127,14 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
-and owner-only Rename and Delete.
+unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
+Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
+**Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
+beside it (or at the top level without edit access to its parent), copying its
+subfolders, documents, tasks, and chats; email threads filed in it stay with the
+original. Folders with more than 100 subfolders, documents, and chats can't be
+duplicated, and a failed copy leaves nothing behind.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
