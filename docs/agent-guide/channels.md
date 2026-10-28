@@ -1037,8 +1037,8 @@ Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
 The mobile dock Search button opens the independent Search route. Its Channels
-and People categories search cached channel names and people directly; the
-conversation list does not constrain results. Full-text search is explicit,
+and People categories search the complete channel list, cached channel names,
+and people directly; the conversation list does not constrain results. Full-text search is explicit,
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
 [Search](search.md) for mode, keyboard, and session-reset checks.

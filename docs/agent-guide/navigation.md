@@ -1174,9 +1174,11 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Missing items may still be uncached, but should appear
-after hydration without retyping, including channels outside the first cached
-page. Cmd+K's
+another pagination attempt. Quick Access merges the complete channel list with
+cached channels, so known channels remain searchable before cache hydration and
+outside its recent page. Cached metadata wins for duplicate channels while newer
+viewed timestamps from either source are retained. Other uncached items should
+appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
 email mentions keep their separate search-service path. Text search loads only
 its requested cache buckets, so a document-only category must not read the email
@@ -1197,11 +1199,21 @@ Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
-losing name/email matches. Group DMs stay separate, and the viewer is excluded
+losing name/email matches, including DMs found by typed search beyond the recent
+channel list. Group DMs stay separate, and the viewer is excluded
 from person results. Empty queries keep the existing recency lists. Verify a
 teammate with no DM or CRM record in both categories, including with CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
-show that person.
+show that person. Also verify a typed match whose DM is absent from the recent
+list: desktop and mobile should show one DM row, including after a same-email CRM
+contact arrives, with its alias still searchable.
+
+Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
+and [phone](media/command/deduplicated-person-mobile.png) use the real command and
+mobile search views in the backend-free universal-input fixture, with a synthetic
+person and a DM available only to typed searches. All/People each show one row;
+Enter and tap select that DM through recording-only navigation adapters. These
+captures verify result composition, not a live account's cache or backend.
 
 Browser examples: [desktop](media/command/teammate-desktop.png) and
 [mobile](media/command/teammate-mobile.png), using a known-user fixture with no DM
@@ -1233,9 +1245,20 @@ contacts.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
-time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
-relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
-the cache or reopening the menu with unchanged data does not reorder the results.
+time; equal timestamps have a stable entity-type and ID order. Typed searches give
+channels (including DMs) the same 3x boost as the main search view, with the menu's
+additional 1.8x DM boost; relevance and viewed recency still order those results.
+This shared ranking also applies to mobile name search. Verify an older matching
+channel stays above recent CRM contacts and agent sessions in All, and remains
+findable in Channels while its cache entry is absent. Refreshing the cache or
+reopening the menu with unchanged data must not reorder results or duplicate a
+channel when its cache entry arrives. Hydration must also refresh ownership,
+participants, and channel type when the name and timestamps are unchanged.
+
+The `quick_access.search` trace includes `search.channel_index` attributes for
+complete-list, cached-recent-page, and merged channel counts. `last_build_ms`
+records the most recent shared channel-index build duration; that build can
+precede the search and is not a child phase of the cache request.
 
 Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
 lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation

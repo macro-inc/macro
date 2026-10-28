@@ -31,7 +31,7 @@ import {
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
-  markCalendarNotificationSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
@@ -292,7 +292,7 @@ export function createSoupEntityActions(
         });
       }
 
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
+      markRowNotificationsSeenOnOpen(entity, notificationSource);
 
       // Match row navigation, including a thread row's driving message.
       await openEntityInSplitFromUnifiedList(entity, {

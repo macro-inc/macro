@@ -61,6 +61,7 @@ import {
 } from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
+  createTaskComposerLinkInSource,
   createTaskComposerSharing,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
@@ -125,6 +126,14 @@ export interface ComposeTaskProps {
    * Pairs with onCreateStart for placeholder cleanup.
    */
   onCreateFailure?: () => void;
+  /**
+   * Offers a toggle that links the created task back where it was composed
+   * from; `insert` runs after creation while the toggle is on.
+   */
+  linkInSource?: {
+    label: string;
+    insert: (result: ComposeTaskSuccess) => void;
+  };
 }
 
 export function ComposeTask(props: ComposeTaskProps) {
@@ -231,6 +240,11 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [shareWithTeam, setShareWithTeam] = createTaskComposerSharing(
     recovered?.shareWithTeam
   );
+  const [linkInSourceEnabled, setLinkInSourceEnabled] =
+    createTaskComposerLinkInSource();
+  const linkCreatedTask = (result: ComposeTaskSuccess) => {
+    if (linkInSourceEnabled()) props.linkInSource?.insert(result);
+  };
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const userTeams = useUserTeamsQuery();
   const team = () =>
@@ -578,6 +592,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         'compose-task'
       );
     }
+    linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);
   };
   const handleCreateTask = () => createTask(false);
@@ -933,6 +948,16 @@ export function ComposeTask(props: ComposeTaskProps) {
           )}
         </Show>
         <div class="ml-auto flex items-center gap-3">
+          <Show when={props.linkInSource}>
+            {(linkInSource) => (
+              <ToggleSwitch
+                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                onChange={setLinkInSourceEnabled}
+                checked={linkInSourceEnabled()}
+                label={linkInSource().label}
+              />
+            )}
+          </Show>
           <ToggleSwitch
             labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
             onChange={setCreateMore}

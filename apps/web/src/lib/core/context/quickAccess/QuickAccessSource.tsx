@@ -264,13 +264,6 @@ function getHistoryItemVersion(
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
 }
 
-function getChannelVersion(
-  channel: CachedGraphqlChannel,
-  viewedAt?: string
-): string {
-  return `${channel.name}|${channel.updatedAt}|${viewedAt}`;
-}
-
 function getUserVersion(
   user: IUser,
   lastInteraction: DateValue | undefined
@@ -519,22 +512,37 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const channelEntries = createLazyMemo(() => {
+    const startedAt = performance.now();
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
-
-    // The GraphQL cache is authoritative while enabled. Otherwise preserve the
-    // existing channel-list source unchanged.
-    const usesCache = cacheHost() !== undefined;
-    const channelData = usesCache
-      ? queryReadyGate(cachedChannelsQuery)
+    const completeChannels = channels();
+    const cachedChannels =
+      cacheHost() && queryReadyGate(cachedChannelsQuery)
         ? cachedChannelsQuery.data
-        : []
-      : channels().map(apiChannelToQuickAccessChannel);
-    for (const sourceChannel of channelData) {
+        : [];
+
+    // A partial cache must not hide channels already available in the complete
+    // channel list. Cached metadata wins for duplicates, retaining newer views.
+    const channelData = new Map(
+      completeChannels.map((channel) => [
+        channel.id,
+        apiChannelToQuickAccessChannel(channel),
+      ])
+    );
+    for (const channel of cachedChannels) {
+      channelData.set(channel.id, {
+        ...channel,
+        viewedAt: latestDate(
+          channelData.get(channel.id)?.viewedAt,
+          channel.viewedAt
+        ),
+      });
+    }
+    for (const sourceChannel of channelData.values()) {
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
-      const version = getChannelVersion(channel, viewedAt);
+      const version = JSON.stringify(channel);
       const cached = itemCache.get(channel.id);
 
       if (!cached || cached.version !== version) {
@@ -554,7 +562,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
-    return sortIndexEntries(allEntries);
+    const entries = sortIndexEntries(allEntries);
+    return {
+      entries,
+      completeCount: completeChannels.length,
+      cachedCount: cachedChannels.length,
+      buildDurationMs: performance.now() - startedAt,
+    };
   });
 
   const contactEntries = createLazyMemo(() => {
@@ -954,7 +968,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const processedData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
-      channelEntries(),
+      channelEntries().entries,
       contactEntries(),
       crmCompanyEntries(),
       crmContactEntries(),
@@ -1144,6 +1158,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
             filterPreviousItems: filterQuickAccessItems,
+            sourceAttributes: () => {
+              const channelIndex = channelEntries();
+              return {
+                'search.channel_index.complete_count':
+                  channelIndex.completeCount,
+                'search.channel_index.cached_recent_count':
+                  channelIndex.cachedCount,
+                'search.channel_index.merged_count':
+                  channelIndex.entries.length,
+                'search.channel_index.last_build_ms':
+                  channelIndex.buildDurationMs,
+              };
+            },
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
@@ -1158,7 +1185,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedEmails,
               ] = await Promise.all([
                 materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, missing),
+                materializeCachedGraphqlChannels(projectionHost, documents),
                 materializeCachedGraphqlCrmCompanies(projectionHost, missing),
                 materializeCachedGraphqlCrmContacts(projectionHost, missing),
                 materializeCachedEmailItems(projectionHost, documents),
@@ -1183,6 +1210,18 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 if (document.bucket === 'email') {
                   const email = emailsById.get(id);
                   return email ? [email] : [];
+                }
+                const channel = channelsById.get(id);
+                if (channel) {
+                  return [
+                    channelToQuickAccessItem({
+                      ...channel,
+                      viewedAt: latestDate(
+                        soupViewedAtMap().get(id),
+                        channel.viewedAt
+                      ),
+                    }),
+                  ];
                 }
                 const cached = itemCache.get(id)?.item;
                 if (cached) return [cached];
@@ -1236,8 +1275,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                     },
                   ];
                 }
-                const channel = channelsById.get(id);
-                return channel ? [channelToQuickAccessItem(channel)] : [];
+                return [];
               });
             },
           })
@@ -1259,7 +1297,26 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const ranked = projected
         .items()
         .filter((item) => !localDraftIds.has(item.id))
-        .map((item) => itemCache.get(item.id)?.item ?? item);
+        .map((item) => {
+          const cached = itemCache.get(item.id)?.item;
+          if (!cached) return item;
+          // Projected channels carry current cache metadata even when the
+          // complete list still has an older name. Only overlay newer views.
+          if (item.kind === 'entity' && item.data.type === 'channel') {
+            const viewedAt = latestDate(
+              item.timestamps.viewedAt,
+              cached.timestamps.viewedAt
+            );
+            return {
+              ...item,
+              sortTimestamp:
+                toTimestamp(viewedAt) || toTimestamp(item.timestamps.updatedAt),
+              timestamps: { ...item.timestamps, viewedAt },
+              data: { ...item.data, viewedAt },
+            };
+          }
+          return cached;
+        });
       const seen = new Set(ranked.map((item) => item.id));
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))

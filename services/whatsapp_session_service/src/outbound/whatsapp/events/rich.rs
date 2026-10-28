@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use external_chat::domain::rich::{
     Call, CallOutcome, ContactCard, Contacts, Event, Location, Poll, PollOption, PollVote,
-    RichContent, SystemAction, SystemLine, web_link,
+    RichContent, SystemAction, SystemLine, created_subject, web_link,
 };
 use nom::Parser;
 use nom::bytes::complete::{take_till, take_while1};
@@ -382,7 +382,10 @@ pub(super) fn stub_line(web: &WebMessageInfo) -> Option<SystemLine> {
     };
     Some(match stub {
         StubType::GroupCreate => SystemLine {
-            value: first(),
+            value: parameters
+                .first()
+                .map(String::as_str)
+                .and_then(created_subject),
             ..line(SystemAction::GroupCreated)
         },
         StubType::GroupChangeSubject => SystemLine {
