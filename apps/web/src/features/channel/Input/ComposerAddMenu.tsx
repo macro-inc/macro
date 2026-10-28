@@ -2,7 +2,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button, cn, Dropdown, Tooltip } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
 export type ComposerAddMenuItem = {
@@ -14,6 +14,11 @@ export type ComposerAddMenuItem = {
   hint?: string;
   onSelect: () => void;
   disabled?: boolean;
+  /**
+   * Grays the item out and says why: beside the row on hover or focus, as
+   * its second line on touch.
+   */
+  disabledReason?: string;
   /**
    * The item puts the caret in the editor (a mention, an inserted card), so
    * the editor takes focus as the menu closes instead of the +.
@@ -121,38 +126,33 @@ function AddDropdown(props: {
               </Show>
               <For each={group.items}>
                 {(item) => (
-                  <Tooltip
-                    label={item.description ?? item.label}
-                    disabled={!item.disabled}
-                    class="w-full"
+                  <Dropdown.Item
+                    disabled={item.disabled}
+                    disabledReason={item.disabledReason}
+                    onSelect={() => select(item)}
+                    class={
+                      item.description
+                        ? 'min-h-10 h-auto py-2 gap-3'
+                        : undefined
+                    }
                   >
-                    <Dropdown.Item
-                      disabled={item.disabled}
-                      onSelect={() => select(item)}
-                      class={
-                        item.description
-                          ? 'min-h-10 h-auto py-2 gap-3 data-disabled:pointer-events-none'
-                          : undefined
-                      }
-                    >
-                      <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
-                        {item.icon}
-                      </span>
-                      <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-                        <span class="block truncate">{item.label}</span>
-                        <Show when={item.description}>
-                          <span class="block truncate text-sm text-ink-muted font-normal">
-                            {item.description}
-                          </span>
-                        </Show>
-                      </span>
-                      <Show when={item.hint}>
-                        <span class="shrink-0 pl-4 font-mono text-xs text-ink-extra-muted">
-                          {item.hint}
+                    <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
+                      {item.icon}
+                    </span>
+                    <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+                      <span class="block truncate">{item.label}</span>
+                      <Show when={item.description}>
+                        <span class="block truncate text-sm text-ink-muted font-normal">
+                          {item.description}
                         </span>
                       </Show>
-                    </Dropdown.Item>
-                  </Tooltip>
+                    </span>
+                    <Show when={item.hint}>
+                      <span class="shrink-0 pl-4 font-mono text-xs text-ink-extra-muted">
+                        {item.hint}
+                      </span>
+                    </Show>
+                  </Dropdown.Item>
                 )}
               </For>
             </Dropdown.Group>
@@ -201,7 +201,7 @@ export function ComposerAddDrawer(props: {
                     <For each={group.items}>
                       {(item) => (
                         <MobileDrawer.Item
-                          disabled={item.disabled}
+                          disabled={item.disabled || !!item.disabledReason}
                           data-composer-add-item={item.id}
                           ref={(el) => {
                             if (item.focusesEditor)
@@ -220,10 +220,15 @@ export function ComposerAddDrawer(props: {
                           </span>
                           <span class="min-w-0 flex-1">
                             <span class="block">{item.label}</span>
-                            <Show when={item.description}>
-                              <span class="block text-xs text-ink-muted font-normal">
-                                {item.description}
-                              </span>
+                            {/* No hover on a phone: the reason is the line. */}
+                            <Show
+                              when={item.disabledReason ?? item.description}
+                            >
+                              {(line) => (
+                                <span class="block text-xs text-ink-muted font-normal">
+                                  {line()}
+                                </span>
+                              )}
                             </Show>
                           </span>
                         </MobileDrawer.Item>

@@ -2012,9 +2012,11 @@ turns. Test an image-only prompt and a text-plus-image prompt, then follow up
 without reattaching the image.
 
 Text-only model choices show a description. In the composer’s + menu, only
-**Add photos** is dimmed, with a tooltip using the model’s house name
-(`"<Model> doesn't support images"`); the phone sheet shows the reason inline.
-**Add files** remains available, and no warning banner is shown. Pasted,
+**Add photos** is dimmed, with a tooltip beside the row using the model’s house
+name (`"<Model> doesn't support images"`) on hover or arrow-key focus; selecting
+it does nothing and leaves the menu open. Touch shows the reason as the row’s
+second line instead. **Add files** remains available without a tooltip, and no
+warning banner is shown. Pasted,
 dropped, and picked images should be refused before upload; document attachments
 and text should still work. If an image is already attached when switching to a
 text-only model, keep the draft and image chip but disable Send until the image

@@ -215,10 +215,15 @@ it('hands the mobile sheet off to connection settings', async () => {
 
 it('refuses photos on a text-only model while keeping the file action usable', () => {
   const actions = setup("GPT OSS 120B doesn't support images");
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add photos/ }), {
-    key: 'Enter',
-  });
+  const photos = screen.getByRole('menuitem', { name: /Add photos/ });
+  expect(photos.getAttribute('aria-disabled')).toBe('true');
+  const reason = document.getElementById(
+    photos.getAttribute('aria-describedby') ?? ''
+  );
+  expect(reason?.textContent).toBe("GPT OSS 120B doesn't support images");
+  fireEvent.keyDown(photos, { key: 'Enter' });
   expect(actions.openImages).not.toHaveBeenCalled();
+  expect(screen.getByRole('menu')).toBeTruthy();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add files/ }), {
     key: 'Enter',
   });
@@ -236,7 +241,10 @@ it('opens the photo picker for an image-capable model', () => {
 it('keeps file uploads available in the mobile sheet for a text-only model', async () => {
   state.mobile = true;
   const actions = setup("GPT OSS 120B doesn't support images");
-  fireEvent.click(await screen.findByRole('button', { name: /Add photos/ }));
+  const photos = await screen.findByRole('button', { name: /Add photos/ });
+  expect(photos.hasAttribute('disabled')).toBe(true);
+  expect(photos.textContent).toContain("GPT OSS 120B doesn't support images");
+  fireEvent.click(photos);
   expect(actions.openImages).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: /Add files/ }));
   expect(actions.openFiles).toHaveBeenCalledOnce();

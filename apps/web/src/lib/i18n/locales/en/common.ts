@@ -1,7 +1,8 @@
 export default {
   addPhotos: 'Add photos',
   addFiles: 'Add files',
-  uploadFromDevice: 'Upload from your device',
+  photosFromDevice: 'Images from your device',
+  filesFromDevice: 'Documents and other files',
   selectedModel: 'This model',
   imagesUnsupported: "{{model}} doesn't support images",
   cancel: 'Cancel',

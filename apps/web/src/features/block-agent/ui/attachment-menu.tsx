@@ -12,15 +12,15 @@ export function agentAttachmentItems(
     {
       id: 'photos',
       label: t('common.addPhotos'),
-      description: imageUnsupportedReason,
+      description: t('common.photosFromDevice'),
       icon: <ImageIcon />,
-      disabled: !!imageUnsupportedReason,
+      disabledReason: imageUnsupportedReason,
       onSelect: openImages,
     },
     {
       id: 'upload',
       label: t('common.addFiles'),
-      description: t('common.uploadFromDevice'),
+      description: t('common.filesFromDevice'),
       icon: <PaperclipIcon />,
       onSelect: () => openFiles(),
     },
