@@ -122,9 +122,10 @@ impl NotificationRepository for SandboxNotificationRepository {
         user_id: MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
         status: &NotificationStatus,
+        through: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<Uuid>, Report> {
         self.inner
-            .get_notification_ids_for_entities(user_id, entities, status)
+            .get_notification_ids_for_entities(user_id, entities, status, through)
             .await
     }
 
