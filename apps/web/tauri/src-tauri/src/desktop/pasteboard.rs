@@ -107,9 +107,9 @@ fn stage_file(
 
 #[cfg(target_os = "macos")]
 fn pasteboard_file_paths() -> Vec<std::path::PathBuf> {
+    use objc2::msg_send;
     use objc2::rc::{Retained, autoreleasepool};
     use objc2::runtime::{AnyClass, AnyObject};
-    use objc2::msg_send;
     use objc2_foundation::{NSString, ns_string};
 
     autoreleasepool(|_| {
