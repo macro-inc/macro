@@ -60,7 +60,7 @@ export function createInputCommands(
       } catch (error) {
         const draft = deps.snapshot();
         if (
-          !draft.value?.length &&
+          draft.value.trim().length === 0 &&
           draft.attachments.length === 0 &&
           draft.mentions.length === 0
         )

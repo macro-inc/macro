@@ -31,12 +31,16 @@ for (const mobile of [false, true]) {
     const editor = page.locator('[data-markdown-editable]');
     await expect(editor).toBeVisible({ timeout: 60_000 });
     await editor.fill('pending message');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Send message', exact: true })
+      .click();
     await expect(page.getByLabel('Sent message')).toHaveText('pending message');
     await expect(editor).toHaveText('');
     await page.getByRole('button', { name: 'Fail send' }).click();
     await expect(editor).toHaveText('pending message');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Send message', exact: true })
+      .click();
     await expect(editor).toHaveText('');
     await editor.fill('next draft');
     await page.getByRole('button', { name: 'Fail send' }).click();

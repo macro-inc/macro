@@ -24,6 +24,7 @@ it('retains the complete draft after a failed send and clears it after a success
       onSendError,
     });
   });
+  clearEditor.mockImplementation(() => composer.onChange('\n \n'));
   try {
     composer.mentionsTracker.onMentionCreate({
       itemType: 'user',
@@ -38,11 +39,10 @@ it('retains the complete draft after a failed send and clears it after a success
     expect(onSendError).toHaveBeenCalledOnce();
     expect(await composer.inputState.commands.send()).toBe(true);
     expect(send).toHaveBeenLastCalledWith(draft);
-    expect(composer.inputState.snapshot()).toEqual({
-      value: '',
-      attachments: [],
-      mentions: [],
-    });
+    const cleared = composer.inputState.snapshot();
+    expect(cleared.value.trim()).toBe('');
+    expect(cleared.attachments).toEqual([]);
+    expect(cleared.mentions).toEqual([]);
     expect(clearEditor).toHaveBeenCalledTimes(2);
   } finally {
     dispose();
