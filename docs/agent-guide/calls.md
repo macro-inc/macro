@@ -62,6 +62,13 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
+A channel with a live call shows a green `Live` pill on its Chat rail row (and on
+its mobile conversation card), and the Chat nav item carries a pulsing green call
+badge. Inside the channel, the header shows a filled green `Join call` and a green
+card above the composer offers `Join` with the call's running time. To see these
+without starting a real call, answer `/call/active` and `/call/<channelId>/active`
+with a fake call through CDP `Fetch` interception.
+
 In the native iOS call drawer, the horizontal participant row excludes the person
 shown in the large video. While holding or scrolling the row (including momentum),
 the displayed primary and row membership stay fixed; speaking indicators still
