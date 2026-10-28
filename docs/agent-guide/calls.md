@@ -62,6 +62,12 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
+The desktop Chat sidebar lists every live channel call and quick call in a `Live`
+section above the conversations. Each row reads `Join`, or `Open` when you are
+already in that call, which returns to the channel's Call tab. To see the section
+without starting a real call, answer `/call/active` and `/call/<channelId>/active`
+with a fake call through CDP `Fetch` interception.
+
 In the native iOS call drawer, the horizontal participant row excludes the person
 shown in the large video. While holding or scrolling the row (including momentum),
 the displayed primary and row membership stay fixed; speaking indicators still
