@@ -6,8 +6,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,

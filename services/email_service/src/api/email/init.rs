@@ -111,6 +111,10 @@ impl InitError {
 impl IntoResponse for InitError {
     fn into_response(self) -> Response {
         let status_code = self.status_code();
+        let headers = match &self {
+            InitError::ProviderError(error) => super::provider_error::provider_error_headers(error),
+            _ => axum::http::HeaderMap::new(),
+        };
 
         match self {
             InitError::SharedInboxConflict {
@@ -142,7 +146,7 @@ impl IntoResponse for InitError {
                 }),
             )
                 .into_response(),
-            other => (status_code, other.to_string()).into_response(),
+            other => (status_code, headers, other.to_string()).into_response(),
         }
     }
 }

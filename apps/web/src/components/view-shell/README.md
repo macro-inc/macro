@@ -29,3 +29,5 @@ align trailing controls by their outer edges or offset an individual icon.
 - `TreeItem` and `Branch` own disclosure positioning and the nested rail.
 - Use `--sidebar-action-inset` for a trailing control beside a separate selectable
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
+
+Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.

@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import {
   useCreateTeamInviteLinkMutation,
   useDeleteTeamInviteLinkMutation,

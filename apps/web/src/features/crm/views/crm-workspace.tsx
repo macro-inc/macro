@@ -3,6 +3,7 @@ import {
   useViewControlHotkeys,
   useViewShell,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -32,10 +33,10 @@ import {
   isCrmCompanyEntity,
   isCrmContactEntity,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import FileCsvIcon from '@phosphor/file-csv.svg';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import FileCsvIcon from '@icon/system/regular/file-csv.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
@@ -543,9 +544,9 @@ export function CrmWorkspaceView(props: {
                     <ArrowLeftIcon class="size-4" />
                   </Button>
                 </Tooltip>
-                <h1 class="flex h-7 min-w-0 flex-1 items-center text-sm font-semibold tracking-[-0.03em]">
-                  <span class="truncate">CRM settings</span>
-                </h1>
+                <ViewSidebar.Title caret={false} class="h-7 flex-1">
+                  CRM settings
+                </ViewSidebar.Title>
               </div>
               {/* The header above already clears the status bar on touch. */}
               <div class="min-h-0 min-w-0 flex-1 [--mobile-content-inset-top:0px]">
@@ -648,34 +649,27 @@ export function CrmWorkspaceView(props: {
           </Show>
           <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
             {(tab) => (
-              <>
-                <Show when={!isTouchDevice()}>
-                  <ListHeader
-                    title={
-                      <div class="flex min-w-0 items-center gap-3">
-                        <NavigationToggle onExpand={() => setCollapsed(false)}>
-                          <Suspense>{sidebar()}</Suspense>
-                        </NavigationToggle>
-                        <h1
-                          class="min-w-0 truncate text-sm font-semibold"
-                          title={title()}
-                        >
-                          {title()}
-                        </h1>
-                      </div>
-                    }
-                  />
-                </Show>
-                <Suspense
-                  fallback={
-                    <div class="p-4 text-sm text-ink-muted">
-                      Loading CRM activity…
+              <Suspense
+                fallback={
+                  <div class="p-4 text-sm text-ink-muted">
+                    Loading CRM activity…
+                  </div>
+                }
+              >
+                <CrmActivityView
+                  tab={tab}
+                  title={
+                    <div class="flex min-w-0 items-center gap-3">
+                      <NavigationToggle onExpand={() => setCollapsed(false)}>
+                        <Suspense>{sidebar()}</Suspense>
+                      </NavigationToggle>
+                      <ViewSidebar.Title caret={false} title={title()}>
+                        {title()}
+                      </ViewSidebar.Title>
                     </div>
                   }
-                >
-                  <CrmActivityView tab={tab} />
-                </Suspense>
-              </>
+                />
+              </Suspense>
             )}
           </Show>
           <Show
@@ -715,12 +709,9 @@ export function CrmWorkspaceView(props: {
                     <NavigationToggle onExpand={() => setCollapsed(false)}>
                       <Suspense>{sidebar()}</Suspense>
                     </NavigationToggle>
-                    <h1
-                      class="min-w-0 truncate text-sm font-semibold"
-                      title={title()}
-                    >
+                    <ViewSidebar.Title caret={false} title={title()}>
                       {title()}
-                    </h1>
+                    </ViewSidebar.Title>
                   </div>
                 }
               >

@@ -729,7 +729,18 @@ fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
         .received_requests()
         .into_iter()
         .filter_map(|request| match request {
-            ClientRequest::PromptRequest(prompt) => Some(prompt.prompt),
+            ClientRequest::PromptRequest(prompt) => Some(
+                prompt
+                    .prompt
+                    .into_iter()
+                    .filter(|block| {
+                        !matches!(block, ContentBlock::Text(text)
+                            if text.meta.as_ref().and_then(|meta| meta.get(
+                                agent_runtime_protocol::domain::action::INVOCATION_CONTEXT_META
+                            )) == Some(&serde_json::Value::Bool(true)))
+                    })
+                    .collect(),
+            ),
             _ => None,
         })
         .collect()
@@ -3297,6 +3308,8 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             owner: model_owner::Owner::User(sender()),
             prompt: None,
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await
         .expect("the managed session should open");
@@ -3542,6 +3555,8 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             owner: model_owner::Owner::User(sender()),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await;
 
@@ -3575,6 +3590,8 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         owner: model_owner::Owner::User(sender()),
         prompt: None,
         profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         loop {
@@ -3642,6 +3659,8 @@ async fn open_managed_session_refuses_a_bot_owner() {
             owner: model_owner::Owner::Bot(BotId::TEST_A),
             prompt: None,
             profile: None,
+            source: agent_session::domain::model::SessionSource::User,
+            visibility: agent_session::domain::model::SessionVisibility::Listed,
         })
         .await
         .expect_err("a bot cannot own a session");
@@ -4439,6 +4458,8 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
             bot_id: bot_id::CODEX_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         while containers.spawned() == 0 {
@@ -4573,6 +4594,8 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         let session = containers.first_spawned().await;
@@ -4599,6 +4622,8 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
         model: Some("openai/gpt-5.6".to_owned()),
         prompt: None,
         profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         let session = containers.first_spawned().await;
@@ -4641,6 +4666,8 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     });
     let drive = async {
         while containers.spawned() == 0 {
@@ -4673,6 +4700,8 @@ fn explicit_cursor_request() -> OpenManagedSession {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
     }
 }
 

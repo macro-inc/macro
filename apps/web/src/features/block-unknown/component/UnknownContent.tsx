@@ -1,6 +1,6 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import ShareFat from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 

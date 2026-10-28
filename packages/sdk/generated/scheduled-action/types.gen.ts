@@ -11,6 +11,10 @@ export type ActionConfiguration = {
     enabled: boolean;
     kind: ActionKind;
     name: string;
+    /**
+     * Omitted by clients that predate the setting; runs then start unlisted.
+     */
+    run_visibility?: RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -19,7 +23,8 @@ export type ActionConfiguration = {
 
 /**
  * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value.
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
+ * it too, so clients that predate the setting do not reset it.
  */
 export type ActionConfigurationUpdate = {
     /**
@@ -30,6 +35,7 @@ export type ActionConfigurationUpdate = {
     enabled?: boolean | null;
     kind: ActionKind;
     name: string;
+    run_visibility?: null | RunVisibility;
     task: {
         [key: string]: unknown;
     };
@@ -70,8 +76,30 @@ export type ActionTrigger = {
     type: 'multiple';
 };
 
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
+    /**
+     * Apps the routine requires on top of the agent's own. The owner must
+     * have each one connected to save the routine and for it to run.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
     prompt: string;
     user_prompt: string;
@@ -215,6 +243,14 @@ export type RoutineTrigger = {
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
 
+/**
+ * Whether a routine's runs are listed in Home and the Agents list. Routines
+ * that run often would bury the owner's own work, so runs start unlisted;
+ * either way they stay in the routine's history. The string form is the
+ * `scheduled_action.run_visibility` column's.
+ */
+export type RunVisibility = 'listed' | 'unlisted';
+
 export type Schedule = string;
 
 export type ScheduledAction = {
@@ -247,6 +283,10 @@ export type ScheduledAction = {
      * rather than failing to parse.
      */
     owner: string;
+    /**
+     * Whether the action's runs are listed in Home and the Agents list.
+     */
+    run_visibility: RunVisibility;
     task: {
         [key: string]: unknown;
     };

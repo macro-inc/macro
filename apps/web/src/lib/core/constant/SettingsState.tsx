@@ -29,6 +29,7 @@ export type SettingsTab =
   | 'Desktop App'
   | 'Agent'
   | 'Agents'
+  | 'Routines'
   | 'Harness'
   | 'Bots'
   | 'Team'

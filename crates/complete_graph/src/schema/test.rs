@@ -8,9 +8,9 @@ use email::domain::models::{
     EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
     EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
     LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest, Thread,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings,
-    UserProvider,
+    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
+    SetThreadsArchivedResult, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -55,6 +55,7 @@ mod initiative;
 mod scheduled_actions;
 mod soup_patches;
 mod stale_client;
+mod team_activity;
 mod work_feed;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
@@ -117,6 +118,8 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
         updated_at: Default::default(),
         viewed_at: None,
         extra: (),
+        source: models_soup::agent_session::AgentSessionSource::User,
+        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
     })
 }
 
@@ -545,6 +548,24 @@ impl EmailService for CountingEmailService {
         Ok(())
     }
 
+    async fn set_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        *self.thread_archived.lock().unwrap() = archived;
+        self.archive_mutation_calls.lock().unwrap().extend(
+            thread_ids
+                .iter()
+                .map(|thread_id| (user_id.clone(), *thread_id, archived)),
+        );
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids: thread_ids,
+            failed_thread_ids: vec![],
+        })
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: GetEmailsRequest,
@@ -942,6 +963,36 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
         })
     }
 
+    async fn teammate_feed(
+        &self,
+        viewer_id: &str,
+        cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
+        limit: std::num::NonZeroU32,
+    ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
+        // Emulate the repo with everyone but the viewer as a teammate, in
+        // the same keyset order and raw-row `next` as `subject_feed`.
+        let limit = limit.get() as usize;
+        let records = self.records.lock().expect("activity records lock").clone();
+        let mut page: Vec<activity::ActivityRecord> = records
+            .into_iter()
+            .filter(|record| record.subject_id != viewer_id)
+            .filter(|record| {
+                cursor.is_none_or(|(occurred_at, id)| {
+                    (record.occurred_at, record.id) < (occurred_at, id)
+                })
+            })
+            .collect();
+        let has_more = page.len() > limit;
+        page.truncate(limit);
+        let next = has_more
+            .then(|| page.last().map(|record| (record.occurred_at, record.id)))
+            .flatten();
+        Ok(activity::ActivityFeedPage {
+            records: page,
+            next,
+        })
+    }
+
     async fn subject_overview(
         &self,
         subject_id: &str,
@@ -1232,6 +1283,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -1499,10 +1559,12 @@ impl TestHarness {
             ))
             .data(graphql_email::email_thread_metadata_loader(
                 user_id.clone(),
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(graphql_email::email_thread_mail_projection_loader(
                 user_id,
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(NoOpEntityFavoriteEdgeReader)

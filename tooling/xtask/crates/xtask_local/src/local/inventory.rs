@@ -290,6 +290,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: false,
     },
+    RustService {
+        compose_name: "whatsapp_session_service",
+        cargo_bin: "whatsapp_session_service",
+        package: "whatsapp_session_service",
+        // Nothing calls it: it only dials out (WhatsApp, Postgres, KMS).
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        // Local-only: under `run-dev` it would take leases on shared-dev
+        // accounts from the deployed replicas.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

@@ -1,6 +1,6 @@
 import { hapticImpact } from '@core/mobile/haptics';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type ParentProps, Show } from 'solid-js';

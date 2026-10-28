@@ -266,6 +266,7 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
             NULL::TEXT as body_macro
         FROM email_messages
         WHERE thread_id = $1
+          AND NOT (is_draft AND COALESCE((mailbox_state->>'provider_missing')::boolean, false))
         ORDER BY internal_date_ts DESC NULLS LAST
         LIMIT $2 OFFSET $3
         "#,

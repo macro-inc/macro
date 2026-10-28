@@ -1,6 +1,8 @@
-import CheckCircle from '@phosphor/check-circle.svg';
-import Lock from '@phosphor/lock.svg';
-import Prohibit from '@phosphor/prohibit.svg';
+import { timeRangeFromInstants } from '@app/features/database/core/cell-date-range';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Lock from '@icon/system/regular/lock.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
+import { formatTimeRange } from '@property/utils/formatting';
 import { Button, cn } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -184,6 +186,16 @@ export function AnswerValue(props: {
       .with({ type: 'date' }, (date) => (
         <span>{displayDate(date.value, props.widget !== 'date')}</span>
       ))
+      .with({ type: 'date_range' }, (answer) => {
+        const range = timeRangeFromInstants(answer.value);
+        return (
+          <span>
+            {range
+              ? formatTimeRange(range)
+              : `${answer.value.start} – ${answer.value.end}`}
+          </span>
+        );
+      })
       .with({ type: 'link' }, (link) => (
         <span class="flex flex-col">
           <For each={link.value}>

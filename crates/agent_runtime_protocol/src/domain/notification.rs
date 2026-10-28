@@ -29,7 +29,10 @@ pub enum NotificationEvent {
     ReviewDecided(ReviewOutcome),
     /// Completion of work initiated by a prior review decision.
     #[serde(rename = "review.settled")]
-    ReviewSettled(ReviewOutcome),
+    ReviewSettled(ReviewSettlement),
+    /// The import plan a presented review shows finished planning.
+    #[serde(rename = "import.planned")]
+    ImportPlanned(ImportPlan),
     /// An app connection became available to the session.
     #[serde(rename = "app.connected")]
     AppConnected {
@@ -44,6 +47,7 @@ impl NotificationEvent {
         match self {
             Self::ReviewDecided(_) => "review.decided",
             Self::ReviewSettled(_) => "review.settled",
+            Self::ImportPlanned(_) => "import.planned",
             Self::AppConnected { .. } => "app.connected",
         }
     }
@@ -61,6 +65,126 @@ pub struct ReviewOutcome {
     pub via: DecisionVia,
     /// Exact affected items and their final states.
     pub items: Vec<ReviewItemOutcome>,
+}
+
+/// How the work a review decision started ended. Untagged so settlements
+/// stored before imports existed, bare [`ReviewOutcome`]s, still read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(untagged)]
+pub enum ReviewSettlement {
+    /// An approved import's background write ended.
+    Import {
+        /// The import's final report.
+        import: ImportSettlement,
+    },
+    /// The decided actions' confirmed results.
+    Actions(ReviewOutcome),
+}
+
+/// The final report of an approved workspace import, with no page content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSettlement {
+    /// The workspace the import read.
+    #[serde(default)]
+    pub source: ImportWorkspace,
+    /// How the write ended.
+    pub outcome: ImportOutcome,
+    /// Why it failed, or what went wrong in a completed write.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Objects written into Macro.
+    pub imported: u32,
+    /// Objects the plan copies: as they are or as task lists from Notion,
+    /// projects and issues from Linear or Jira.
+    pub planned: u32,
+    /// Planned documents.
+    pub documents: u32,
+    /// Planned databases.
+    pub databases: u32,
+    /// Rows those databases hold.
+    pub database_rows: u32,
+    /// Planned task lists; issues that become tasks for Linear and Jira.
+    pub task_lists: u32,
+    /// Tasks those task lists or issues become.
+    pub task_rows: u32,
+    /// Objects left in the source workspace.
+    pub skipped: u32,
+    /// Planned objects that were not written.
+    pub not_written: u32,
+    /// Written objects shared with the owner's team.
+    pub shared_with_team: u32,
+    /// Objects teammates had already imported, linked instead of copied.
+    pub already_in_macro: u32,
+    /// Objects a teammate is writing at the same time, linked once written.
+    pub waiting_on_teammates: u32,
+    /// The Macro folder the import writes into.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[specta(type = Option<String>)]
+    pub root_folder_id: Option<Uuid>,
+    /// Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`].
+    pub failures: Vec<ImportItem>,
+    /// Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`].
+    pub hand_items: Vec<ImportItem>,
+}
+
+/// Most items an [`ImportSettlement`] lists per kind, keeping it bounded.
+pub const MAX_IMPORT_ITEMS: usize = 50;
+
+/// The workspace an import reads. Events stored before Linear and Jira
+/// imports existed are Notion's.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportWorkspace {
+    /// Notion pages and databases.
+    #[default]
+    Notion,
+    /// Linear projects and issues.
+    Linear,
+    /// Jira projects, epics and issues.
+    Jira,
+}
+
+/// How an approved import's write ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportOutcome {
+    /// Every planned object was written or accounted for.
+    Completed,
+    /// The write stopped on an error.
+    Failed,
+    /// The owner cancelled it.
+    Cancelled,
+}
+
+/// One object an import report calls out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+pub struct ImportItem {
+    /// The object's title.
+    pub title: String,
+    /// Its URL in the source workspace.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Why it is called out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// What an import plan proposes, once it is ready to approve.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPlan {
+    /// The workspace the import reads.
+    #[serde(default)]
+    pub source: ImportWorkspace,
+    /// Objects to copy as they are; projects for Linear and Jira.
+    pub copy: u32,
+    /// Data sources whose rows become tasks; issues for Linear and Jira.
+    pub task_lists: u32,
+    /// Objects to leave in the source workspace.
+    pub skipped: u32,
+    /// Objects that need handling by hand.
+    pub by_hand: u32,
 }
 
 /// Overall review decision.

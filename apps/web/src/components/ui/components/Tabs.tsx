@@ -20,9 +20,9 @@ export type TabOption<T extends string> = {
 export type TabsSize = 'sm' | 'md' | 'lg';
 
 /**
- * Desktop always renders separate pills. Touch keeps the treatment each
+ * Desktop joins options inside one segmented frame. Touch keeps the treatment each
  * surface already had: a sliding pill, a bordered inset track, divided
- * segments, or the same separate pills as desktop.
+ * segments, or separate pills.
  */
 export type TabsTouchStyle = 'pill' | 'inset' | 'segmented' | 'pills';
 
@@ -41,7 +41,7 @@ export type TabsProps<T extends string> = {
   ref?: (element: HTMLElement) => void;
 } & (
   | {
-      variant?: 'pills';
+      variant?: 'grouped' | 'pills';
       size?: TabsSize;
       /** Let many options flow onto more lines; renders pills on touch too. */
       wrap?: boolean;
@@ -61,15 +61,15 @@ export type TabsProps<T extends string> = {
 
 /**
  * One inline single choice: switch a view, a section, or a small set of
- * values. On desktop each option is its own pill, the outline Button frame,
- * and the selected option takes the pressed fill.
+ * values. On desktop options share one rounded frame with dividers,
+ * and the selected segment takes the pressed fill.
  *
  * @do Use for two to six short options that are all visible at once.
  * @do Put view tabs left of the header controls, after the title.
  * @do Use `iconOnly` to collapse a narrow header; keep `label` as the name.
  * @do Use `size` to match neighbouring controls: `md` beside 32px buttons.
  * @do Set `touch` to the look the surface had on touch: `pill` (sliding),
- *   `inset`, `segmented`, or `pills` for separate pills like desktop.
+ *   `inset`, `segmented`, or `pills` for separate pills.
  * @dont Do not build tabs from Buttons, a ButtonGroup, or HeaderActionGroup.
  * @dont Do not put Tabs inside a HeaderActionGroup or ButtonGroup.
  * @dont Do not use Tabs for tabs that own panels or a dynamic collection; use TabSelector.
@@ -81,7 +81,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
     const option = props.options.find((option) => option.value === value);
     if (option) props.onChange(option.value);
   };
-  // Desktop and wrapping rows always render separate pills.
+  // Wrapping presets retain separate pills; desktop view tabs share a frame.
   const touchStyle = (): TabsTouchStyle =>
     isTouchDevice() && !props.wrap ? (props.touch ?? 'pill') : 'pills';
 
@@ -123,6 +123,29 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
       >
         <Match when={props.variant === 'track'}>
           <Track {...props} />
+        </Match>
+        <Match
+          when={!isTouchDevice() && !props.wrap && props.variant !== 'pills'}
+        >
+          <div
+            class={cn(
+              'inline-flex min-w-0 items-center overflow-hidden rounded-full border border-edge-button bg-control elevated gap-0.5 p-0.5',
+              props.size === 'sm' ? 'h-6' : props.size === 'lg' ? 'h-9' : 'h-8',
+              props.fullWidth && 'w-full'
+            )}
+          >
+            <For each={props.options}>
+              {(option) => (
+                <PillOption
+                  option={option}
+                  size={props.size ?? 'md'}
+                  iconOnly={props.iconOnly ?? false}
+                  fullWidth={props.fullWidth ?? false}
+                  joined
+                />
+              )}
+            </For>
+          </div>
         </Match>
         <Match when={touchStyle() === 'pill'}>
           <TouchPill {...props} />
@@ -172,6 +195,7 @@ function PillOption<T extends string>(props: {
   size: TabsSize;
   iconOnly: boolean;
   fullWidth: boolean;
+  joined?: boolean;
 }) {
   const square = () => props.iconOnly && props.option.icon !== undefined;
   const item = () => (
@@ -179,16 +203,19 @@ function PillOption<T extends string>(props: {
       value={props.option.value}
       disabled={props.option.disabled}
       class={cn(
-        'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
-        // Unselected options share the outline Button frame.
-        'bg-control elevated not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
-        // The selected option takes the pressed fill, flat like a pressed Button.
-        'data-checked:border-edge-button data-checked:overlay-active data-checked:text-ink data-checked:shadow-none',
+        'relative inline-flex min-w-0 shrink-0 text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
+        props.joined
+          ? 'h-full rounded-full border border-transparent data-checked:border-edge-button data-checked:shadow-sm'
+          : 'rounded-full border bg-control elevated data-checked:shadow-none',
+        // The joined track leaves a visible inset around each rounded option.
+        'not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
+        // The selected option uses the same pressed fill as a pressed Button.
+        'data-checked:border-edge-button data-checked:overlay-active data-checked:text-ink',
         'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
-        props.size === 'sm' && 'h-6',
-        props.size === 'md' && 'h-8',
-        props.size === 'lg' && 'h-9',
+        !props.joined && props.size === 'sm' && 'h-6',
+        !props.joined && props.size === 'md' && 'h-8',
+        !props.joined && props.size === 'lg' && 'h-9',
         square() && 'aspect-square',
         props.fullWidth && 'flex-1'
       )}
@@ -221,7 +248,12 @@ function PillOption<T extends string>(props: {
 
   return (
     <Show when={square()} fallback={item()}>
-      <Tooltip label={props.option.label}>{item()}</Tooltip>
+      <Tooltip
+        label={props.option.label}
+        class={props.joined ? 'h-full' : undefined}
+      >
+        {item()}
+      </Tooltip>
     </Show>
   );
 }
@@ -230,11 +262,11 @@ function Track<T extends string>(props: TabsProps<T>) {
   return (
     <div
       class={cn(
-        'relative flex h-9 items-center rounded-full bg-ink/3 light-mode:bg-[rgb(246_246_246)] dark-mode:bg-[rgb(24_24_24)]',
+        'relative flex h-9 items-center rounded-full bg-ink/3',
         props.fullWidth && 'w-full'
       )}
     >
-      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-full bg-panel bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--color-ink)_2%,transparent),transparent)] transition-[transform,width,height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none dark-mode:bg-[rgb(32_32_32)] light-mode:border light-mode:border-ink/7 light-mode:bg-[rgb(250_250_250)] light-mode:bg-none light-mode:shadow-[0_1px_6px_0_color-mix(in_srgb,var(--color-ink)_5%,transparent)]" />
+      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-full bg-panel bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--color-ink)_2%,transparent),transparent)] transition-[transform,width,height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none dark-mode:bg-active light-mode:border light-mode:border-ink/7 light-mode:bg-none light-mode:shadow-[0_1px_6px_0_color-mix(in_srgb,var(--color-ink)_5%,transparent)]" />
       <For each={props.options}>
         {(option) => (
           <KSegmentedControl.Item

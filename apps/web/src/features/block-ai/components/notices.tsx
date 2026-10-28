@@ -4,9 +4,9 @@
  * saved. Presentational.
  */
 
-import Info from '@phosphor/info.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import Info from '@icon/system/regular/info.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { For, Show } from 'solid-js';
 

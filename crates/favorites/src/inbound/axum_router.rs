@@ -14,8 +14,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use entity_access::{
-    domain::{models::ViewAccessLevel, ports::EntityAccessService},
-    inbound::axum_extractors::EntityBodyAccessLevelExtractor,
+    domain::ports::EntityAccessService, inbound::axum_extractors::EntityBodyAccessLevelExtractor,
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
@@ -26,7 +25,7 @@ use serde::Deserialize;
 
 use crate::domain::{
     models::{Favorite, FavoriteFilter, FavoritesError, FavoritesList},
-    ports::FavoritesService,
+    ports::{FavoriteView, FavoritesService},
 };
 
 /// Router state for favorites endpoints.
@@ -203,7 +202,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn add_favorite_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    access: EntityBodyAccessLevelExtractor<ViewAccessLevel, AccessSvc, AddFavoriteRequest, Auth>,
+    access: EntityBodyAccessLevelExtractor<FavoriteView, AccessSvc, AddFavoriteRequest, Auth>,
 ) -> Result<Json<Favorite>, FavoritesError>
 where
     S: FavoritesService,

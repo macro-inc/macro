@@ -1,6 +1,6 @@
 import { formatOrdinal, plural } from '@core/util/string';
 import { TZDateMini } from '@date-fns/tz';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import type { CalendarEvent } from '../types';
 
 const POSITIVE_INTEGER_REGEX = /^\d+$/;
@@ -368,6 +368,30 @@ function parseUntilDate(value: string) {
 export interface RecurrenceDescriptionOptions {
   /** Locale used for weekday, month, date, and list formatting. */
   locale?: Intl.LocalesArgument;
+  /**
+   * Where the series starts, in the zone its rule is expressed in. A weekly
+   * rule without BYDAY repeats on this weekday (RFC 5545), so the
+   * description names it, as the composer's weekly preset does.
+   */
+  start?: Date;
+}
+
+function withImpliedWeekday(
+  rule: ParsedRecurrenceRule,
+  start: Date | undefined
+): ParsedRecurrenceRule {
+  if (
+    rule.frequency !== 'WEEKLY' ||
+    rule.byDay.length > 0 ||
+    !start ||
+    Number.isNaN(start.getTime())
+  ) {
+    return rule;
+  }
+  return {
+    ...rule,
+    byDay: [{ weekday: WEEKDAY_CODES[start.getDay()] as WeekdayCode }],
+  };
 }
 
 /** Formats recurrence properties as concise, human-readable text. */
@@ -378,7 +402,7 @@ export function formatRecurrenceDescription(
   const { locale } = options;
   const parsed = parseRecurrenceLines(lines);
   let description = parsed.rule
-    ? formatRuleDetails(parsed.rule, locale)
+    ? formatRuleDetails(withImpliedWeekday(parsed.rule, options.start), locale)
     : undefined;
 
   if (!description && parsed.additionalDates.length > 0) {
@@ -690,11 +714,32 @@ export function defaultCustomConfig(start: Date): RecurrenceConfig {
   };
 }
 
+/**
+ * Where an occurrence sits in its series: its original start (the occurrence
+ * key, which a moved occurrence keeps), in the event's own zone.
+ */
+function occurrenceSlotStart(
+  event: Pick<CalendarEvent, 'occurrenceKey' | 'allDay' | 'timeZone'>
+): Date | undefined {
+  const slot = event.allDay
+    ? parseISO(event.occurrenceKey)
+    : new Date(event.occurrenceKey);
+  if (Number.isNaN(slot.getTime())) return undefined;
+  return !event.allDay && event.timeZone
+    ? TZDateMini.tz(event.timeZone, slot)
+    : slot;
+}
+
 /** How an event repeats, as event details describe it; undefined for a one-off event. */
 export function eventRecurrenceDescription(
-  event: Pick<CalendarEvent, 'recurrenceLines' | 'recurrenceId'>
+  event: Pick<
+    CalendarEvent,
+    'recurrenceLines' | 'recurrenceId' | 'occurrenceKey' | 'allDay' | 'timeZone'
+  >
 ): string | undefined {
-  const description = formatRecurrenceDescription(event.recurrenceLines);
+  const description = formatRecurrenceDescription(event.recurrenceLines, {
+    start: occurrenceSlotStart(event),
+  });
   if (description) return description;
 
   return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined

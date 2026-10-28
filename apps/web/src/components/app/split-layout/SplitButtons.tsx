@@ -1,9 +1,9 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
-
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import SplitIcon from '@phosphor/square-half.svg';
-import CloseIcon from '@phosphor/x.svg';
+import { t } from '@app/lib/i18n';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import SplitIcon from '@icon/system/regular/square-half.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -15,7 +15,7 @@ export function SplitBackButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      label="Go Back"
+      label={t('splitMenu.goBack')}
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
@@ -31,7 +31,7 @@ export function SplitForwardButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      label="Go Forward"
+      label={t('splitMenu.goForward')}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
@@ -47,7 +47,7 @@ export function SplitCreateButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      label="Create new split"
+      label={t('splitMenu.createNewSplit')}
       onClick={() => {
         context.manager.createNewSplit({
           content: {
@@ -70,7 +70,7 @@ export function SplitCloseButton() {
     <Button
       variant="ghost"
       size="icon-md"
-      label="Close"
+      label={t('splitMenu.close')}
       onClick={context.handle.close}
     >
       <CloseIcon />

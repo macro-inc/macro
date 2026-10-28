@@ -16,7 +16,9 @@ use pipedream_mcp::domain::service::PipedreamToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 
+mod overlay;
 mod selection;
+pub use overlay::{NativeOverlayConnections, overlay_connection};
 use selection::native_matches;
 pub use selection::select_connections;
 use std::sync::Arc;

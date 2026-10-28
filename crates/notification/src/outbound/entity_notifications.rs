@@ -1,6 +1,6 @@
 //! Filtered notification edges, limited independently for every requested entity.
-//! Separate indexed primary/secondary candidate paths keep the legacy JSON
-//! message lookup from forcing a metadata scan for ordinary channel requests.
+//! The primary, secondary and message-id candidate paths each have their own
+//! index; the message-id path's `COALESCE` must match `idx_notification_message_id`.
 
 use std::{collections::HashMap, str::FromStr};
 

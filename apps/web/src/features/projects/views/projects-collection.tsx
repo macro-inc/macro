@@ -31,8 +31,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
-import CalendarIcon from '@phosphor/calendar.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import {
   PROPERTY_OPTION_IDS,
@@ -639,6 +639,7 @@ export function ProjectsCollection(props: {
                 <Match when={collection.state().kind === 'loading'}>
                   <div class="grid flex-1 place-items-center text-ink-muted">
                     <SpinnerIcon
+                      aria-hidden={false}
                       class="size-5 animate-spin"
                       aria-label="Loading projects"
                     />

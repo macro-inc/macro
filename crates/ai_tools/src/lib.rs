@@ -17,6 +17,9 @@ mod deferred;
 mod display_results;
 pub mod email_attachments;
 mod import_channels;
+mod import_jobs;
+mod import_trackers;
+mod import_workspace;
 mod mcp_app_catalog;
 mod schemas;
 pub mod search;
@@ -67,6 +70,7 @@ pub use build_context::{
     build_tool_service_context_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
+pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
 pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
@@ -101,11 +105,11 @@ pub use tool_context::{
     build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
     build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
     build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
-    build_forms_tool_context, build_image_generation_tool_context, build_initiative_tool_context,
-    build_item_notification_preference_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_message_tool_context,
-    build_pipeline_tool_context, build_project_tool_context, build_properties_service,
-    build_properties_service_with_broker, build_properties_tool_context,
+    build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
+    build_initiative_tool_context, build_item_notification_preference_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_message_tool_context, build_pipeline_tool_context, build_project_tool_context,
+    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context,
@@ -266,6 +270,12 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// cannot reintroduce the hidden SDK methods as direct tools.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
+}
+
+/// Public MCP tools for users with code mode: SDK-covered tools are hidden in
+/// favor of `ExecuteCode`, as in agent sessions.
+pub fn tools_for_mcp_code_mode() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::Mcp, true)
 }
 
 /// Existing agent-session tools exposed through the code-mode capability policy.

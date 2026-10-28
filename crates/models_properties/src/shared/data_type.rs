@@ -12,6 +12,8 @@ pub enum DataType {
     Boolean,
     /// Date and time values.
     Date,
+    /// A span from a start date-time to an end one.
+    DateRange,
     /// Numeric values.
     Number,
     /// String/text values.

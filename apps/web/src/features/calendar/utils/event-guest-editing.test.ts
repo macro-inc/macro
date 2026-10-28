@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarEvent } from '../types';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   eventGuestEditing,
+  GUEST_INVITES_RESTRICTED,
+  GUEST_LIST_HIDDEN,
   guestInvitesRestricted,
+  guestInvitesRestrictedReason,
   guestListChanged,
+  guestListHidden,
 } from './event-guest-editing';
 
 function attendee(overrides: Partial<CalendarAttendee>): CalendarAttendee {
@@ -158,6 +163,121 @@ describe('guestInvitesRestricted', () => {
     expect(
       guestInvitesRestricted({
         ...invited({ ...GUEST, rsvp: false }),
+        isSnapshot: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('canForwardInvitation', () => {
+  it('lets a guest who cannot invite forward instead, hidden list or not', () => {
+    expect(canForwardInvitation(invited(GUEST))).toBe(true);
+    expect(
+      canForwardInvitation({
+        ...invited(GUEST),
+        guestPolicy: {
+          canModify: false,
+          canInviteOthers: true,
+          canSeeOtherGuests: false,
+        },
+      })
+    ).toBe(true);
+  });
+
+  it('is not offered to someone who can invite, or on a copy that cannot change', () => {
+    expect(canForwardInvitation(invited(INVITING_GUEST))).toBe(false);
+    expect(canForwardInvitation(invited(ORGANIZER))).toBe(false);
+    expect(canForwardInvitation({ ...invited(GUEST), isCancelled: true })).toBe(
+      false
+    );
+    expect(canForwardInvitation({ ...invited(GUEST), isReadOnly: true })).toBe(
+      false
+    );
+    expect(
+      canForwardInvitation({
+        ...invited({ ...GUEST, rsvp: false }),
+        isSnapshot: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('guestInvitesRestrictedReason', () => {
+  const policy = (
+    canSeeOtherGuests: boolean,
+    canInviteOthers: boolean,
+    canModify = false
+  ) => ({ canModify, canInviteOthers, canSeeOtherGuests });
+  // Google gives a guest's copy of a hidden list only the guest, and the
+  // server lets no guest add to it.
+  const hiddenFrom = (guestPolicy: CalendarEvent['guestPolicy']) =>
+    event({
+      guestPolicy,
+      viewerCan: GUEST,
+      attendees: [attendee({ email: 'me@example.com', isSelf: true })],
+    });
+
+  it('blames the hidden guest list when the organizer lets guests invite or modify', () => {
+    expect(guestInvitesRestrictedReason(hiddenFrom(policy(false, true)))).toBe(
+      GUEST_LIST_HIDDEN
+    );
+    expect(
+      guestInvitesRestrictedReason(hiddenFrom(policy(false, true, true)))
+    ).toBe(GUEST_LIST_HIDDEN);
+  });
+
+  it('names the organizer when guests may not invite, hidden list or not', () => {
+    expect(guestInvitesRestrictedReason(hiddenFrom(policy(false, false)))).toBe(
+      GUEST_INVITES_RESTRICTED
+    );
+    expect(
+      guestInvitesRestrictedReason({
+        ...invited(GUEST),
+        guestPolicy: policy(true, false),
+      })
+    ).toBe(GUEST_INVITES_RESTRICTED);
+  });
+
+  it('says nothing to a guest who may invite', () => {
+    expect(guestInvitesRestrictedReason(invited(INVITING_GUEST))).toBe(
+      undefined
+    );
+  });
+});
+
+describe('guestListHidden', () => {
+  const hidden = {
+    canModify: false,
+    canInviteOthers: true,
+    canSeeOtherGuests: false,
+  };
+
+  it('holds for a guest on their own copy of a hidden list', () => {
+    expect(guestListHidden({ ...invited(GUEST), guestPolicy: hidden })).toBe(
+      true
+    );
+  });
+
+  it('does not hold for the organizer, who sees every guest', () => {
+    expect(
+      guestListHidden({ ...invited(ORGANIZER), guestPolicy: hidden })
+    ).toBe(false);
+  });
+
+  it('does not hold for someone else’s copy or a snapshot', () => {
+    expect(
+      guestListHidden(
+        event({
+          viewerCan: GUEST,
+          guestPolicy: hidden,
+          attendees: [attendee({ email: 'sharer@example.com' })],
+        })
+      )
+    ).toBe(false);
+    expect(
+      guestListHidden({
+        ...invited({ ...GUEST, rsvp: false }),
+        guestPolicy: hidden,
         isSnapshot: true,
       })
     ).toBe(false);

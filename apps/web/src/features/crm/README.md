@@ -65,18 +65,39 @@ context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
 The workspace activity feeds are CRM-linked, not unfiltered app shortcuts.
-`queries/activity.ts` loads all authorized companies and contacts before
-building the feed filters; the capped Quick Access suggestions are not a
-complete scope. Notes means Markdown documents excluding task, snippet, and
-skill subtypes. Email uses the viewer's mailbox, without team-scope widening.
-This reuses existing endpoints without a schema change. Keep the scope complete:
-never cap association IDs or fall back to an unfiltered feed. The activity query
-memoizes its large filter AST between scope/tab changes. SQL generation batches
-OR-ed references into set-membership predicates rather than emitting thousands
-of separate subqueries. Email similarly batches participant lists with identical
-sender/recipient roles in both candidate and message queries, and omits exact
-addresses already covered by a company domain. These backend optimizations must
-be deployed to resolve large-scope request stalls.
+`queries/activity.ts` sends a constant-size `crma: 'activity'` association
+selector. CRM resolves every visible company and contact on the server before
+Soup filters and paginates the result; the browser does not prefetch the full
+CRM or enumerate record IDs in filter trees. The scope excludes hidden records,
+including for administrators, and keeps distinct contact IDs even when their
+email addresses match. Tasks, Notes and Calls match Companies/Contacts property
+links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
+visible company domains/contact addresses in the viewer's own mailbox, without
+team-scope widening or requiring a property link on the email.
+
+Activity rows render stored Companies and Contacts reference properties as inline
+pills through the shared Soup row. Pills use the shared property preview and open
+a record independently of the row; additional values use the shared overflow menu.
+Email still matches visible company domains and contact addresses for feed
+membership, but the row displays only stored properties, not inferred matches.
+No separate CRM association metadata lookup or row footer runs during paging.
+Record-detail lists and activity membership remain unchanged.
+Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+layouts (subject to the normal feature flags and touch fallback). They use a separate
+CRM persistence scope, and every query, including search and grouped continuation,
+retains the mandatory CRM association. Record-detail Tasks stay unchanged.
+Email reuses the shared read/done/attachment/calendar/tag facets. Notes expose creator
+and tag filters; Calls expose audience and tag filters. These lists have independent
+per-entry search, sort direction, and date/none grouping settings. Date headings follow
+the selected sort field in viewer-local time. Email defaults to last-update date groups;
+Notes and Calls default to no grouping. Local-only filters continue paging through
+empty pages; clearing filters never clears the CRM scope.
+
+Activity extends the existing authorized CRM association path rather than
+splitting the feed into independent client queries. This preserves one sorted
+cursor and a complete scope without raising GraphQL's filter safety limits.
+SQL batching remains useful after resolution, but cannot fix oversized ingress
+filters. Deploy the backend association variant before the updated frontend.
 
 When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading

@@ -1,13 +1,10 @@
 import { useListInteractions } from '@app/components/list';
 import {
-  makeCopyLinkAction,
-  makeFavoriteAction,
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   type OpenPrLink,
   PrLinkChips,
@@ -16,7 +13,6 @@ import {
 } from '@block-pr/component/PrLinks';
 import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   EntitySelectionToolbar,
@@ -24,12 +20,8 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import SplitIcon from '@phosphor/columns.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import StarIcon from '@phosphor/star.svg';
 import type { GithubLinkStatus } from '@queries/auth/github-link';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
@@ -54,6 +46,7 @@ import {
   type ReviewsSortId,
   scopeMatchesViewerGithubId,
 } from '../reviews-types';
+import { ReviewContextMenuContent } from './ReviewContextMenu';
 import { ReviewsEmptyState } from './ReviewsEmptyState';
 
 /** What each row links to, loaded alongside the list. */
@@ -81,8 +74,6 @@ export type ReviewsListProps = {
   links: ReviewsListLinks;
 };
 
-const copyLink = makeCopyLinkAction();
-
 function ReviewListElement(props: JSX.HTMLAttributes<HTMLUListElement>) {
   return <ul {...props} aria-label="Pull requests" />;
 }
@@ -92,7 +83,6 @@ function ReviewRow(props: {
   authorDisplayName?: string;
   checked: boolean;
   onChecked: (checked: boolean, shiftKey: boolean) => void;
-  favoriteAction: ReturnType<typeof makeFavoriteAction>;
   onOpen: ReviewsListProps['onOpen'];
   links: ReviewsListLinks;
   onActivate: (newSplit: boolean) => void;
@@ -147,58 +137,13 @@ function ReviewRow(props: {
           }
         />
       </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
-          <MenuItem
-            icon={SplitIcon}
-            text="Open in new split"
-            disabled={!globalSplitManager()?.canAppendSplit()}
-            onClick={() => {
-              if (globalSplitManager()?.canAppendSplit())
-                props.onOpen(props.review.id, true);
-            }}
-          />
-          <MenuItem
-            icon={StarIcon}
-            text={
-              props.favoriteAction.isFavorited(props.review)
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            }
-            onClick={() =>
-              fireAndForget(
-                props.favoriteAction.execute([props.review]),
-                'reviews-view'
-              )
-            }
-          />
-          <MenuItem
-            icon={CopyIcon}
-            text="Copy link"
-            onClick={() =>
-              fireAndForget(copyLink.execute([props.review]), 'reviews-view')
-            }
-          />
-          <MenuItem
-            icon={ArrowSquareOutIcon}
-            text="Open on GitHub"
-            onClick={() =>
-              window.open(
-                props.review.metadata.url,
-                '_blank',
-                'noopener,noreferrer'
-              )
-            }
-          />
-        </ContextMenuContent>
-      </ContextMenu.Portal>
+      <ReviewContextMenuContent review={props.review} onOpen={props.onOpen} />
     </ContextMenu>
   );
 }
 
 export function ReviewsList(props: ReviewsListProps) {
   const panel = useSplitPanelOrThrow();
-  const favoriteAction = makeFavoriteAction();
   const source = props.source;
   const list = props.list;
   const reviews = list.items.all;
@@ -332,6 +277,7 @@ export function ReviewsList(props: ReviewsListProps) {
             class="grid flex-1 place-items-center text-ink-muted"
           >
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading reviews"
               class="size-5 animate-spin"
             />
@@ -350,6 +296,7 @@ export function ReviewsList(props: ReviewsListProps) {
               class="grid flex-1 place-items-center text-ink-muted"
             >
               <SpinnerIcon
+                aria-hidden={false}
                 aria-label="Loading reviews"
                 class="size-5 animate-spin"
               />
@@ -462,7 +409,6 @@ export function ReviewsList(props: ReviewsListProps) {
                                     ? props.viewerName
                                     : undefined
                                 }
-                                favoriteAction={favoriteAction}
                                 onOpen={props.onOpen}
                                 links={props.links}
                                 onChecked={(checked, shiftKey) =>

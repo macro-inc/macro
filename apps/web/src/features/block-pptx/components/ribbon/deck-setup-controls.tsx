@@ -5,8 +5,8 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import Hash from '@phosphor/hash.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import Hash from '@icon/system/regular/hash.svg';
 import { Show } from 'solid-js';
 import { presetOf } from '../../core/slide-size';
 import {

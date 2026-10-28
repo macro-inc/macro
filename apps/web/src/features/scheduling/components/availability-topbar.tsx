@@ -1,5 +1,6 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Info from '@phosphor/info.svg';
+import { ViewSidebar } from '@app/components/view-shell';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Info from '@icon/system/regular/info.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -23,13 +24,13 @@ export function AvailabilityTopBar(props: {
         </Button>
       </Show>
       <div class="flex min-w-0 items-center gap-1">
-        <h1 class="min-w-0 truncate pl-2 text-sm font-semibold">
+        <ViewSidebar.Title caret={false} class="pl-2">
           {props.editing
             ? props.creating
               ? 'Create schedule'
               : 'Edit schedule'
             : 'Availability'}
-        </h1>
+        </ViewSidebar.Title>
         <Show when={!props.editing}>
           <Button
             variant="ghost"

@@ -4,13 +4,13 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import ChatText from '@phosphor/chat-text.svg';
-import Chats from '@phosphor/chats.svg';
-import CheckIcon from '@phosphor/check.svg';
-import TextAUnderline from '@phosphor/text-a-underline.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import Chats from '@icon/system/regular/chats.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import TextAUnderline from '@icon/system/regular/text-a-underline.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Show } from 'solid-js';
 import type { CommentsState } from '../../primitives/create-comments';
 import {

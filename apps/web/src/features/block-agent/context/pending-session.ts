@@ -23,6 +23,7 @@
  */
 
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
+import { analytics } from '@app/lib/analytics';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   type PromptSubmitSurface,
@@ -213,10 +214,20 @@ export function startPendingSession(
           // writes are readable. Marked first, a refusal to that read is waited
           // out rather than reported as a session that is not ours.
           markSessionCreated(created);
+          // `agent`, as BlockLoader reports the session's opens.
+          analytics.track('create_entity', {
+            entityType: 'agent',
+            entityId: created,
+            agentId: options.botId,
+            submitSurface: options.submitSurface,
+          });
           // A warm claim releases its server reservation before creation answers.
           replenishWarmAgentSession(result.value.session.ownerId);
           fireAndForget(
-            refetchSoupEntity(created, 'agentSession', { created: true }),
+            refetchSoupEntity(created, 'agentSession', {
+              created: true,
+              refreshGraphql: true,
+            }),
             'agent-session'
           );
           // The create already starts the session on `modelOverride`, so only

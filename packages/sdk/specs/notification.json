@@ -1853,7 +1853,8 @@
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "ErrorResponse": {
@@ -1866,6 +1867,31 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "ExternalChatMessageMetadata": {
+        "type": "object",
+        "description": "A live message in an independently shared external chat.",
+        "required": ["provider", "chatName", "messageId"],
+        "properties": {
+          "chatName": {
+            "type": "string",
+            "description": "The chat's name."
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable message id; retries use it as their notification id."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The messaging service the chat lives in."
+          }
+        }
+      },
+      "ExternalChatProvider": {
+        "type": "string",
+        "description": "The messaging service an external chat lives in.",
+        "enum": ["whatsapp"]
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
@@ -2291,6 +2317,10 @@
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
           },
+          "reminder": {
+            "type": "boolean",
+            "description": "Whether this email reminds the invitee of an invite they have not answered."
+          },
           "role": {
             "type": ["string", "null"],
             "description": "Role/permission level in the team"
@@ -2711,6 +2741,21 @@
           },
           {
             "type": "object",
+            "description": "A live message in a shared external chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ExternalChatMessageMetadata",
+                "description": "A live message in a shared external chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["external_chat_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A calendar event alarm came due.",
             "required": ["content", "tag"],
             "properties": {
@@ -2982,18 +3027,65 @@
       },
       "PushNotificationData": {
         "type": "object",
+        "description": "the value we send as the payload in the ios notification\nThis data is accessible to the client",
         "required": ["notificationId"],
         "properties": {
+          "navigation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PushNotificationNavigation",
+                "description": "Destination to open without fetching the notification record first."
+              }
+            ]
+          },
           "notificationId": {
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "recipientId": {
+            "type": ["string", "null"],
+            "description": "Account that owns the receiving device, set during per-recipient delivery."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"],
             "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
+      },
+      "PushNotificationNavigation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Open a channel at a specific message.",
+            "required": ["channelId", "messageId", "threadId", "type"],
+            "properties": {
+              "channelId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Channel containing the message."
+              },
+              "messageId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Message to highlight."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Root of the message's thread; null identifies a top-level message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          }
+        ],
+        "description": "A destination carried by a push notification. Access is checked when opened."
       },
       "RealtimeNotif_TaggedContent_Value": {
         "allOf": [

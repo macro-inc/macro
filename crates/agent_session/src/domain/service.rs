@@ -67,7 +67,7 @@ use super::model::{
     SandboxSize, SessionClaim, SessionLog, SessionManagement, SessionPreviewCandidate,
     StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
 };
-use super::model::{SessionBot, TurnPrompter};
+use super::model::{SessionBot, SessionSource, SessionVisibility, TurnPrompter};
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
@@ -1955,6 +1955,15 @@ where
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
         self.repo.set_model(id, model).await
+    }
+
+    async fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> Result<()> {
+        self.repo.set_origin(id, source, visibility).await
     }
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {

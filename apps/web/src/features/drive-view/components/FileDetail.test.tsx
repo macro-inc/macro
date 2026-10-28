@@ -4,6 +4,10 @@ import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => analytics,
+}));
 vi.mock('@components/app/side-panel', () => ({}));
 vi.mock('@core/mobile/native-network-status', () => ({
   nativeNetworkStatus: () => 'online',
@@ -50,6 +54,7 @@ import { FileDetailLoadGate } from './FileDetail';
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
+  analytics.track.mockClear();
   dispose?.();
   document.body.replaceChildren();
 });
@@ -62,6 +67,7 @@ function mount(load: () => Promise<Loaded>, cleanupEditor?: () => void) {
     () => (
       <FileDetailLoadGate
         documentId="private-document"
+        entityType="md"
         label="document"
         load={load}
       >
@@ -131,6 +137,36 @@ describe('file access errors', () => {
       expect(container.textContent).toContain('Document content: view')
     );
     expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  it('counts an open once the document loads, not on access reloads', async () => {
+    const load = vi
+      .fn<() => Promise<Loaded>>()
+      .mockResolvedValueOnce({ userAccessLevel: 'view' })
+      .mockResolvedValue({ userAccessLevel: 'edit' });
+    const container = mount(load);
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: view')
+    );
+    notifyAccess?.('edit');
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Document content: edit')
+    );
+
+    expect(analytics.track.mock.calls).toEqual([
+      ['open_entity', { entityType: 'md', entityId: 'private-document' }],
+    ]);
+  });
+
+  it('counts no open for a document that failed to load', async () => {
+    const container = mount(async () => {
+      throw new ThrownResultError([{ code: 'NOT_FOUND', message: 'Missing' }]);
+    });
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('Try again')
+    );
+
+    expect(analytics.track).not.toHaveBeenCalled();
   });
 
   it.each(['NETWORK_ERROR', 'NOT_FOUND', 'GONE'])(

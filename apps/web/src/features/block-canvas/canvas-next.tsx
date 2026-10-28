@@ -9,19 +9,31 @@ import {
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
-import { createGraphicsEditor, screenToWorld } from '@macro-inc/graphics';
+import {
+  createGraphicsEditor,
+  createGraphicsEditorFromBackend,
+  screenToWorld,
+} from '@macro-inc/graphics';
+import {
+  createLoroGraphicsBackendFromDoc,
+  type GraphicsPresence,
+} from '@macro-inc/graphics/loro';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
+import type { LoroDoc } from 'loro-crdt';
 import { onCleanup, Show } from 'solid-js';
 import { CanvasBlockEmbed } from './block-embed-adapter';
 import { createCanvasClipboard } from './clipboard';
+import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { registerCanvasNextHotkeys } from './hotkeys';
 import { createAssetState } from './primitives/create-asset-state';
+import { createCanvasPresence } from './primitives/create-canvas-presence';
 import { createCanvasState } from './primitives/create-canvas-state';
 import { createCanvasInsertState } from './primitives/create-insert-state';
 import { observeObjectSnapping } from './primitives/observe-object-snapping';
 import { importTextClipboard } from './primitives/text-lexical';
 import { canvasAssetSource } from './queries/assets';
+import type { CanvasSession } from './queries/canvas-session';
 import { CanvasReadOnlyView } from './views/canvas-read-only-view';
 import { CanvasView } from './views/canvas-view';
 import { createCanvasTextMeasurer } from './views/text-content';
@@ -29,6 +41,9 @@ import { createCanvasTextMeasurer } from './views/text-content';
 export function CanvasNextEditor(props: {
   documentId: string;
   initial: CanvasFile;
+  doc?: LoroDoc;
+  session?: CanvasSession;
+  displayName?: (userId: string | undefined) => string;
   canEdit: boolean;
   isEmbedded?: boolean;
   fitOnLoad?: boolean;
@@ -36,10 +51,35 @@ export function CanvasNextEditor(props: {
 }) {
   const measurement = createCanvasTextMeasurer();
   onCleanup(measurement.dispose);
-  const editor = createGraphicsEditor(props.initial.document, {
-    measureText: measurement.measure,
-  });
+  const options = { measureText: measurement.measure };
+  const backend = props.doc
+    ? createLoroGraphicsBackendFromDoc(
+        props.doc,
+        readSharedCanvas(props.doc).document.rootId,
+        () => {
+          const state = props.session?.state();
+          return (
+            props.canEdit &&
+            !props.isEmbedded &&
+            (!state || (state.t === 'ready' && state.doc === props.doc))
+          );
+        }
+      )
+    : undefined;
+  if (backend) onCleanup(backend.dispose);
+  const editor = backend
+    ? createGraphicsEditorFromBackend(backend, options)
+    : createGraphicsEditor(props.initial.document, options);
   onCleanup(editor.dispose);
+  const presence =
+    backend && props.session
+      ? createCanvasPresence(
+          editor,
+          props.session,
+          backend.getClock,
+          props.displayName ?? (() => 'Someone')
+        )
+      : undefined;
   let finishText = () => {};
   props.onReady?.(editor, () => finishText());
   return (
@@ -47,12 +87,17 @@ export function CanvasNextEditor(props: {
       <Show
         when={props.canEdit && !props.isEmbedded}
         fallback={
-          <CanvasReadOnlyView editor={editor} fitOnLoad={props.fitOnLoad} />
+          <CanvasReadOnlyView
+            editor={editor}
+            fitOnLoad={props.fitOnLoad}
+            presence={presence}
+          />
         }
       >
         <EditableCanvasNext
           documentId={props.documentId}
           editor={editor}
+          presence={presence}
           measureText={measurement.measure}
           fitOnLoad={props.fitOnLoad}
           canEdit={() => props.canEdit}
@@ -68,6 +113,7 @@ export function CanvasNextEditor(props: {
 function EditableCanvasNext(props: {
   documentId: string;
   editor: GraphicsEditor;
+  presence?: GraphicsPresence;
   measureText: TextMeasurer;
   fitOnLoad?: boolean;
   canEdit: () => boolean;
@@ -131,6 +177,7 @@ function EditableCanvasNext(props: {
     <CanvasView
       fitOnLoad={props.fitOnLoad}
       state={state}
+      presence={props.presence}
       scopeId={scopeId}
       embedView={CanvasBlockEmbed}
       assets={assets}

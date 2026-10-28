@@ -25,6 +25,7 @@ use super::{
 /// Lifecycle of a request to be added as a guest of a shared event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarJoinRequestStatus {
     /// Waiting on the person who shared the event.
@@ -71,7 +72,7 @@ pub struct CalendarJoinRequest {
     pub requester_email: String,
     /// Where the request stands.
     pub status: CalendarJoinRequestStatus,
-    /// When the request was made, or last reopened.
+    /// When the request was made.
     pub created_at: DateTime<Utc>,
 }
 
@@ -145,14 +146,17 @@ pub async fn annotate_join_state<R: CalendarRepository>(
                 _ => None,
             });
     for (event_id, event) in shared {
-        event.can_request_to_join = matches!(
-            join_eligibility(repository, requester_id, event_id).await?,
-            JoinEligibility::Eligible { .. }
-        );
         event.join_request_status = repository
             .find_join_request(event_id, requester_id)
             .await?
             .map(|request| request.status);
+        // A declined requester may not ask again.
+        event.can_request_to_join = event.join_request_status
+            != Some(CalendarJoinRequestStatus::Declined)
+            && matches!(
+                join_eligibility(repository, requester_id, event_id).await?,
+                JoinEligibility::Eligible { .. }
+            );
     }
     Ok(())
 }
@@ -208,6 +212,11 @@ where
             .open_join_request(event_id, requester_id, &email)
             .await
             .map_err(CalendarJoinRequestError::Internal)?;
+        // A declined request stands: the requester cannot ask again, so the
+        // sharer is never asked twice.
+        if request.status == CalendarJoinRequestStatus::Declined {
+            return Err(CalendarJoinRequestError::Declined);
+        }
         if opened {
             self.notifier
                 .notify_join_request(&sharer_id, &request, &title)
@@ -257,6 +266,7 @@ where
             Err(CalendarJoinRequestError::NotFound) => "not_found",
             Err(CalendarJoinRequestError::AlreadyOnCalendar) => "already_on_calendar",
             Err(CalendarJoinRequestError::SharerCannotInvite) => "sharer_cannot_invite",
+            Err(CalendarJoinRequestError::Declined) => "declined",
             Err(CalendarJoinRequestError::Internal(_)) => "failed",
         };
         span.record("outcome", outcome);

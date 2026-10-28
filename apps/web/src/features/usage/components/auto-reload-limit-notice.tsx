@@ -1,4 +1,4 @@
-import CalendarIcon from '@phosphor/calendar-blank.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { type AutoReloadBudget, formatCreditBalance } from '../core/usage';

@@ -5,9 +5,9 @@ use crate::domain::models::{
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
     MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
     RecipientType, ResolvedDraftInput, ResolvedSendingInbox, SavedUserDraft, SenderPolicy,
-    SendingInboxRequest, SettledDraftIds, SimpleMessage, SimpleMessageInfo, SourcedAttachment,
-    Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts,
-    UserEmailLink, UserProvider,
+    SendingInboxRequest, SetThreadsArchivedResult, SettledDraftIds, SimpleMessage,
+    SimpleMessageInfo, SourcedAttachment, Thread, ThreadRow, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
 };
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -24,6 +24,10 @@ pub type RecipientsByMessageId = HashMap<Uuid, Vec<(ContactInfo, RecipientType)>
 pub trait EmailMessageEnqueuer: Send + Sync + 'static {
     /// Error type for enqueue operations.
     type Err: Send;
+
+    /// Most messages one Gmail label write carries as a single provider
+    /// request; a larger write is split across several queue messages.
+    const MAX_LABEL_WRITE_MESSAGES: usize;
 
     /// Enqueue a message to be sent after an optional delay.
     fn enqueue_scheduled_message(
@@ -877,6 +881,20 @@ pub trait EmailService: Send + Sync + 'static {
         archived: bool,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
+    /// Archive or unarchive up to [`MAX_BULK_ARCHIVE_THREADS`] caller-owned or
+    /// delegated threads, queueing one provider write per inbox. Threads that
+    /// can't change are reported in the result instead of failing the rest.
+    ///
+    /// [`MAX_BULK_ARCHIVE_THREADS`]: super::models::MAX_BULK_ARCHIVE_THREADS
+    fn set_threads_archived(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_ids: Vec<Uuid>,
+        _archived: bool,
+    ) -> impl Future<Output = Result<SetThreadsArchivedResult, EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
+
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
         &self,
@@ -1100,6 +1118,41 @@ impl<T: EmailService> DraftSendService for T {
     }
 }
 
+/// Narrow port choosing the inbox a composed email is sent from, for use
+/// cases that need nothing else of the [`EmailService`].
+pub trait SendingInboxResolver: Send + Sync + 'static {
+    /// See [`EmailService::resolve_sending_inbox`].
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send;
+}
+
+impl<T: EmailService> SendingInboxResolver for T {
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send {
+        EmailService::resolve_sending_inbox(self, macro_id, request)
+    }
+}
+
+/// Use case: send a message carrying files the caller already holds, such
+/// as an event's iCalendar file.
+pub trait EmailFileSendService: Send + Sync + 'static {
+    /// Like [`EmailService::send_message`], with every file staged on the
+    /// message before delivery is queued. With no files it is exactly a send.
+    fn send_message_with_files(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+        files: Vec<SourcedAttachment>,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+}
+
 /// Use case: send a message carrying Macro documents as attachments.
 ///
 /// Object-safe (boxed future) so a tool context can hold any implementation
@@ -1147,6 +1200,7 @@ pub struct NoOpEnqueuer;
 
 impl EmailMessageEnqueuer for NoOpEnqueuer {
     type Err = std::convert::Infallible;
+    const MAX_LABEL_WRITE_MESSAGES: usize = usize::MAX;
 
     async fn enqueue_scheduled_message(
         &self,

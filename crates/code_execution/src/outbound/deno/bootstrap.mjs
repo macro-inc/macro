@@ -32,6 +32,9 @@ try {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
         if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
       }
+      // Marks the request as a program's, not a person's in the app, so an API
+      // can ask it to confirm what a person would have chosen by opening it.
+      request.headers.set("x-macro-code-execution", "1");
     }
     return originalFetch(request);
   };

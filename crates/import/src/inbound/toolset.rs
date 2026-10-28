@@ -1,21 +1,15 @@
 //! AI tools over the import ledger.
 //!
-//! One tool surface serves three callers, differing only in the
-//! [`ToolPolicy`] baked into the context:
-//! - chat sessions get the ledger tools plus the single-page Notion import
-//!   workflow, staging as `initiator = chat`;
-//! - gather jobs get only `CreateImportEntity`, locked to one source and
-//!   `initiator = onboarding`, staging only;
-//! - Notion import jobs get only `FinalizeImport`.
-//!
-//! The policy lives server-side in the tool context — the model can never
-//! spoof another user, source, or initiator.
+//! Chat sessions get the ledger tools plus the single-page Notion import
+//! workflow, staging as `initiator = chat`; Notion import jobs get only
+//! `FinalizeImport`. The user comes from the request context, so the model
+//! can never stage on another user's behalf.
 
 use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{
     DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
-    StageOutcome,
+    StageOutcome, WorkspaceImporter,
 };
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
@@ -27,51 +21,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_notion;
+mod import_from_tracker;
+pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
+
+pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
+
 #[cfg(test)]
 mod test;
-
-/// What a given toolset instance is allowed to do; baked in server-side.
-#[derive(Debug, Clone, Copy)]
-pub struct ToolPolicy {
-    /// The initiator recorded on rows staged through this context.
-    pub initiator: Initiator,
-    /// When set, staging is locked to this source (gather jobs).
-    pub forced_source: Option<ImportSource>,
-    /// Whether `status = imported` writes are allowed (chat agents that
-    /// already created the entity).
-    pub allow_imported: bool,
-}
-
-impl ToolPolicy {
-    /// Policy for interactive chat sessions.
-    pub fn chat() -> Self {
-        Self {
-            initiator: Initiator::Chat,
-            forced_source: None,
-            allow_imported: true,
-        }
-    }
-
-    /// Policy for a gather job over one connector, recording `initiator`
-    /// (onboarding suggestions or a user-started discovery).
-    pub fn gather(source: ImportSource, initiator: Initiator) -> Self {
-        Self {
-            initiator,
-            forced_source: Some(source),
-            allow_imported: false,
-        }
-    }
-
-    /// Policy for a Notion import job (only `FinalizeImport` is registered,
-    /// which ignores staging policy).
-    pub fn import_job() -> Self {
-        Self {
-            initiator: Initiator::Onboarding,
-            forced_source: Some(ImportSource::Notion),
-            allow_imported: false,
-        }
-    }
-}
 
 /// Service context for import AI tools.
 ///
@@ -82,36 +39,28 @@ impl ToolPolicy {
 pub struct ImportToolContext<T> {
     /// The import service, where the host wired one.
     pub service: Option<Arc<T>>,
-    /// What this toolset instance may do.
-    pub policy: ToolPolicy,
 }
 
 impl<T> Clone for ImportToolContext<T> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
-            policy: self.policy,
         }
     }
 }
 
 impl<T> ImportToolContext<T> {
-    /// A chat-policy context backed by a real import service.
+    /// A context backed by a real import service.
     pub fn wired(service: Arc<T>) -> Self {
         Self {
             service: Some(service),
-            policy: ToolPolicy::chat(),
         }
     }
 
-    /// A chat-policy context with no import service: every tool call fails
-    /// with a clear error. For hosts that share the toolset but cannot
-    /// build the service.
+    /// A context with no import service: every tool call fails with a clear
+    /// error. For hosts that share the toolset but cannot build the service.
     pub fn unwired() -> Self {
-        Self {
-            service: None,
-            policy: ToolPolicy::chat(),
-        }
+        Self { service: None }
     }
 
     fn require_service(&self) -> ToolResult<&Arc<T>> {
@@ -123,18 +72,16 @@ impl<T> ImportToolContext<T> {
 }
 
 /// The import toolset for interactive chat.
-pub fn import_toolset<T: ImportStager + NotionPageImporter>()
+pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>()
 -> AsyncToolCollection<ImportToolContext<T>> {
     AsyncToolCollection::new()
         .add_tool::<CreateImportEntity, ImportToolContext<T>>()
         .add_tool::<ImportNotionPage, ImportToolContext<T>>()
+        .add_tool::<ImportFromNotion, ImportToolContext<T>>()
+        .add_tool::<ImportFromLinear, ImportToolContext<T>>()
+        .add_tool::<ImportFromJira, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
-}
-
-/// The staging-only toolset for gather jobs.
-pub fn gather_toolset<T: ImportStager>() -> AsyncToolCollection<ImportToolContext<T>> {
-    AsyncToolCollection::new().add_tool::<CreateImportEntity, ImportToolContext<T>>()
 }
 
 /// The finalize-only toolset for Notion import jobs.
@@ -270,20 +217,6 @@ impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let user = request_context.user_id.clone();
-        let policy = service_context.policy;
-
-        if let Some(forced) = policy.forced_source
-            && self.source != forced
-        {
-            return Err(tool_error(
-                format!(
-                    "This session only stages {} items; got {}.",
-                    forced.as_ref(),
-                    self.source.as_ref()
-                ),
-                anyhow::anyhow!("forced-source policy violation"),
-            ));
-        }
 
         match self.status {
             CreateImportStatus::Staged => {
@@ -291,7 +224,7 @@ impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
                     .require_service()?
                     .stage(
                         &user,
-                        policy.initiator,
+                        Initiator::Chat,
                         self.source,
                         &self.foreign_id,
                         self.metadata.clone(),
@@ -301,14 +234,6 @@ impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
                 Ok(stage_response(outcome, user.as_ref()))
             }
             CreateImportStatus::Imported => {
-                if !policy.allow_imported {
-                    return Err(tool_error(
-                        "This session can only stage candidates (status `staged`); it cannot \
-                         record imported entities."
-                            .to_string(),
-                        anyhow::anyhow!("imported-status policy violation"),
-                    ));
-                }
                 let Some(entity_id) = self
                     .entity_id
                     .as_deref()
@@ -326,7 +251,7 @@ impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
                     .require_service()?
                     .record_imported(
                         &user,
-                        policy.initiator,
+                        Initiator::Chat,
                         self.source,
                         &self.foreign_id,
                         self.metadata.clone(),

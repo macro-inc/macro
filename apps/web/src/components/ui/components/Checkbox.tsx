@@ -1,6 +1,6 @@
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import CheckIcon from '@phosphor/check.svg';
-import MinusIcon from '@phosphor/minus.svg';
 import type { ComponentProps } from 'solid-js';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';

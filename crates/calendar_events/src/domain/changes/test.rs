@@ -465,6 +465,7 @@ async fn attendee_self_flags_follow_the_viewers_inboxes() {
             link_id: LINK_A,
             email: "viewer@example.com".to_owned(),
             provider: CalendarProvider::Google,
+            writable_calendar_ids: Vec::new(),
         }],
         ..Default::default()
     });
@@ -502,6 +503,7 @@ async fn one_event_is_read_with_the_viewers_attendee_flags() {
             link_id: LINK_A,
             email: "viewer@example.com".to_owned(),
             provider: CalendarProvider::Google,
+            writable_calendar_ids: Vec::new(),
         }],
         ..Default::default()
     });

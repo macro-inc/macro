@@ -1,6 +1,8 @@
 //! Contains the service logic for teams
 
 mod invite_link;
+#[cfg(feature = "ports")]
+pub mod invite_reminders;
 #[cfg(test)]
 mod test;
 
@@ -60,6 +62,14 @@ use crate::domain::{
 
 /// Most new invites a non-enterprise team may create in a rolling day.
 const MAX_TEAM_INVITES_PER_DAY: usize = 50;
+
+/// How long after an invite's last email it may be sent again: the invite
+/// email's own rate-limit window, so a resend is never dropped by it.
+#[cfg(feature = "ports")]
+pub fn invite_resend_interval() -> std::time::Duration {
+    use notification::domain::models::NotificationExtEmail;
+    InviteToTeamMetadata::rate_limit_config().window
+}
 
 /// The roles a member of a paying or enterprise team holds: the team
 /// subscriber role plus the tier role of their seat's plan.
@@ -1602,6 +1612,7 @@ where
                             role: None,
                             sender_profile_picture_url: None,
                             invitee_plan,
+                            reminder: false,
                         },
                     )
                     .await

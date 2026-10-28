@@ -7,7 +7,7 @@
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{
-    agent_session::AgentSessionLiteral,
+    agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
 use model_entity::EntityType;
@@ -21,6 +21,18 @@ use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortReque
 
 #[cfg(test)]
 mod test;
+
+/// [`AgentSessionLiteral::Source`] over the `agent_session` row `s`, shared
+/// with the candidate gates. The value is a closed enum's, so it is inlined.
+pub(super) fn source_sql(source: AgentSessionSource) -> String {
+    format!("s.source = '{}'", <&str>::from(source))
+}
+
+/// [`AgentSessionLiteral::Visibility`] over the `agent_session` row `s`, shared
+/// with the candidate gates. The value is a closed enum's, so it is inlined.
+pub(super) fn visibility_sql(visibility: AgentSessionVisibility) -> String {
+    format!("s.visibility = '{}'", <&str>::from(visibility))
+}
 
 #[derive(FromRow)]
 struct AgentSessionRow {
@@ -36,6 +48,8 @@ struct AgentSessionRow {
     pull_request_url: Option<String>,
     turn_state: Option<String>,
     thread_id: Option<Uuid>,
+    source: String,
+    visibility: String,
     status: String,
     status_event_name: Option<String>,
     created_at: DateTime<Utc>,
@@ -68,6 +82,8 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
             Expr::Literal(AgentSessionLiteral::Id(_) | AgentSessionLiteral::Owner(_)) => {
                 out.named = true
             }
+            // Narrows the sessions a query asks for; never asks for them.
+            Expr::Literal(AgentSessionLiteral::Source(_) | AgentSessionLiteral::Visibility(_)) => {}
             Expr::And(a, b) | Expr::Or(a, b) => {
                 walk(a, out);
                 walk(b, out);
@@ -110,7 +126,7 @@ pub(super) async fn cursor_soup(
     // Hidden inline mentions and DM contexts are absent from broad lists. A
     // query that names the session still returns it, so favorites and direct
     // id lookups keep working.
-    query.push(" AND (s.list_hidden = FALSE OR s.id = ANY(");
+    query.push(" AND (s.visibility <> 'hidden' OR s.id = ANY(");
     query.push_bind(explicitly_named_ids(filter));
     query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
@@ -230,6 +246,8 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
         s.pull_request_url,
         s.turn_state,
         s.thread_id,
+        s.source,
+        s.visibility,
         s.status,
         s.status_event_name,
         s.created_at,
@@ -312,6 +330,12 @@ fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<Agent
             builder.push("s.owner_id = ");
             builder.push_bind(owner.principal_id());
         }
+        Expr::Literal(AgentSessionLiteral::Source(source)) => {
+            builder.push(source_sql(*source));
+        }
+        Expr::Literal(AgentSessionLiteral::Visibility(visibility)) => {
+            builder.push(visibility_sql(*visibility));
+        }
     }
 }
 
@@ -338,6 +362,8 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
         pull_request_id: None,
         turn_state: row.turn_state,
         thread_id: row.thread_id,
+        source: row.source.parse().map_err(super::type_err)?,
+        visibility: row.visibility.parse().map_err(super::type_err)?,
         status,
         created_at: row.created_at,
         updated_at: row.modified_at,

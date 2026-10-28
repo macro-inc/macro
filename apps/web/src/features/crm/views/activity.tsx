@@ -1,70 +1,97 @@
-import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { SearchBar, ViewShell } from '@app/components/view-shell';
+import {
+  ListHeader,
+  ListHeaderSearch,
+} from '@app/components/view-shell/ListHeader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
+import { type JSX, Show } from 'solid-js';
+import { ActivityControls } from '../components/activity-controls';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmActivityTab } from '../core/navigation';
 import { RecordItemList } from './record-item-list';
 
-const DESCRIPTIONS: Record<CrmActivityTab, string> = {
-  tasks: 'Tasks linked to your CRM companies and people.',
-  email: 'Email in your mailbox exchanged with your CRM companies and people.',
-  notes: 'Notes linked to your CRM companies and people.',
-  calls: 'Calls linked to your CRM companies and people.',
-};
-
-/** The workspace-wide feed uses the same paged rows as a record's activity. */
-export function CrmActivityView(props: { tab: CrmActivityTab }) {
+/** Embedded activity uses normal view controls around an immutable CRM scope. */
+export function CrmActivityView(props: {
+  tab: CrmActivityTab;
+  title?: JSX.Element;
+}) {
   const crm = useCrmContext();
-  const source = crm.createActivity(() => props.tab);
-  const [retrying, setRetrying] = createSignal(false);
-  const retry = async () => {
-    if (!source.refetch || retrying()) return;
-    setRetrying(true);
-    try {
-      await source.refetch();
-    } catch {
-      // Keep the source's error state and retry action visible.
-    } finally {
-      setRetrying(false);
-    }
-  };
   return (
-    <div class="flex min-h-0 flex-1 flex-col">
-      <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-3">
-        <p class="text-sm text-ink-muted">{DESCRIPTIONS[props.tab]}</p>
-        <Show when={props.tab === 'tasks'}>
-          <Button
-            variant="outline"
-            class="shrink-0"
-            onClick={crm.openTaskComposer}
-          >
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </Show>
-      </div>
-      <div class="min-h-0 flex-1 overflow-y-auto p-4">
-        <Show
-          when={!source.isError}
-          fallback={
-            <div class="flex flex-col items-start gap-3 text-sm text-ink-muted">
-              <p>Could not load CRM {props.tab}.</p>
-              <Button
-                variant="outline"
-                disabled={retrying()}
-                onClick={() => fireAndForget(retry(), 'crm')}
-              >
-                {retrying() ? 'Retrying…' : 'Try again'}
-              </Button>
+    <Show
+      when={props.tab !== 'tasks' ? props.tab : undefined}
+      keyed
+      fallback={<crm.ActivityTasks title={props.title} />}
+    >
+      {(tab) => (
+        <TagSetsQueryProvider>
+          <ActivityList tab={tab} title={props.title} />
+        </TagSetsQueryProvider>
+      )}
+    </Show>
+  );
+}
+
+function ActivityList(props: { tab: CrmActivityTab; title?: JSX.Element }) {
+  const crm = useCrmContext();
+  const [state, setState] = crm.createActivityState(props.tab);
+  const filters = crm.createActivityFilters(props.tab, state, setState);
+  const source = crm.createActivity(
+    () => props.tab,
+    () => state
+  );
+  const controls = () => (
+    <ActivityControls
+      label={props.tab}
+      state={state}
+      filters={filters}
+      setSort={(sort) => setState('sort', sort)}
+      setDirection={(direction) => setState('direction', direction)}
+      setGroupBy={(groupBy) => setState('groupBy', groupBy)}
+    />
+  );
+  return (
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <ViewShell.Header>
+            <div class="flex min-w-0 items-center gap-2 px-4 py-2">
+              {controls()}
+              <SearchBar
+                label={`Search ${props.tab}`}
+                placeholder={`Search ${props.tab}`}
+                value={state.search}
+                onValueChange={(search) => setState('search', search)}
+                class="min-w-0 flex-1"
+              />
             </div>
-          }
-        >
-          <RecordItemList
-            source={source}
-            empty={`No ${props.tab} linked to your CRM companies or people yet.`}
+          </ViewShell.Header>
+        }
+      >
+        <ListHeader title={props.title ?? props.tab}>
+          {controls()}
+          <ListHeaderSearch
+            label={`Search ${props.tab}`}
+            value={state.search}
+            onValueChange={(search) => setState('search', search)}
+            registerFocus={() => {}}
           />
-        </Show>
+        </ListHeader>
+      </Show>
+      <div class="min-h-0 flex-1 overflow-y-auto p-4">
+        <RecordItemList
+          source={source}
+          empty={`No ${props.tab} match these CRM filters.`}
+          search={state.search}
+          groupByDate={state.groupBy === 'date'}
+          dateField={state.sort}
+          referencePropertyIds={[
+            SYSTEM_PROPERTY_IDS.COMPANIES,
+            SYSTEM_PROPERTY_IDS.CONTACTS,
+          ]}
+        />
       </div>
     </div>
   );

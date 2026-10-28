@@ -1,0 +1,17 @@
+---
+title: ImportFromLinear
+description: >-
+  Import a Linear workspace into Macro: issues become tasks, and teams, projects
+  and initiatives become Macro projects.
+---
+
+# ImportFromLinear
+
+Import a Linear workspace into Macro: issues become tasks, and teams, projects and initiatives become Macro projects. Plan reads only through the user's connected Linear account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [\{source: linear}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action` | `"plan"` \| `"status"` \| `"cancel"` | Yes | What the tool is asked to do. |
+| `sharing` | `"team"` \| `"personal"` \| `"ai"` | No | The user's visibility choice: team, personal or AI. Ask if required. |

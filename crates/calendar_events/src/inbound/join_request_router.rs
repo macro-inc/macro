@@ -86,6 +86,9 @@ pub enum CalendarJoinRequestErrorCode {
     AlreadyOnCalendar,
     /// The person who shared the event cannot add guests to it.
     SharerCannotInvite,
+    /// The person who shared the event declined the requester's earlier
+    /// request, which stands.
+    RequestDeclined,
     /// An internal failure.
     Internal,
 }
@@ -131,6 +134,11 @@ impl From<CalendarJoinRequestError> for CalendarJoinRequestApiError {
                 CalendarJoinRequestErrorCode::SharerCannotInvite,
                 "the person who shared this event cannot add guests to it",
             ),
+            CalendarJoinRequestError::Declined => (
+                StatusCode::CONFLICT,
+                CalendarJoinRequestErrorCode::RequestDeclined,
+                "the person who shared this event declined your request to join",
+            ),
             CalendarJoinRequestError::Internal(report) => {
                 tracing::error!(error=?report, "calendar join request failed");
                 (
@@ -157,8 +165,9 @@ pub struct CalendarJoinRequestsResponse {
 }
 
 /// Ask the person who shared an event with one of the requester's channels
-/// to add them as a guest. Asking again while the request is pending changes
-/// nothing; asking after a decline reopens it.
+/// to add them as a guest. Asking again while the request is pending or
+/// accepted changes nothing; a declined request stands, so asking after a
+/// decline is refused with `request_declined`.
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
     post,
@@ -169,7 +178,7 @@ pub struct CalendarJoinRequestsResponse {
         (status = 200, description = "The requester's join request", body = CalendarJoinRequest),
         (status = 401, description = "Authentication required"),
         (status = 404, description = "Event not found or not shared with the requester", body = CalendarJoinRequestApiError),
-        (status = 409, description = "Already on the requester's calendar, or the sharer cannot add guests", body = CalendarJoinRequestApiError),
+        (status = 409, description = "Already on the requester's calendar, the sharer cannot add guests, or the sharer declined the requester's earlier request", body = CalendarJoinRequestApiError),
         (status = 500, description = "Join request failed", body = CalendarJoinRequestApiError),
     )
 )]

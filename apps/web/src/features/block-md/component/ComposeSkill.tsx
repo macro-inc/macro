@@ -20,12 +20,12 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createSkill } from '@core/util/create';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import SplitIcon from '@icon/system/regular/square-half.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { mergeRegister } from '@lexical/utils';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import SplitIcon from '@phosphor/square-half.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, Hotkey, Scroll } from '@ui';
 import {
   $getRoot,

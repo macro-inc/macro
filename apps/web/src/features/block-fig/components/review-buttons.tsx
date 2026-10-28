@@ -3,8 +3,8 @@
  * threads, and Present (⌥⌘↵). Presentational.
  */
 
-import ChatCircle from '@phosphor/chat-circle.svg';
-import Play from '@phosphor/play.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import Play from '@icon/system/regular/play.svg';
 import { Button } from '@ui/components/Button';
 import { Show } from 'solid-js';
 

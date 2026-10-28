@@ -2,7 +2,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,

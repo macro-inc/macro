@@ -1,15 +1,15 @@
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file-text.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { Button, badgeTriggerClasses } from '@ui';
 import { format } from 'date-fns';
 import {

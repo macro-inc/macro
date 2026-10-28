@@ -1,8 +1,8 @@
 import { DiffCounts } from '@app/components/diff-view';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import XIcon from '@phosphor/x.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { describeFileCount } from '../core/changeset';

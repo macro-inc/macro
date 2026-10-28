@@ -133,6 +133,15 @@ impl MacroAuthorizationService for FakeAuth {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_bot(
         &self,
         bot_token: &str,
@@ -153,6 +162,7 @@ impl MacroAuthorizationService for FakeAuth {
                     let macro_user_id = MacroUserIdStr::try_from(user_id).expect("acting user id");
                     MacroUserAuthentication {
                         agent_id: None,
+                        origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),
                             ..Default::default()
@@ -514,7 +524,7 @@ async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found
 }
 
 #[tokio::test]
-async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
+async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
         &app,
@@ -525,8 +535,11 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     )
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
+    assert_eq!(
+        request(&app, "GET", &url, "other", Value::Null).await.0,
+        StatusCode::OK
+    );
     for (method, path, body) in [
-        ("GET", url.clone(), Value::Null),
         ("PUT", url.clone(), legacy()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
@@ -895,7 +908,11 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
     );
     assert_eq!(
         request(&app, "GET", &url, "viewer", Value::Null).await.0,
-        StatusCode::NOT_FOUND
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "GET", &url, "stranger", Value::Null).await.0,
+        StatusCode::OK
     );
     assert_eq!(
         request(

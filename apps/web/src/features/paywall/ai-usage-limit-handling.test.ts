@@ -72,7 +72,6 @@ const spendingActions = [
     'import',
     () => importClient.runImport({ import_ids: ['id'], discard_ids: [] }),
   ],
-  ['gather retry', () => importClient.retryGather('linear')],
   [
     'run schedule',
     () => scheduledActionClient.runNow({ scheduleId: 'schedule' }),

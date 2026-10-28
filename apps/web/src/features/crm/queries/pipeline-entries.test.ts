@@ -1,7 +1,16 @@
 import type { CrmPipelineEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { okAsync } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
-import { pipelineEntriesInput, toPipelineEntry } from './pipeline-entries';
+import {
+  type PipelineEntriesDependencies,
+  pipelineEntriesInput,
+  savePipelineEntryCell,
+  toPipelineEntry,
+} from './pipeline-entries';
+
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
@@ -186,4 +195,37 @@ it('reads one company or one contact through soup', () => {
     company?.initial?.filters?.documentFilter
   );
   expect(contact?.initial?.limit).toBe(1);
+});
+
+it('reports a record page pipeline write with the record type', async () => {
+  const mapped = toPipelineEntry(
+    entry([
+      {
+        __typename: 'GraphqlCrmPipelineCell',
+        column: column({ id: 'notes' }),
+        value: null,
+      },
+    ])
+  );
+  const storage = {
+    applyCrmPipelineOps: vi.fn(() => okAsync({ results: [], changes: [] })),
+  } as unknown as PipelineEntriesDependencies['storage'];
+
+  await savePipelineEntryCell(
+    storage,
+    mapped,
+    'contact',
+    mapped.cells[0],
+    'Follow up',
+    false
+  );
+
+  expect(track).toHaveBeenCalledExactlyOnceWith('crm_pipeline_entries_edited', {
+    pipelineId: 'pipeline',
+    recordType: 'contact',
+    surface: 'record',
+    insertedRows: 0,
+    updatedRows: 1,
+    deletedRows: 0,
+  });
 });

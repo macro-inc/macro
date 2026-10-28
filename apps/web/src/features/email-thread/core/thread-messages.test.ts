@@ -52,6 +52,28 @@ describe('thread message selection', () => {
     ).toBeUndefined();
     expect(selectThreadSender(thread([]))).toBeUndefined();
   });
+  it('never offers a deleted draft as the reply draft or the draft to edit', () => {
+    const parent = message('parent');
+    const live = message('live', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-02T10:00:00Z',
+    });
+    const deleted = message('deleted', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-03T10:00:00Z',
+      operation: { state: 'DELETED', revision: '3' },
+    });
+    expect(
+      selectThreadMessages(thread([parent, live, deleted])).draftMap
+    ).toEqual({ parent: live });
+    const standalone = message('standalone', {
+      is_draft: true,
+      operation: { state: 'DELETED', revision: '1' },
+    });
+    expect(selectThreadMessages(thread([standalone])).messages).toEqual([]);
+  });
   it('orders messages chronologically without mutating the source and separates reply drafts', () => {
     const newer = message('new', { internal_date_ts: '2026-09-02T10:00:00Z' });
     const older = message('old');

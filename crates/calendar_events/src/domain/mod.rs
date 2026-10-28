@@ -8,6 +8,9 @@ pub mod acting;
 pub mod capabilities;
 /// The per-email-link calendar change log.
 pub mod changes;
+/// Which copy of a meeting held by several of the user's inboxes a change
+/// addresses.
+pub mod copies;
 /// Kafka event models for the calendar topic.
 pub mod events;
 /// iCalendar export of calendar events.
@@ -20,6 +23,9 @@ pub mod meeting_links;
 pub mod models;
 /// User-initiated calendar mutation policy.
 pub mod mutations;
+/// Markdown documents linked to a meeting occurrence.
+#[cfg(feature = "notes")]
+pub mod notes;
 /// Domain ports.
 pub mod ports;
 /// Calendar reminder dispatch policy.

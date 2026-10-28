@@ -3,7 +3,7 @@
  * dialog, one name field with Rename and Cancel.
  */
 
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { inputClasses } from '@ui/components/Input';

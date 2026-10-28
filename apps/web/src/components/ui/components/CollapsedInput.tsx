@@ -1,7 +1,7 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
@@ -27,8 +27,6 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
-  /** Extra composer action placed immediately before Send. */
-  trailingAction?: JSX.Element;
   /** Replaces the attach button at the start of the input. */
   leadingAction?: JSX.Element;
   /**
@@ -124,10 +122,6 @@ export function CollapsedInput(props: CollapsedInputProps) {
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
-        {props.trailingAction}
-        {/* Fades out rather than unmounting, the way the expanded composer's
-            send action does: dropping it would slide the trailing action
-            across as soon as the draft emptied. */}
         <SendButton
           appearance="composer"
           pending={props.pending}

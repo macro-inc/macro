@@ -15,7 +15,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 
 | Role | Use | Never |
 | --- | --- | --- |
-| Switch a view, section, or one of a few values (`wrap` for preset chips in forms) | `Tabs` | Buttons, a ButtonGroup, or an island acting as tabs |
+| Switch a view, section, or one of a few values (`wrap` for separate preset chips in forms) | `Tabs` (desktop pill within a pill) | Buttons, a ButtonGroup, or an island acting as tabs |
 | Tabs that own panels or a dynamic collection (tables, form pages, rename, add) | `TabSelector` (`Root`, `List`, `Tab`, `Panel`, `AddMenu`) | `@kobalte/core/tabs` in a feature |
 | Related header actions (filters, view options, sharing, navigation) | `HeaderActionGroup` | A hand-built bordered row |
 | One on/off toggle, or an icon-only layout choice | `Button` with `aria-pressed` | A custom active tint |
@@ -48,10 +48,10 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   width, order, shrink). Never resize or recolor a control from a wrapper
   (`[&_button]:size-8`), and don't use `square` for new icon buttons. Enforced
   for wrappers by ast-grep `tsx-no-descendant-button-styles`, warning.
-- **FE-64** Keep one selected state: a selected tab and a pressed button share
-  the pressed fill, flat; unselected options keep the outline Button frame. No
+- **FE-64** Keep one selected state: desktop view tabs share one rounded track with an inset selected pill; a selected tab and a pressed button share
+  the pressed fill; the inset selected pill has a subtle edge and shadow, while unselected options sit within the shared outer frame. No
   accent text, underlines, or bespoke tints for selection on desktop. The one
-  exception is the agent composer's Chat/Code switch: `Tabs variant="track"`,
+  exception is the agent composer's Auto/Chat/Code switch: `Tabs variant="track"`,
   a raised pill sliding along the composer tray's track.
 - **FE-65** Components own their touch treatment. Never branch on
   `isTouchDevice()` to choose a tab component or variant; set `Tabs`' `touch`
@@ -62,12 +62,15 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   control fill) with `overlay-*` hovers, never raw `ink/5` tints.
 - **FE-67** Overlays share two surfaces: menus, popovers, floating toolbars, and
   editor panels use `menu-surface`; dialogs use `Dialog` (`elevated-surface`).
-  Never give overlay content its own fill, border, or shadow. On a `Surface` or
+  Never give overlay content its own fill, border, or shadow, and never paint a
+  fill on a child that reaches the overlay's edge: it covers the dark-mode bevel
+  (`menu-surface`'s inset edges). On a `Surface` or
   `Panel`, pass `hideBorder` and keep `rounded-xl bg-surface` (core utilities
   outrank `@utility` classes). Enforced for Kobalte `.Content` and
   `bg-menu-glass` by ast-grep `tsx-overlay-canonical-surface`, CI error; the
   reply composer, mobile drawer, call controls, and fullscreen media viewers
   are the documented exceptions.
+- Reuse the same styled items and padded groups for dropdown and context menus; vary only their root, trigger, and content composition.
 - **FE-68** Loading placeholders use the shared shimmer: `ListSkeleton.Bar`
   (a pill; pass size and radius) or `skeleton-shimmer bg-skeleton`. A view's
   skeleton is built from `ViewSkeleton` and mirrors its header (title, view

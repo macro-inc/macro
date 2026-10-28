@@ -23,9 +23,22 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication.
+  reuses the harness tool context and retains bearer authentication. Users with
+  `ai-code-mode` get `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` in place of SDK-covered
+  tools (`tool_service.rs`); the flag is cached per user (`tool_mode_cache.rs`).
+  `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
+  `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
+  with the user's team as the `team` group. At most 64 sends run at once
+  (more are dropped) and each user's team is cached for 10 minutes.
 - `src/cognition/`: existing chat, completions, integrations, and projection
   workers; the library also exports their OpenAPI document.
+  `src/cognition/service/integration_analytics.rs` sends PostHog
+  `integration_connected` / `integration_disconnected` for native MCP servers
+  and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+- `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
+  and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
+  composes staged search type/field extraction and Clairic content extraction
+  with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`.
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
@@ -54,7 +67,13 @@ Pulumi stacks; they do not host extra agent processes.
 
 ## Tool contracts
 
-- Internal session tools require a verified acting user plus owner/edit authorization. Keep their restricted prompt/stop route separate from human approval controls.
+- Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
+- An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
+- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
+- The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
+- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
+- The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
 
 The composition root wires `PgExternalReplyStore` into the harness and recovers
 unfinished external chat replies alongside conversation recovery every ten seconds.
@@ -67,6 +86,10 @@ session's serialized worker. Internal producers use
 `POST /agent-sessions/internal/notifications`; only internal credentials may
 produce events, independently of public session control.
 
+## Canvas media
+
+- `RenderCanvas` promotes only its explicit top-level `modelMedia` contract to at most two bounded native PNG blocks; pixels are removed from text and structured JSON, nested scene media is never promoted, and this adapter never fetches image URLs.
+
 ## Checks
 
 - `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
@@ -74,8 +97,9 @@ produce events, independently of public session control.
 - `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
   `GITHUB_TOKEN` in the environment or a local `.env`.
 
-Code-mode credentials sign the authenticated session bot identity for SDK
-message attribution after owner approval, while retaining user authentication.
+Code-mode credentials sign the session bot for SDK attribution and the selected
+user for API authorization; owner approval is required only for cross-account
+access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
 
 ## Configuration and lifecycle
 
@@ -91,8 +115,9 @@ hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_SSH_HOST` remain infrastructure-generated Doppler settings. Legacy
 `MCP_PUBLIC_URL`, `MCP_CLIENT_PUBLIC_URL`, `PREVIEW_APP_ORIGIN`, and
 `PREVIEW_CONTROL_HOSTS` values are retained only for old-image rollback; new
-code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` remain
-available for feature flags and future analytics; MCP emits no analytics events.
+code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` drive
+feature flags and the MCP and integration analytics; when the key is unset,
+analytics are off.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
@@ -112,6 +137,12 @@ listener failure shuts down the process so ECS can replace the task.
 - Two managed bots run on different runtimes: `@coder` (`HARNESS_BOT_ID`) in a
   Daytona sandbox, `@macro-new`/`@macro` (`INMEM_BOT_ID`) on the in-process ACP
   runtime — check which one a bug report is about before debugging containers.
+
+- Analytics record the tool name, outcome, duration, and client headers only;
+  never add tool arguments or results to them.
+- The public MCP server is stateless, so tool calls carry no `clientInfo`; the
+  client is identified per call by its `User-Agent` / `x-anthropic-client`
+  headers and per session by `$mcp_initialize`.
 
 ## Related
 

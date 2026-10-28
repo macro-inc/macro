@@ -6,9 +6,9 @@
  */
 
 import type { MediaOutline } from '@core/pptx-engine/types';
-import Pause from '@phosphor-fill/pause-fill.svg';
-import Play from '@phosphor-fill/play-fill.svg';
-import Stop from '@phosphor-fill/stop-fill.svg';
+import Pause from '@icon/system/fill/pause-fill.svg';
+import Play from '@icon/system/fill/play-fill.svg';
+import Stop from '@icon/system/fill/stop-fill.svg';
 import {
   createEffect,
   createResource,

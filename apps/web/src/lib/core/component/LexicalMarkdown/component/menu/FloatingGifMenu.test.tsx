@@ -76,6 +76,30 @@ function mountPicker() {
   return { editor, open, setCanEdit };
 }
 
+it('opens the picker when the editor has no selection', async () => {
+  const { editor } = mountPicker();
+  editor.update(
+    () => {
+      editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+    },
+    { discrete: true }
+  );
+  expect(await screen.findByRole('searchbox')).toBeTruthy();
+});
+
+it('inserts a GIF when the editor has no saved caret', async () => {
+  const { editor } = mountPicker();
+  editor.update(
+    () => {
+      $getRoot().append($createParagraphNode());
+      editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+    },
+    { discrete: true }
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+  expect(insertGif).toHaveBeenCalledOnce();
+});
+
 it('inserts a selected GIF while editing remains allowed', async () => {
   const { open } = mountPicker();
   open();

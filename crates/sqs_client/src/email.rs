@@ -8,6 +8,10 @@ use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::pubsub::ScheduledPubsubMessage;
 use uuid::Uuid;
 
+/// Message attribute counting how often a backfill operation has been sent
+/// back to its queue by [`SQS::defer_email_backfill_message`].
+pub const BACKFILL_DEFERRALS_ATTRIBUTE: &str = "deferrals";
+
 impl SQS {
     pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
         self.link_manager_queue = Some(link_manager_queue.to_string());
@@ -22,6 +26,45 @@ impl SQS {
     pub fn email_backfill_queue(mut self, email_backfill_queue: &str) -> Self {
         self.email_backfill_queue = Some(email_backfill_queue.to_string());
         self
+    }
+
+    /// Send Gmail label writes as `ModifyMessageLabelsBatch` messages. Enable
+    /// only once every gmail_ops worker decodes them; workers released before
+    /// the batch form delete it. Off, each message is its own operation.
+    pub fn gmail_label_write_batches(mut self, enabled: bool) -> Self {
+        self.gmail_label_write_batches = enabled;
+        self
+    }
+
+    /// The gmail_ops queue messages for one label write, in the format this
+    /// client is configured for.
+    fn gmail_label_write_messages(
+        &self,
+        link_id: Uuid,
+        messages: Vec<(Uuid, String)>,
+        labels_to_add: Vec<String>,
+        labels_to_remove: Vec<String>,
+    ) -> Vec<models_email::gmail::gmail_ops::GmailOpsPubsubMessage> {
+        use models_email::gmail::gmail_ops::{
+            GmailMessageRef, GmailOpsPubsubMessage, label_write_operations,
+        };
+
+        let messages = messages
+            .into_iter()
+            .map(|(db_message_id, provider_message_id)| GmailMessageRef {
+                db_message_id,
+                provider_message_id,
+            })
+            .collect();
+        label_write_operations(
+            messages,
+            labels_to_add,
+            labels_to_remove,
+            self.gmail_label_write_batches,
+        )
+        .into_iter()
+        .map(|operation| GmailOpsPubsubMessage { link_id, operation })
+        .collect()
     }
 
     pub fn email_crm_cleanup_queue(mut self, email_crm_cleanup_queue: &str) -> Self {
@@ -64,6 +107,35 @@ impl SQS {
             return enqueue_backfill_message(&self.inner, email_backfill_queue, message).await;
         }
         Err(anyhow::anyhow!("email_backfill_queue is not configured"))
+    }
+
+    /// Sends a backfill operation back to the backfill queue as a new message
+    /// that becomes visible after `delay_seconds`. Unlike waiting out the
+    /// visibility timeout, the wait uses none of the operation's deliveries.
+    /// `deferrals` is recorded in [`BACKFILL_DEFERRALS_ATTRIBUTE`].
+    #[tracing::instrument(skip(self), err)]
+    pub async fn defer_email_backfill_message(
+        &self,
+        message: &BackfillPubsubMessage,
+        delay_seconds: i32,
+        deferrals: u32,
+    ) -> anyhow::Result<()> {
+        let Some(email_backfill_queue) = &self.email_backfill_queue else {
+            anyhow::bail!("email_backfill_queue is not configured");
+        };
+        let deferrals = aws_sdk_sqs::types::MessageAttributeValue::builder()
+            .data_type("Number")
+            .string_value(deferrals.to_string())
+            .build()?;
+        self.inner
+            .send_message()
+            .queue_url(email_backfill_queue)
+            .message_body(serde_json::to_string(&message)?)
+            .delay_seconds(delay_seconds)
+            .message_attributes(BACKFILL_DEFERRALS_ATTRIBUTE, deferrals)
+            .send()
+            .await?;
+        Ok(())
     }
 
     /// Sends a message to the email crm cleanup queue
@@ -130,6 +202,9 @@ impl SQS {
 impl EmailMessageEnqueuer for SQS {
     type Err = anyhow::Error;
 
+    const MAX_LABEL_WRITE_MESSAGES: usize =
+        models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES;
+
     async fn enqueue_scheduled_message(
         &self,
         link_id: Uuid,
@@ -146,7 +221,11 @@ impl EmailMessageEnqueuer for SQS {
         .await
     }
 
-    #[tracing::instrument(skip(self, messages, labels_to_add, labels_to_remove), err)]
+    #[tracing::instrument(
+        skip(self, messages, labels_to_add, labels_to_remove),
+        fields(message_count = messages.len()),
+        err
+    )]
     async fn enqueue_gmail_ops_modify_labels_batch(
         &self,
         link_id: Uuid,
@@ -154,27 +233,17 @@ impl EmailMessageEnqueuer for SQS {
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
     ) -> Result<(), Self::Err> {
-        use models_email::gmail::gmail_ops::{
-            GmailOpsOperation, GmailOpsPubsubMessage, ModifyMessageLabelsPayload,
-        };
-
-        let gmail_ops_messages: Vec<GmailOpsPubsubMessage> = messages
-            .into_iter()
-            .map(
-                |(db_message_id, provider_message_id)| GmailOpsPubsubMessage {
-                    link_id,
-                    operation: GmailOpsOperation::ModifyMessageLabels(ModifyMessageLabelsPayload {
-                        db_message_id,
-                        provider_message_id,
-                        labels_to_add: labels_to_add.clone(),
-                        labels_to_remove: labels_to_remove.clone(),
-                    }),
-                },
-            )
-            .collect();
-
-        self.enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
-            .await
+        let messages =
+            self.gmail_label_write_messages(link_id, messages, labels_to_add, labels_to_remove);
+        if !self.gmail_label_write_batches {
+            return self.enqueue_gmail_ops_notifications_batch(messages).await;
+        }
+        // A full batch is ~100 KB, so each goes out alone rather than in an
+        // SQS batch whose 256 KB cap is shared by all its entries.
+        for message in messages {
+            self.enqueue_gmail_ops_notification(message).await?;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, email_address), err)]
@@ -337,3 +406,6 @@ pub struct SFSDeleteMessage {
     /// The ID of the item in SFS
     pub sfs_id: Uuid,
 }
+
+#[cfg(test)]
+mod test;

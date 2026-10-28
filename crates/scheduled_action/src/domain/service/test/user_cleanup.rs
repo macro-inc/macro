@@ -108,6 +108,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         task: config.task,
         claimed: None,
         enabled: true,
+        run_visibility: config.run_visibility,
     }
 }
 

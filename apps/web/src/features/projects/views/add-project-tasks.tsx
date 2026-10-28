@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import ListPlusIcon from '@phosphor/list-plus.svg';
+import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button, Dropdown } from '@ui';

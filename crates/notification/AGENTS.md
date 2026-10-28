@@ -83,6 +83,9 @@ through the same service.
   stale/unknown measurements from zero; they are not client-delivery ACKs.
 - Notification payloads must not be logged on tracing spans (see the
   `fix(notification): stop recording notification payloads` history).
+- iOS egress binds `recipientId` to each receiving account; channel pushes carry
+  an optional typed `navigation` destination, with `threadId: null` for a root
+  message. Preserve older payloads that omit these fields.
 
 ## Related
 

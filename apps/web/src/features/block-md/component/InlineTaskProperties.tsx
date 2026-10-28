@@ -4,11 +4,16 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import {
+  getBuiltinPropertyIds,
+  getDefaultPinnedProperties,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useEntityProperties } from '@property/hooks';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
@@ -40,8 +45,35 @@ export function InlineTaskProperties() {
 
   const { properties, refetch, addProperty, removeProperty } =
     useEntityProperties(blockId, entityType, false);
-  const pins = createPinnedProperties(() => state.editor.md.editor);
   const projects = useFeatureFlag(enableProjects);
+  const defaultDefinitionIds = () =>
+    documentKind === 'task'
+      ? [
+          ...getDefaultPinnedProperties('task'),
+          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
+        ]
+      : [];
+  const pins = createPinnedProperties(
+    () => state.editor.md.editor,
+    defaultDefinitionIds
+  );
+  const titleProperties = () => {
+    const fetched = properties();
+    return documentKind === 'task' &&
+      projects().enabled &&
+      !fetched.some(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      )
+      ? [...fetched, buildTaskProjectDefaultProperty()]
+      : fetched;
+  };
+  const titlePinnedIds = () =>
+    resolvePinnedPropertyIds(
+      titleProperties(),
+      pins.ids(),
+      defaultDefinitionIds()
+    );
   const tagSets = useTagsQuery();
   const tagDefinitionIds = () =>
     new Set(
@@ -67,38 +99,37 @@ export function InlineTaskProperties() {
     if (pendingPins().size === 0 || !state.editor.md.editor) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
-      pins.pin(property.propertyId);
+      pins.pin(property.propertyId, titleProperties());
       clearPendingPin(property.propertyDefinitionId);
     }
   });
 
   const inlineProperties = createMemo(() => {
-    const props = properties();
-    if (documentKind === 'document') {
-      return props.filter(
-        (property) =>
-          pins.ids().includes(property.propertyId) &&
-          !property.isMetadata &&
-          !tagDefinitionIds().has(property.propertyDefinitionId)
+    const selected = titlePinnedIds();
+    const visible = titleProperties().filter(
+      (property) =>
+        selected.includes(property.propertyId) &&
+        !property.isMetadata &&
+        !tagDefinitionIds().has(property.propertyDefinitionId) &&
+        !(
+          documentKind === 'task' &&
+          !projects().enabled &&
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+        )
+    );
+    if (documentKind !== 'task') return visible;
+    const order = [
+      ...getDefaultPinnedProperties('task'),
+      SYSTEM_PROPERTY_IDS.PROJECT,
+    ];
+    return [...visible].sort((left, right) => {
+      const leftIndex = order.indexOf(left.propertyDefinitionId);
+      const rightIndex = order.indexOf(right.propertyDefinitionId);
+      return (
+        (leftIndex < 0 ? order.length : leftIndex) -
+        (rightIndex < 0 ? order.length : rightIndex)
       );
-    }
-    const ids = [
-      SYSTEM_PROPERTY_IDS.STATUS,
-      SYSTEM_PROPERTY_IDS.PRIORITY,
-      SYSTEM_PROPERTY_IDS.ASSIGNEES,
-    ];
-    const task = ids
-      .map((id) => props.find((p) => p.propertyDefinitionId === id))
-      .filter((p): p is Property => p !== undefined);
-    if (!projects().enabled) return task;
-    // A task carries Project only once it joins one; the placeholder lets the
-    // same pill and editor set it.
-    return [
-      ...task,
-      props.find(
-        (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-      ) ?? buildTaskProjectDefaultProperty(),
-    ];
+    });
   });
   const shouldShowRow = createMemo(
     () =>
@@ -131,9 +162,11 @@ export function InlineTaskProperties() {
           properties={properties}
           addProperty={addProperty}
           removeProperty={removeProperty}
-          pinnedPropertyIds={pins.ids}
-          onPropertyPinned={pins.pin}
-          onPropertyUnpinned={pins.unpin}
+          pinnedPropertyIds={titlePinnedIds}
+          onPropertyPinned={(id) => pins.pin(id, titleProperties())}
+          onPropertyUnpinned={(id, definitionId) =>
+            pins.unpin(id, titleProperties(), definitionId)
+          }
           onRefresh={refetch}
           onPropertyAdded={propertyAdded}
           onPropertyAddFailed={clearPendingPin}
@@ -152,7 +185,17 @@ export function InlineTaskProperties() {
                 property={property}
                 entityId={blockId}
                 class="bg-surface-2 border border-edge"
-                canManage={documentKind === 'document'}
+                canManage={
+                  !property.propertyId.startsWith('pending:') ||
+                  defaultDefinitionIds().includes(property.propertyDefinitionId)
+                }
+                canRemove={
+                  !property.propertyId.startsWith('pending:') &&
+                  (documentKind !== 'task' ||
+                    !getBuiltinPropertyIds('task').includes(
+                      property.propertyDefinitionId
+                    ))
+                }
               />
             )}
           </For>

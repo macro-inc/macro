@@ -23,7 +23,12 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
-import { chooseSelectOption, selectOptions } from './tests/select-helpers';
+import {
+  chooseModelOption,
+  chooseSelectOption,
+  modelOptions,
+  selectOptions,
+} from './tests/select-helpers';
 
 const agentsPageProps = {
   onCursor: vi.fn(),
@@ -96,6 +101,25 @@ const agentMocks = vi.hoisted(() => ({
 const avatarMocks = vi.hoisted(() => ({ upload: vi.fn() }));
 vi.mock('@queries/agents/avatar', () => ({
   useUploadAgentAvatarMutation: () => ({ mutateAsync: avatarMocks.upload }),
+}));
+
+const apiKeyMocks = vi.hoisted(() => ({
+  query: {
+    isSuccess: true,
+    data: undefined as
+      | {
+          key?: { provider: string; updatedAt: string } | null;
+          planAllows: boolean;
+        }
+      | undefined,
+  },
+  save: vi.fn(),
+  remove: vi.fn(),
+}));
+vi.mock('@queries/agents/agent-api-key', () => ({
+  useAgentApiKeyQuery: () => apiKeyMocks.query,
+  saveAgentApiKey: apiKeyMocks.save,
+  removeAgentApiKey: apiKeyMocks.remove,
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -285,6 +309,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   avatarMocks.upload.mockReset();
+  apiKeyMocks.query.data = undefined;
+  apiKeyMocks.save.mockReset();
+  apiKeyMocks.remove.mockReset();
   avatarMocks.upload.mockResolvedValue('https://static.example/avatar.png');
   updateSearchParams({ createAgent: undefined });
   setSearchParams.mockClear();
@@ -294,7 +321,7 @@ beforeEach(() => {
   };
   agentMocks.query.data = [];
   agentMocks.query.isError = false;
-  agentMocks.create.mockResolvedValue(undefined);
+  agentMocks.create.mockResolvedValue({ bot: { id: 'created-agent' } });
   agentMocks.delete.mockResolvedValue(undefined);
   agentMocks.update.mockResolvedValue(undefined);
   agentMocks.currentUserId = 'macro|user@example.com';
@@ -1223,6 +1250,109 @@ describe('Agents', () => {
     });
   });
 
+  it("saves a new agent's API key after the agent, for its model's provider", async () => {
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Bug fixer' },
+    });
+    fireEvent.input(within(dialog).getByLabelText('Anthropic API key'), {
+      target: { value: 'sk-ant-api03-abc' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+
+    await waitFor(() => {
+      expect(apiKeyMocks.save).toHaveBeenCalledWith(
+        'created-agent',
+        'sk-ant-api03-abc'
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it("removes an agent's saved API key, and locks the field on a free plan", async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    apiKeyMocks.query.data = {
+      key: { provider: 'anthropic', updatedAt: '2026-10-20T12:00:00Z' },
+      planAllows: true,
+    };
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    const field = within(dialog).getByLabelText(
+      'Anthropic API key'
+    ) as HTMLInputElement;
+    expect(field.placeholder).toBe('sk-ant-••••••••••••');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(apiKeyMocks.remove).toHaveBeenCalledWith('agent-1');
+    });
+  });
+
+  it('locks the API key field when the plan does not include agent keys', () => {
+    apiKeyMocks.query.data = { key: null, planAllows: false };
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+
+    expect(
+      (within(dialog).getByLabelText('Anthropic API key') as HTMLInputElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      within(dialog).getByText(
+        'Agent API keys are part of the Premium and Max plans.'
+      )
+    ).toBeTruthy();
+  });
+
   it('offers Cursor and saves the model chosen from its dropdown', async () => {
     cursorMocks.status.data = {
       registered: true,
@@ -1250,13 +1380,9 @@ describe('Agents', () => {
     expect(cursor).toHaveProperty('checked', true);
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
-    expect(
-      selectOptions(defaultModel)
-        .getByRole('option', { name: 'Cursor Small' })
-        .getAttribute('aria-selected')
-    ).toBe('true');
-    chooseSelectOption(defaultModel, 'Cursor Large');
+    expect(modelOptions(defaultModel).getAllByRole('menuitem')).toHaveLength(2);
+    expect(defaultModel.textContent).toBe('Cursor Small');
+    chooseModelOption(defaultModel, 'Cursor Large');
     expect(defaultModel.textContent).toBe('Cursor Large');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Coding agent' },
@@ -1404,7 +1530,7 @@ describe('Agents', () => {
     render(() => <Agents {...agentsPageProps} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    expect(within(dialog).getByText('Claude Sonnet 4.5')).toBeTruthy();
+    expect(within(dialog).getByText('Sonnet 5.5')).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole('radio', { name: 'In Cursor' }));
     expect(
@@ -1452,7 +1578,7 @@ describe('Agents', () => {
     const defaultModel = within(dialog).getByLabelText('Default model');
     expect(defaultModel.tagName).toBe('BUTTON');
     expect(defaultModel).toHaveProperty('textContent', 'Codex');
-    expect(selectOptions(defaultModel).getAllByRole('option')).toHaveLength(2);
+    expect(modelOptions(defaultModel).getAllByRole('menuitem')).toHaveLength(2);
   });
 
   it('falls back to the first advertised model when current is absent', () => {
@@ -1498,7 +1624,7 @@ describe('Agents', () => {
       'provider-default (unavailable)'
     );
     expect(
-      selectOptions(defaultModel).getByRole('option', {
+      modelOptions(defaultModel).getByRole('menuitem', {
         name: 'provider-default (unavailable)',
       })
     ).toBeTruthy();
@@ -1614,9 +1740,13 @@ describe('Agents', () => {
       'textContent',
       'retired-model (saved, unavailable)'
     );
+    fireEvent.keyDown(defaultModel, { key: 'Enter' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'retired' },
+    });
     expect(
-      selectOptions(defaultModel).getByRole('option', {
-        name: 'retired-model (saved, unavailable)',
+      screen.getByRole('menuitem', {
+        name: /^retired-model \(saved, unavailable\)/,
       })
     ).toBeTruthy();
   });

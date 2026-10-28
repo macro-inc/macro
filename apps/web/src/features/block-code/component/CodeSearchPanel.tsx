@@ -10,13 +10,13 @@ import {
 } from '@codemirror/search';
 import type { EditorState } from '@codemirror/state';
 import { type EditorView, runScopeHandlers } from '@codemirror/view';
-import ReplaceAllIcon from '@phosphor/arrow-bend-double-up-right.svg';
-import ReplaceIcon from '@phosphor/arrow-bend-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import X from '@phosphor/x.svg';
+import ReplaceAllIcon from '@icon/system/regular/arrow-bend-double-up-right.svg';
+import ReplaceIcon from '@icon/system/regular/arrow-bend-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Surface } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 

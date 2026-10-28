@@ -1,9 +1,11 @@
-//! Adding a snapshot of a channel-shared event to the requester's own Google
-//! calendar.
+//! Adding a snapshot of a channel-shared event, or of an event file someone
+//! sent the requester, to the requester's own Google calendar.
 use super::*;
 use crate::domain::{
-    ics::{CalendarEventExport, CalendarEventExportAccess},
+    ics::{CalendarEventExportAccess, EventSnapshot},
+    join_requests::CalendarJoinRequestStatus,
     models::{CalendarProvider, EventType},
+    ports::CalendarSnapshotImporter,
 };
 
 impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
@@ -31,6 +33,18 @@ where
         if source.access == CalendarEventExportAccess::OwnCopy {
             return Err(CalendarMutationError::AlreadyOnCalendar);
         }
+        // The sharer's answer to a join request is an invitation to the
+        // meeting under its own UID, which a snapshot added meanwhile would
+        // take in, so a copy waits until the request is declined.
+        let join_request = self
+            .repository
+            .find_join_request(event_id, requester_id)
+            .await
+            .map_err(internal)?;
+        if join_request.is_some_and(|request| request.status != CalendarJoinRequestStatus::Declined)
+        {
+            return Err(CalendarMutationError::JoinRequestOpen);
+        }
         // Google imports only regular events; status events such as
         // out-of-office belong to their owner's calendar alone.
         if source.event_type != EventType::Default {
@@ -38,6 +52,18 @@ where
                 "only regular events can be added to a calendar".to_string(),
             ));
         }
+        self.add_snapshot(requester_id, source.snapshot(), calendar_id)
+            .await
+    }
+
+    /// Import a snapshot into the selected calendar, or the requester's
+    /// primary inbox's primary calendar, and persist the provider echo.
+    async fn add_snapshot(
+        &self,
+        requester_id: &str,
+        snapshot: EventSnapshot,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
         let target = self
             .repository
             .get_creation_target(requester_id, None, calendar_id)
@@ -54,19 +80,14 @@ where
                 "shared events can be added to Google calendars only".to_string(),
             ));
         }
-        let (description, location) = source.without_macro_call();
-        let source = CalendarEventExport {
-            description,
-            location,
-            ..source
-        };
+        let snapshot = snapshot.without_macro_call();
         let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider
             .import_event(
                 &access_token,
                 &target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now())),
-                &source,
+                &snapshot,
             )
             .await
             .map_err(provider_error)?;
@@ -103,11 +124,47 @@ where
     }
 }
 
+impl<R, G, T, B, N> CalendarSnapshotImporter for CalendarMutationServiceImpl<R, G, T, B, N>
+where
+    R: CalendarRepository,
+    G: CalendarMutationProvider,
+    T: CalendarAccessTokenProvider,
+    B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
+{
+    #[tracing::instrument(
+        name = "calendar.import_event_snapshot",
+        skip(self, requester_id, snapshot),
+        fields(
+            recurring = !snapshot.recurrence_lines.is_empty(),
+            picked_calendar = calendar_id.is_some(),
+            copied_event_id = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn import_snapshot(
+        &self,
+        requester_id: &str,
+        snapshot: EventSnapshot,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        let result = self.add_snapshot(requester_id, snapshot, calendar_id).await;
+        let span = tracing::Span::current();
+        if let Ok(copied) = &result {
+            span.record("copied_event_id", tracing::field::display(copied.id));
+        }
+        span.record("outcome", copy_outcome(&result));
+        result
+    }
+}
+
 /// The span outcome of a copy.
 pub(super) fn copy_outcome(result: &Result<CalendarEvent, CalendarMutationError>) -> &'static str {
     match result {
         Ok(_) => "copied",
         Err(CalendarMutationError::AlreadyOnCalendar) => "already_on_calendar",
+        Err(CalendarMutationError::JoinRequestOpen) => "join_request_open",
         Err(CalendarMutationError::NotFound) => "not_found",
         Err(CalendarMutationError::NoWritableCalendar) => "no_writable_calendar",
         Err(CalendarMutationError::ReadOnly) => "read_only",

@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Popover } from '@kobalte/core/popover';
-import DotsIcon from '@phosphor/dots-three.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Button } from '@ui/components/Button';
 import type { ResultAsync } from 'neverthrow';

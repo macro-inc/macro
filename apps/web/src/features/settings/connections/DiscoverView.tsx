@@ -6,10 +6,11 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button, InputGroup, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -27,8 +28,10 @@ import { useConnectionsView } from './view-state';
 
 export function DiscoverView(props: { model: ConnectionsModel }) {
   const view = useConnectionsView();
+  // Includes overlaid apps, which are connected as native MCP servers.
+  const connected = usePipedreamConnectedSlugs();
   const alreadyHave = createMemo(() => {
-    const slugs = new Set<string>();
+    const slugs = new Set<string>(connected.slugs());
     for (const row of props.model.capabilities) {
       if (row.status !== 'not-connected') slugs.add(row.provider);
     }

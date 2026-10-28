@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import { Button } from '@ui/components/Button';
 import type { Result } from 'neverthrow';

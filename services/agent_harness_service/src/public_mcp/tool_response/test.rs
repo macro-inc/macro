@@ -378,3 +378,85 @@ async fn document_markdown_images_still_render() {
         ["https://image.example/image.png"]
     );
 }
+
+#[tokio::test]
+async fn canvas_pixels_are_native_images_without_base64_in_json() {
+    let resolver = RecordingResolver::default();
+    let data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPuoAAAAASUVORK5CYII=";
+    let result = render(
+        &resolver,
+        "RenderCanvas",
+        json!({
+            "revision": "immutable-revision",
+            "crop": {"x": 10, "y": 20, "width": 100, "height": 80},
+            "textLayout": [{"id": "label", "overflow": false}],
+            "modelMedia": [{"type": "image", "mediaType": "image/png", "data": data}],
+        }),
+    )
+    .await;
+
+    let metadata = assert_matching_json(&result);
+    assert_eq!(metadata["revision"], "immutable-revision");
+    assert_eq!(metadata["crop"]["x"], 10);
+    assert_eq!(metadata["textLayout"][0]["id"], "label");
+    assert!(metadata.get("modelMedia").is_none());
+    assert!(!result.content[0].as_text().unwrap().text.contains(data));
+    assert_eq!(result.content.len(), 2);
+    let image = result.content[1].as_image().unwrap();
+    assert_eq!(image.data, data);
+    assert_eq!(image.mime_type, "image/png");
+    assert!(resolver.urls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn canvas_rejects_unbounded_or_remote_media_without_leaking_pixels() {
+    let resolver = RecordingResolver::default();
+    let image = json!({"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo"});
+    for media in [
+        Value::Null,
+        json!([]),
+        json!([image.clone(), image.clone(), image.clone()]),
+        json!([{"type": "image", "mediaType": "image/png", "url": "https://private.example/image"}]),
+        json!([{"type": "image", "mediaType": "image/png", "data": "https://private.example/image"}]),
+        json!([{"type": "image", "mediaType": "image/jpeg", "data": "iVBORw0KGgo"}]),
+        json!([{"type": "image", "mediaType": "image/png", "data": format!("iVBORw0KGgo{}", "A".repeat(4_000_000))}]),
+        json!([image, {"type": "image", "mediaType": "image/png", "data": "invalid"}]),
+    ] {
+        let result = render(&resolver, "RenderCanvas", json!({"modelMedia": media})).await;
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.structured_content.is_none());
+        assert!(
+            result
+                .content
+                .iter()
+                .all(|content| content.as_image().is_none())
+        );
+        assert!(
+            !serde_json::to_string(&result)
+                .unwrap()
+                .contains("iVBORw0KGgo")
+        );
+    }
+    assert!(resolver.urls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn scene_media_is_not_promoted_by_unrelated_or_nested_tool_data() {
+    let resolver = RecordingResolver::default();
+    let value = json!({"document": {"modelMedia": [{
+        "type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo"
+    }]}});
+    let result = render(&resolver, "ReadCanvas", value.clone()).await;
+    assert_eq!(assert_matching_json(&result), &value);
+    assert_eq!(result.content.len(), 1);
+
+    let result = render(&resolver, "RenderCanvas", value).await;
+    assert_eq!(result.is_error, Some(true));
+    assert!(
+        result
+            .content
+            .iter()
+            .all(|content| content.as_image().is_none())
+    );
+    assert!(resolver.urls.lock().unwrap().is_empty());
+}

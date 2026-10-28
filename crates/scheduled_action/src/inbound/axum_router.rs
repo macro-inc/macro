@@ -302,17 +302,15 @@ where
 )]
 pub async fn get_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
-    ScheduledActionAccessExtractor {
-        entity_access_receipt,
-        ..
-    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(id): Path<Uuid>,
 ) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
 where
     S: ScheduledActionService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let action = state.service.get_action(entity_access_receipt).await?;
+    let action = state.service.get_action(id).await?;
     Ok(Json(action.into()))
 }
 
@@ -529,7 +527,8 @@ impl IntoResponse for ScheduledActionApiError {
                 TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
                     StatusCode::BAD_REQUEST
                 }
-                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+                TargetValidationError::ExplicitAgentRequired
+                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }
@@ -543,6 +542,9 @@ impl IntoResponse for ScheduledActionApiError {
                     (StatusCode::NOT_FOUND, session.to_string())
                 }
                 RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
+                    (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
+                }
                 RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,

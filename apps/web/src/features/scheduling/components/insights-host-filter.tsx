@@ -1,11 +1,11 @@
 import { getInitialsFromName } from '@core/user/displayName';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import UsersIcon from '@phosphor/users.svg';
 import { Avatar, Button, Layer } from '@ui';
 import {
   type Accessor,

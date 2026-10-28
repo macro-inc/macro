@@ -438,3 +438,72 @@ async fn unreadable_bound_events_keep_the_entire_original_action_for_a_compatibl
     assert_eq!(recovered.action_id, original.action_id);
     assert_eq!(recovered.notifications.len(), 2);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool) {
+    use agent_runtime_protocol::domain::notification::{
+        DecisionOutcome, DecisionVia, ImportOutcome, ImportSettlement, ImportWorkspace,
+        ReviewOutcome, ReviewSettlement,
+    };
+    sqlx::raw_sql("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ('00000000-0000-0000-0000-000000000001','macro|owner@example.com','00000000-0000-0000-0000-00000000a9e7','test','macrod','/workspace')").execute(&pool).await.unwrap();
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let store = PgNotificationStore(pool.clone());
+    let import = ReviewSettlement::Import {
+        import: ImportSettlement {
+            source: ImportWorkspace::Notion,
+            outcome: ImportOutcome::Cancelled,
+            error: Some("Cancelled".into()),
+            imported: 1,
+            planned: 4,
+            documents: 4,
+            databases: 0,
+            database_rows: 0,
+            task_lists: 0,
+            task_rows: 0,
+            skipped: 0,
+            not_written: 3,
+            shared_with_team: 0,
+            already_in_macro: 0,
+            waiting_on_teammates: 0,
+            root_folder_id: Some(Uuid::from_u128(9)),
+            failures: Vec::new(),
+            hand_items: Vec::new(),
+        },
+    };
+    let actions = ReviewSettlement::Actions(ReviewOutcome {
+        outcome: DecisionOutcome::Approved,
+        by: "macro|owner@example.com".into(),
+        via: DecisionVia::Card,
+        items: Vec::new(),
+    });
+    for (subject, settlement) in [("import", &import), ("email", &actions)] {
+        store
+            .enqueue(
+                PendingNotification::new(ProduceNotification {
+                    session_id: session,
+                    subject_id: subject.into(),
+                    event: NotificationEvent::ReviewSettled(settlement.clone()),
+                    dedupe_key: None,
+                    wake: true,
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+    }
+
+    let batch = store.claim(session, false).await.unwrap().unwrap();
+
+    let read: Vec<_> = batch
+        .notifications
+        .iter()
+        .map(|notification| notification.event.clone())
+        .collect();
+    assert_eq!(
+        read,
+        [
+            NotificationEvent::ReviewSettled(import),
+            NotificationEvent::ReviewSettled(actions)
+        ]
+    );
+}

@@ -3,6 +3,7 @@
  */
 
 import { ThrownResultError } from '@core/util/result';
+import { createSignal, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,12 +42,15 @@ import {
 
 let dispose: (() => void) | undefined;
 
-function renderGate<Data>(result: EntityLoadResult<Data>): HTMLElement {
+function renderGate<Data>(
+  result: EntityLoadResult<Data>,
+  loadingFallback?: JSX.Element
+): HTMLElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const disposeRender = render(
     () => (
-      <EntityLoadGate result={result}>
+      <EntityLoadGate result={result} loadingFallback={loadingFallback}>
         <div>Loaded</div>
       </EntityLoadGate>
     ),
@@ -67,6 +71,23 @@ afterEach(() => {
 });
 
 describe('EntityLoadGate', () => {
+  it('uses the conversation placeholder while pending without masking access failures', () => {
+    const [pending, setPending] = createSignal(true);
+    const [error, setError] = createSignal<EntityLoadErrorCode>();
+    const container = renderGate(
+      {
+        data: () => undefined,
+        error,
+        isPending: pending,
+      },
+      <div>Conversation placeholder</div>
+    );
+    expect(container.textContent).toBe('Conversation placeholder');
+    setPending(false);
+    setError('FORBIDDEN');
+    expect(container.textContent).toBe('Unauthorized');
+  });
+
   it('renders its child after data loads', () => {
     const container = renderGate({
       data: () => 'channel data',

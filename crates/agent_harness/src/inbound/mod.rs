@@ -3,11 +3,15 @@
 //! Thin by construction - decode the broker message, ask the domain whether it
 //! is addressed to us, hand one value inward. No policy lives here.
 
+/// Continuing a session after its owner connects an app.
+pub mod app_connections;
 /// Authenticated ACP capability discovery.
 pub mod capability_discovery;
 /// Authenticated agent conversation metadata and controls.
 pub mod conversations;
 pub mod kafka;
+/// Authenticated Auto mode choice for the agent composer.
+pub mod mode_choice;
 /// Authenticated model discovery.
 pub mod model_load;
 /// Authenticated repository and branch listing.

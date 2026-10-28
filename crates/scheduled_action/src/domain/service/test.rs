@@ -6,7 +6,7 @@ use super::*;
 use crate::domain::event_runs::ClaimToken;
 use crate::domain::models::{
     ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType,
-    MAX_ACTION_TIME,
+    MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
     execution::ExecutionHandle,
@@ -299,6 +299,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         kind: ActionKind::Agent,
         task: json!({"model": "model", "prompt": "summarize", "user_prompt": "task"}),
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 
@@ -310,6 +311,7 @@ fn update(config: ActionConfiguration) -> UpdateScheduledAction {
         kind: config.kind,
         task: config.task,
         enabled: Some(config.enabled),
+        run_visibility: Some(config.run_visibility),
     })
 }
 
@@ -694,7 +696,7 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
 }
 
 #[tokio::test]
-async fn grants_do_not_allow_access_to_another_owners_routine() {
+async fn nonowners_can_read_but_not_manage_routines() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -709,12 +711,9 @@ async fn grants_do_not_allow_access_to_another_owners_routine() {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(svc.get_action(view_receipt(id)).await.unwrap().id, Some(id));
+        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
-        assert_policy(
-            svc.get_action(view_receipt(id)).await,
-            ActionPolicyError::NotFound,
-        );
+        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
         assert_policy(
             svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,
@@ -931,6 +930,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         claimed: Some(claimed),
         next_run_at: None,
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     };
     let expires_at = action
         .claim_expires_at()
@@ -999,6 +999,7 @@ fn seeded(
         claimed: None,
         next_run_at: None,
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 

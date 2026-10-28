@@ -104,4 +104,12 @@ describe('makeRenameAction.canExecute', () => {
     expect(canExecute(entity('email'))).toBe(false);
     expect(canExecute(entity('foreign'))).toBe(false);
   });
+
+  it('offers only what the rename mutation renames', () => {
+    expect(canExecute(entity('call'))).toBe(true);
+    expect(canExecute(entity('chat'))).toBe(true);
+    expect(canExecute(entity('calendar_event'))).toBe(false);
+    expect(canExecute(entity('initiative'))).toBe(false);
+    expect(canExecute(entity('routine'))).toBe(false);
+  });
 });

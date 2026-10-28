@@ -121,11 +121,11 @@ vi.mock('@channel/Input/Input', () => ({
 }));
 vi.mock('@core/util/upload', () => ({ handleFileFolderDrop: vi.fn() }));
 
-vi.mock('@phosphor/arrow-up.svg', () => ({
+vi.mock('@icon/system/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
-vi.mock('@phosphor/spinner-gap.svg', () => ({
+vi.mock('@icon/system/regular/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 

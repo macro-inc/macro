@@ -60,6 +60,10 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 
 - Opaque JSON scalars must preserve floating-point values on reparse — `serde_json`
   is pulled in with the `float_roundtrip` feature; don't drop it.
+- `StoredMutation.created_at_ms` is the first-enqueue time hosts report as
+  `enqueuedAtMs`: a row replacing an unsent row for the same UUID inherits the
+  earlier time. Lease and backoff checks take `now_ms` separately; never read
+  `created_at_ms` as the current time.
 - Patches structural query changes in place instead of resending full results
   (#7825); a new query shape change needs a patch path, not just a resend.
 

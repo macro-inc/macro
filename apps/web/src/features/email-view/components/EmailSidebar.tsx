@@ -9,18 +9,18 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@phosphor/archive.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import StarIcon from '@phosphor/star.svg';
-import TrayIcon from '@phosphor/tray.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import SignalIcon from '@phosphor/wave-sine.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
@@ -36,6 +36,10 @@ import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
 const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
+const INBOX_TAB_IDS = [
+  'important',
+  'noise',
+] as const satisfies readonly EmailTab[];
 const PRIMARY_TAB_IDS = [
   'favorites',
   'drafts',
@@ -167,18 +171,22 @@ export function EmailSidebar() {
     setSidebarSectionOpen,
   } = useEmailView();
 
+  const tabIds = () =>
+    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(
+      (id) =>
+        id !== 'reminders' ||
+        reminders().enabled ||
+        (reminders().loading && state.tab === 'reminders')
+    );
+
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(
-        (id) =>
-          id !== 'reminders' ||
-          reminders().enabled ||
-          (reminders().loading && state.tab === 'reminders')
-      ),
-    activeId: () =>
-      !isTouchDevice() && state.tab === 'noise' ? 'important' : state.tab,
+    ids: tabIds,
+    // Desktop groups Signal and Noise under Inbox, so Tab toggles between
+    // them instead of walking the sidebar.
+    sequentialIds: () => (isTouchDevice() ? tabIds() : INBOX_TAB_IDS),
+    activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>
       !(

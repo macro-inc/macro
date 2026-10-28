@@ -40,6 +40,8 @@ export function tooltipClasses(options: TooltipClassOptions = {}): string {
 }
 
 /**
+ * Informational content never intercepts pointer input to nearby controls.
+ *
  * @example
  * <Tooltip label="" hotkey={}>
  *   <div></div>
@@ -142,7 +144,7 @@ export function Tooltip(props: TooltipProps) {
       </KobalteTooltip.Trigger>
       <Show when={visible()}>
         <KobalteTooltip.Portal>
-          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
+          <KobalteTooltip.Content class="pointer-events-none! z-tool-tip max-w-[calc(100vw-32px)]">
             <Surface class={tooltipClasses()} depth={3}>
               <div class="flex flex-row items-center gap-2">
                 <div class="text-xs">{props.label}</div>

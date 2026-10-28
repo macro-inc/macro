@@ -3,9 +3,9 @@
  * panels, color pickers, and numeric fields. Presentational.
  */
 
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Eyedropper from '@icon/system/regular/eyedropper.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDown from '@phosphor/caret-down.svg';
-import Eyedropper from '@phosphor/eyedropper.svg';
 import { cn } from '@ui';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import {

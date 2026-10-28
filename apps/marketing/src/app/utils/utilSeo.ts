@@ -27,12 +27,12 @@ export interface PageSeo {
 }
 
 export const SITE_NAME = 'Macro';
-export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og/home-2026-10.png`;
+export const DEFAULT_OG_IMAGE = `${APP_BASE_URL}/og/home-unified-2026-10-27.png`;
 
 // Homepage only: other product and article cards retain their own images.
 const HOMEPAGE_VIDEO_TAGS = [
-  ['og:video', `${APP_BASE_URL}/og/home-orbit-dark-2026-10-23.mp4`],
-  ['og:video:secure_url', `${APP_BASE_URL}/og/home-orbit-dark-2026-10-23.mp4`],
+  ['og:video', `${APP_BASE_URL}/og/home-unified-2026-10-27.mp4`],
+  ['og:video:secure_url', `${APP_BASE_URL}/og/home-unified-2026-10-27.mp4`],
   ['og:video:type', 'video/mp4'],
   ['og:video:width', '1200'],
   ['og:video:height', '630'],

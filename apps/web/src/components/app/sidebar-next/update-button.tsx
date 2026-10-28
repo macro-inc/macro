@@ -1,5 +1,6 @@
+import { t } from '@app/lib/i18n';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import { Popover } from '@kobalte/core/popover';
-import DownloadIcon from '@phosphor/download-simple.svg';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import type { AppUpdate } from './app-update';
@@ -58,7 +59,7 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
         variant="ghost"
         size="icon-md"
         class="size-10 cursor-default rounded-xl"
-        label="Update available"
+        label={t('nav.updateAvailable')}
         draggable={false}
         data-sidebar-next-item="app-update"
       >

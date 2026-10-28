@@ -3,7 +3,12 @@ import { useCallKitSetup } from '../use-callkit';
 
 const bridge = vi.hoisted(() => ({
   watchers: new Map<string, (payload: unknown) => void>(),
-  pending: null as { channelId: string; nativeMedia: boolean } | null,
+  pending: null as {
+    channelId: string;
+    nativeMedia: boolean;
+    callId?: string;
+    answeredAtMs?: number;
+  } | null,
   cleanups: [] as (() => void)[],
   open: vi.fn(async () => {}),
   join: vi.fn(async () => {}),
@@ -140,5 +145,51 @@ describe('native answered-call recovery', () => {
     await settle();
     expect(bridge.open).toHaveBeenCalledTimes(2);
     expect(bridge.pending).toBeNull();
+  });
+
+  it('handles two distinct answers in the same channel, but each only once', async () => {
+    useCallKitSetup();
+    await settle();
+    const answered = bridge.watchers.get(
+      'plugin:call-kit|watch_call_answered'
+    )!;
+    const first = {
+      channelId: 'channel-1',
+      nativeMedia: false,
+      callId: 'CALL-1',
+      answeredAtMs: Date.now(),
+    };
+    answered(first);
+    answered({ ...first });
+    answered({ ...first, callId: 'CALL-2' });
+    await settle();
+    expect(bridge.join).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops an answer replayed long after CallKit fulfilled it', async () => {
+    useCallKitSetup();
+    await settle();
+    // Answered, then the webview stayed suspended past the replay window.
+    bridge.pending = {
+      channelId: 'channel-1',
+      nativeMedia: false,
+      callId: 'call-1',
+      answeredAtMs: Date.now() - 61_000,
+    };
+    resume();
+    await settle();
+    expect(bridge.join).not.toHaveBeenCalled();
+    expect(bridge.open).not.toHaveBeenCalled();
+    expect(bridge.pending).toBeNull();
+
+    bridge.pending = {
+      channelId: 'channel-2',
+      nativeMedia: false,
+      callId: 'call-2',
+      answeredAtMs: Date.now() - 5_000,
+    };
+    resume();
+    await settle();
+    expect(bridge.join).toHaveBeenCalledExactlyOnceWith('channel-2');
   });
 });

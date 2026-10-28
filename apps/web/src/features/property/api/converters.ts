@@ -1,6 +1,11 @@
 import type { PropertyValue } from '@service-properties/generated/schemas/propertyValue';
+import {
+  timeRangeFromInstants,
+  timeRangeToInstants,
+} from '../../database/core/cell-date-range';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type {
+  DateRangeValue,
   EntityPropertyWithDefinition,
   EntityReference,
   Property,
@@ -19,6 +24,7 @@ type NormalizedPropertyValue =
   | { type: 'NUMBER'; value: number }
   | { type: 'BOOLEAN'; value: boolean }
   | { type: 'DATE'; value: Date }
+  | { type: 'DATE_RANGE'; value: DateRangeValue }
   | { type: 'SELECT_OPTION'; value: string[] }
   | { type: 'ENTITY_REFERENCE'; value: EntityReference[] }
   | { type: 'LINK'; value: string[] }
@@ -127,6 +133,17 @@ export function entityPropertyFromApi(
       return { ...baseProperty, valueType: 'DATE', value: null };
     }
 
+    case 'DATE_RANGE': {
+      return {
+        ...baseProperty,
+        valueType: 'DATE_RANGE',
+        value:
+          (propertyValue?.type === 'DateRange' &&
+            timeRangeFromInstants(propertyValue.value)) ||
+          null,
+      };
+    }
+
     case 'SELECT_STRING':
     case 'SELECT_NUMBER': {
       if (hasPropertyValueType(propertyValue, 'SelectOption')) {
@@ -214,6 +231,15 @@ export function propertyValueToApi(
       return {
         type: 'date',
         value: apiValues.value.toISOString(),
+      };
+
+    case 'DATE_RANGE':
+      if (apiValues.value == null) {
+        return null;
+      }
+      return {
+        type: 'date_range',
+        value: timeRangeToInstants(apiValues.value),
       };
 
     case 'BOOLEAN':
@@ -333,6 +359,12 @@ export function propertyApiValuesToNormalized(
         }
       }
       return { type: 'EMPTY', value: null };
+    }
+
+    case 'DATE_RANGE': {
+      return apiValues.value
+        ? { type: 'DATE_RANGE', value: apiValues.value }
+        : { type: 'EMPTY', value: null };
     }
 
     case 'SELECT_STRING':

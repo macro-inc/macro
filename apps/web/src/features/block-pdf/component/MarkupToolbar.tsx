@@ -1,10 +1,10 @@
 import { useOwnedCommentPlaceableSelector } from '@block-pdf/signal/permissions';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Signature from '@phosphor/signature.svg';
-import Textbox from '@phosphor/textbox.svg';
-import Trash from '@phosphor/trash-simple.svg';
-import Cancel from '@phosphor/x.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Signature from '@icon/system/regular/signature.svg';
+import Textbox from '@icon/system/regular/textbox.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
+import Cancel from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';

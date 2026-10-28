@@ -1,8 +1,10 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useSplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
+  isGoToLeaderActive,
   navigateToSidebarView,
   SidebarOpenInSplitMenu,
   sidebarContent,
@@ -11,8 +13,8 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import { Button, cn } from '@ui';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import { Button, cn, Hotkey } from '@ui';
 import { Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
@@ -33,8 +35,9 @@ export type ListNavProps = {
  * behind it — active detection, navigation, shift-click into a new split, the
  * open-in-split context menu.
  *
- * There is no room for a label or a `g`-leader hint in a 36px square, so both
- * live in the tooltip instead.
+ * There is no room for a label in a 40px square, so it lives in the tooltip
+ * along with the full `g`-leader shortcut. After `g` is pressed, a small
+ * badge in the corner shows the destination key, as the legacy sidebar did.
  *
  * Named for the shape it grows into: each nav is expected to expand into a list
  * of its own live items (Email accounts, Chat channels, Drive files). The slot
@@ -120,7 +123,7 @@ export const ListNav = (props: ListNavProps) => {
         <Show when={props.item.id !== 'home'}>
           <MenuSeparator />
           <MenuItem
-            text="Hide from sidebar"
+            text={t('nav.hideFromSidebar')}
             onClick={() => hideSidebarItem(props.item.id)}
           />
         </Show>
@@ -136,14 +139,14 @@ export const ListNav = (props: ListNavProps) => {
         label={props.item.label}
         aria-description={
           [
-            props.unread && 'Unread items',
-            props.activeCall && 'Active call',
-            props.badge && `Next meeting: ${props.badge}`,
+            props.unread && t('nav.unreadItems'),
+            props.activeCall && t('nav.activeCall'),
+            props.badge && t('nav.nextMeeting', { time: props.badge }),
           ]
             .filter(Boolean)
             .join('. ') || undefined
         }
-        tooltip={`Go to ${props.item.label}`}
+        tooltip={t('nav.goTo', { label: props.item.label })}
         tooltipPlacement="right"
         hotkey={
           props.item.hotkeyToken
@@ -184,7 +187,7 @@ export const ListNav = (props: ListNavProps) => {
             <PhoneCallIcon class="size-full" />
           </span>
         </Show>
-        <Show when={props.badge}>
+        <Show when={!isGoToLeaderActive() && props.badge}>
           {(badge) => (
             <span
               aria-hidden="true"
@@ -192,6 +195,19 @@ export const ListNav = (props: ListNavProps) => {
               class="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-accent px-1 text-[9px] font-semibold leading-3 text-surface ring-2 ring-panel"
             >
               {badge()}
+            </span>
+          )}
+        </Show>
+        <Show when={isGoToLeaderActive() && props.item.hotkeyToken}>
+          {(token) => (
+            <span
+              aria-hidden="true"
+              data-sidebar-goto-hint
+              class="pointer-events-none absolute right-0.5 bottom-0.5 flex size-4 items-center justify-center overflow-hidden rounded-xs bg-page text-xs"
+            >
+              <span class="flex size-full items-center justify-center rounded-xs border border-accent/30 bg-accent/10 text-accent">
+                <Hotkey token={token()} />
+              </span>
             </span>
           )}
         </Show>

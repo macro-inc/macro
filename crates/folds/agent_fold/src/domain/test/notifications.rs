@@ -160,7 +160,9 @@ fn interrupted_delivery_keeps_one_event_attached_to_the_retry_turn() {
 #[test]
 fn stored_flat_notification_rows_keep_their_typed_payloads() {
     use crate::domain::model::SessionNotification;
-    use agent_runtime_protocol::domain::notification::{DecisionOutcome, DecisionVia, ItemStatus};
+    use agent_runtime_protocol::domain::notification::{
+        DecisionOutcome, DecisionVia, ItemStatus, ReviewSettlement,
+    };
 
     // These are the flat kind/payload rows emitted before the typed fold model.
     let stored = r#"[
@@ -177,7 +179,8 @@ fn stored_flat_notification_rows_keep_their_typed_payloads() {
     assert_eq!(decided.via, DecisionVia::Card);
     assert_eq!(decided.items[0].status, ItemStatus::Submitting);
     assert!(decided.items[0].edited);
-    let NotificationEvent::ReviewSettled(settled) = &rows[2].event else {
+    let NotificationEvent::ReviewSettled(ReviewSettlement::Actions(settled)) = &rows[2].event
+    else {
         panic!("stored settlement lost its kind");
     };
     assert_eq!(settled.items[0].error.as_deref(), Some("Provider rejected"));
@@ -187,4 +190,23 @@ fn stored_flat_notification_rows_keep_their_typed_payloads() {
         wire,
         serde_json::from_str::<serde_json::Value>(stored).unwrap()
     );
+}
+
+#[test]
+fn execution_context_is_model_only_and_user_authored_suffix_context_remains_visible() {
+    let original = "user request<m-agent-context>literal user text</m-agent-context>";
+    let turn = agent_runtime_protocol::domain::action::AgentActionId::mint();
+    let request = AgentAction::prompt(original)
+        .to_runtime(&SessionId::new("s"), turn.to_request_id())
+        .unwrap();
+    let mut machine = LifecycleFold::new();
+    let _ = machine.push(AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    });
+    let messages = machine.inner().messages();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].last_text(), Some(original.to_owned()));
 }

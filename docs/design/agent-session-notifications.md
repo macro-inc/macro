@@ -7,11 +7,25 @@ through its transaction-aware producer port in the state-change transaction.
 ## Contract
 
 A notification has a UUIDv7 id, session, typed event (`review.decided`,
-`review.settled`, `app.connected`), subject, payload, dedupe key, wake policy,
-creation time and producer trace context. Dedupe is scoped to a session; absent
-an explicit key it is kind plus subject. Review decisions include a revision in
-their key because a stack can be decided in several batches. Payloads reference
-review and item ids; final drafts remain available through GetReview.
+`review.settled`, `import.planned`, `app.connected`), subject, payload, dedupe
+key, wake policy, creation time and producer trace context. Dedupe is scoped to
+a session; absent an explicit key it is kind plus subject. Review decisions
+include a revision in their key because a stack can be decided in several
+batches. Payloads reference review and item ids; final drafts remain available
+through GetReview.
+
+Long-running review kinds settle in their own domain. Approving an import
+review only starts its write, so its `review.decided` is quiet; the import
+produces one `review.settled` per review, carrying the final report
+(`ImportSettlement`: outcome, counts, failures, by-hand items, root folder),
+in the transaction that ends the write, including a resumed write and one
+given up on. A plan presented while planning also produces `import.planned`
+once it is ready to approve. Both name the workspace they read (`source`:
+`notion`, `linear` or `jira`; absent on events stored before trackers, which
+are Notion's). Both wake the session. A settled payload is
+either an import report or the review service's own outcome; the enum is
+untagged so settlements stored before imports existed still read. Dismissing
+an import still wakes, as for other kinds.
 
 The harness serializes delivery with all other session commands. It claims a
 bounded batch under a lease using SKIP LOCKED. Waking events start an idle turn;
@@ -106,9 +120,8 @@ terminal writes from older replicas during rollout. Queue reads discard their
 former context entries so they cannot restore as empty owner prompts.
 Old JSON fields are ignored on reads;
 removing them does not require destructive SQL. Notification rows are visible to all
-session viewers. The app-connected context-prompt caller referenced in the
-original goals does not exist in this checkout; the typed event remains part
-of the producer API for the next integration branch.
+session viewers. The harness produces `app.connected` when the owner connects
+an app a session asked for (`POST /agent-sessions/{id}/app-connections`, 202).
 
 ## Browser proof
 

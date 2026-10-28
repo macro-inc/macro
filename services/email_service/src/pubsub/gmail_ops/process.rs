@@ -68,6 +68,10 @@ async fn inner_process_message(
     let (operation_name, operation_result) = match &data.operation {
         GmailOpsOperation::ModifyMessageLabels(payload) => (
             "modify_message_labels",
+            modify_message_labels(ctx, &link, &payload.clone().into()).await,
+        ),
+        GmailOpsOperation::ModifyMessageLabelsBatch(payload) => (
+            "modify_message_labels",
             modify_message_labels(ctx, &link, payload).await,
         ),
         GmailOpsOperation::DeleteLabel(payload) => {

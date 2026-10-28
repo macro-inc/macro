@@ -293,6 +293,28 @@ describe('coordinator runtime protocol', () => {
     );
   });
 
+  it('validates Mail pages and reads through a position', () => {
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+    };
+    const valid = (value: unknown) =>
+      isCacheRequest({ id: 1, kind: 'entity-filter', request: value });
+    const mail = (fields: Record<string, unknown>, limit = 20) =>
+      valid({ ...request, limit, mail: { view: 'INBOX', ...fields } });
+    expect(mail({})).toBe(true);
+    expect(mail({ cursor: 'row' })).toBe(true);
+    expect(mail({}, 500)).toBe(false);
+    // `limit` is the fewest rows of a read through a position.
+    expect(mail({ through: 'row' }, 2_000)).toBe(true);
+    expect(mail({ through: 'row' }, 5_001)).toBe(false);
+    expect(mail({ cursor: 'row', through: 'row' })).toBe(false);
+    expect(mail({ through: 'x'.repeat(4097) })).toBe(false);
+    expect(mail({ unexpected: true })).toBe(false);
+  });
+
   it('validates calendar range, commit, and uncertain-event requests', () => {
     const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const rangeRequest = (request: unknown) =>
@@ -525,6 +547,7 @@ describe('coordinator runtime protocol', () => {
       scope: 'scope',
       tabId: 'tab',
       livenessLockName: 'graphql-cache-tab:scope:tab',
+      visible: true,
       buildTime: 1_790_000_000_000,
     },
     {
@@ -777,6 +800,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
         buildTime: 0,
       }).ok
     ).toBe(false);
@@ -788,6 +812,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
       }).ok
     ).toBe(false);
     expect(

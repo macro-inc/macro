@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -11,7 +12,7 @@ import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelInviteButton } from '@channel/channel-invite-button';
-import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
+import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -35,7 +36,6 @@ import {
 } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { Tabs } from '@ui';
 import {
   type Accessor,
@@ -46,9 +46,11 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
+import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
   ChannelSurface,
@@ -101,18 +103,10 @@ type ChannelDetailHeaderProps = {
 
 export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
-  const channelType = useChannelType(props.channelId);
-  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
-  const participants = () =>
-    participantsQuery.isSuccess ? (participantsQuery.data ?? []) : [];
 
   return (
     <div class="ph-no-capture flex min-w-0 shrink items-center gap-2">
-      <ChannelTopIcon
-        channelId={props.channelId}
-        channelType={channelType()}
-        participants={participants()}
-      />
+      <ChannelTitleIcon channelId={props.channelId} />
       <span class="truncate text-sm font-semibold">
         {channelName() ?? 'New Channel'}
       </span>
@@ -278,6 +272,15 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const canCall = useChannelCanCall(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
   useSplitDisplayName(() => channelName() ?? 'New Channel');
+  const analytics = useAnalytics();
+  // Keyed by channel id, so this counts one open per channel shown.
+  onMount(() => {
+    analytics.pageView('channel');
+    analytics.track('open_entity', {
+      entityType: 'channel',
+      entityId: channelId,
+    });
+  });
 
   const requestFromTarget = (
     target: ChannelTargetRequest | undefined
@@ -415,7 +418,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
           >
             <Switch>
               <Match when={activeTab() === 'messages'}>
-                <DebugSuspense name="ChannelDetail.messages">
+                <DebugSuspense
+                  name="ChannelDetail.messages"
+                  fallback={<ChannelLoading />}
+                >
                   <ChannelMessages autofocus={props.autofocus ?? false} />
                 </DebugSuspense>
               </Match>

@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   type Accessor,

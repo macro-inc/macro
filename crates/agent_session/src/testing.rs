@@ -11,8 +11,8 @@ use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
     ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim,
-    SessionManager, SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog,
-    StoredQueuedAction, ThreadSession, TurnPrompter,
+    SessionManager, SessionPreviewCandidate, SessionSource, SessionStatus, SessionVisibility,
+    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, TurnPrompter,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -212,6 +212,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             status: SessionStatus::default(),
             created_at: now,
             modified_at: now,
+            source: params.purpose.source(),
+            visibility: params
+                .purpose
+                .visibility(params.bot_id, params.thread_id, false),
         };
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
@@ -423,6 +427,25 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
         session.model = model.to_owned();
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.source = source;
+        session.visibility = visibility;
         session.modified_at = chrono::Utc::now();
         Ok(())
     }
@@ -1032,6 +1055,8 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         status: SessionStatus::NoMessages,
         created_at: now,
         modified_at: now,
+        source: SessionSource::User,
+        visibility: SessionVisibility::Listed,
     }
 }
 

@@ -33,6 +33,9 @@ vi.mock('@block-channel/utils/link', () => ({
   getChannelParams: vi.fn(),
   navigateToChannelMessage: vi.fn(),
 }));
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToBlockName: (value: { fileType: string }) => value.fileType,
   resolveBlockAlias: (type: string) => type,

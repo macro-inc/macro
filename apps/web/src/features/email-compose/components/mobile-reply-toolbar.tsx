@@ -1,5 +1,5 @@
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import CaretLeft from '@phosphor/caret-left.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 import { MobileComposeActions } from './mobile-compose-actions';

@@ -1,5 +1,6 @@
 mod access_request;
 mod calendar_join_request;
+mod channel_push;
 pub use access_request::{
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
 };
@@ -1056,6 +1057,8 @@ fn alert_apns<T: NotificationTitle>(
         push_notification_data: PushNotificationData {
             notification_id,
             sender_profile_picture_url,
+            recipient_id: None,
+            navigation: None,
         },
     })
 }
@@ -1102,11 +1105,19 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            None,
+        )
     }
 }
 
@@ -1120,16 +1131,18 @@ impl NotificationExtIos for ChannelMessageReactionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        alert_apns(
+        channel_push::channel_apns(
             self,
             sender_id,
             notification_id,
             self.sender_profile_picture_url.clone(),
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
         )
-        .ok()
     }
 }
 
@@ -1143,11 +1156,19 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1161,11 +1182,19 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            Some(&self.thread_id),
+        )
     }
 }
 
@@ -1179,11 +1208,19 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.channel.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.channel.message_id,
+            self.channel.thread_id.as_deref(),
+        )
     }
 }
 
@@ -2000,3 +2037,49 @@ mod initiative_discussion;
 pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
 mod crm_discussion;
 pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};
+
+/// A live message in an independently shared external chat.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalChatMessageMetadata {
+    /// The messaging service the chat lives in.
+    pub provider: model_entity::ExternalChatProvider,
+    /// The chat's name.
+    pub chat_name: String,
+    /// Stable message id; retries use it as their notification id.
+    pub message_id: Uuid,
+}
+impl Notification for ExternalChatMessageMetadata {
+    const TYPE_NAME: &'static str = "external_chat_message";
+}
+impl NotificationTitle for ExternalChatMessageMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.chat_name.clone())
+    }
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("New {} message", self.provider.label()))
+    }
+}
+
+impl NotificationExtIos for ExternalChatMessageMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("external_chat").append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}

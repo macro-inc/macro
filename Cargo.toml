@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "crates/access_requests",
+  "crates/agent_api_keys",
   "crates/routines",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
@@ -40,6 +41,7 @@ members = [
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
   "crates/jev",
+  "crates/universal_input",
   "crates/database_sql",
   "crates/database_webhooks",
   "crates/databases",
@@ -84,6 +86,10 @@ members = [
   "crates/harness_token",
   "crates/harnesses",
   "crates/import",
+  "crates/import_notion",
+  "crates/import_tracker",
+  "crates/import_linear",
+  "crates/import_jira",
   "crates/initiative",
   "crates/initiative_description",
   "crates/item_filter_index",
@@ -124,7 +130,16 @@ members = [
   "crates/task_dedup",
   "crates/unfurl",
   "crates/user_api_key",
+  "crates/user_language",
   "crates/webhook_signature",
+  "crates/whatsapp_e2e",
+  "crates/whatsapp_fake_server",
+  "crates/external_chat",
+  "crates/whatsapp_linked",
+  "crates/whatsapp_store_pg",
+  "crates/whatsmeow",
+  "crates/whatsmeow_proto",
+  "crates/whatsmeow_signal",
   "crates/work_feed",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
@@ -162,12 +177,14 @@ members = [
   "services/sha_cleanup_worker",
   "services/slack_import_worker",
   "services/static_file_service",
+  "crates/sync_router",
   "services/sync-service",
   "services/sync-service/bebop-schema",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
   "services/user_link_cleanup_handler",
+  "services/whatsapp_session_service",
   "services/worker_trigger",
   "tooling/native_app_server",
   "tooling/notification_sandbox",
@@ -178,6 +195,7 @@ members = [
 ]
 
 [workspace.dependencies]
+aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
 apollo-compiler = "1"
@@ -234,6 +252,7 @@ chrono = { version = "0.4.39", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
+cbc = { version = "0.1.2", features = ["std"] }
 constant_time_eq = "0.3.1"
 console_error_panic_hook = "0.1.7"
 crossterm = "0.28"
@@ -247,6 +266,7 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 eventsource-stream = "0.2.3"
+flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
@@ -258,6 +278,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 hex = "0.4.3"
+hkdf = "0.12.4"
 hmac = "0.12.1"
 encoding_rs = "0.8"
 http = "1"
@@ -280,6 +301,8 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+# Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
+libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
   "rustls-tls-webpki-roots",
@@ -292,6 +315,7 @@ logos = "0.16"
 lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
+md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nom = "8"
@@ -319,6 +343,9 @@ png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+prost = "0.14"
+prost-build = "0.14"
+protox = "0.10"
 quote = "1"
 rand = "0.9.0"
 ratatui = "0.29"
@@ -421,6 +448,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
 zune-core = "0.5"
@@ -435,6 +463,7 @@ web-time = "1.1.0"
 webbrowser = { version = "=1.2.2", features = ["hardened"] }
 windows-sys = "0.61"
 worker = "0.8.1"
+x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",

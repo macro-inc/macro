@@ -8,6 +8,9 @@ version = "0.1.0"
 # `AgentSessionId` only. `default-features = false` drops the crate's CLI
 # binaries (clap, tokio), which the vocabulary does not need.
 agent_fold = { path = "../folds/agent_fold", default-features = false }
+ai_toolset = { path = "../ai_toolset" }
+async-trait = { workspace = true }
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 axum = { workspace = true }
@@ -36,6 +39,7 @@ lru = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 # The rows holding the owner's custom (URL-added) MCP servers and their
 # encrypted grants, and the refresh that keeps a grant live. Port and domain
@@ -53,6 +57,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sha2 = { workspace = true }
+sse-stream = { workspace = true }
 thiserror = { workspace = true }
 # The hold's keepalive timer, and the channel its stream is fed through.
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }

@@ -159,6 +159,18 @@ describe('formatReactorNames', () => {
     ).toBe('alice@test.com and bob@test.com');
   });
 
+  it('counts reactors outside Macro instead of naming them', () => {
+    expect(
+      formatReactorNames(
+        ['whatsapp-reactor:1', 'user-1', 'whatsapp-reactor:2'],
+        'user-1'
+      )
+    ).toBe('You and 2 other people');
+    expect(formatReactorNames(['whatsapp-reactor:1'], 'user-1')).toBe(
+      '1 other person'
+    );
+  });
+
   it('puts current user first regardless of input order', () => {
     expect(
       formatReactorNames(['macro|alice@test.com', 'user-1'], 'user-1')

@@ -1,11 +1,11 @@
+import Check from '@icon/system/regular/check.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import {
   DROPDOWN_CHOICE_COLORS,
   type DropdownOptions,
 } from '@macro-inc/spreadsheet/data-validation';
 import type { DropdownColor } from '@macro-inc/spreadsheet/sheet-rules';
-import Check from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';

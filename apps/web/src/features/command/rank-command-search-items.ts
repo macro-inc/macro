@@ -44,13 +44,14 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const search = createFreshSearch<T>({
     config: {
       useViewedAt: true,
+      channelBoost: 3,
       dmBoost: 1.8,
       fuzzyWeight: 0.7,
       timeWeight: 0.7,
       minFuzzyThreshold: 0.1,
-      commaSeparatedChannelMatch: true,
     },
     getName: (item) => item.searchText,
+    isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
     isDmItem: (item) => item.bucket === 'dm',
     getTimestamp: (item) => item.timestamps,
   });

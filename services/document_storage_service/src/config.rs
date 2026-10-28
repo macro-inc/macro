@@ -170,6 +170,13 @@ pub struct Config {
     #[macro_config_default(false)]
     pub slack_import_enabled: bool,
 
+    /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
+    /// Enable only after every email-service pubsub worker runs a release that
+    /// decodes them; older workers delete the batch form. Off, each message is
+    /// its own `ModifyMessageLabels`.
+    #[macro_config_default(false)]
+    pub gmail_label_write_batches_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,

@@ -5,8 +5,10 @@ members = [
   "android_push_plugin",
   "callkit_plugin",
   "edit_menu_plugin",
+  "file_export_plugin",
   "graphql_cache_plugin",
   "input_accessory_plugin",
+  "ios_push_plugin",
   "logger",
   "macro_bundle_updater_plugin",
   "navigation_plugin",
@@ -27,6 +29,10 @@ opt-level = 3
 debug-assertions = false
 
 [workspace.dependencies]
+# Beeper's fork carries the caBLE (hybrid) fixes WhatsApp passkey pairing needs.
+webauthn-authenticator-rs = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6", default-features = false }
+webauthn-rs-proto = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6" }
+
 pollster = "0.4"
 reqwest = "0.13"
 rootcause = "0.12"

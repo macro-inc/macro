@@ -1,7 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
-import Bell from '@phosphor/bell.svg';
+import Bell from '@icon/system/regular/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {
@@ -69,7 +70,10 @@ function NotificationToastTrigger(props: {
           },
         ],
       },
-      { persistent: true }
+      {
+        persistent: true,
+        region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+      }
     );
   });
 

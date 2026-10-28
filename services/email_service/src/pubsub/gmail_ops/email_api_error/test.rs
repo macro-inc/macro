@@ -6,7 +6,7 @@ use super::*;
 fn rate_limits_use_queue_routing_policy() {
     let provider_rate_limit = EmailApiError::RateLimited {
         retry_after: Some(Duration::from_secs(30)),
-        origin: email_api_client::domain::models::RateLimitOrigin::Provider,
+        origin: email_api_client::domain::models::RateLimitOrigin::Provider { concurrency: false },
     };
 
     assert_eq!(error_policy(&provider_rate_limit), ErrorPolicy::RateLimited);
@@ -73,7 +73,7 @@ fn not_found_is_success_for_delete_label() {
 fn modify_message_labels_rate_limited_and_transient_failures_do_not_revert() {
     assert!(!is_permanent_mutation_error(&EmailApiError::RateLimited {
         retry_after: None,
-        origin: email_api_client::domain::models::RateLimitOrigin::Provider,
+        origin: email_api_client::domain::models::RateLimitOrigin::Provider { concurrency: false },
     }));
     assert!(!is_permanent_mutation_error(&EmailApiError::Transient {
         message: "timeout".to_string(),

@@ -3,9 +3,9 @@ import type { SplitFileMenuActionGroups } from '@components/app/split-layout/con
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Share from '@icon/share.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Rename from '@phosphor/pencil-line.svg';
-import Sparkle from '@phosphor/sparkle.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Rename from '@icon/system/regular/pencil-line.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { Dropdown } from '@ui';
 import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

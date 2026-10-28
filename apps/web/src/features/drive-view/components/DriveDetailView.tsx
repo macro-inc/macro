@@ -185,6 +185,7 @@ function StackEntityDetail(props: {
             if (context.type !== 'document') return null;
             return (
               <FileDetailBreadcrumbItem
+                download={context.download}
                 value={props.entry.value}
                 metadata={props.entry.data}
                 order={props.order}

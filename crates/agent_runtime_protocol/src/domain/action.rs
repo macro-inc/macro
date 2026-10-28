@@ -23,6 +23,9 @@ mod test;
 /// ACP session config option used to select the agent's model.
 pub const MODEL_CONFIG_ID: &str = "model";
 
+/// Marks server-added execution context that runtimes read but transcripts omit.
+pub const INVOCATION_CONTEXT_META: &str = "macro/invocation-context";
+
 /// Identifies one accepted [`AgentAction`] end to end: returned by the
 /// control endpoint, written as the JSON-RPC request id on the action's wire
 /// frame, and read back off that frame as `request_id` on the folded message
@@ -603,6 +606,16 @@ impl AgentAction {
                         .insert(0, serde_json::json!({"type":"text", "text":context}));
                     params["_meta"] =
                         serde_json::json!({crate::domain::notification::NOTIFICATIONS_META: input});
+                }
+                if let Some(turn) = AgentActionId::from_request_id(&request_id) {
+                    let context = serde_json::json!({
+                        "version": 1,
+                        "text": format!("<invocation turn_id=\"{turn}\">Use this turn_id for ExecuteCode calls originating in this prompt. Never substitute another turn's ID for a stale call.</invocation>")
+                    });
+                    params["prompt"]
+                        .as_array_mut()
+                        .ok_or_else(|| ActionError::Acp("missing prompt blocks".into()))?
+                        .push(serde_json::json!({"type":"text", "text":format!("<m-agent-context>{context}</m-agent-context>"), "_meta": { INVOCATION_CONTEXT_META: true }}));
                 }
                 let frame =
                     RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)

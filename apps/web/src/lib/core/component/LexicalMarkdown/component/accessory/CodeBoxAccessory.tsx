@@ -4,6 +4,20 @@
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
+import Braces from '@icon/system/regular/brackets-curly.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import FileC from '@icon/system/regular/file-c.svg';
+import FileCode from '@icon/system/regular/file-code.svg';
+import FileCpp from '@icon/system/regular/file-cpp.svg';
+import FileCss from '@icon/system/regular/file-css.svg';
+import FileHtml from '@icon/system/regular/file-html.svg';
+import FileJs from '@icon/system/regular/file-js.svg';
+import FileMd from '@icon/system/regular/file-md.svg';
+import FilePy from '@icon/system/regular/file-py.svg';
+import FileRs from '@icon/system/regular/file-rs.svg';
+import FileSql from '@icon/system/regular/file-sql.svg';
+import FileTs from '@icon/system/regular/file-ts.svg';
+import TrashCan from '@icon/system/regular/trash-simple.svg';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
@@ -12,20 +26,6 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
-import Braces from '@phosphor/brackets-curly.svg';
-import Copy from '@phosphor/copy.svg';
-import FileC from '@phosphor/file-c.svg';
-import FileCode from '@phosphor/file-code.svg';
-import FileCpp from '@phosphor/file-cpp.svg';
-import FileCss from '@phosphor/file-css.svg';
-import FileHtml from '@phosphor/file-html.svg';
-import FileJs from '@phosphor/file-js.svg';
-import FileMd from '@phosphor/file-md.svg';
-import FilePy from '@phosphor/file-py.svg';
-import FileRs from '@phosphor/file-rs.svg';
-import FileSql from '@phosphor/file-sql.svg';
-import FileTs from '@phosphor/file-ts.svg';
-import TrashCan from '@phosphor/trash-simple.svg';
 import { Button, CopyButton, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,

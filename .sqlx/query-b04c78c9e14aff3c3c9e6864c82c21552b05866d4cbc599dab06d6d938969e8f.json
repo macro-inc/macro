@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE retained AS (\n                SELECT entity.id, entity.parent_id\n                FROM import_entity AS entity\n                WHERE entity.user_id = $1 AND entity.source = $2\n                  AND EXISTS (\n                      SELECT 1 FROM import_entity_written AS written\n                      WHERE written.import_id = entity.id\n                  )\n                UNION\n                SELECT parent.id, parent.parent_id\n                FROM import_entity AS parent\n                JOIN retained AS child ON child.parent_id = parent.id\n                WHERE parent.user_id = $1 AND parent.source = $2\n            )\n            DELETE FROM import_entity\n            WHERE user_id = $1 AND source = $2 AND status = 'staged'\n              AND metadata->'plan' IS NOT NULL\n              AND id NOT IN (SELECT id FROM retained)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b04c78c9e14aff3c3c9e6864c82c21552b05866d4cbc599dab06d6d938969e8f"
+}

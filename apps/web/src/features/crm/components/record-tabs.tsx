@@ -1,6 +1,6 @@
 import { getIconConfig } from '@core/component/EntityIcon';
-import SquaresFourIcon from '@phosphor/squares-four.svg';
-import UsersIcon from '@phosphor/users.svg';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Tabs } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {

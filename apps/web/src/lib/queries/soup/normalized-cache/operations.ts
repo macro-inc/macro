@@ -153,6 +153,14 @@ function updateSoupEntity<T extends SoupEntityTag>(
   };
 }
 
+/** Apply a row read from the server to every list holding it, without
+ * cancelling a list revalidation it may accompany. */
+export function hydrateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>
+): void {
+  updateSoupEntity(partial, false);
+}
+
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
   return (getSoupNormalizer().getObjectById(soupNormKey(entityId)) ??
     undefined) as SoupApiItem | undefined;

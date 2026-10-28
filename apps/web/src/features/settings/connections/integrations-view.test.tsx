@@ -142,6 +142,7 @@ function provideChannels() {
       id: name,
       foreign_id: `C${name}`,
       source: 'slack',
+      kind: 'channel',
       status: 'staged',
       initiator: 'manual',
       user_id: 'me',

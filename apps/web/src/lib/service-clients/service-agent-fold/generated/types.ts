@@ -666,6 +666,155 @@ export type Harness =
   /**  Not announced, or an agent this fold does not know. */
   | 'unknown';
 
+/**  One object an import report calls out. */
+export type ImportItem = ImportItem_Serialize | ImportItem_Deserialize;
+
+/**  One object an import report calls out. */
+export type ImportItem_Deserialize = {
+  /**  The object's title. */
+  title: string;
+  /**  Its URL in the source workspace. */
+  url: string | null;
+  /**  Why it is called out. */
+  reason: string | null;
+};
+
+/**  One object an import report calls out. */
+export type ImportItem_Serialize = {
+  /**  The object's title. */
+  title: string;
+  /**  Its URL in the source workspace. */
+  url?: string | null;
+  /**  Why it is called out. */
+  reason?: string | null;
+};
+
+/**  How an approved import's write ended. */
+export type ImportOutcome =
+  /**  Every planned object was written or accounted for. */
+  | 'completed'
+  /**  The write stopped on an error. */
+  | 'failed'
+  /**  The owner cancelled it. */
+  | 'cancelled';
+
+/**  What an import plan proposes, once it is ready to approve. */
+export type ImportPlan = {
+  /**  The workspace the import reads. */
+  source?: ImportWorkspace;
+  /**  Objects to copy as they are; projects for Linear and Jira. */
+  copy: number;
+  /**  Data sources whose rows become tasks; issues for Linear and Jira. */
+  taskLists: number;
+  /**  Objects to leave in the source workspace. */
+  skipped: number;
+  /**  Objects that need handling by hand. */
+  byHand: number;
+};
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement =
+  | ImportSettlement_Serialize
+  | ImportSettlement_Deserialize;
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement_Deserialize = {
+  /**  The workspace the import read. */
+  source?: ImportWorkspace;
+  /**  How the write ended. */
+  outcome: ImportOutcome;
+  /**  Why it failed, or what went wrong in a completed write. */
+  error: string | null;
+  /**  Objects written into Macro. */
+  imported: number;
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
+  planned: number;
+  /**  Planned documents. */
+  documents: number;
+  /**  Planned databases. */
+  databases: number;
+  /**  Rows those databases hold. */
+  databaseRows: number;
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
+  taskLists: number;
+  /**  Tasks those task lists or issues become. */
+  taskRows: number;
+  /**  Objects left in the source workspace. */
+  skipped: number;
+  /**  Planned objects that were not written. */
+  notWritten: number;
+  /**  Written objects shared with the owner's team. */
+  sharedWithTeam: number;
+  /**  Objects teammates had already imported, linked instead of copied. */
+  alreadyInMacro: number;
+  /**  Objects a teammate is writing at the same time, linked once written. */
+  waitingOnTeammates: number;
+  /**  The Macro folder the import writes into. */
+  rootFolderId: string | null;
+  /**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
+  failures: ImportItem_Deserialize[];
+  /**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
+  handItems: ImportItem_Deserialize[];
+};
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement_Serialize = {
+  /**  The workspace the import read. */
+  source: ImportWorkspace;
+  /**  How the write ended. */
+  outcome: ImportOutcome;
+  /**  Why it failed, or what went wrong in a completed write. */
+  error?: string | null;
+  /**  Objects written into Macro. */
+  imported: number;
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
+  planned: number;
+  /**  Planned documents. */
+  documents: number;
+  /**  Planned databases. */
+  databases: number;
+  /**  Rows those databases hold. */
+  databaseRows: number;
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
+  taskLists: number;
+  /**  Tasks those task lists or issues become. */
+  taskRows: number;
+  /**  Objects left in the source workspace. */
+  skipped: number;
+  /**  Planned objects that were not written. */
+  notWritten: number;
+  /**  Written objects shared with the owner's team. */
+  sharedWithTeam: number;
+  /**  Objects teammates had already imported, linked instead of copied. */
+  alreadyInMacro: number;
+  /**  Objects a teammate is writing at the same time, linked once written. */
+  waitingOnTeammates: number;
+  /**  The Macro folder the import writes into. */
+  rootFolderId?: string | null;
+  /**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
+  failures: ImportItem_Serialize[];
+  /**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
+  handItems: ImportItem_Serialize[];
+};
+
+/**
+ *  The workspace an import reads. Events stored before Linear and Jira
+ *  imports existed are Notion's.
+ */
+export type ImportWorkspace =
+  /**  Notion pages and databases. */
+  | 'notion'
+  /**  Linear projects and issues. */
+  | 'linear'
+  /**  Jira projects, epics and issues. */
+  | 'jira';
+
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
   /**  Still awaiting a decision. */
@@ -854,7 +1003,9 @@ export type NotificationEvent_Deserialize =
   /**  Owner decision and its confirmed results. */
   | { kind: 'review.decided'; payload: ReviewOutcome_Deserialize }
   /**  Completion of work initiated by a prior review decision. */
-  | { kind: 'review.settled'; payload: ReviewOutcome_Deserialize }
+  | { kind: 'review.settled'; payload: ReviewSettlement_Deserialize }
+  /**  The import plan a presented review shows finished planning. */
+  | { kind: 'import.planned'; payload: ImportPlan }
   /**  An app connection became available to the session. */
   | {
       kind: 'app.connected';
@@ -869,7 +1020,9 @@ export type NotificationEvent_Serialize =
   /**  Owner decision and its confirmed results. */
   | { kind: 'review.decided'; payload: ReviewOutcome_Serialize }
   /**  Completion of work initiated by a prior review decision. */
-  | { kind: 'review.settled'; payload: ReviewOutcome_Serialize }
+  | { kind: 'review.settled'; payload: ReviewSettlement_Serialize }
+  /**  The import plan a presented review shows finished planning. */
+  | { kind: 'import.planned'; payload: ImportPlan }
   /**  An app connection became available to the session. */
   | {
       kind: 'app.connected';
@@ -1093,6 +1246,40 @@ export type ReviewOutcome_Serialize = {
   /**  Exact affected items and their final states. */
   items: ReviewItemOutcome_Serialize[];
 };
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement =
+  | ReviewSettlement_Serialize
+  | ReviewSettlement_Deserialize;
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement_Deserialize =
+  /**  An approved import's background write ended. */
+  | {
+      /**  The import's final report. */
+      import: ImportSettlement_Deserialize;
+    }
+  /**  The decided actions' confirmed results. */
+  | ReviewOutcome_Deserialize;
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement_Serialize =
+  /**  An approved import's background write ended. */
+  | {
+      /**  The import's final report. */
+      import: ImportSettlement_Serialize;
+    }
+  /**  The decided actions' confirmed results. */
+  | ReviewOutcome_Serialize;
 
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = {

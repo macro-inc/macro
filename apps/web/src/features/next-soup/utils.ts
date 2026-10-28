@@ -1,5 +1,7 @@
 import { isListViewID } from '@app/constants/list-views';
+import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { markCalendarNotificationSeenOnOpen } from '@app/features/calendar/mark-event-notifications-seen';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
   type CalendarEventTime,
@@ -98,6 +100,7 @@ import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
@@ -885,7 +888,17 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-export { markCalendarNotificationSeenOnOpen } from '../calendar/mark-event-notifications-seen';
+/**
+ * Clear the dots of rows whose opened view has no block that marks the row's
+ * loaded notifications read: calendar events and agent sessions.
+ */
+export function markRowNotificationsSeenOnOpen(
+  entity: EntityWithRawNotifications<EntityData>,
+  notificationSource: NotificationSource
+) {
+  markCalendarNotificationSeenOnOpen(entity, notificationSource);
+  markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
+}
 
 /**
  * The event and instance a calendar row points at, resolved exactly as the
@@ -1515,9 +1528,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1614,9 +1625,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

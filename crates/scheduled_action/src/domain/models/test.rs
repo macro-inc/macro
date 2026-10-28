@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::{
     ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, MAX_ACTION_TIME,
-    ResolvedTaskTarget, RoutineModelId, Schedule, ScheduledAction, TaskTargetError,
+    ResolvedTaskTarget, RoutineModelId, RunVisibility, Schedule, ScheduledAction, TaskTargetError,
     UpdateScheduledAction,
 };
 use crate::domain::event_runs::ConfigurationRevision;
@@ -17,11 +17,15 @@ fn both_request_representations_normalize_to_the_same_configuration() {
         "schedule":"0 0 9 * * *", "timezone":"UTC"});
     let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
         "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    let stored = ScheduledAction {
+        enabled: false,
+        ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
+    };
     for input in [legacy, canonical] {
         let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
         let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
         let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
-        let update = serde_json::to_value(update.into_configuration(false)).unwrap();
+        let update = serde_json::to_value(update.into_configuration(&stored)).unwrap();
         assert_eq!(create, update);
         assert_eq!(create["trigger"]["type"], "cron");
     }
@@ -31,11 +35,52 @@ fn both_request_representations_normalize_to_the_same_configuration() {
 fn updates_may_omit_activation_but_creates_may_not() {
     let input = json!({"name":"routine", "kind":"Agent", "task":{},
         "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
-    for stored in [false, true] {
+    for enabled in [false, true] {
+        let stored = ScheduledAction {
+            enabled,
+            ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
+        };
         let update: UpdateScheduledAction = serde_json::from_value(input.clone()).unwrap();
-        assert_eq!(update.into_configuration(stored).enabled, stored);
+        assert_eq!(update.into_configuration(&stored).enabled, enabled);
     }
     assert!(serde_json::from_value::<CreateScheduledAction>(input).is_err());
+}
+
+/// Runs start unlisted unless a create says otherwise, and an update that
+/// omits the setting, as every client from before it does, keeps it.
+#[test]
+fn run_visibility_defaults_to_unlisted_and_omitting_it_keeps_the_stored_value() {
+    let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "schedule":"0 0 9 * * *", "timezone":"UTC"});
+    let with = |visibility: &str| {
+        let mut input = canonical.clone();
+        input["run_visibility"] = json!(visibility);
+        input
+    };
+    let create = |input: serde_json::Value| {
+        ActionConfiguration::from(serde_json::from_value::<CreateScheduledAction>(input).unwrap())
+            .run_visibility
+    };
+    assert_eq!(create(canonical.clone()), RunVisibility::Unlisted);
+    assert_eq!(create(legacy.clone()), RunVisibility::Unlisted);
+    assert_eq!(create(with("listed")), RunVisibility::Listed);
+
+    let stored = ScheduledAction {
+        run_visibility: RunVisibility::Listed,
+        ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
+    };
+    let update = |input: serde_json::Value| {
+        serde_json::from_value::<UpdateScheduledAction>(input)
+            .unwrap()
+            .into_configuration(&stored)
+            .run_visibility
+    };
+    assert_eq!(update(canonical.clone()), RunVisibility::Listed);
+    assert_eq!(update(legacy), RunVisibility::Listed);
+    assert_eq!(update(with("unlisted")), RunVisibility::Unlisted);
+    assert!(serde_json::from_value::<CreateScheduledAction>(with("hidden")).is_err());
 }
 
 #[test]
@@ -189,6 +234,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         claimed: None,
         next_run_at: Some(next_run_at),
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 

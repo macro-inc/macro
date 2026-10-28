@@ -1,10 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import OpenIcon from '@phosphor/arrows-out-simple.svg';
-import CheckIcon from '@phosphor/check.svg';
-import EmptyIcon from '@phosphor/circle-dashed.svg';
-import GripIcon from '@phosphor/dots-six-vertical.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import OpenIcon from '@icon/system/regular/arrows-out-simple.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EmptyIcon from '@icon/system/regular/circle-dashed.svg';
+import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';

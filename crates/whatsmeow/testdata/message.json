@@ -1,0 +1,181 @@
+{
+  "hashes": [
+    {
+      "hash": "2:XzulbVk1",
+      "jids": [
+        "5550001@s.whatsapp.net",
+        "5550001:3@s.whatsapp.net"
+      ]
+    },
+    {
+      "hash": "2:Gp17HBNi",
+      "jids": [
+        "777:1@lid",
+        "777@lid",
+        "1234:5@s.whatsapp.net"
+      ]
+    },
+    {
+      "hash": "2:47DEQpj8",
+      "jids": []
+    }
+  ],
+  "sources": [
+    {
+      "node": "00f80d1306faff845550001f0308fb01a11aff051700000000043818fc0450656572fc0a73656e6465725f6c6964faef7e76",
+      "chat": "5550001@s.whatsapp.net",
+      "sender": "5550001@s.whatsapp.net",
+      "from_me": false,
+      "group": false,
+      "addressing_mode": "",
+      "sender_alt": "777@lid",
+      "recipient_alt": "",
+      "id": "A1",
+      "t": 1700000000,
+      "push_name": "Peer",
+      "type": "text",
+      "edit": "",
+      "media_type": ""
+    },
+    {
+      "node": "00f8121306faff091203630000000000011c05f70103ef7efc0e7061727469636970616e745f706efaff845550001f03fc0f61646472657373696e675f6d6f64657608fb01a21aff05170000000104379555f801f8031d2643",
+      "chat": "120363000000000001@g.us",
+      "sender": "777:3@lid",
+      "from_me": false,
+      "group": true,
+      "addressing_mode": "lid",
+      "sender_alt": "5550001:3@s.whatsapp.net",
+      "recipient_alt": "",
+      "id": "A2",
+      "t": 1700000001,
+      "push_name": "",
+      "type": "media",
+      "edit": "1",
+      "media_type": "image"
+    },
+    {
+      "node": "00f80d13043806f70007ff02123494faff845550001f03fc12706565725f726563697069656e745f6c6964faef7e7608fb01a31aff051700000002",
+      "chat": "5550001@s.whatsapp.net",
+      "sender": "1234:7@s.whatsapp.net",
+      "from_me": true,
+      "group": false,
+      "addressing_mode": "",
+      "sender_alt": "",
+      "recipient_alt": "777@lid",
+      "id": "A3",
+      "t": 1700000002,
+      "push_name": "",
+      "type": "text",
+      "edit": "",
+      "media_type": ""
+    },
+    {
+      "node": "00f80b1306f70102ff02987608fb01a41aff0517000000030438fc11706565725f726563697069656e745f706efaff845550001f03",
+      "chat": "9876@lid",
+      "sender": "9876:2@lid",
+      "from_me": true,
+      "group": false,
+      "addressing_mode": "",
+      "sender_alt": "",
+      "recipient_alt": "5550001@s.whatsapp.net",
+      "id": "A4",
+      "t": 1700000003,
+      "push_name": "",
+      "type": "text",
+      "edit": "",
+      "media_type": ""
+    }
+  ],
+  "types": [
+    {
+      "message": "0a026869",
+      "type": "text",
+      "media_type": "",
+      "edit": "",
+      "plaintext": "0a026869",
+      "device_sent_plaintext": "fa010f0a07373737406c696412040a026869"
+    },
+    {
+      "message": "1a051a03706963",
+      "type": "media",
+      "media_type": "image",
+      "edit": "",
+      "plaintext": "1a051a03706963",
+      "device_sent_plaintext": "fa01120a07373737406c696412071a051a03706963"
+    },
+    {
+      "message": "42023001",
+      "type": "media",
+      "media_type": "ptt",
+      "edit": "",
+      "plaintext": "42023001",
+      "device_sent_plaintext": "fa010f0a07373737406c6964120442023001"
+    },
+    {
+      "message": "4a024001",
+      "type": "media",
+      "media_type": "gif",
+      "edit": "",
+      "plaintext": "4a024001",
+      "device_sent_plaintext": "fa010f0a07373737406c696412044a024001"
+    },
+    {
+      "message": "32060a0178320174",
+      "type": "media",
+      "media_type": "url",
+      "edit": "",
+      "plaintext": "32060a0178320174",
+      "device_sent_plaintext": "fa01130a07373737406c6964120832060a0178320174"
+    },
+    {
+      "message": "c202040a023a00",
+      "type": "media",
+      "media_type": "document",
+      "edit": "",
+      "plaintext": "c202040a023a00",
+      "device_sent_plaintext": "fa01120a07373737406c69641207c202040a023a00"
+    },
+    {
+      "message": "f202021200",
+      "type": "reaction",
+      "media_type": "",
+      "edit": "7",
+      "plaintext": "f202021200",
+      "device_sent_plaintext": "fa01100a07373737406c69641205f202021200"
+    },
+    {
+      "message": "920300",
+      "type": "poll",
+      "media_type": "",
+      "edit": "",
+      "plaintext": "920300",
+      "device_sent_plaintext": "fa010e0a07373737406c69641203920300"
+    },
+    {
+      "message": "623c0a380a1731323033363330303030303030303030303140672e757310001a034f4c4422163535353030303140732e77686174736170702e6e65741000",
+      "type": "text",
+      "media_type": "",
+      "edit": "8",
+      "plaintext": "623c0a380a1731323033363330303030303030303030303140672e757310001a034f4c4422163535353030303140732e77686174736170702e6e65741000",
+      "device_sent_plaintext": "fa01490a07373737406c6964123e623c0a380a1731323033363330303030303030303030303140672e757310001a034f4c4422163535353030303140732e77686174736170702e6e65741000"
+    },
+    {
+      "message": "62230a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c441000",
+      "type": "text",
+      "media_type": "",
+      "edit": "7",
+      "plaintext": "62230a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c441000",
+      "device_sent_plaintext": "fa01300a07373737406c6964122562230a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c441000"
+    },
+    {
+      "message": "d203350a3362310a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c44100e72050a036e65777880d095ffbc31",
+      "type": "text",
+      "media_type": "",
+      "edit": "1",
+      "plaintext": "d203350a3362310a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c44100e72050a036e65777880d095ffbc31",
+      "device_sent_plaintext": "fa01430a07373737406c69641238d203350a3362310a1f0a163535353030303140732e77686174736170702e6e657410011a034f4c44100e72050a036e65777880d095ffbc31"
+    }
+  ],
+  "unavailable_req": "6235101082013008042a2c0a2a0a1731323033363330303030303030303030303140672e757310001a044c4f53542207373737406c6964",
+  "unpadded": "616263"
+}

@@ -1,4 +1,4 @@
-import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   createSignal,

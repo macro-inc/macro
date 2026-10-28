@@ -5,6 +5,11 @@ binary update. Their IPC is optional: OTA-only clients retain frontend reload
 markers and instance IDs, with missing native coverage explicitly reported.
 See [reload diagnostics](../tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 
+The optional `file_export_plugin` adds the native file save picker and share
+sheet. The web bundle probes availability and keeps Web Share on older binaries,
+so it does not raise the native floor. The picker itself still needs an App Store
+release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
+
 (The Android counterpart — `android-update`, `Android Native Check`, Google
 Play as the source of truth — is described in `docs/development/android.md`.)
 
@@ -117,6 +122,24 @@ That workflow is not a required check: it waits for the web suite run to
 finish first (up to 25 minutes), and the release preconditions ignore it. For a non-breaking change you still want
 to ship to the App Store, `just ios-bump --no-min` bumps the versions without
 raising the floor.
+
+### Notification launch handoff compatibility
+
+The local `tauri/ios_push_plugin` exposes
+`window.__MACRO_IOS_NOTIFICATION_LAUNCH__` at document start. Web bundles use
+the durable pending-intent, acknowledgment and native-cover commands only
+when that capability exists; older iOS binaries keep their legacy push path.
+New watchers pass `launchAware: true`. Older web bundles omit it, so the native
+plugin delivers with the legacy contract and does not wait behind a cover for
+an acknowledgment those bundles cannot send. This opt-in contract does not
+require raising the OTA native floor; the improved cold-launch handoff still
+requires shipping the new native binary.
+
+Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
+for persisted intent/acknowledgment regressions. A simulator build checks the
+UIKit bridge; device verification must include notification launches after
+termination/WebContent eviction and ordinary icon resume, as well as auth
+failures, account switching, and rapid successive taps.
 
 ## What counts as native code
 

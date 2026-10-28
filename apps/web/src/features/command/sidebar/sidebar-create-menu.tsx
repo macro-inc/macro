@@ -1,13 +1,14 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import type { Placement } from '@floating-ui/dom';
-import CreateIcon from '@phosphor/note-pencil.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CreateIcon from '@icon/system/regular/note-pencil.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
@@ -116,7 +117,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
                 fullWidth
                 tooltipPlacement="right"
                 tooltipDisabled={!isSlim()}
-                label="Create"
+                label={t('create.create')}
                 hotkey={TOKENS.global.createCommand}
                 onMouseDown={(e: MouseEvent) => {
                   if (e.button !== 0) return;
@@ -127,7 +128,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
                   <PlusIcon class="size-4" />
                 </div>
                 <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-                  Create
+                  {t('create.create')}
                 </span>
                 <Show when={open()}>
                   <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
@@ -147,7 +148,7 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
               size="icon-sm"
               depth={1}
               class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
-              label="Create"
+              label={t('create.create')}
               hotkey={TOKENS.global.createCommand}
               onMouseDown={(e: MouseEvent) => {
                 if (e.button !== 0) return;

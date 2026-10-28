@@ -2,6 +2,7 @@ import type {
   DraftAttempt,
   LocalDraft,
 } from '@app/features/email-compose/core/local-draft';
+import { RecoverableIDB } from '../../persistence/recoverable-idb';
 import {
   createEmailSendJournal,
   restoreEmailSendLocks,
@@ -14,7 +15,8 @@ type AttemptRecord = DraftAttempt & {
   storageGeneration: string;
 };
 export type DraftStorageSession = { accountId: string; epoch: string };
-type StoredDraft = LocalDraft & { epoch: string };
+/** `writeId` identifies the save that produced the record, so a replay can recognize its own commit. */
+type StoredDraft = LocalDraft & { epoch: string; writeId?: string };
 const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
 
 export type DraftStorageEvent =
@@ -26,7 +28,6 @@ export function createLocalDraftStore(
   dbName = 'macro-email-working-copies-v1',
   onStorageEvent?: (event: DraftStorageEvent) => void
 ) {
-  let connection: Promise<IDBDatabase> | undefined;
   let recovering = false;
   let failed = false;
   const report = (event: DraftStorageEvent) => {
@@ -55,16 +56,13 @@ export function createLocalDraftStore(
       /* Durable state remains readable without notifications. */
     }
   };
-  const open = () => {
-    if (connection) return connection;
-    const request = indexedDB.open(dbName, 3);
-    const opening = new Promise<IDBDatabase>((resolve, reject) => {
-      request.onupgradeneeded = () => {
+  const connect = () =>
+    new RecoverableIDB(
+      dbName,
+      3,
+      (db, tx) => {
         for (const name of STORES)
-          if (!request.result.objectStoreNames.contains(name))
-            request.result.createObjectStore(name);
-        const tx = request.transaction;
-        if (!tx) return;
+          if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
         const owner = tx.objectStore('meta').get('session');
         owner.onsuccess = () => {
           const session = owner.result as DraftStorageSession | undefined;
@@ -80,92 +78,34 @@ export function createLocalDraftStore(
             row.continue();
           };
         };
-      };
-      request.onerror = () => {
-        if (connection === opening) connection = undefined;
-        reject(request.error);
-      };
-      request.onsuccess = () => {
-        const db = request.result;
-        db.onclose = () => {
-          if (connection !== opening) return;
-          connection = undefined;
-          recovering = true;
-          report({ type: 'closed' });
-        };
-        db.onversionchange = () => {
-          db.close();
-          if (connection === opening) connection = undefined;
-        };
-        resolve(db);
-        try {
-          if (typeof BroadcastChannel !== 'undefined' && !channel) {
-            channel = new BroadcastChannel(dbName);
-            channel.onmessage = notify;
-          }
-        } catch {
-          /* Embedded browsers may expose an unavailable channel. */
-        }
-      };
-    });
-    connection = opening;
-    return opening;
-  };
-  async function beginTransaction(mode: IDBTransactionMode) {
-    for (let attempt = 0; ; attempt++) {
-      const opening = open();
-      const db = await opening;
-      try {
-        return db.transaction([...STORES], mode);
-      } catch (error) {
-        if (
-          !(error instanceof DOMException) ||
-          error.name !== 'InvalidStateError'
-        )
-          throw error;
-        if (connection === opening) connection = undefined;
-        db.close();
+      },
+      undefined,
+      () => {
+        if (!recovering) report({ type: 'closed' });
         recovering = true;
-        // No requests have run yet. Never replay a started draft transaction.
-        if (attempt === 1) throw error;
       }
+    );
+  let database = connect();
+  const listen = () => {
+    try {
+      if (typeof BroadcastChannel !== 'undefined' && !channel) {
+        channel = new BroadcastChannel(dbName);
+        channel.onmessage = notify;
+      }
+    } catch {
+      /* Embedded browsers may expose an unavailable channel. */
     }
-  }
+  };
+  /** Every body re-reads its fences inside the transaction, so a replay after an interruption is safe. */
   async function transaction<T>(
     mode: IDBTransactionMode,
     run: (tx: IDBTransaction, finish: (value: T) => void) => void,
     publish = true
   ): Promise<T> {
     try {
-      const tx = await beginTransaction(mode);
-      const result = await new Promise<T>((resolve, reject) => {
-        let value: T;
-        let executionError: unknown;
-        tx.oncomplete = () => {
-          resolve(value);
-          if (mode === 'readwrite' && publish) changed();
-        };
-        // Request errors bubble before tx.error is set and before rollback
-        // finishes. Settle only on abort so callers see the real cause and
-        // cannot start recovery against a transaction that is still running.
-        tx.onabort = () =>
-          reject(
-            executionError ??
-              tx.error ??
-              new DOMException(
-                'Draft storage transaction aborted',
-                'AbortError'
-              )
-          );
-        try {
-          run(tx, (next) => {
-            value = next;
-          });
-        } catch (error) {
-          executionError = error;
-          tx.abort();
-        }
-      });
+      const result = await database.run([...STORES], mode, run);
+      listen();
+      if (mode === 'readwrite' && publish) changed();
       if (recovering || failed) report({ type: 'recovered' });
       recovering = false;
       failed = false;
@@ -226,14 +166,15 @@ export function createLocalDraftStore(
       epoch?: string,
       isCurrent = () => true
     ): Promise<DraftStorageSession> {
-      return await transaction(
+      const fenced = new Error('This draft session is no longer active');
+      const result = await transaction<DraftStorageSession | Error>(
         'readwrite',
         (tx, finish) => {
           const meta = tx.objectStore('meta');
           const retired = meta.get(['retired-session', epoch ?? '']);
           retired.onsuccess = () => {
             if (epoch && retired.result) {
-              tx.abort();
+              finish(fenced);
               return;
             }
             const request = meta.get('session');
@@ -247,7 +188,7 @@ export function createLocalDraftStore(
                   previous.accountId !== accountId &&
                   (!epoch || previous.epoch === epoch))
               ) {
-                tx.abort();
+                finish(fenced);
                 return;
               }
               if (
@@ -271,6 +212,8 @@ export function createLocalDraftStore(
         },
         false
       );
+      if (result instanceof Error) throw result;
+      return result;
     },
     read,
     async generation(
@@ -333,6 +276,7 @@ export function createLocalDraftStore(
       > & { expectedRevision: number },
       files: ReadonlyMap<string, Blob> = new Map()
     ): Promise<LocalDraft> {
+      const writeId = crypto.randomUUID();
       const result = await transaction<LocalDraft | Error | undefined>(
         'readwrite',
         (tx, finish) =>
@@ -362,6 +306,10 @@ export function createLocalDraftStore(
                   const request = drafts.get(input.key);
                   request.onsuccess = () => {
                     const previous = request.result as StoredDraft | undefined;
+                    if (previous?.writeId === writeId) {
+                      finish(previous);
+                      return;
+                    }
                     if (previous && previous.generation !== input.generation) {
                       finish(undefined);
                       return;
@@ -387,6 +335,7 @@ export function createLocalDraftStore(
                     const draft: StoredDraft = {
                       ...snapshot,
                       epoch: session.epoch,
+                      writeId,
                       latestAttemptId: previous?.latestAttemptId,
                       queuedAttemptId: previous?.queuedAttemptId,
                       attachments: input.attachments.map((attachment) => {
@@ -624,8 +573,10 @@ export function createLocalDraftStore(
           }
           for (const name of STORES)
             if (name !== 'sends') tx.objectStore(name).clear();
-          if (retire && previous)
-            meta.put(true, ['retired-session', previous.epoch]);
+          // A replay of a clear that already landed finds no session; the
+          // caller's epoch still names the session to fence.
+          const retired = previous?.epoch ?? expectedEpoch;
+          if (retire && retired) meta.put(true, ['retired-session', retired]);
           finish();
         };
       });
@@ -636,9 +587,11 @@ export function createLocalDraftStore(
         listeners.delete(listener);
       };
     },
+    /** Releases the connection; a later operation opens a new one. */
     async close() {
-      if (connection) (await connection).close();
-      connection = undefined;
+      const closing = database;
+      database = connect();
+      await closing.close();
       try {
         channel?.close();
       } catch {

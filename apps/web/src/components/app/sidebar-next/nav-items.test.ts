@@ -22,6 +22,7 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCalls: true,
   showReviews: true,
   showActivity: true,
+  showExternal: true,
   prefs: defaultPrefs(),
   ...overrides,
 });
@@ -149,6 +150,30 @@ describe('sidebar visibility preferences', () => {
         moreMenuItems(gates),
       ]) {
         expect(items.some((item) => item.id === 'booking-links')).toBe(false);
+      }
+    }
+  });
+});
+
+describe('External', () => {
+  it('shows External on the rail when WhatsApp linking is enabled', () => {
+    expect(
+      visibleNavItems(defaultGates()).some((item) => item.id === 'external')
+    ).toBe(true);
+  });
+
+  it('keeps External absent everywhere when its feature flag is off', () => {
+    for (const hidden of [new Set<string>(), new Set(['external'])]) {
+      const gates = defaultGates({
+        showExternal: false,
+        prefs: defaultPrefs({ hidden }),
+      });
+      for (const items of [
+        customizableNavItems(gates),
+        visibleNavItems(gates),
+        moreMenuItems(gates),
+      ]) {
+        expect(items.some((item) => item.id === 'external')).toBe(false);
       }
     }
   });

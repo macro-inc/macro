@@ -11,7 +11,7 @@ import type { CalendarJoinRequestStatus } from './calendarJoinRequestStatus';
 only through a channel share.
  */
 export interface CalendarJoinRequest {
-  /** When the request was made, or last reopened. */
+  /** When the request was made. */
   createdAt: string;
   /** The sharer's event entity that was shared with the channel. */
   eventId: string;

@@ -59,14 +59,26 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - `cargo test -p soup --features outbound` (`SQLX_OFFLINE` unset; needs local
   MacroDB). Without the feature the Postgres repo and its tests don't compile.
 - After schema/query changes: `nix develop --command just prepare_db` (see `justfile`).
+- `cargo clippy -p soup --no-default-features`, and again with `--features ports`
+  (both run in `just clippy` and CI): most dependents build soup without
+  `outbound`. Gate a domain helper on the feature its callers compile under:
+  `ports` for `domain/service`, `outbound` for the Postgres repository.
 
 ## Gotchas
+
+- `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
+  Activity uses property edges rather than references and matches email within
+  the caller's mailbox. Keep browser requests bounded; never expand every CRM
+  record into client-side filters or raise ingress limits to fit them.
 
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
+- Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
+  fence so the caller's `user_notification` rows drive the join; aggregate the
+  latest notification before applying the cursor or notification-state gates.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are

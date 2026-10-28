@@ -28,7 +28,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {

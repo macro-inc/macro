@@ -51,7 +51,7 @@ use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
-    SessionBot, SessionStatus, StoredAgentSessionLog,
+    SessionBot, SessionSource, SessionStatus, SessionVisibility, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -2290,6 +2290,8 @@ pub async fn create_agent_session_handler<
                             repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
+                            source: SessionSource::User,
+                            visibility: SessionVisibility::Listed,
                         })
                         .await?;
                     return Ok((
@@ -2322,6 +2324,8 @@ pub async fn create_agent_session_handler<
                 profile,
                 instructions,
                 model: request.model.filter(|model| !model.trim().is_empty()),
+                source: SessionSource::User,
+                visibility: SessionVisibility::Listed,
             })
             .await?;
         return Ok((

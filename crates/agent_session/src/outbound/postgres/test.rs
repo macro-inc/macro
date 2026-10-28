@@ -6,7 +6,9 @@ mod search;
 mod session_task;
 mod user_cleanup;
 mod working_branch;
-use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
+use crate::domain::model::{
+    AgentMcpServer, DEFAULT_AGENT_SESSION_NAME, SessionSource, SessionVisibility,
+};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
@@ -1308,16 +1310,144 @@ async fn inline_macro_sessions_start_hidden(pool: PgPool) {
     .await;
     let composer = create_session(&repo, new_session(bot_id::MACRO_NEW_BOT_ID, None, None)).await;
 
-    let hidden = sqlx::query!(
-        "SELECT id, list_hidden FROM agent_session WHERE id = ANY($1) ORDER BY list_hidden DESC",
-        &[inline.id.as_uuid(), composer.id.as_uuid()] as &[Uuid],
+    assert_eq!(
+        inline.visibility,
+        SessionVisibility::Hidden,
+        "the thread session starts hidden"
+    );
+    assert_eq!(
+        composer.visibility,
+        SessionVisibility::Listed,
+        "a composer session is listed"
+    );
+}
+
+/// Replicas still on code that knows only `list_hidden` keep reading and
+/// writing it until it is dropped, so a trigger keeps it in step with
+/// `visibility` both ways.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_hidden_stays_in_step_with_visibility_for_older_replicas(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let columns = |id: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query!(
+                "SELECT visibility, list_hidden FROM agent_session WHERE id = $1",
+                id
+            )
+            .fetch_one(&pool)
+            .await
+            .map(|row| (row.visibility, row.list_hidden))
+            .expect("read both columns")
+        }
+    };
+    let id = session.id.as_uuid();
+
+    for (visibility, hidden) in [("hidden", true), ("unlisted", false), ("hidden", true)] {
+        sqlx::query!(
+            "UPDATE agent_session SET visibility = $2 WHERE id = $1",
+            id,
+            visibility
+        )
+        .execute(&pool)
+        .await
+        .expect("write visibility");
+        assert_eq!(columns(id).await, (visibility.to_owned(), hidden));
+    }
+    // An old warm claimant unhides by `list_hidden` alone.
+    sqlx::query!(
+        "UPDATE agent_session SET list_hidden = FALSE WHERE id = $1",
+        id
     )
-    .fetch_all(&pool)
+    .execute(&pool)
     .await
-    .expect("read list visibility");
-    assert!(hidden[0].list_hidden, "the thread session starts hidden");
-    assert_eq!(hidden[0].id, inline.id.as_uuid());
-    assert!(!hidden[1].list_hidden, "a composer session is listed");
+    .expect("write list_hidden");
+    assert_eq!(columns(id).await, ("listed".to_owned(), false));
+
+    // An old writer creates a hidden row knowing nothing of `visibility`.
+    let old = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace, list_hidden)
+        VALUES ($1, $2, $3, 'model', 'harness', '/workspace', TRUE)
+        "#,
+        old,
+        OWNER,
+        bot_id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .expect("insert as an old writer");
+    assert_eq!(columns(old).await, ("hidden".to_owned(), true));
+}
+
+/// A routine's run records its source and its routine's visibility, and an
+/// agent's dispatch records that an agent started it, whether the harness
+/// created the row knowing them or an external runtime created it first. An
+/// unlisted run is not hidden: lists leave it out by asking to, so the Agents
+/// list can still show it on request.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sessions_record_who_started_them_and_where_they_show(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+
+    let managed = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            purpose: crate::domain::model::SessionPurpose::Routine {
+                visibility: SessionVisibility::Unlisted,
+            },
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+    assert_eq!(managed.source, SessionSource::Routine);
+    assert_eq!(managed.visibility, SessionVisibility::Unlisted);
+
+    let shown = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            purpose: crate::domain::model::SessionPurpose::Routine {
+                visibility: SessionVisibility::Listed,
+            },
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+    assert_eq!(shown.visibility, SessionVisibility::Listed);
+
+    let dispatched = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            purpose: crate::domain::model::SessionPurpose::Dispatched,
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+    assert_eq!(dispatched.source, SessionSource::Agent);
+    assert_eq!(dispatched.visibility, SessionVisibility::Listed);
+
+    let external = create_session(&repo, new_session(bot_id, None, None)).await;
+    assert_eq!(external.source, SessionSource::User);
+    assert_eq!(external.visibility, SessionVisibility::Listed);
+    for _ in 0..2 {
+        // Recording it again is a no-op.
+        AgentSessionRepo::set_origin(
+            &repo,
+            external.id,
+            SessionSource::Routine,
+            SessionVisibility::Unlisted,
+        )
+        .await
+        .expect("record the origin");
+    }
+    let external = AgentSessionRepo::get(&repo, external.id)
+        .await
+        .expect("read the session");
+    assert_eq!(external.source, SessionSource::Routine);
+    assert_eq!(external.visibility, SessionVisibility::Unlisted);
 }
 
 /// A preview reports every existing id with whether the viewer holds a grant:

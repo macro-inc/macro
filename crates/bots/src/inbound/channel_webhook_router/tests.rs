@@ -173,6 +173,14 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_agent(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -725,13 +733,19 @@ impl BotAuthorizer for TestBotAuthorizer {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -815,6 +829,7 @@ fn bot_authentication_with_acting_user(bot_id: BotId) -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            origin: macro_authorization::CredentialOrigin::Bot,
             agent_id: None,
             macro_user_id: MacroUserIdStr::parse_from_str("macro|acting-bot@example.com").unwrap(),
             user_context: Default::default(),

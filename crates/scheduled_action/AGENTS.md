@@ -24,6 +24,8 @@ each run.
 - Owns: scheduled-action and event-trigger CRUD, dispatch (in-process or
   tokio), run history, and live-update notifications over the connection
   gateway.
+- An authenticated caller with a routine ID can read its detail; listing,
+  run history, and mutations stay owner-scoped.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
@@ -59,8 +61,21 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
+- A task's `mcp_servers` are apps the routine requires. The owner must have
+  each connected: `TargetValidation` checks on save and
+  `RoutineSessions::prepare` checks again on every run, then adds them to an
+  agent limited to selected apps. An update that omits the key is rejected
+  when the stored task has apps (`require_explicit_selection`).
+
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
+- A new configuration field needs `#[serde(default)]` in `ActionConfiguration`
+  and an `Option` in `ActionConfigurationUpdate` that keeps the stored value
+  (both reject unknown fields, and older clients omit it), plus every query in
+  `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
+  which builds its own `ScheduledAction`.
+- `run_visibility` is copied onto each run's agent session when the run is
+  prepared, so changing it affects later runs only.
 
 ## Related
 

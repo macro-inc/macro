@@ -4,7 +4,7 @@ import {
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
-import ArrowUp from '@phosphor/arrow-up.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import { Button } from '@ui';
 /**
  * The block's composer container: reads the session from context and drives

@@ -159,6 +159,7 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         cancel: CancellationToken::new(),
         user_input: None,
         reviewer: None,
+        agent_key: None,
     }
 }
 

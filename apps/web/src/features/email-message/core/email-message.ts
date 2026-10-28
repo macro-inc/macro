@@ -17,6 +17,19 @@ export interface EmailAttachment {
   size_bytes?: number | null;
 }
 
+/** Whether a file is an iCalendar event file, by its MIME type or `.ics` name. */
+export function isCalendarFile(
+  fileName: string | null | undefined,
+  mimeType: string | null | undefined
+): boolean {
+  const type = mimeType?.split(';')[0].trim().toLowerCase();
+  return (
+    type === 'text/calendar' ||
+    type === 'application/ics' ||
+    !!fileName?.toLowerCase().endsWith('.ics')
+  );
+}
+
 export interface EmailDraftAttachment {
   upload_pending?: boolean;
   content_id?: string | null;
