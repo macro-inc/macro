@@ -345,7 +345,7 @@ describe('@ trigger position', () => {
 
     expect(harness.children()).toEqual([
       'text:hello ',
-      'user-mention:Jo',
+      'user-mention:@Jo',
       'text:world',
     ]);
   });

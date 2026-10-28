@@ -7,7 +7,7 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
@@ -47,19 +47,16 @@ vi.mock('@ui', () => ({
     <div data-testid="bubble">{props.children}</div>
   ),
 }));
-vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: {
-    text: string;
-    observeRender?: (element: HTMLElement) => void;
-  }) => {
-    let element!: HTMLParagraphElement;
-    onMount(() => props.observeRender?.(element));
-    return (
-      <p ref={element} data-testid="text">
-        {props.text}
-      </p>
-    );
-  },
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string }) => (
+      <p data-testid="text">{props.markdown}</p>
+    ),
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  channelTheme: {},
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
@@ -176,6 +173,49 @@ const message = (
   author: { kind: 'agent' },
   parts,
   stop,
+});
+
+describe('Message incomplete mentions', () => {
+  const partial = 'See <m-document-mention>{"documentId":"unfinished';
+
+  it('keeps a cancelled reply clean when stopping and after remount', () => {
+    const [reply, setReply] = createSignal(message([text(partial)], null));
+    const [inFlight, setInFlight] = createSignal(true);
+    const view = render(() => (
+      <Message message={reply()} inFlight={inFlight()} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+
+    setReply(message([text(partial)], { kind: 'cancelled' }));
+    setInFlight(false);
+    expect(view.getByTestId('text').textContent).toBe('See ');
+    view.unmount();
+
+    const restored = render(() => (
+      <Message message={reply()} inFlight={false} />
+    ));
+    expect(restored.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('hides an interrupted reply without a recorded stop reason', () => {
+    const view = render(() => (
+      <Message message={message([text(partial)], null)} inFlight={false} />
+    ));
+    expect(view.getByTestId('text').textContent).toBe('See ');
+  });
+
+  it('preserves unfinished markup in user prompts', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(partial)]),
+          author: { kind: 'user', userId: null },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('text').textContent).toBe(partial);
+  });
 });
 
 describe('Message tool grouping', () => {

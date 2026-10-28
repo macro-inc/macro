@@ -827,6 +827,7 @@ fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileE
 
 fn compile_database_row_literal(literal: &DatabaseRowLiteral) -> PredicateExpr {
     match literal {
+        DatabaseRowLiteral::Include => PredicateExpr::All,
         DatabaseRowLiteral::TableId(id) => exact_uuid(vocabulary::table_id(), id),
         DatabaseRowLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
     }

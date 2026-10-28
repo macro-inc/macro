@@ -821,7 +821,8 @@ failed tasks selected for retry, and a request failure preserves the selection.
 The regular Tasks list includes a Project column. Its cell is a regular property
 cell: clicking it opens the same entity dropdown as the other property columns,
 listing projects. Narrow lists show Project as a compact pill after the row's
-Status, Priority and Assignees pills. Right-click a task and choose `Add to project…` to choose or clear
+Status, Priority and Assignees pills. A project's Tasks tab hides the Project
+column, pill and board-card property, since every task there shares that project. Right-click a task and choose `Add to project…` to choose or clear
 its project. On mobile the same action is in the long-press menu. For a selection,
 choose `Actions → Add to project…`; there is no separate assignment button in the
 selection toolbar. A context action on a selected row applies to the selection.

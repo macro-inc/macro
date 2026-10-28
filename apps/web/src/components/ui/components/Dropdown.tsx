@@ -27,6 +27,7 @@ import {
 import { Button, type ButtonProps } from './Button';
 import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
+import { Tooltip } from './Tooltip';
 
 /*
 <Dropdown>
@@ -100,6 +101,12 @@ export type DropdownItemProps = Omit<
   'closeOnSelect'
 > & {
   closeOnSelect?: SelectionDismissal;
+  /**
+   * Shows the item as unavailable and explains why: a tooltip beside the row
+   * on hover or keyboard focus, a second line on touch. Unlike `disabled`, the
+   * row stays reachable so the reason can be read; selecting it does nothing.
+   */
+  disabledReason?: string;
 };
 export type DropdownMultiSelectItemProps = Omit<
   DropdownItemProps,
@@ -461,21 +468,88 @@ function DropdownSub(props: DropdownSubProps) {
 
 function DropdownItem(props: DropdownItemProps) {
   const selection = createSelectionDismissal();
-  const [local, rest] = splitProps(props, ['class', 'ref', 'closeOnSelect']);
+  const [local, rest] = splitProps(props, [
+    'class',
+    'ref',
+    'closeOnSelect',
+    'disabledReason',
+  ]);
   return (
-    <KobalteDropdownMenu.Item
-      class={cn(ROW_CLASS, local.class)}
-      {...rest}
-      ref={(element) => {
-        selection.track(element);
-        callRef(local.ref, element);
-      }}
-      closeOnSelect={
-        local.closeOnSelect === 'unless-shift'
-          ? selection.shouldClose()
-          : local.closeOnSelect
+    <Show
+      when={local.disabledReason}
+      fallback={
+        <KobalteDropdownMenu.Item
+          class={cn(ROW_CLASS, local.class)}
+          {...rest}
+          ref={(element) => {
+            selection.track(element);
+            callRef(local.ref, element);
+          }}
+          closeOnSelect={
+            local.closeOnSelect === 'unless-shift'
+              ? selection.shouldClose()
+              : local.closeOnSelect
+          }
+        />
       }
-    />
+    >
+      {(reason) => (
+        <UnavailableItem {...rest} class={local.class} reason={reason()} />
+      )}
+    </Show>
+  );
+}
+
+/**
+ * Kobalte skips `disabled` items, so their reason could never be reached by
+ * keyboard. This row keeps its place in the menu, announced as disabled.
+ */
+function UnavailableItem(
+  props: Omit<DropdownItemProps, 'closeOnSelect' | 'disabledReason'> & {
+    reason: string;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'ref',
+    'reason',
+    'children',
+    'onSelect',
+    'disabled',
+  ]);
+  // Kobalte focuses the row on hover as well as on arrow keys.
+  const [focused, setFocused] = createSignal(false);
+  return (
+    <Tooltip
+      label={local.reason}
+      placement="right"
+      open={focused()}
+      class="w-full"
+    >
+      <KobalteDropdownMenu.Item
+        {...rest}
+        class={cn(ROW_CLASS, 'touch:flex-wrap touch:gap-y-0.5', local.class)}
+        closeOnSelect={false}
+        aria-disabled="true"
+        data-disabled=""
+        ref={(element) => {
+          const show = () => setFocused(true);
+          const hide = () => setFocused(false);
+          element.addEventListener('focus', show);
+          element.addEventListener('blur', hide);
+          onCleanup(() => {
+            element.removeEventListener('focus', show);
+            element.removeEventListener('blur', hide);
+          });
+          callRef(local.ref, element);
+        }}
+      >
+        {local.children}
+        <KobalteDropdownMenu.ItemDescription class="sr-only touch:not-sr-only touch:basis-full touch:text-xs touch:text-ink-muted">
+          {local.reason}
+        </KobalteDropdownMenu.ItemDescription>
+      </KobalteDropdownMenu.Item>
+    </Tooltip>
   );
 }
 

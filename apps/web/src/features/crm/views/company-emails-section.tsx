@@ -1,7 +1,10 @@
+import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import type { CrmCompanyEntity } from '@entity';
 import { Tabs } from '@ui';
 import { createMemo, createSignal } from 'solid-js';
+import { CrmListEmpty } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
+import { useCrmContext } from '../context/crm-context';
 import type {
   CrmEmailSignal as EmailSignalView,
   CrmEmailScope as EmailView,
@@ -14,6 +17,7 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
     () => props.company?.domains.map((domain) => domain.domain) ?? []
   );
   const [search, setSearch] = createSignal('');
+  const crm = useCrmContext();
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useCompanyEmailsQuery(domains, view, signalView);
@@ -63,7 +67,22 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
         source={emailsQuery}
         search={search()}
         pending={!props.company}
-        empty={emptyMessage()}
+        onClearSearch={() => setSearch('')}
+        emptyContent={
+          <CrmListEmpty
+            graphic={EmptyStateEmailGraphic}
+            title={emptyMessage()}
+            description="Conversations with this company's email domains will appear here."
+            action={
+              props.company?.emailSync === false
+                ? undefined
+                : {
+                    label: 'New email',
+                    onClick: () => crm.openEmailComposer(),
+                  }
+            }
+          />
+        }
       />
     </RecordSection>
   );

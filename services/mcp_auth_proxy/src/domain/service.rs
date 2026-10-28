@@ -14,8 +14,8 @@ use std::{
 use super::{
     models::{
         AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
-        TokenRequest, TokenResponse,
+        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
+        RegisteredClient, RevocationRequest, TokenRequest, TokenResponse,
     },
     ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
     redirect_uri::RedirectUriPolicy,
@@ -31,6 +31,10 @@ pub const CLIENT_REGISTRATION_TTL: Duration = Duration::from_secs(90 * 24 * 60 *
 /// refresh tokens on a 30-day sliding window and each broker refresh re-binds,
 /// so a binding outlives every refresh token that can still be redeemed.
 pub const REFRESH_TOKEN_BINDING_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// How long a grant revocation is remembered. A binding is re-armed for at
+/// most `REFRESH_TOKEN_BINDING_TTL` from its last write, so a revocation kept
+/// as long outlives every binding in the family it revokes.
+pub const REVOKED_GRANT_TTL: Duration = REFRESH_TOKEN_BINDING_TTL;
 
 /// Redirect URIs accepted per registration. Enough for a client that offers
 /// several callbacks, low enough that open registration cannot be used to
@@ -65,6 +69,11 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
         &self,
         params: TokenRequest,
     ) -> impl Future<Output = Result<TokenResponse, TokenExchangeError>> + Send;
+    /// Revokes the refresh token family a token belongs to (RFC 7009).
+    fn revoke_token(
+        &self,
+        params: RevocationRequest,
+    ) -> impl Future<Output = Result<(), RevokeTokenError>> + Send;
     /// Removes expired broker state when required by the backing store.
     fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
@@ -197,19 +206,31 @@ where
             .ok_or(TokenExchangeError::RefreshTokenRequired)?;
 
         let presented_digest = refresh_token_digest(&refresh_token);
-        let bound_client_id = self
+        let binding = self
             .refresh_token_bindings
-            .bound_client(&presented_digest)
+            .binding(&presented_digest)
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?
             .ok_or(TokenExchangeError::UnboundRefreshToken)?;
 
-        if bound_client_id != client_id {
+        if binding.client_id != client_id {
             tracing::warn!(
                 %client_id,
                 "refresh token presented by a client it was not issued to"
             );
             return Err(TokenExchangeError::ClientMismatch);
+        }
+
+        // A revocation that raced a refresh can leave a binding behind for the
+        // token that refresh rotated to; the grant marker refuses it anyway.
+        if self
+            .refresh_token_bindings
+            .is_grant_revoked(&binding.grant_id)
+            .await
+            .map_err(TokenExchangeError::RefreshTokenBindingStore)?
+        {
+            tracing::warn!(%client_id, grant_id = %binding.grant_id, "refresh token from a revoked grant");
+            return Err(TokenExchangeError::RevokedGrant);
         }
 
         let tokens = self
@@ -225,7 +246,7 @@ where
         // costs them the session outright. So log and hand the token over.
         let rebound = self
             .refresh_token_bindings
-            .bind(&rotated_digest, &client_id)
+            .bind(&rotated_digest, &binding)
             .await
             .inspect_err(|error| {
                 tracing::error!(error=?error, %client_id, "failed to bind rotated refresh token");
@@ -249,7 +270,7 @@ where
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             token_type: "Bearer",
-            expires_in: Some(tokens.expires_in),
+            expires_in: tokens.expires_in,
         })
     }
 
@@ -307,7 +328,10 @@ where
         self.refresh_token_bindings
             .bind(
                 &refresh_token_digest(&issued.refresh_token),
-                &issued.client_id,
+                &RefreshTokenBinding {
+                    client_id: issued.client_id,
+                    grant_id: uuid::Uuid::new_v4().to_string(),
+                },
             )
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
@@ -316,7 +340,7 @@ where
             access_token: issued.access_token,
             refresh_token: issued.refresh_token,
             token_type: "Bearer",
-            expires_in: issued.access_token_expires_at.map(seconds_until),
+            expires_in: seconds_until(issued.access_token_expires_at),
         })
     }
 }
@@ -334,6 +358,8 @@ where
             "authorization_endpoint": format!("{base}/authorize"),
             "token_endpoint": format!("{base}/token"),
             "registration_endpoint": format!("{base}/register"),
+            "revocation_endpoint": format!("{base}/revoke"),
+            "revocation_endpoint_auth_methods_supported": ["none"],
             "response_types_supported": ["code"],
             "grant_types_supported": ["authorization_code", "refresh_token"],
             "code_challenge_methods_supported": ["S256"],
@@ -512,8 +538,14 @@ where
         // before redeeming it, so record when the upstream token actually expires
         // and count down from that at token exchange rather than replaying a stale
         // `expires_in`.
-        let access_token_expires_at =
-            SystemTime::now().checked_add(Duration::from_secs(tokens.expires_in));
+        let access_token_expires_at = SystemTime::now()
+            .checked_add(Duration::from_secs(tokens.expires_in))
+            .ok_or_else(|| {
+                CompleteCallbackError::AuthorizationCodeExchangeFailed(anyhow::anyhow!(
+                    "upstream expires_in {} is out of range",
+                    tokens.expires_in
+                ))
+            })?;
 
         let issued_code = uuid::Uuid::new_v4().to_string();
         self.inflight_auth
@@ -551,6 +583,57 @@ where
             "refresh_token" => self.refresh_token_exchange(params).await,
             _ => Err(TokenExchangeError::UnsupportedGrantType),
         }
+    }
+
+    /// Revokes the refresh token family a token belongs to.
+    ///
+    /// Every step is idempotent and the binding is dropped last, so a client
+    /// that gets an error can retry and finish the revocation. A token the
+    /// broker does not know (never issued, expired, or already revoked) is not
+    /// an error, as RFC 7009 section 2.2 requires.
+    #[tracing::instrument(skip_all, err, fields(client_id = params.client_id.as_deref(), grant_id))]
+    async fn revoke_token(&self, params: RevocationRequest) -> Result<(), RevokeTokenError> {
+        let client_id = params.client_id.ok_or(RevokeTokenError::ClientIdRequired)?;
+        let token = params.token.ok_or(RevokeTokenError::TokenRequired)?;
+
+        let digest = refresh_token_digest(&token);
+        let Some(binding) = self
+            .refresh_token_bindings
+            .binding(&digest)
+            .await
+            .map_err(RevokeTokenError::RefreshTokenBindingStore)?
+        else {
+            // Access tokens are FusionAuth JWTs, which the broker cannot
+            // revoke; say so rather than reporting a revocation that did not
+            // happen. Refresh tokens are opaque, so a JWT is never one.
+            if token.as_str().split('.').count() == 3 {
+                return Err(RevokeTokenError::UnsupportedTokenType);
+            }
+            tracing::info!("revocation of a token the broker does not hold");
+            return Ok(());
+        };
+        tracing::Span::current().record("grant_id", binding.grant_id.as_str());
+
+        if binding.client_id != client_id {
+            tracing::warn!("revocation by a client the token was not issued to");
+            return Err(RevokeTokenError::ClientMismatch);
+        }
+
+        self.refresh_token_bindings
+            .revoke_grant(&binding.grant_id)
+            .await
+            .map_err(RevokeTokenError::RefreshTokenBindingStore)?;
+        self.oauth_provider
+            .revoke_refresh_token(&token)
+            .await
+            .map_err(RevokeTokenError::UpstreamRevocationFailed)?;
+        self.refresh_token_bindings
+            .unbind(&digest)
+            .await
+            .map_err(RevokeTokenError::RefreshTokenBindingStore)?;
+
+        tracing::info!("refresh token grant revoked");
+        Ok(())
     }
 
     /// Removes expired pending sessions and broker-issued codes.
@@ -696,6 +779,9 @@ pub enum TokenExchangeError {
     /// tell which client it belongs to.
     #[error("refresh token is not bound to a client")]
     UnboundRefreshToken,
+    /// The refresh token belongs to a grant that has been revoked.
+    #[error("refresh token has been revoked")]
+    RevokedGrant,
     /// Inflight auth state could not be loaded or updated.
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),
@@ -705,4 +791,27 @@ pub enum TokenExchangeError {
     /// Upstream refresh failed.
     #[error("refresh token exchange failed")]
     RefreshFailed(anyhow::Error),
+}
+
+/// Errors returned when revoking a token.
+#[derive(Debug, thiserror::Error)]
+pub enum RevokeTokenError {
+    /// The client_id was absent, so the revoking client is unidentified.
+    #[error("client_id required")]
+    ClientIdRequired,
+    /// The token parameter was absent.
+    #[error("token required")]
+    TokenRequired,
+    /// The token is an access token, which the broker cannot revoke.
+    #[error("access tokens cannot be revoked")]
+    UnsupportedTokenType,
+    /// The token was issued to a different client than the one revoking it.
+    #[error("token was not issued to this client")]
+    ClientMismatch,
+    /// Refresh token bindings could not be read or written.
+    #[error("failed to access refresh token bindings")]
+    RefreshTokenBindingStore(anyhow::Error),
+    /// The upstream provider did not revoke the refresh token.
+    #[error("upstream refresh token revocation failed")]
+    UpstreamRevocationFailed(anyhow::Error),
 }

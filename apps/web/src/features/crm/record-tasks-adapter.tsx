@@ -10,10 +10,17 @@ import {
   enableCrmActivity,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListError,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from './components/list-state';
 import { RecordSection } from './components/record-section';
 import type { CrmRecordScope } from './core/record';
 import { crmTaskComposerContext } from './task-composer';
@@ -58,7 +65,7 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
 }
 
 function RecordTasksBody(props: { scope: CrmRecordScope }) {
-  const { state, setState } = useTasksView();
+  const { state, setState, source } = useTasksView();
   const layout = useSplitLayout();
   let listElement: HTMLDivElement | undefined;
 
@@ -95,6 +102,30 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       }
     >
       <TaskList
+        loadingContent={<CrmListSkeleton label="Loading tasks" />}
+        errorContent={
+          <CrmListError
+            title="Tasks couldn’t be loaded."
+            onRetry={() => source.refresh()}
+          />
+        }
+        emptyContent={
+          state.search.trim() && source.hasMore() ? (
+            <span>Search more results to find matching tasks.</span>
+          ) : state.search.trim() ? (
+            <CrmListSearchEmpty
+              title="No tasks match this search"
+              onClearSearch={() => setState('search', '')}
+            />
+          ) : (
+            <CrmListEmpty
+              title="No tasks yet"
+              graphic={EmptyStateTasksGraphic}
+              description="Tasks associated with this record will appear here."
+              action={{ label: 'New task', onClick: composeTask }}
+            />
+          )
+        }
         ref={(element) => {
           listElement = element;
         }}

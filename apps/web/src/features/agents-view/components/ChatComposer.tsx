@@ -5,6 +5,7 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import { t } from '@app/lib/i18n';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -57,6 +58,7 @@ export function ChatComposer(props: {
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
   supportsImages?: boolean | null;
+  modelName?: string;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
@@ -409,9 +411,19 @@ export function ChatComposer(props: {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={disabled()}
-                      trigger={(openFiles) => (
+                      trigger={(openFiles, openImages) => (
                         <AgentComposerAddMenu
                           openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={
+                            props.supportsImages === false
+                              ? t('common.imagesUnsupported', {
+                                  model:
+                                    props.modelName ??
+                                    t('common.selectedModel'),
+                                })
+                              : undefined
+                          }
                           openLibrary={() => openTypeahead('library')}
                           openSkills={() => openTypeahead('skills')}
                           getEditor={() => editor.lexical.getRootElement()}
@@ -503,11 +515,6 @@ export function ChatComposer(props: {
           </Input.DropZone>
           <DictationPanel dictation={dictation} />
         </ComposerSurface>
-        <Show when={props.supportsImages === false}>
-          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
-            {IMAGE_INPUT_WARNING}
-          </p>
-        </Show>
         <Show when={!isTouchDevice()}>{repositoryDrawer()}</Show>
         <DictationFeedback dictation={dictation} />
       </div>
@@ -532,6 +539,7 @@ export function ChatSessionInput(props: AgentInputProps) {
       onSend={props.onSend}
       session={props}
       supportsImages={props.supportsImages}
+      modelName={props.modelName}
       attachments={props.attachments}
       onAttachFiles={props.onAttachFiles}
       onRemoveAttachment={props.onRemoveAttachment}

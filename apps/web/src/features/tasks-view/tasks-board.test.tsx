@@ -58,6 +58,7 @@ vi.mock('./tasks-view-context', () => ({
     },
     openTask: mocks.openTask,
     projectsEnabled: () => false,
+    showTaskProject: () => false,
     setFacets: vi.fn(),
   }),
 }));

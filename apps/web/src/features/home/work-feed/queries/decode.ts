@@ -19,6 +19,7 @@ import type {
   WorkFeedEntry,
   WorkFeedItemState,
   WorkFeedItemType,
+  WorkFeedPageState,
   WorkFeedScope,
 } from '../core/work-feed';
 
@@ -103,6 +104,7 @@ export function decodeWorkFeedEntry(
 const toGraphqlItemType = (type: WorkFeedItemType): GraphqlWorkFeedItemType =>
   match(type)
     .with('document', () => 'DOCUMENT' as const)
+    .with('task', () => 'TASK' as const)
     .with('chat', () => 'CHAT' as const)
     .with('project', () => 'PROJECT' as const)
     .with('email', () => 'EMAIL' as const)
@@ -113,6 +115,17 @@ const toGraphqlItemType = (type: WorkFeedItemType): GraphqlWorkFeedItemType =>
     .with('agent_session', () => 'AGENT_SESSION' as const)
     .exhaustive(() => {
       throw new Error(`Unknown work feed item type: ${type}`);
+    });
+
+/** Encode a page state for the wire. */
+export const encodeWorkFeedPageState = (
+  state: WorkFeedPageState
+): GraphqlWorkFeedItemState =>
+  match(state)
+    .with('unseen', () => 'UNSEEN' as const)
+    .with('seen', () => 'SEEN' as const)
+    .exhaustive(() => {
+      throw new Error(`Unknown work feed page state: ${state}`);
     });
 
 /** Encode a feed scope for the wire. */

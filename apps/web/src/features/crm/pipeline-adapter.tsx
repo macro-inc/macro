@@ -44,6 +44,7 @@ import {
 import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
+import { CrmListSkeleton } from './components/list-state';
 import type { Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
@@ -88,11 +89,7 @@ export function PipelineDatabaseEditor(props: {
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
       style={{ '--database-title-column-width': '18rem' }}
     >
-      <Suspense
-        fallback={
-          <div class="p-4 text-sm text-ink-muted">Loading pipeline…</div>
-        }
-      >
+      <Suspense fallback={<CrmListSkeleton label="Loading pipeline" />}>
         <Show when={props.pipeline.id} keyed>
           {(_id) => (
             <PipelineRecords

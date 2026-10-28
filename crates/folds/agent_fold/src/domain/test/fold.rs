@@ -230,8 +230,8 @@ fn folds_session_controls_as_typed_parts() {
 
 /// `/compact` is a message to every harness: the transcript shows what the
 /// agent did, not what someone asked for. A compaction shows when the agent
-/// reports one, as a line of its own beside the turn it landed in, which
-/// carries on and ends as usual.
+/// reports one, at the point in the turn it landed, which carries on after it
+/// and ends as usual.
 #[test]
 fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
     let log = parse_log(concat!(
@@ -244,14 +244,12 @@ fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" Nothing yet."}}}}}"#,
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"n","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"next"}]}}}"#,
     ));
 
     let messages = fold(log);
-    assert_eq!(
-        messages.len(),
-        3,
-        "the message, its reply and the compaction"
-    );
+    assert_eq!(messages.len(), 3, "the message, its reply and the next");
     assert_eq!(
         messages[0].parts.as_slice(),
         &[MessagePart::Text {
@@ -261,21 +259,55 @@ fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
     assert!(matches!(messages[0].author, Author::User { .. }));
     assert_eq!(
         messages[1].parts.as_slice(),
-        &[MessagePart::Text {
-            text: "What should I compact? Nothing yet.".to_owned()
-        }]
+        &[
+            MessagePart::Text {
+                text: "What should I compact?".to_owned()
+            },
+            MessagePart::Control {
+                control: Control::Compact,
+                outcome: ControlOutcome::Accepted,
+            },
+            MessagePart::Text {
+                text: " Nothing yet.".to_owned()
+            },
+        ]
     );
     assert_eq!(messages[1].author, Author::Agent);
     assert_eq!(messages[1].stop, Some(StopReason::EndTurn));
+    // The compaction still takes a turn id, so later turns keep theirs.
+    assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// A summary the agent waited for lands before it says anything: the divider
+/// opens the reply rather than trailing it.
+#[test]
+fn a_compaction_before_the_agent_speaks_opens_the_reply() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"a long paste"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_macro/context_summary","params":{"sessionId":"s","text":"Earlier work.","through":"c","replaces":2}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Read it."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 2, "the paste and its reply");
+    assert_eq!(messages[1].id, TurnId(0));
     assert_eq!(
-        messages[2].parts.as_slice(),
-        &[MessagePart::Control {
-            control: Control::Compact,
-            outcome: ControlOutcome::Accepted,
-        }]
+        messages[1].parts.as_slice(),
+        &[
+            MessagePart::Control {
+                control: Control::Compact,
+                outcome: ControlOutcome::Accepted,
+            },
+            MessagePart::Text {
+                text: "Read it.".to_owned()
+            },
+        ]
     );
-    assert_eq!(messages[2].author, Author::Agent);
-    assert_eq!(messages[2].stop, None);
+    assert_eq!(messages[1].stop, Some(StopReason::EndTurn));
 }
 
 /// A stop pressed before the agent's first chunk - a window over ten seconds

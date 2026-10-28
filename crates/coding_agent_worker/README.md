@@ -79,6 +79,14 @@ visible dialog, and the same Herdr state generation. Sign-in prompts and other
 unknown dialogs require native interaction. Herdr does not offer an atomic
 compare-and-send-key operation, so native interaction remains the authority.
 
+Macro offers **Always allow** next to **Allow once**. When the dialog shows its
+own "Yes, and don't ask again ..." answer with a known shortcut, Always allow
+presses it and the native agent keeps the rule. Otherwise macrod approves the
+dialog and remembers the tool for the rest of the session: Claude Code's tool
+name (such as `Bash`) or Codex's exact command. Later dialogs for it are
+approved without asking Macro. These standing approvals live in macrod's memory
+and end when macrod restarts.
+
 Macro supplies the session's configured MCP connections when macrod binds it:
 owner-connection sessions include enabled connected apps and custom MCP servers;
 explicit agent selections retain their selected apps. All connections use the

@@ -15,6 +15,11 @@ export type ComposerAddMenuItem = {
   onSelect: () => void;
   disabled?: boolean;
   /**
+   * Grays the item out and says why: beside the row on hover or focus, as
+   * its second line on touch.
+   */
+  disabledReason?: string;
+  /**
    * The item puts the caret in the editor (a mention, an inserted card), so
    * the editor takes focus as the menu closes instead of the +.
    */
@@ -124,6 +129,7 @@ function AddDropdown(props: {
                 {(item) => (
                   <Dropdown.Item
                     disabled={item.disabled}
+                    disabledReason={item.disabledReason}
                     onSelect={() => select(item)}
                     class={
                       item.description
@@ -196,7 +202,7 @@ export function ComposerAddDrawer(props: {
                     <For each={group.items}>
                       {(item) => (
                         <MobileDrawer.Item
-                          disabled={item.disabled}
+                          disabled={item.disabled || !!item.disabledReason}
                           data-composer-add-item={item.id}
                           ref={(el) => {
                             if (item.focusesEditor)
@@ -215,10 +221,15 @@ export function ComposerAddDrawer(props: {
                           </span>
                           <span class="min-w-0 flex-1">
                             <span class="block">{item.label}</span>
-                            <Show when={item.description}>
-                              <span class="block text-xs text-ink-muted font-normal">
-                                {item.description}
-                              </span>
+                            {/* No hover on a phone: the reason is the line. */}
+                            <Show
+                              when={item.disabledReason ?? item.description}
+                            >
+                              {(line) => (
+                                <span class="block text-xs text-ink-muted font-normal">
+                                  {line()}
+                                </span>
+                              )}
                             </Show>
                           </span>
                         </MobileDrawer.Item>

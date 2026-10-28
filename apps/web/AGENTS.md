@@ -81,9 +81,21 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
+Mention menus rank loaded entity sources together with `MENTION_RANKING_CONFIG`
+in `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
+brevity, and explicit type/name boosts. Task projects use the `initiative`
+bucket; `project` means a Drive folder. Preserve broader cache/server matches
+and the existing People preview/pinning. The channel browser suite below also
+checks project ranking and insertion on desktop and phone.
+
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
+
+Block formatting passes a forward copy of the selection to Lexical's
+`$setBlocksType` so backward selections include their first paragraph and keep
+the editor's actual selection direction. The Markdown core browser suite's
+`quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -134,6 +146,11 @@ new MutationObserver(() => {
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
 
+Column renames have a backend-free desktop/phone regression using the real
+schema query and mutation adapter with delayed service responses:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
+It checks the optimistic name, header identity, and persistence across reload.
+
 ## Canvas collaboration
 
 Document sync uses the `sync-via-gateway` PostHog flag in both deployed dev and
@@ -160,6 +177,10 @@ on desktop and mobile. Tool results render through
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
+
+Shared diff and Changes views expand files with at most 40 additions + deletions
+by default; keep saved per-capture choices and explicit toggles authoritative.
+Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -192,8 +213,13 @@ the user's newest account for that app from the last fifteen minutes.
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+Agent split headers show live viewers through `BlockLiveIndicators` with the
+resolved session ID; keep the existing `AgentSessionProvider` subscription to
+`agent_session` rather than enabling legacy block tracking of placeholder IDs.
+
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -286,6 +312,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
@@ -573,6 +600,9 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 ### Agent system events
 
+Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
+`magic-chip-shimmer` style; keep Working and Thinking on the same sweep and phase.
+
 Accept `notification` in both fetched and subscribed GraphQL session log rows.
 System notifications live in fold metadata, separate from messages. Review
 subjects refresh their existing card; other subjects render quiet timeline rows
@@ -583,6 +613,10 @@ desktop and mobile.
 Keep Responding bound to the notification turn, including rejection and noop.
 The backend-free desktop/mobile check is
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts`.
+The same suite covers stopping and reloading an agent reply inside a mention:
+keep incomplete trailing Macro XML hidden in settled agent prose, preserve
+completed chips and literal tag examples in Markdown code, and leave user prompts
+unchanged.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using the Nix Chrome binary.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report

@@ -2438,8 +2438,8 @@ filter, and tap a result to insert a single mention. The menu should remain
 visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
-text and inline mention chips (tasks, docs, channels, skills, …) by the title
-shown on the chip.
+text and every inline mention chip (people, groups, tasks, docs, channels,
+skills, dates, tags, …) by the title shown on the chip.
 
 On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
 available actions) appears above the floating header, comment input, and bottom

@@ -80,6 +80,7 @@ function AgentMessagePart(props: {
           <TextPart
             text={part().text}
             inFlight={props.inFlight}
+            hideIncompleteXml={props.message.author.kind === 'agent'}
             observeRender={
               props.message.author.kind === 'agent'
                 ? (element) =>

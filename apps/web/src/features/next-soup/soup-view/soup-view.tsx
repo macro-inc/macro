@@ -545,7 +545,12 @@ interface SoupViewListProps {
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
-  emptyState?: () => JSX.Element;
+  emptyState?: (state: {
+    filtered: boolean;
+    clearFilters: () => void;
+  }) => JSX.Element;
+  loadingContent?: JSX.Element;
+  errorContent?: (retry: () => void) => JSX.Element;
   emptyContent?: JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -581,6 +586,8 @@ export const SoupViewList = (props: SoupViewListProps) => (
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
+      loadingContent={props.loadingContent}
+      errorContent={props.errorContent}
       emptyContent={props.emptyContent}
     />
   </SoupRowMetadataProvider>
@@ -1124,7 +1131,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     ref={setEmptyStateRef}
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
-                    <LoadErrorPanel onRetry={retryLoad} />
+                    {props.errorContent ? (
+                      props.errorContent(retryLoad)
+                    ) : (
+                      <LoadErrorPanel onRetry={retryLoad} />
+                    )}
                   </div>
                 </Match>
                 <Match
@@ -1136,7 +1147,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
                   <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                    <LoadingBlock />
+                    {props.loadingContent ?? <LoadingBlock />}
                   </div>
                 </Match>
                 <Match
@@ -1157,7 +1168,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <Show
-                      when={!searchText() && props.emptyState}
+                      when={props.emptyState}
                       fallback={
                         <EmptyState
                           content={props.emptyContent}
@@ -1169,7 +1180,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         />
                       }
                     >
-                      {(emptyState) => emptyState()()}
+                      {(emptyState) =>
+                        emptyState()({
+                          filtered: hasActiveRefinements(),
+                          clearFilters: resetToTabDefaults,
+                        })
+                      }
                     </Show>
                   </div>
                 </Match>
