@@ -40,13 +40,27 @@ use model_entity::EntityType;
 use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
-/// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+/// Macro team members added to every new user's support channel.
+const MACRO_SUPPORT_EMAILS: [&str; 19] = [
     "jacob@macro.com",
     "julia@macro.com",
     "teo@macro.com",
     "valentina@macro.com",
     "chaitanya@macro.com",
+    "aidan@macro.com",
+    "austin@macro.com",
+    "cam@macro.com",
+    "eric.hayes@macro.com",
+    "gab@macro.com",
+    "hutch@macro.com",
+    "jackson@macro.com",
+    "panat@macro.com",
+    "peter@macro.com",
+    "rahul@macro.com",
+    "seamus@macro.com",
+    "sean@macro.com",
+    "wolf@macro.com",
+    "zhamilya@macro.com",
 ];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
