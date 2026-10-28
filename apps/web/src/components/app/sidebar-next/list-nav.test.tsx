@@ -497,6 +497,15 @@ describe('ListNav', () => {
     expectSelection();
   });
 
+  it('keeps the Agents glyph still while other rail glyphs keep icon motion', () => {
+    setup();
+    const motion = (label: string) =>
+      screen.getByRole('button', { name: label }).dataset.iconMotion;
+    expect(motion('Agents')).toBe('none');
+    expect(motion('Home')).toBeUndefined();
+    expect(motion('Calendar')).toBeUndefined();
+  });
+
   it('shows each destination key while the g leader awaits one', () => {
     const [leaderActive, setLeaderActive] = createSignal(false);
     mocks.goToLeaderActive = leaderActive;

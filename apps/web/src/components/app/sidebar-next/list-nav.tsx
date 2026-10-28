@@ -162,6 +162,7 @@ export const ListNav = (props: ListNavProps) => {
         data-unread={props.unread ? '' : undefined}
         data-active-call={props.activeCall ? '' : undefined}
         data-badge={props.badge}
+        data-icon-motion={props.item.id === 'agents' ? 'none' : undefined}
         onMouseEnter={preload}
         onFocus={preload}
         onMouseDown={onMouseDown}
