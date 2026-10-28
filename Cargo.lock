@@ -351,6 +351,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "bytes",
  "chrono",
  "futures",
