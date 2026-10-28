@@ -19,7 +19,7 @@ export function MessageStack(props: {
   showNames: boolean;
   Avatar: AvatarComponent;
   size?: 'sm' | 'md';
-  lines?: 1 | 2 | 3;
+  lines?: 1 | 2 | 3 | 4;
   class?: string;
 }) {
   const avatarSize = () => (props.size === 'sm' ? 18 : 22);

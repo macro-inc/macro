@@ -200,7 +200,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-or-calls>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/board` | Board: Home's Signal feed as a pannable, zoomable map in five layout variants, picked in its sidebar and kept in `sN.board.variant`; items open in a modal (requires the `enable-company-board` flag) |
+| `/app/board` | Board: Home's Signal feed as a pannable, zoomable map in five layout variants, or as a scrolling list at three levels of detail that loads older activity near its end (J/K move, Enter opens); picked in its sidebar or with number keys and kept in `sN.board.variant`; items open in a modal (requires the `enable-company-board` flag) |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |

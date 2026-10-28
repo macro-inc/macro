@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '@app/index.css';
+import { useHotKeyRoot, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Button } from '@ui';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -22,9 +23,17 @@ import {
   DEFAULT_BOARD_VARIANT,
 } from '../core/variants';
 import { BoardView } from '../views/board-view';
-import { arrivingMessage, FIXTURE_NOW, fixtureItems } from './fixture-data';
+import {
+  arrivingMessage,
+  FIXTURE_NOW,
+  fixtureItems,
+  OLDER_PAGES,
+  olderActivity,
+} from './fixture-data';
 
 const STORAGE_KEY = 'macro:board:fixture';
+/** Long enough to see the end of a list say it is loading. */
+const OLDER_DELAY_MS = 400;
 const HUES = ['blue', 'violet', 'teal', 'orange', 'pink', 'green', 'cyan'];
 
 function hue(id: string) {
@@ -114,6 +123,21 @@ function Fixture() {
     window.addEventListener('hashchange', follow);
     onCleanup(() => window.removeEventListener('hashchange', follow));
   });
+  const [olderPages, setOlderPages] = createSignal(0);
+  const [loadingOlder, setLoadingOlder] = createSignal(false);
+  const loadOlder = () => {
+    if (loadingOlder() || olderPages() >= OLDER_PAGES) return;
+    setLoadingOlder(true);
+    setTimeout(() => {
+      setItems((previous) => [...previous, ...olderActivity(olderPages())]);
+      setOlderPages((pages) => pages + 1);
+      setLoadingOlder(false);
+    }, OLDER_DELAY_MS);
+  };
+  useHotKeyRoot();
+  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('board-fixture');
+  let boardRoot!: HTMLDivElement;
+  onMount(() => attachHotkeys(boardRoot));
   const [events, setEvents] = createSignal<string[]>([]);
   const record = (event: string) =>
     setEvents((previous) => [event, ...previous].slice(0, 4));
@@ -132,6 +156,11 @@ function Fixture() {
       items: () => (state() === 'ready' ? items() : []),
       state,
       retry: () => setState('ready'),
+      older: {
+        hasMore: () => olderPages() < OLDER_PAGES,
+        loading: loadingOlder,
+        load: loadOlder,
+      },
     },
     now,
     storage,
@@ -217,7 +246,7 @@ function Fixture() {
           <For each={events()}>{(event) => <li>{event}</li>}</For>
         </ol>
       </div>
-      <div class="flex min-h-0 flex-1">
+      <div ref={boardRoot} class="flex min-h-0 flex-1">
         <BoardProvider value={capabilities}>
           <BoardView
             variant={variant()}
@@ -225,6 +254,7 @@ function Fixture() {
               setVariant(next);
               window.location.hash = next;
             }}
+            hotkeys={{ scopeId: hotkeyScope, enabled: () => true }}
           />
         </BoardProvider>
       </div>

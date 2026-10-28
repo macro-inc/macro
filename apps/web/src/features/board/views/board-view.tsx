@@ -19,6 +19,7 @@ import { createBoardScene } from '../primitives/board-scene';
 import { BoardModal } from './board-modal';
 import { BoardSidebar, variantDescription, variantName } from './board-sidebar';
 import { BubblesBoard } from './bubbles-board';
+import { DigestFeed, HeadlinesFeed, ThreadsFeed } from './feed-view';
 import { NeighborhoodsBoard } from './neighborhoods-board';
 import { PeopleBoard } from './people-board';
 import { RadarBoard } from './radar-board';
@@ -32,17 +33,23 @@ const VARIANT_VIEWS: Record<BoardVariant, Component<VariantProps>> = {
   v1c: RiverBoard,
   v1d: RadarBoard,
   v1e: PeopleBoard,
+  v2a: HeadlinesFeed,
+  v2b: DigestFeed,
+  v2c: ThreadsFeed,
 };
 
 /**
- * The company board: a variant picker beside a pannable, zoomable board of
- * what is happening. Opening an item shows it in a modal over the board;
- * the host owns which variant is selected.
+ * The company board: a variant picker beside a pannable, zoomable board or
+ * a scrolling list of what is happening. Opening an item shows it in a
+ * modal over the board; the host owns which variant is selected.
  */
 export function BoardView(props: {
   variant: BoardVariant;
   onVariantChange: (variant: BoardVariant) => void;
-  /** Number keys and Tab cycle variants while this scope is active. */
+  /**
+   * Number keys and Tab cycle variants while this scope is active, and
+   * lists move between items.
+   */
   hotkeys?: { scopeId: string; enabled: () => boolean };
 }) {
   const board = useBoard();
@@ -82,6 +89,12 @@ export function BoardView(props: {
   const variantProps: VariantProps = {
     scene,
     memory,
+    // A list's keys rest while one of its items is open over it.
+    hotkeys: props.hotkeys && {
+      scopeId: props.hotkeys.scopeId,
+      enabled: () =>
+        (props.hotkeys?.enabled() ?? false) && openKey() === undefined,
+    },
     onOpen: (key) => {
       // Before marking it seen, which can re-render what was clicked.
       const active = document.activeElement;

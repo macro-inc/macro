@@ -13,6 +13,21 @@ async function openBoard(page: Page, variant = 'v1a') {
   await expect(page.locator('[data-board-node]').first()).toBeVisible();
 }
 
+async function openList(page: Page, variant: string) {
+  await page.routeWebSocket(/^wss?:\/\/(?!localhost)/, (socket) =>
+    socket.close()
+  );
+  await page.route('https://**', (route) => route.abort());
+  await page.goto(`${fixture}#${variant}`, { waitUntil: 'domcontentloaded' });
+  const list = page.getByRole('grid', { name: 'Activity' });
+  await expect(list.getByRole('row').first()).toBeVisible();
+  return list;
+}
+
+/** A list row by the start of its item's title. */
+const row = (list: Locator, title: string) =>
+  list.getByRole('row', { name: new RegExp(`^${title}`) });
+
 const card = (page: Page, name: string) =>
   page.locator(`[data-board-node] [role="button"][aria-label^="${name}"]`);
 
@@ -52,6 +67,16 @@ test('every variant draws the board and can be picked from the sidebar', async (
   await expect(
     page.getByRole('heading', { name: 'Bubbles', exact: true })
   ).toBeVisible();
+  const lists = page.getByRole('navigation', { name: 'List variants' });
+  for (const name of ['Headlines', 'Digest', 'Threads']) {
+    await lists.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+    await expect(
+      page.getByRole('heading', { name, exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('grid', { name: 'Activity' }).getByRole('row').first()
+    ).toHaveText('Today');
+  }
   expect(errors).toEqual([]);
 });
 
@@ -214,4 +239,69 @@ test('zooms with the toolbar and a WebKit pinch, and fits the board again', asyn
       board.dispatchEvent(gesture('gesturechange', 1.5));
     });
   await expect(level).not.toHaveText(fitted ?? '');
+});
+
+test('a list scrolls back through older activity to the end', async ({
+  page,
+}) => {
+  const list = await openList(page, 'v2b');
+  await expect(row(list, 'launch')).toBeVisible();
+  const viewport = list.locator(':scope > div');
+  const end = list.getByText('That’s everything');
+  // Each scroll to the bottom brings the next page of older activity.
+  await expect
+    .poll(
+      async () => {
+        await viewport.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        return end.isVisible();
+      },
+      { timeout: 20_000, intervals: [500] }
+    )
+    .toBe(true);
+  await expect(row(list, 'Upgrade build dependencies')).toBeVisible();
+  await expect(
+    list.getByRole('row', { name: 'Older', exact: true })
+  ).toBeVisible();
+});
+
+test('keys move through a list and open the focused item', async ({ page }) => {
+  const list = await openList(page, 'v2a');
+  await list.focus();
+  const focusedOn = async (title: string) =>
+    expect(list).toHaveAttribute(
+      'aria-activedescendant',
+      (await row(list, title).getAttribute('id')) ?? ''
+    );
+  await page.keyboard.press('j');
+  await focusedOn('launch');
+  await page.keyboard.press('j');
+  await focusedOn('Design review');
+  await page.keyboard.press('k');
+  await focusedOn('launch');
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Release notes draft');
+  // The list's keys rest while an item is open over it.
+  await page.keyboard.press('j');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(list).toBeFocused();
+  await focusedOn('launch');
+});
+
+test('clicking a list row opens it and hands focus back to the list', async ({
+  page,
+}) => {
+  const list = await openList(page, 'v2c');
+  await row(list, 'general').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Office is open late Friday');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(list).toBeFocused();
+  await expect(page.getByLabel('Fixture events')).toContainText(
+    'opened channel:general'
+  );
 });

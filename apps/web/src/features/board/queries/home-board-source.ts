@@ -43,6 +43,11 @@ export function createHomeBoardSource(resolvers: Accessor<BoardItemResolvers>) {
       return home.error() ? 'error' : 'ready';
     },
     retry: () => fireAndForget(home.refresh(), 'board'),
+    older: {
+      hasMore: home.hasMore,
+      loading: home.isLoadingMore,
+      load: () => fireAndForget(home.loadMore(), 'board'),
+    },
   };
 
   return {

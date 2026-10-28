@@ -84,9 +84,9 @@ export function PeopleBoard(props: VariantProps) {
       overlay={
         <>
           <BoardStatus
-            scene={props.scene}
-            memory={props.memory}
+            view={props.scene.view()}
             onRetry={props.onRetry}
+            onShowSettled={() => props.memory.setShowSettled(true)}
           />
           <ZoomToolbar
             scale={stage.camera.camera().scale}

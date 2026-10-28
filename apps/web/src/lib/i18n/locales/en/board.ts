@@ -3,8 +3,12 @@ export default {
   title: 'Board',
   roleDescription: 'board',
   variantsNav: 'Board variants',
+  listVariantsNav: 'List variants',
   variants: 'Variants',
+  groupBoards: 'Boards',
+  groupLists: 'Lists',
   thisBoard: 'This board',
+  thisList: 'This list',
 
   // Variants
   v1aName: 'Neighborhoods',
@@ -17,6 +21,24 @@ export default {
   v1dDescription: 'What needs you sits closest to the center',
   v1eName: 'People',
   v1eDescription: 'Who is saying what, across every conversation',
+  v2aName: 'Headlines',
+  v2aDescription: 'One line per conversation, newest first',
+  v2bName: 'Digest',
+  v2bDescription: 'The latest message from each, and who said it',
+  v2cName: 'Threads',
+  v2cDescription: 'Each conversation’s recent messages in full',
+
+  // Lists
+  dayToday: 'Today',
+  dayYesterday: 'Yesterday',
+  dayWeek: 'Last 7 days',
+  dayOlder: 'Older',
+  needsYou: 'Needs you',
+  speaker: '{{name}}:',
+  loadingOlder: 'Loading older activity…',
+  loadOlder: 'Load older activity',
+  feedEnd: 'That’s everything',
+  activity: 'Activity',
 
   // Neighborhoods
   zoneChannels: 'Channels',
@@ -83,6 +105,8 @@ export default {
   unreadOnBoard: { one: '{{count}} unread', other: '{{count}} unread' },
   boardHelp:
     'Drag the board to pan, pinch or {{modifier}}-scroll to zoom. Drag cards to move them; read items settle and fade after a quiet spell.',
+  listHelp:
+    'Everything, newest first; scroll down for older activity. J and K move between items, Enter opens one.',
 
   // States
   loading: 'Loading the board…',

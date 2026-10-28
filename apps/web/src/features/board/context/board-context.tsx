@@ -8,11 +8,20 @@ import type { BoardAuthor, BoardItem } from '../core/item';
 
 export type BoardSourceState = 'loading' | 'error' | 'ready';
 
+/** Earlier activity the host can fetch, for lists that scroll back in time. */
+export type BoardOlderActivity = {
+  hasMore: Accessor<boolean>;
+  loading: Accessor<boolean>;
+  load: () => void;
+};
+
 /** What the board shows, kept current by the host. */
 export type BoardSource = {
   items: Accessor<readonly BoardItem[]>;
   state: Accessor<BoardSourceState>;
   retry: () => void;
+  /** Absent when the host has nothing older to offer. */
+  older?: BoardOlderActivity;
 };
 
 /** Where the board keeps its per-viewer layout and lifecycle memory. */

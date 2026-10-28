@@ -5,7 +5,7 @@ import { type JSX, Match, Switch } from 'solid-js';
 import type { Point } from '../core/camera';
 import type { BoardItem } from '../core/item';
 import type { BoardMemory } from '../primitives/board-memory';
-import type { BoardScene } from '../primitives/board-scene';
+import type { BoardScene, BoardSceneView } from '../primitives/board-scene';
 import type { BoardStage } from '../primitives/board-stage';
 
 /** What every variant receives from the board view. */
@@ -16,6 +16,8 @@ export type VariantProps = {
   /** Closes a node until something newer than `activityAt` happens in it. */
   onDismiss: (key: string, activityAt: number) => void;
   onRetry: () => void;
+  /** Keys a list moves through while this scope is active. */
+  hotkeys?: { scopeId: string; enabled: () => boolean };
 };
 
 export function itemLabel(item: BoardItem, moved: boolean): string {
@@ -59,13 +61,15 @@ export function nodeBindings(
 
 /** Loading, failure and all-caught-up states, drawn over an empty board. */
 export function BoardStatus(props: {
-  scene: BoardScene;
-  memory: BoardMemory;
+  view: BoardSceneView;
   onRetry: () => void;
+  /** Offered when settled items are all that is left. */
+  onShowSettled?: () => void;
 }) {
+  const hidden = () => (props.view.t === 'empty' ? props.view.hidden : 0);
   return (
     <Switch>
-      <Match when={props.scene.view().t === 'loading'}>
+      <Match when={props.view.t === 'loading'}>
         <StatusOverlay>
           <div
             role="status"
@@ -76,7 +80,7 @@ export function BoardStatus(props: {
           </div>
         </StatusOverlay>
       </Match>
-      <Match when={props.scene.view().t === 'error'}>
+      <Match when={props.view.t === 'error'}>
         <StatusOverlay>
           <EmptyStatePanel
             centered
@@ -85,19 +89,17 @@ export function BoardStatus(props: {
           />
         </StatusOverlay>
       </Match>
-      <Match when={props.scene.view().t === 'empty'}>
+      <Match when={props.view.t === 'empty'}>
         <StatusOverlay>
           <EmptyStatePanel
             centered
             title={t('board.emptyTitle')}
             description={t('board.emptyDescription')}
             primaryAction={
-              props.scene.hiddenCount() > 0
+              hidden() > 0 && props.onShowSettled
                 ? {
-                    label: t('board.showSettledCount', {
-                      count: props.scene.hiddenCount(),
-                    }),
-                    onClick: () => props.memory.setShowSettled(true),
+                    label: t('board.showSettledCount', { count: hidden() }),
+                    onClick: props.onShowSettled,
                   }
                 : undefined
             }

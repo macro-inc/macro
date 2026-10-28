@@ -58,6 +58,8 @@ export function createBoardScene(
 
   return {
     items,
+    /** Every item the source has, closed and quiet ones included. */
+    all: () => board.source.items(),
     view,
     hiddenCount,
     freshness: (key: string): BoardFreshness =>

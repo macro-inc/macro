@@ -395,6 +395,255 @@ export function fixtureItems(): BoardItem[] {
   ];
 }
 
+const daysAgo = (days: number, hours = 0) => (days * 24 + hours) * 60;
+
+/** Pages of earlier activity a list loads as it scrolls back. */
+export const OLDER_PAGES = 3;
+
+/** One page of earlier activity, each further back than the last. */
+export function olderActivity(page: number): BoardItem[] {
+  const pages: BoardItem[][] = [
+    [
+      conversation({
+        key: 'channel:help-desk',
+        zone: 'channels',
+        kind: 'channel',
+        title: 'help-desk',
+        said: [
+          [
+            FARAH,
+            'Three tickets left in the queue for tomorrow',
+            daysAgo(1, 2),
+          ],
+          [BEN, 'I’ll take the billing one first thing', daysAgo(1, 1)],
+        ],
+      }),
+      conversation({
+        key: 'dm:eli',
+        zone: 'dms',
+        kind: 'dm',
+        title: ELI.name,
+        face: ELI,
+        said: [
+          [ELI, 'Can you share the deck from Monday?', daysAgo(1, 5)],
+          [ME, 'Sent it over, the appendix is new', daysAgo(1, 4)],
+        ],
+      }),
+      conversation({
+        key: 'doc:planning',
+        zone: 'docs',
+        kind: 'document',
+        title: 'Planning: next quarter',
+        said: [[HANA, 'Added the mobile milestones', daysAgo(1, 7)]],
+      }),
+      conversation({
+        key: 'email:statement',
+        zone: 'email',
+        kind: 'email',
+        title: 'Your October statement',
+        face: BILLING,
+        said: [
+          [BILLING, 'Invoice 4821 for October is attached', daysAgo(1, 9)],
+        ],
+      }),
+      conversation({
+        key: 'task:onboarding',
+        zone: 'docs',
+        kind: 'task',
+        title: 'Refresh the onboarding checklist',
+        status: 'In progress',
+        said: [[BEN, 'Moved this to In progress', daysAgo(2)]],
+      }),
+      conversation({
+        key: 'channel:watercooler',
+        zone: 'channels',
+        kind: 'channel',
+        title: 'watercooler',
+        said: [
+          [GUS, 'Who left the cake in the kitchen?', daysAgo(2, 3)],
+          [MAYA, 'Guilty. Help yourselves', daysAgo(2, 2)],
+        ],
+      }),
+      conversation({
+        key: 'agent:weekly-digest',
+        zone: 'agents',
+        kind: 'agent',
+        title: 'Weekly digest',
+        status: 'Done',
+        face: MACRO_AGENT,
+        said: [
+          [
+            MACRO_AGENT,
+            'Summarized 42 conversations from last week into the team notes',
+            daysAgo(2, 6),
+          ],
+        ],
+      }),
+      conversation({
+        key: 'pr:search-index',
+        zone: 'code',
+        kind: 'pull-request',
+        title: 'Rebuild the search index nightly',
+        status: 'Merged',
+        said: [[IVAN, 'Merged after a green run', daysAgo(3)]],
+      }),
+    ],
+    [
+      conversation({
+        key: 'channel:hiring',
+        zone: 'channels',
+        kind: 'channel',
+        title: 'hiring',
+        unread: 1,
+        said: [
+          [HANA, 'Two onsite loops booked for next week', daysAgo(4, 2)],
+          [CHLOE, 'I can cover the design interview', daysAgo(4)],
+        ],
+      }),
+      conversation({
+        key: 'thread:support-sla',
+        zone: 'channels',
+        kind: 'thread',
+        title: 'Response time targets',
+        context: 'Thread in #support',
+        groupKey: 'support',
+        said: [
+          [FARAH, 'Proposing four hours for paid plans', daysAgo(4, 6)],
+          [ANA, 'Works for me if weekends are excluded', daysAgo(4, 5)],
+        ],
+      }),
+      conversation({
+        key: 'event:offsite',
+        zone: 'calendar',
+        kind: 'event',
+        title: 'Team offsite planning',
+        said: [[MAYA, 'Accepted the invitation', daysAgo(5, 3)]],
+      }),
+      conversation({
+        key: 'dm:farah',
+        zone: 'dms',
+        kind: 'dm',
+        title: FARAH.name,
+        face: FARAH,
+        said: [
+          [ME, 'Nice work on the help center rewrite', daysAgo(5, 8)],
+          [FARAH, 'Thank you! It was overdue', daysAgo(5, 7)],
+        ],
+      }),
+      conversation({
+        key: 'doc:brand-guide',
+        zone: 'docs',
+        kind: 'document',
+        title: 'Brand guide',
+        said: [
+          [GUS, 'Updated the logo spacing rules', daysAgo(6, 1)],
+          [undefined, 'Gus Moreau edited the document', daysAgo(6)],
+        ],
+      }),
+      conversation({
+        key: 'email:conference',
+        zone: 'email',
+        kind: 'email',
+        title: 'Speaker confirmation',
+        face: PRIYA,
+        said: [
+          [PRIYA, 'Confirming your talk slot on the second day', daysAgo(7, 4)],
+        ],
+      }),
+      conversation({
+        key: 'task:security-review',
+        zone: 'docs',
+        kind: 'task',
+        title: 'Annual security review',
+        status: 'Done',
+        said: [[DEV, 'Closed the last finding', daysAgo(8)]],
+      }),
+      conversation({
+        key: 'pr:dark-mode',
+        zone: 'code',
+        kind: 'pull-request',
+        title: 'Dark mode for exported PDFs',
+        status: 'Merged',
+        said: [[CHLOE, 'Merged, thanks for the review', daysAgo(9, 2)]],
+      }),
+    ],
+    [
+      conversation({
+        key: 'channel:announcements',
+        zone: 'channels',
+        kind: 'channel',
+        title: 'announcements',
+        said: [[ANA, 'Welcome to everyone who joined this month', daysAgo(11)]],
+      }),
+      conversation({
+        key: 'dm:hana',
+        zone: 'dms',
+        kind: 'dm',
+        title: HANA.name,
+        face: HANA,
+        said: [
+          [HANA, 'Do you have the interview rubric?', daysAgo(13, 3)],
+          [ME, 'Linked it in the hiring doc', daysAgo(13, 2)],
+        ],
+      }),
+      conversation({
+        key: 'doc:handbook',
+        zone: 'docs',
+        kind: 'document',
+        title: 'Team handbook',
+        said: [[ANA, 'Added the new leave policy', daysAgo(15)]],
+      }),
+      conversation({
+        key: 'agent:triage-report',
+        zone: 'agents',
+        kind: 'agent',
+        title: 'Monthly support report',
+        status: 'Done',
+        face: TRIAGE_AGENT,
+        said: [
+          [
+            TRIAGE_AGENT,
+            'Tagged 318 tickets; billing questions are up this month',
+            daysAgo(18),
+          ],
+        ],
+      }),
+      conversation({
+        key: 'email:newsletter',
+        zone: 'email',
+        kind: 'email',
+        title: 'This month in hiring',
+        face: TALENT,
+        said: [[TALENT, 'Five tips for faster interview loops', daysAgo(20)]],
+      }),
+      conversation({
+        key: 'project:website',
+        zone: 'docs',
+        kind: 'project',
+        title: 'Website refresh',
+        status: 'Planned',
+        said: [[MAYA, 'Kicked off the project', daysAgo(24)]],
+      }),
+      conversation({
+        key: 'call:quarterly-review',
+        zone: 'calendar',
+        kind: 'call',
+        title: 'Quarterly review',
+        said: [[undefined, 'Call ended after 48 minutes', daysAgo(27)]],
+      }),
+      conversation({
+        key: 'pr:upgrade-deps',
+        zone: 'code',
+        kind: 'pull-request',
+        title: 'Upgrade build dependencies',
+        status: 'Closed',
+        said: [[IVAN, 'Superseded by a smaller change', daysAgo(30)]],
+      }),
+    ],
+  ];
+  return pages[page] ?? [];
+}
+
 /** A new message arriving, for the "new activity" control. */
 export function arrivingMessage(
   now: number,
