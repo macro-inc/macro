@@ -28,6 +28,7 @@ fn stages_the_verified_binary_next_to_the_executable() {
         .stage(
             &archive,
             &checksum_file(&archive, "macrod-v2026.10.27.2-linux-x86_64.tar.gz"),
+            "v2026.10.27.2",
         )
         .unwrap();
 
@@ -52,7 +53,11 @@ fn restaging_replaces_an_earlier_staged_binary() {
     let archive = archive_with("macrod", b"new macrod");
 
     let staged = installation
-        .stage(&archive, &checksum_file(&archive, "macrod.tar.gz"))
+        .stage(
+            &archive,
+            &checksum_file(&archive, "macrod.tar.gz"),
+            "v2026.10.27.2",
+        )
         .unwrap();
 
     assert_eq!(std::fs::read(staged).unwrap(), b"new macrod");
@@ -66,7 +71,11 @@ fn a_checksum_mismatch_stages_nothing() {
     let other = archive_with("macrod", b"tampered macrod");
 
     let error = installation
-        .stage(&archive, &checksum_file(&other, "macrod.tar.gz"))
+        .stage(
+            &archive,
+            &checksum_file(&other, "macrod.tar.gz"),
+            "v2026.10.27.2",
+        )
         .unwrap_err();
 
     assert!(
@@ -83,7 +92,9 @@ fn a_checksum_file_without_a_digest_is_rejected() {
     let archive = archive_with("macrod", b"new macrod");
 
     for checksum in ["", "Not Found", "abc123  macrod.tar.gz"] {
-        let error = installation.stage(&archive, checksum).unwrap_err();
+        let error = installation
+            .stage(&archive, checksum, "v2026.10.27.2")
+            .unwrap_err();
         assert!(
             matches!(error, StageError::MalformedChecksum),
             "{checksum:?}: {error:?}"
@@ -98,7 +109,11 @@ fn an_archive_without_the_binary_stages_nothing() {
     let archive = archive_with("README.md", b"not a binary");
 
     let error = installation
-        .stage(&archive, &checksum_file(&archive, "macrod.tar.gz"))
+        .stage(
+            &archive,
+            &checksum_file(&archive, "macrod.tar.gz"),
+            "v2026.10.27.2",
+        )
         .unwrap_err();
 
     assert!(matches!(error, StageError::MissingExecutable), "{error:?}");
@@ -113,7 +128,11 @@ fn swapping_replaces_the_executable_and_leaves_nothing_staged() {
     let installation = Installation::at(executable.clone());
     let archive = archive_with("macrod", b"new macrod");
     let staged = installation
-        .stage(&archive, &checksum_file(&archive, "macrod.tar.gz"))
+        .stage(
+            &archive,
+            &checksum_file(&archive, "macrod.tar.gz"),
+            "v2026.10.27.2",
+        )
         .unwrap();
     // A process running the old binary holds it open across the swap.
     let running = std::fs::File::open(&executable).unwrap();

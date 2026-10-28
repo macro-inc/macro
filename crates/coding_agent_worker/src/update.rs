@@ -1,15 +1,22 @@
 //! Self-update for a released `macrod`.
 //!
-//! A release build polls the repository's latest GitHub release. When it is
-//! newer, the platform archive is downloaded, checked against its published
-//! SHA-256, and its binary staged next to the running executable and
-//! smoke-tested. The control panel then swaps it in and re-executes once no
-//! agent turn is running. Every failure is logged and leaves the running
-//! process alone; the next poll tries again.
+//! A release build polls the repository's latest GitHub release (or the
+//! `MACROD_UPDATE_SOURCE` mirror). When it is newer, the platform archive is
+//! downloaded, checked against its published SHA-256, and its binary staged
+//! and smoke-tested.
 //!
-//! Only the terminal control panel updates itself. `macrod service` is driven
-//! by an embedding app (the desktop app ships and updates its own copy), and
-//! builds without a release tag (local and branch builds) never update.
+//! On Unix the control panel then swaps the binary in and `execve`s into it
+//! once no agent turn is running, handing the running agent process over
+//! ([`crate::handoff`]) so it never restarts. On Windows the new version is
+//! installed beside the running one and the launcher starts it from the next
+//! launch ([`versions`]); the panel says so.
+//!
+//! Every failure is logged and leaves the running process alone; the next
+//! poll tries again. Only the terminal control panel updates itself.
+//! `macrod service` is driven by an embedding app (the desktop app ships and
+//! updates its own copy), builds without a release tag (local and branch
+//! builds) never update, and `[update] auto = false` or `MACROD_NO_UPDATE=1`
+//! turns updating off.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -20,9 +27,24 @@ use tracing::Instrument as _;
 
 mod install;
 mod release;
+pub mod versions;
 
 use install::{Installation, StageError};
-use release::{ReleaseClient, ReleaseVersion};
+use release::{ReleaseClient, ReleaseSource, ReleaseVersion};
+
+#[cfg(test)]
+mod test;
+
+mod environment {
+    macro_env_var::maybe_env_var! {
+        /// `1` (or any value but `0`/`false`) turns self-update off.
+        pub struct MacrodNoUpdate;
+    }
+    macro_env_var::maybe_env_var! {
+        /// A mirror to update from instead of GitHub releases.
+        pub struct MacrodUpdateSource;
+    }
+}
 
 /// The release tag this binary was built from, set by the release workflow.
 const RELEASE_TAG: Option<&str> = option_env!("MACROD_RELEASE_TAG");
@@ -44,18 +66,20 @@ const SMOKE_TEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Why one update attempt failed.
 #[derive(Debug, thiserror::Error)]
 enum UpdateError {
-    #[error("could not reach GitHub releases")]
-    Http(#[from] reqwest::Error),
+    #[error("could not read the release source")]
+    Fetch(#[from] release::FetchError),
     #[error("could not stage the new binary")]
     Stage(#[from] StageError),
     #[error("the staged binary failed its smoke test: {0}")]
     SmokeTest(String),
 }
 
-/// A newer binary, verified and staged next to the running one.
+/// A newer binary, verified, smoke-tested, and ready.
 pub struct StagedUpdate {
     tag: String,
+    #[cfg_attr(windows, expect(dead_code, reason = "Windows installs while staging"))]
     staged: PathBuf,
+    #[cfg_attr(windows, expect(dead_code, reason = "Windows installs while staging"))]
     installation: Installation,
 }
 
@@ -67,6 +91,7 @@ impl StagedUpdate {
 
     /// Move the staged binary over the running one. The running process is
     /// unaffected until [`Installed::relaunch`].
+    #[cfg(unix)]
     pub fn swap(self) -> std::io::Result<Installed> {
         let span = tracing::info_span!("macrod.update.apply", tag = %self.tag);
         let _entered = span.enter();
@@ -81,16 +106,27 @@ impl StagedUpdate {
 }
 
 /// A new binary in place of the running one, not yet running.
+#[cfg(unix)]
 pub struct Installed {
     executable: PathBuf,
 }
 
+#[cfg(unix)]
 impl Installed {
-    /// Re-execute as the new binary with the same arguments and environment.
-    /// Returns only on failure.
-    pub fn relaunch(self) -> std::io::Error {
-        install::relaunch(&self.executable)
+    /// Re-execute as the new binary with the same arguments and environment,
+    /// handing it the running agent. Returns only on failure.
+    pub fn relaunch(self, agent: Option<crate::handoff::HandedOffAgent>) -> std::io::Error {
+        install::relaunch(&self.executable, agent)
     }
+}
+
+/// Whether this process may update itself: a release build, with updating
+/// left on in the config (`auto`) and not turned off by `MACROD_NO_UPDATE`.
+fn updates_enabled(release_tag: Option<&str>, auto: bool, no_update: Option<&str>) -> bool {
+    let turned_off = no_update.map(str::trim).is_some_and(|value| {
+        !value.is_empty() && value != "0" && !value.eq_ignore_ascii_case("false")
+    });
+    release_tag.and_then(ReleaseVersion::parse).is_some() && auto && !turned_off
 }
 
 /// The background update check, alive until dropped.
@@ -101,12 +137,15 @@ pub struct UpdatePoller {
 }
 
 /// Start polling for releases, or `None` when this build cannot update
-/// itself.
-pub fn start_poller() -> Option<UpdatePoller> {
-    let Some(current) = RELEASE_TAG.and_then(ReleaseVersion::parse) else {
-        tracing::debug!("not a release build; self-update is off");
+/// itself or updating is turned off (`auto` is `[update] auto`).
+pub fn start_poller(auto: bool) -> Option<UpdatePoller> {
+    let no_update =
+        environment::MacrodNoUpdate::new().and_then(|value| value.value().map(str::to_owned));
+    if !updates_enabled(RELEASE_TAG, auto, no_update.as_deref()) {
+        tracing::info!(version = VERSION, "self-update is off");
         return None;
-    };
+    }
+    let current = RELEASE_TAG.and_then(ReleaseVersion::parse)?;
     let installation = match Installation::current() {
         Ok(installation) => installation,
         Err(error) => {
@@ -115,7 +154,11 @@ pub fn start_poller() -> Option<UpdatePoller> {
         }
     };
     installation.remove_leftovers();
-    let client = match ReleaseClient::new() {
+    let source =
+        environment::MacrodUpdateSource::new().and_then(|value| value.value().map(str::to_owned));
+    let source = ReleaseSource::new(source.as_deref());
+    tracing::info!(version = VERSION, source = ?source, "checking for macrod updates hourly");
+    let client = match ReleaseClient::new(source) {
         Ok(client) => client,
         Err(error) => {
             tracing::warn!(error = ?error, "could not build the release client; self-update is off");
@@ -172,7 +215,7 @@ async fn check_and_stage(
         check.record("outcome", "up_to_date");
         return Ok(None);
     }
-    let Some(asset) = latest.platform_asset() else {
+    let Some(asset) = latest.platform_asset(client.source()) else {
         // The release job uploads every platform at once; a missing one is a
         // build that failed or a platform that is not published.
         check.record("outcome", "no_asset");
@@ -191,21 +234,25 @@ async fn check_and_stage(
     let staged = async {
         let downloaded = client.download(&asset).await?;
         tracing::Span::current().record("bytes", downloaded.archive.len());
-        let installation = installation.clone();
+        let staging = installation.clone();
+        let tag = latest.tag.clone();
         let staged = tokio::task::spawn_blocking(move || {
-            installation.stage(&downloaded.archive, &downloaded.checksum)
+            staging.stage(&downloaded.archive, &downloaded.checksum, &tag)
         })
         .await
         .map_err(|error| StageError::Io(std::io::Error::other(error)))??;
         smoke_test(&staged).await.inspect_err(|_| {
             let _ = std::fs::remove_file(&staged);
         })?;
+        // Windows launches it from the next start; nothing to swap later.
+        #[cfg(windows)]
+        let staged = installation.commit(&latest.tag).map_err(StageError::Io)?;
         Ok::<_, UpdateError>(staged)
     }
     .instrument(download)
     .await?;
 
-    tracing::info!(tag = %latest.tag, "downloaded a newer macrod; restarting once no turn is running");
+    tracing::info!(tag = %latest.tag, "downloaded a newer macrod");
     Ok(Some(StagedUpdate {
         tag: latest.tag,
         staged,

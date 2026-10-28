@@ -25,6 +25,8 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         Path::new("/"),
         None,
         ActiveTurns::default(),
+        None,
+        crate::harness::Handoffs::channel().0,
     )
 }
 

@@ -35,9 +35,9 @@ pub enum StageError {
     Io(#[from] std::io::Error),
 }
 
-/// Where the running executable lives, and the files the updater keeps
-/// beside it. Staging in the same directory keeps the swap a rename on one
-/// filesystem.
+/// Where the running executable lives, and where the updater puts a new
+/// one: beside it on Unix, so the swap is a rename on one filesystem; in the
+/// installation's `versions` folder on Windows ([`super::versions`]).
 #[derive(Debug, Clone)]
 pub struct Installation {
     executable: PathBuf,
@@ -58,27 +58,22 @@ impl Installation {
         &self.executable
     }
 
-    fn sibling(&self, name: &str) -> PathBuf {
-        self.executable
-            .with_file_name(format!("{name}{}", std::env::consts::EXE_SUFFIX))
-    }
-
     /// The verified new binary, waiting to be swapped in.
-    fn staged_path(&self) -> PathBuf {
-        self.sibling(".macrod.new")
+    #[cfg(not(windows))]
+    fn staged_path(&self, _tag: &str) -> PathBuf {
+        self.executable.with_file_name(".macrod.new")
     }
 
-    /// Where Windows moves the running binary aside: a running `.exe` can be
-    /// renamed but not replaced or deleted.
-    fn retired_path(&self) -> PathBuf {
-        self.sibling(".macrod.old")
+    #[cfg(windows)]
+    fn staged_path(&self, tag: &str) -> PathBuf {
+        super::versions::Versions::of_executable(&self.executable).staging_executable(tag)
     }
 
-    /// Remove what an earlier run left: a staged binary it never swapped in,
-    /// or (on Windows) the binary it retired. Best effort; a retired binary
-    /// still running elsewhere stays until a later start.
+    /// Remove a staged binary an earlier run never swapped in. Best effort.
     pub fn remove_leftovers(&self) {
-        for leftover in [self.staged_path(), self.retired_path()] {
+        #[cfg(not(windows))]
+        {
+            let leftover = self.staged_path("");
             if let Err(error) = std::fs::remove_file(&leftover)
                 && error.kind() != std::io::ErrorKind::NotFound
             {
@@ -88,34 +83,32 @@ impl Installation {
     }
 
     /// Verify `archive` against the published `checksum` file, then write
-    /// its executable to the staged path. Nothing is left behind on failure.
-    pub fn stage(&self, archive: &[u8], checksum: &str) -> Result<PathBuf, StageError> {
+    /// its executable to the staged path for `tag`. Nothing is left behind
+    /// on failure.
+    pub fn stage(&self, archive: &[u8], checksum: &str, tag: &str) -> Result<PathBuf, StageError> {
         verify_checksum(archive, checksum)?;
         let binary = extract_executable(archive)?;
-        let staged = self.staged_path();
+        let staged = self.staged_path(tag);
+        if let Some(parent) = staged.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         write_executable(&staged, &binary).inspect_err(|_| {
             let _ = std::fs::remove_file(&staged);
         })?;
         Ok(staged)
     }
 
-    /// Put the staged binary where the running one is. On Unix the rename
-    /// replaces it atomically while the running process keeps its open
-    /// inode; on Windows the running binary is first renamed aside.
+    /// Put the staged binary where the running one is. The rename replaces
+    /// it atomically while the running process keeps its open inode.
+    #[cfg(not(windows))]
     pub fn swap(&self, staged: &Path) -> std::io::Result<()> {
-        #[cfg(windows)]
-        {
-            let retired = self.retired_path();
-            let _ = std::fs::remove_file(&retired);
-            std::fs::rename(&self.executable, &retired)?;
-            if let Err(error) = std::fs::rename(staged, &self.executable) {
-                let _ = std::fs::rename(&retired, &self.executable);
-                return Err(error);
-            }
-            Ok(())
-        }
-        #[cfg(not(windows))]
         std::fs::rename(staged, &self.executable)
+    }
+
+    /// Make the staged version the one the launcher starts next.
+    #[cfg(windows)]
+    pub fn commit(&self, tag: &str) -> std::io::Result<PathBuf> {
+        super::versions::Versions::of_executable(&self.executable).commit(tag)
     }
 }
 
@@ -186,12 +179,16 @@ fn write_executable(path: &Path, binary: &[u8]) -> std::io::Result<()> {
 }
 
 /// Replace this process with `executable`, with the same arguments and
-/// environment. Returns only on failure.
+/// environment, handing it `agent` when there is one. Returns only on
+/// failure, and then the agent is stopped.
 ///
 /// Takes the path recorded before the swap: once the running file is
 /// replaced, Linux reports this process's executable as deleted.
 #[cfg(unix)]
-pub fn relaunch(executable: &Path) -> std::io::Error {
+pub fn relaunch(
+    executable: &Path,
+    agent: Option<crate::handoff::HandedOffAgent>,
+) -> std::io::Error {
     use std::os::unix::process::CommandExt as _;
 
     let mut args = std::env::args_os();
@@ -199,18 +196,21 @@ pub fn relaunch(executable: &Path) -> std::io::Error {
     if let Some(arg0) = args.next() {
         command.arg0(arg0);
     }
-    command.args(args).exec()
-}
-
-/// Start `executable` with the same arguments and environment, then exit:
-/// Windows has no `exec`. Returns only on failure.
-#[cfg(windows)]
-pub fn relaunch(executable: &Path) -> std::io::Error {
-    match std::process::Command::new(executable)
-        .args(std::env::args_os().skip(1))
-        .spawn()
-    {
-        Ok(_) => std::process::exit(0),
-        Err(error) => error,
+    command.args(args).env_remove(crate::handoff::HANDOFF_ENV);
+    // Held open until `exec`: the new image reads the state from it.
+    let mut _state = None;
+    if let Some(agent) = &agent {
+        match agent.prepare_exec() {
+            Ok((state, number)) => {
+                command.env(crate::handoff::HANDOFF_ENV, number);
+                _state = Some(state);
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "could not hand the agent over; it restarts with macrod");
+            }
+        }
     }
+    let error = command.exec();
+    drop(agent);
+    error
 }

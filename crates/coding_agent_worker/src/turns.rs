@@ -70,6 +70,24 @@ impl ActiveTurns {
             .clear();
     }
 
+    /// The prompt ids still running, to hand to the next process image.
+    pub fn snapshot(&self) -> Vec<String> {
+        self.prompt_ids
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    /// Continue tracking turns an earlier process image saw start.
+    pub fn restore(&self, prompt_ids: impl IntoIterator<Item = String>) {
+        self.prompt_ids
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend(prompt_ids);
+    }
+
     /// Whether no turn is running.
     pub fn is_idle(&self) -> bool {
         self.prompt_ids
