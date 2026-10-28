@@ -23,8 +23,13 @@ rule:
         - kind: arrow_function
         - kind: function_expression
         - kind: method_definition
+    # useQueries' combine belongs to the per-mount observer, not the cache.
     - any:
         - kind: method_definition
+          not:
+            has:
+              field: name
+              regex: ^combine$
         - inside:
             kind: pair
             not:
