@@ -6,6 +6,10 @@
 -- the read. A notification's entity and type never change after insert, so
 -- copying on insert is enough; the trigger covers every writer, including
 -- older service binaries.
+-- Fail fast instead of queueing every notification read behind a long
+-- transaction while waiting for the table lock.
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE user_notification
     ADD COLUMN event_item_type text,
     ADD COLUMN event_item_id text,
