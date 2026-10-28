@@ -1197,11 +1197,21 @@ Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
-losing name/email matches. Group DMs stay separate, and the viewer is excluded
+losing name/email matches, including DMs found by typed search beyond the recent
+channel list. Group DMs stay separate, and the viewer is excluded
 from person results. Empty queries keep the existing recency lists. Verify a
 teammate with no DM or CRM record in both categories, including with CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
-show that person.
+show that person. Also verify a typed match whose DM is absent from the recent
+list: desktop and mobile should show one DM row, including after a same-email CRM
+contact arrives, with its alias still searchable.
+
+Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
+and [phone](media/command/deduplicated-person-mobile.png) use the real command and
+mobile search views in the backend-free universal-input fixture, with a synthetic
+person and a DM available only to typed searches. All/People each show one row;
+Enter and tap select that DM through recording-only navigation adapters. These
+captures verify result composition, not a live account's cache or backend.
 
 Browser examples: [desktop](media/command/teammate-desktop.png) and
 [mobile](media/command/teammate-mobile.png), using a known-user fixture with no DM
