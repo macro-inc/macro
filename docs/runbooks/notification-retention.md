@@ -5,9 +5,11 @@ than 30 complete UTC days. Both dev and prod stack configs **enable** its
 hourly EventBridge schedule in **deletion mode**. Deploying either
 notification-service stack activates cleanup, including the historical backlog;
 committing the config or applying migrations alone does not. These are desired
-settings, not proof of the deployed schedule's state. Missing stack settings
-still default to disabled/dry-run, and manual invocations with `{}` remain
-read-only.
+settings, not proof of the deployed schedule's state. Merging to `main` triggers
+normal dev deployment; a production release applies the prod settings. Complete
+the rollout prerequisites before merging or releasing this activation. Missing
+stack settings still default to disabled/dry-run, and manual invocations with
+`{}` remain read-only.
 
 ## Semantics
 
@@ -212,9 +214,11 @@ retention period or batch caps.
 
 ## Monitoring and stopping
 
-Infrastructure alarms on Lambda errors, throttles, and no invocations for
-three hours (three schedule intervals) while the schedule is enabled. Each sweep
-logs the cutoff, `sampled_expired`, `oldest_expired_at`, committed parent `deleted` count,
+Infrastructure alarms on Lambda errors, throttles, and three consecutive hourly
+periods without invocations while the schedule is enabled. The invocation alarm
+fills missing hourly samples with zero and requires all three periods to breach,
+so older invocations cannot mask a stopped schedule. Each sweep logs the cutoff,
+`sampled_expired`, `oldest_expired_at`, committed parent `deleted` count,
 attempted `batches`, and stopping reason. Each committed batch is also logged,
 so partial progress remains visible if a later batch fails.
 

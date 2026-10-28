@@ -175,13 +175,27 @@ export class NotificationRetention extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-missing-invocations`,
       {
-        namespace: 'AWS/Lambda',
-        metricName: 'Invocations',
-        dimensions: { FunctionName: this.lambda.name },
-        statistic: 'Sum',
-        // Allow three scheduled intervals before alarming on missing sweeps.
-        period: 10800,
-        evaluationPeriods: 1,
+        metricQueries: [
+          {
+            id: 'invocations',
+            metric: {
+              namespace: 'AWS/Lambda',
+              metricName: 'Invocations',
+              dimensions: { FunctionName: this.lambda.name },
+              period: 3600,
+              stat: 'Sum',
+            },
+            returnData: false,
+          },
+          {
+            id: 'hourly_invocations',
+            // Fill silent hours so older samples cannot mask a stopped schedule.
+            expression: 'FILL(invocations, 0)',
+            returnData: true,
+          },
+        ],
+        evaluationPeriods: 3,
+        datapointsToAlarm: 3,
         threshold: 1,
         comparisonOperator: 'LessThanThreshold',
         treatMissingData: enabled ? 'breaching' : 'notBreaching',

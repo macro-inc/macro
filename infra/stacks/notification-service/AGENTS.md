@@ -10,7 +10,8 @@ notification-retention Lambda. Runtime business policy lives in Rust.
 From `infra/`:
 - `bun test stacks/notification-service/retention.test.ts`
 - `bun run check`
-- `bunx biome check stacks/notification-service`
+- Run `biome ci --changed --no-errors-on-unmatched --error-on-warnings` inside
+  the Nix shell to match CI; the Bun-installed formatter can differ.
 
 ## Gotchas
 

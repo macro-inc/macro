@@ -1,6 +1,7 @@
-import { file, YAML } from 'bun';
+import { file } from 'bun';
 import { beforeAll, expect, mock, test } from 'bun:test';
 import * as pulumi from '@pulumi/pulumi';
+import { parse } from 'yaml';
 
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 const secretArn =
@@ -111,11 +112,8 @@ test('extension access is scoped to the existing Datadog key, not all secrets', 
   ]);
 });
 
-test.each([
-  'dev',
-  'prod',
-])('%s config schedules hourly deletion and alerts when invocations stop', async (stack) => {
-  const parsed = YAML.parse(
+test.each(['dev', 'prod'])('%s uses hourly retention', async (stack) => {
+  const parsed: unknown = parse(
     await file(new URL(`./Pulumi.${stack}.yaml`, import.meta.url)).text()
   );
   if (
@@ -164,11 +162,30 @@ test.each([
     registered.find(
       (r) =>
         r.type === 'aws:cloudwatch/metricAlarm:MetricAlarm' &&
-        r.inputs.metricName === 'Invocations'
+        r.name === 'notification_retention_handler-missing-invocations'
     )?.inputs
   ).toMatchObject({
-    period: 10800,
-    evaluationPeriods: 1,
+    metricQueries: [
+      {
+        id: 'invocations',
+        metric: {
+          namespace: 'AWS/Lambda',
+          metricName: 'Invocations',
+          period: 3600,
+          stat: 'Sum',
+        },
+        returnData: false,
+      },
+      {
+        id: 'hourly_invocations',
+        expression: 'FILL(invocations, 0)',
+        returnData: true,
+      },
+    ],
+    evaluationPeriods: 3,
+    datapointsToAlarm: 3,
+    threshold: 1,
+    comparisonOperator: 'LessThanThreshold',
     actionsEnabled: true,
     treatMissingData: 'breaching',
   });
