@@ -103,4 +103,24 @@ describe('pruneMemory', () => {
 
     expect(Object.keys(pruned.positions.v1a)).toEqual(['a']);
   });
+
+  it('keeps items moved by hand when the newest recall fills the memory', () => {
+    const recall = Object.fromEntries(
+      Array.from({ length: 450 }, (_, index) => [
+        `seen-${index}`,
+        { seenAt: index + 1 },
+      ])
+    );
+    const pruned = pruneMemory({
+      version: 1,
+      recall: { ...recall, moved: { pinned: true } },
+      positions: { v1a: { moved: { x: 10, y: 20 } } },
+      cameras: {},
+      showSettled: false,
+    });
+
+    expect(Object.keys(pruned.recall)).toHaveLength(400);
+    expect(pruned.recall.moved).toEqual({ pinned: true });
+    expect(pruned.positions.v1a.moved).toEqual({ x: 10, y: 20 });
+  });
 });

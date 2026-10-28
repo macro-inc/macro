@@ -42,11 +42,19 @@ const MAX_ENTRIES = 400;
 const recallTime = (recall: BoardRecall) =>
   Math.max(recall.dismissedAt ?? 0, recall.seenAt ?? 0);
 
-/** Bounds what a long-lived board stores: the newest recall, and positions only for remembered items. */
+/**
+ * Bounds what a long-lived board stores: items moved by hand first, since
+ * their positions depend on it, then the newest recall; positions only for
+ * remembered items.
+ */
 export function pruneMemory(state: BoardMemoryState): BoardMemoryState {
   const recall = Object.fromEntries(
     Object.entries(state.recall)
-      .sort(([, a], [, b]) => recallTime(b) - recallTime(a))
+      .sort(
+        ([, a], [, b]) =>
+          Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+          recallTime(b) - recallTime(a)
+      )
       .slice(0, MAX_ENTRIES)
   );
   const positions = Object.fromEntries(
