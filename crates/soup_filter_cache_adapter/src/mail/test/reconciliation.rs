@@ -215,6 +215,58 @@ fn exhausted_and_empty_first_pages_revoke_older_matches() {
     });
 }
 #[test]
+fn other_mail_views_use_their_own_timestamp_and_membership() {
+    pollster::block_on(async {
+        for view in ["ALL", "SENT", "DRAFTS"] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut vars = variables("DESC");
+            vars["input"]["initial"]["emailView"] = json!(view);
+            let ids = if view == "DRAFTS" {
+                [36, 30, 24, 18, 6]
+            } else {
+                [28, 24, 20, 16, 8]
+            };
+            persist(
+                &mut engine,
+                "SoupMailBackfill",
+                &vars,
+                &response(&ids, Value::Null),
+            )
+            .await;
+            persist(
+                &mut engine,
+                "Soup",
+                &vars,
+                &response(&[ids[0], ids[2], ids[3]], json!("next")),
+            )
+            .await;
+            let PageResult::MailPage { keys, .. } = page_current(
+                &mut engine,
+                "generation",
+                noise(),
+                "UPDATED_AT",
+                "DESC",
+                100,
+                PageRequest {
+                    view: view.into(),
+                    cursor: None,
+                    through: None,
+                },
+            )
+            .await
+            .unwrap() else {
+                panic!("supported {view}")
+            };
+            assert_eq!(
+                keys,
+                [ids[0], ids[2], ids[3], ids[4]].map(|n| format!("{TYPE}:{}", id(n))),
+                "{view}"
+            );
+        }
+    });
+}
+
+#[test]
 fn pending_local_edits_survive_negative_server_membership() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

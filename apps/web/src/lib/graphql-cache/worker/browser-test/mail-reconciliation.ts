@@ -99,23 +99,33 @@ async function show(view: 'INBOX' | 'DRAFTS') {
 const failed = (error: unknown) => {
   result.textContent = String(error);
 };
-document.querySelector('#noise')!.addEventListener('click', () => {
-  show('INBOX').catch(failed);
+document.querySelector('#noise')!.addEventListener('click', async () => {
+  try {
+    await show('INBOX');
+  } catch (error) {
+    failed(error);
+  }
 });
-document.querySelector('#drafts')!.addEventListener('click', () => {
-  show('DRAFTS').catch(failed);
+document.querySelector('#drafts')!.addEventListener('click', async () => {
+  try {
+    await show('DRAFTS');
+  } catch (error) {
+    failed(error);
+  }
 });
-document.querySelector('#network')!.addEventListener('click', () => {
-  host
-    .writeQuery({
+document.querySelector('#network')!.addEventListener('click', async () => {
+  try {
+    await host.writeQuery({
       query: QUERY,
       operationName: 'Soup',
       variables: VARIABLES,
       data: data([20, 16, 8]),
       identity: VIEWER,
-    })
-    .then(() => show('INBOX'))
-    .catch(failed);
+    });
+    await show('INBOX');
+  } catch (error) {
+    failed(error);
+  }
 });
 if (parameters.get('seed') !== 'false') {
   await host.writeQuery({
