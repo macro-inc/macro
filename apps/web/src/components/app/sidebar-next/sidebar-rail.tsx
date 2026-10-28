@@ -12,6 +12,7 @@ import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
+import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 
@@ -99,6 +100,7 @@ export const SidebarRail = () => {
 
       <div class="min-h-0 flex-1" />
 
+      <ReturnToCallButton />
       <FooterActions />
     </div>
   );
