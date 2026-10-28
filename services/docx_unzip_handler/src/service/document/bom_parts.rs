@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
+use futures::stream::{StreamExt, TryStreamExt};
 use lambda_runtime::tracing::{self};
 
 use crate::models::DocumentBomPart;
@@ -40,4 +41,34 @@ pub async fn upload_bom_parts(
         }
     }
     Ok(())
+}
+
+/// How many `HeadObject` requests one docx keeps in flight.
+const CONCURRENT_PART_CHECKS: usize = 16;
+
+/// The distinct SHAs in `shas` with no object in the document storage bucket.
+/// S3 is the only record of what is stored.
+#[tracing::instrument(
+    name = "docx.unzip_part_check",
+    skip_all,
+    fields(part_count = shas.len(), missing_count = tracing::field::Empty),
+    err
+)]
+pub async fn missing_shas(
+    s3_client: &s3_client::S3,
+    document_storage_bucket: &str,
+    shas: &[String],
+) -> anyhow::Result<Vec<String>> {
+    let distinct_shas: HashSet<String> = shas.iter().cloned().collect();
+    let missing_shas: Vec<String> = futures::stream::iter(distinct_shas)
+        .map(|sha| async move {
+            let stored = s3_client.exists(document_storage_bucket, &sha).await?;
+            anyhow::Ok((!stored).then_some(sha))
+        })
+        .buffer_unordered(CONCURRENT_PART_CHECKS)
+        .try_filter_map(|missing| async move { Ok(missing) })
+        .try_collect()
+        .await?;
+    tracing::Span::current().record("missing_count", missing_shas.len());
+    Ok(missing_shas)
 }

@@ -85,6 +85,9 @@ threads, pins, recents, notifications, folders, activity.
   sessions, or 120 while a rolling deployment overlaps all three. Old tasks
   retain their previous cap until they drain during the initial rollout.
   Production and local pools retain their existing primary/readonly limits.
+- Docx presave (`src/api/documents/pre_save.rs`) asks S3 with `HeadObject`
+  which parts are missing; `"BomPart"` rows only drive garbage collection
+  (`services/sha_cleanup_worker`), never "is this part uploaded?".
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.

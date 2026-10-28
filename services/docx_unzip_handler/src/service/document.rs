@@ -3,7 +3,7 @@ mod notify_docx_upload_job;
 mod process_document;
 mod unzip;
 
-pub use bom_parts::upload_bom_parts;
+pub use bom_parts::{missing_shas, upload_bom_parts};
 pub use notify_docx_upload_job::handle_docx_unzip_failure;
 pub use process_document::process;
 pub use unzip::unzip;

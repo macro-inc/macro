@@ -9,7 +9,8 @@ converts their XML parts into a Bill Of Materials (BOM) stored in MacroDB.
 
 - `src/handler.rs`: S3 event entry point — loops over records, resolves bucket/key.
 - `src/service/document.rs`: pipeline — `unzip` → `process` (BOM parts) →
-  `upload_bom_parts`, with `handle_docx_unzip_failure` for error notification.
+  `missing_shas` (`HeadObject` per part) → `upload_bom_parts`, with
+  `handle_docx_unzip_failure` for error notification.
 - `README.md`: local setup, `make build`, and the manual invoke payload.
 
 ## Scope

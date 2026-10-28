@@ -6872,7 +6872,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_queues",
- "macro_sha_count_client",
  "macro_uuid",
  "model",
  "model_owner",
@@ -12349,7 +12348,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "macro_db_migrator",
- "model",
  "sqlx",
  "tokio",
  "tracing",

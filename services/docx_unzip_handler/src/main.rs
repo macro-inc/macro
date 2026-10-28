@@ -18,7 +18,6 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_sha_count_client::ShaReferences;
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -54,7 +53,6 @@ async fn main() -> Result<(), Error> {
     tracing::trace!("initialized sqs client");
 
     let context = context::Context {
-        sha_references: Arc::new(ShaReferences::new(db.clone())),
         db,
         s3_client: Arc::new(s3_client),
         lambda_client: Arc::new(lambda_client),

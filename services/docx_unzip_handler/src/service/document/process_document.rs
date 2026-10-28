@@ -105,11 +105,9 @@ pub async fn process(
 
     let shas: Vec<String> = bom_parts.iter().map(|bp| bp.sha.clone()).collect();
 
-    // Parts no BomPart references yet are not in s3
-    let bom_parts_to_upload: Vec<String> = ctx
-        .sha_references
-        .find_non_existing_shas_string(shas)
-        .await?;
+    let bom_parts_to_upload =
+        service::document::missing_shas(&ctx.s3_client, &ctx.config.document_storage_bucket, &shas)
+            .await?;
 
     tracing::trace!("got bom parts to upload");
 
