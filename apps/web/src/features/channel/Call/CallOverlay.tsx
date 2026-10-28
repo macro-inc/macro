@@ -340,7 +340,7 @@ export function CallOverlay(props: {
       >
         {(mount) => <Portal mount={mount()}>{chatToggle}</Portal>}
       </Show>
-      <div class="relative flex min-h-0 flex-1 overflow-hidden">
+      <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>

@@ -61,7 +61,7 @@ export function CallChatPanel(props: {
         id={isMobile() ? undefined : props.id}
         aria-label="Call chat"
         hidden={isMobile() || !props.open}
-        class="absolute inset-y-0 right-0 z-20 w-full max-w-90 min-h-0 flex-col border-l border-edge-muted bg-surface @min-[800px]/call:static @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
+        class="absolute inset-y-2 right-0 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface-2 @min-[800px]/call:static @min-[800px]/call:my-2 @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
         classList={{ flex: !isMobile() && props.open }}
       >
         <h2 class="flex h-14 shrink-0 items-center px-4 pr-14 text-sm font-medium">

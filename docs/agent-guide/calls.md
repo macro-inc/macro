@@ -196,7 +196,8 @@ to rename it, then Save or press Enter; Cancel or Escape discards the edit. Gues
 read-only name.
 
 Join-preview and in-call controls use the standard Macro icon buttons. In a
-call, the microphone and camera are split buttons (`ButtonGroup`): the left half
+call, a fully rounded toolbar contains the controls. The microphone and camera
+are split buttons (`ButtonGroup`): the left half
 toggles the device (pressed while on), and the caret opens a settings menu above
 the toolbar on click only; hovering opens nothing. **Audio settings** lists
 microphones, speakers (when the browser can choose one), and noise suppression.
@@ -207,8 +208,9 @@ The controls also work by keyboard and touch.
 
 Open live chat with **Open chat** at the right of the header, aligned with
 **Copy Meeting Url**. Desktop chat fills the call content height alongside both
-the video and its media controls; narrow desktop panes overlay chat instead.
-Phones use the shared bottom sheet.
+the video and its media controls, with a rounded, raised background and a gap from
+the participant tiles. Narrow desktop panes overlay chat instead; phones use the
+shared bottom sheet.
 Dismiss the sheet with its handle, backdrop, or Escape; desktop chat closes with
 **Close chat** or Escape. Closing returns focus to the toggle and preserves the
 message draft and scroll position. Check both signed-in and guest calls.
