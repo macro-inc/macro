@@ -50,9 +50,10 @@ export function CellListMenu(props: {
           modal={false}
         >
           <Dropdown.Trigger
-            variant="outline"
+            aria-label={`Choose a value for ${props.address}`}
+            tooltip={`Choose a value for ${props.address}`}
+            variant="secondary"
             size="icon-xs"
-            label={`Choose a value for ${props.address}`}
             tabIndex={-1}
             class="size-full min-h-0 min-w-0 rounded-none p-0 touch:min-h-0 touch:min-w-0"
           >

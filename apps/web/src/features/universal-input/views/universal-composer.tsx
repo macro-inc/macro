@@ -53,7 +53,7 @@ function ComposerFooter(props: {
       <div class="flex flex-wrap items-center gap-2">
         <Show when={s.draft().intent === 'email'}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="lg"
             disabled={s.sending() || s.pending() || !!s.emailDraftValidation()}
             onClick={() => fireAndForget(s.saveEmailDraft(), 'universal-input')}
@@ -62,7 +62,7 @@ function ComposerFooter(props: {
           </Button>
         </Show>
         <Button
-          variant="cta"
+          variant="primary"
           aria-label={action()}
           aria-keyshortcuts="Meta+Enter Control+Enter"
           size="lg"
@@ -217,7 +217,7 @@ export function UniversalComposer(props: {
               </p>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={s.sending() || a.connectingGoogle()}
                 onClick={() =>
                   fireAndForget(a.connectGoogle(), 'universal-input')

@@ -282,14 +282,18 @@ Left nav (feature and platform gates still apply):
 - **Developer**: Runtimes, MCP server, API Keys, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact version and build-date card in the
-desktop app. The date is when the running app bundle was built, not when it was
-installed on the computer. In the browser it links to the latest desktop release
+**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
+date card in the desktop app. Build date is when the running JavaScript was
+built, not when it was installed on the computer. Bundle date is when the active
+OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
+the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app** and offers a QR code
-to download **Macro** from the App Store.
+The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
+code to download **Macro** from the App Store; inside the iOS and Android apps
+it shows the same Version, Build date, and Bundle date card as the desktop app,
+and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -360,7 +364,11 @@ only; without a team it is the only dropdown. A browser language the app isn't
 offered in falls back to English. Menus, navigation, the command and
 create menus, and settings navigation switch language as soon as the setting
 saves; page contents and user data stay as written. The choice is remembered on
-the device, so the next launch starts in the same language.
+the device, so the next launch starts in the same language. Once that resolved
+language has loaded, PostHog stores it on the person as `interface_language`
+(a tag such as `en` or `zh-Hans`). A usage pie is a Trends insight on
+`$pageview`, unique users, broken down by the person property
+`interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` aliases Integrations, and `harness` aliases Runtimes.
@@ -668,7 +676,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Code mode on that agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 

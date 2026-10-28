@@ -35,6 +35,10 @@ struct FakeRepo {
     recorded_sync_errors: Arc<Mutex<Vec<String>>>,
     /// Calendars recorded as refusing push channels, in order.
     recorded_watch_unsupported: Arc<Mutex<Vec<Uuid>>>,
+    /// Copies `meeting_copies` reports for every event.
+    meeting_copies: Vec<crate::domain::models::MeetingCopy>,
+    /// What `event_export` resolves for every event.
+    export: Option<crate::domain::ics::CalendarEventExport>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -111,7 +115,7 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
         _event_id: Uuid,
     ) -> Result<Vec<crate::domain::models::MeetingCopy>, Report> {
-        Ok(Vec::new())
+        Ok(self.meeting_copies.clone())
     }
 
     async fn event_export(
@@ -119,7 +123,7 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
         _event_id: Uuid,
     ) -> Result<Option<crate::domain::ics::CalendarEventExport>, Report> {
-        unreachable!("event export is not exercised by sync tests")
+        Ok(self.export.clone())
     }
 
     async fn open_join_request(
@@ -1897,4 +1901,104 @@ async fn failure_to_persist_calendar_quarantine_fails_the_account_run() {
     );
     assert!(lifecycle.completions.lock().unwrap().is_empty());
     assert_eq!(lifecycle.failures.lock().unwrap().len(), 1);
+}
+
+fn forward_export(
+    access: crate::domain::ics::CalendarEventExportAccess,
+) -> crate::domain::ics::CalendarEventExport {
+    crate::domain::ics::CalendarEventExport {
+        access,
+        owner_id: "macro|guest@example.com".to_string(),
+        event_type: EventType::Default,
+        ical_uid: "meeting@example.com".to_string(),
+        sequence: 2,
+        title: "Office tour".to_string(),
+        description: None,
+        location: Some("12th floor".to_string()),
+        time: EventTime::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 10, 30, 18, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 10, 30, 18, 30, 0).unwrap(),
+            time_zone: None,
+        },
+        recurrence_lines: Vec::new(),
+        organizer_email: Some("organizer@example.org".to_string()),
+        organizer_name: None,
+        updated_at: Utc.with_ymd_and_hms(2026, 10, 28, 12, 0, 0).unwrap(),
+    }
+}
+
+fn forward_copy(event_id: Uuid, inbox: &str) -> crate::domain::models::MeetingCopy {
+    crate::domain::models::MeetingCopy {
+        event_id,
+        inbox: inbox.to_string(),
+        organizes: false,
+        attends: true,
+    }
+}
+
+#[tokio::test]
+async fn event_forward_sends_the_export_from_the_requested_copys_inbox() {
+    let requested = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let service = CalendarService::new(FakeRepo {
+        meeting_copies: vec![
+            forward_copy(other, "work@example.com"),
+            forward_copy(requested, "guest@example.com"),
+        ],
+        export: Some(forward_export(
+            crate::domain::ics::CalendarEventExportAccess::OwnCopy,
+        )),
+        ..FakeRepo::default()
+    });
+
+    let forward = service
+        .event_forward("macro|guest@example.com", requested)
+        .await
+        .unwrap()
+        .expect("the requester's own copy can be forwarded");
+
+    assert_eq!(forward.inbox, "guest@example.com");
+    assert_eq!(forward.ics.title, "Office tour");
+    assert!(forward.ics.document.contains("METHOD:PUBLISH"));
+    assert!(forward.ics.document.contains("UID:meeting@example.com"));
+    assert!(!forward.ics.document.contains("ATTENDEE"));
+}
+
+#[tokio::test]
+async fn event_forward_refuses_an_event_none_of_the_requesters_inboxes_holds() {
+    // A delegated inbox's copy or a channel share lists no copy of the
+    // requester's own for the requested event.
+    let service = CalendarService::new(FakeRepo {
+        meeting_copies: vec![forward_copy(Uuid::now_v7(), "work@example.com")],
+        export: Some(forward_export(
+            crate::domain::ics::CalendarEventExportAccess::OwnCopy,
+        )),
+        ..FakeRepo::default()
+    });
+
+    let forward = service
+        .event_forward("macro|guest@example.com", Uuid::now_v7())
+        .await
+        .unwrap();
+
+    assert_eq!(forward, None);
+}
+
+#[tokio::test]
+async fn event_forward_refuses_a_copy_the_export_no_longer_resolves_as_owned() {
+    let requested = Uuid::now_v7();
+    let service = CalendarService::new(FakeRepo {
+        meeting_copies: vec![forward_copy(requested, "guest@example.com")],
+        export: Some(forward_export(
+            crate::domain::ics::CalendarEventExportAccess::ChannelShared,
+        )),
+        ..FakeRepo::default()
+    });
+
+    let forward = service
+        .event_forward("macro|guest@example.com", requested)
+        .await
+        .unwrap();
+
+    assert_eq!(forward, None);
 }

@@ -32,11 +32,7 @@ fn base_prompt_includes_channel_message_mention_format() {
             r#""blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}"#
         )
     );
-    assert!(
-        rendered.contains(
-            "Do not link only the channel unless you are referring to the whole channel."
-        )
-    );
+    assert!(rendered.contains("mention that message, not just its channel"));
 }
 
 #[test]

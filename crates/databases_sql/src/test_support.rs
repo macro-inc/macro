@@ -495,6 +495,7 @@ fn row_matches(expr: &Expr<DatabaseRowLiteral>, row: &StoredRow) -> bool {
         Expr::And(a, b) => row_matches(a, row) && row_matches(b, row),
         Expr::Or(a, b) => row_matches(a, row) || row_matches(b, row),
         Expr::Not(a) => !row_matches(a, row),
+        Expr::Literal(DatabaseRowLiteral::Include) => true,
         Expr::Literal(DatabaseRowLiteral::TableId(table)) => {
             row.table_id == TableId::from_uuid(*table)
         }

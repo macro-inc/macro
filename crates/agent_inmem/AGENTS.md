@@ -73,6 +73,11 @@ DecideReview are eager internal tools in both standard and code modes.
   25k tokens) for the model and offers `ReadToolResult` to page through them.
   The stream, log and history keep the whole result; replay cuts it again, so
   build turn messages with `to_rig_messages_limited`, not `to_rig_messages`.
+- `rig_engine::system_prompt` orders text from most to least stable for the
+  prompt cache: the static Macro prompt (the cached shared block, the same for
+  every agent), then the session's part, then the turn's (`with_turn`). Put
+  anything that changes per turn in the turn part, never in the shared block;
+  measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
 

@@ -9,7 +9,6 @@ import {
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Tooltip } from '@ui';
 import {
@@ -25,6 +24,7 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
@@ -205,7 +205,11 @@ export function CrmRecordDetail(props: {
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
               <HeaderActionGroup label="Sharing">
-                <CrmCopyLinkButton type={current().type} id={current().id} />
+                <CrmCopyLinkButton
+                  grouped
+                  type={current().type}
+                  id={current().id}
+                />
               </HeaderActionGroup>
               <SidePanel.Toggle />
             </div>
@@ -307,15 +311,7 @@ function RecordContent(props: {
         fallback={error(() => fireAndForget(query.refetch(), 'crm'))}
       >
         <Suspense
-          fallback={
-            <div class="grid size-full place-items-center text-ink-muted">
-              <SpinnerIcon
-                aria-hidden={false}
-                aria-label={`Loading ${props.record.type}`}
-                class="size-5 animate-spin"
-              />
-            </div>
-          }
+          fallback={<CrmListSkeleton label={`Loading ${props.record.type}`} />}
         >
           <ParamsProvider state={params}>{props.children}</ParamsProvider>
         </Suspense>
@@ -334,7 +330,7 @@ function DetailError(props: {
     <div class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted">
       <p>This {props.record} couldn’t be loaded.</p>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" onClick={props.onRetry}>
+        <Button variant="secondary" size="sm" onClick={props.onRetry}>
           Try again
         </Button>
         <Button variant="ghost" size="sm" onClick={props.onBack}>

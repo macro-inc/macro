@@ -176,6 +176,10 @@ The editor and model picker stay mounted so collapsing preserves the draft.
 Dismissing the model or effort selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
+In new and active agent composers, check that the model selector and lightning
+speed toggle share a height and vertical center: 32px on desktop and 36px with
+touch emulation. Open the model picker and toggle fast mode to verify both
+controls remain interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -190,8 +194,8 @@ While an agent works, a draft can be sent to its queue. Above the queue,
 message. The empty composer offers the same action as **Flush queued messages**
 with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
 **Steer** while a turn is running, to interrupt it and send that row next. With no
-draft or queue, the busy composer offers **Stop**. Send-next actions disable and
-Steer is hidden during stopping/starting and for read-only sessions.
+draft or queue, the busy composer offers **Stop**. Send next and Steer stay
+available while a previous one is starting; read-only sessions get neither.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -378,7 +382,7 @@ the shimmer.
   pressed; runs of routines set to **Show runs** are always listed. Every
   routine run carries the same clock icon after its age. The list starts
   without hidden runs each time the Agents view opens.
-- The agent composer's **+ (Add)** menu offers **Add photos & files**,
+- The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
   sheet with the same actions. Selecting a reference or skill restores editor
@@ -413,11 +417,11 @@ the shimmer.
   The selected segment glides for 250ms with
   an ease-out curve. The greeting text flips vertically into place on each mode change
   with the same duration; both animations respect reduced motion.
-  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice is
-  remembered per user, and a person with no saved choice starts in **Auto**. Auto is
+  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice
+  lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
-  agent harness checks too; without it the switch is Chat / Code and a saved Auto reads as Chat.
-  **Auto** (magic wand) hides the agent, model, effort, and speed controls. On send, the
+  agent harness checks too; without it the switch is Chat / Code and Auto reads as Chat.
+  **Auto** (sparkle, the sidebar's Agents icon) hides the agent, model, effort, and speed controls. On send, the
   input is briefly blocked (“Choosing Chat or Code…”) while `POST /agent-mode-choice` on the
   agent harness asks Cloudflare's Clef Flash whether the prompt needs a coding agent. Code
   starts the user's most recently used coding agent (else the first that can start) with its default model and
@@ -1086,10 +1090,11 @@ preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
-AI chat (including Home and doc-scoped chat) and agent session composers have
-a **Start dictation** microphone beside Send. It records
-in memory and uploads to the
-authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+On pointer devices, AI chat (including Home and doc-scoped chat) and agent
+session composers have a **Start dictation** microphone beside Send. Touch
+devices omit it because their keyboards already dictate. It records in memory
+and uploads to the authenticated `/dictation/transcribe` storage endpoint only
+on confirmation.
 Whisper is available on all plans without consuming chat credits; its server
 credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
@@ -1106,7 +1111,6 @@ If the browser stops listening on its own, **Ready** waits for confirmation.
 While **Finishing…**, the checkmark is disabled and Cancel remains available.
 No provider name or transcription hint appears below the composer; only the
 recording limit and failures do.
-Mobile chat stays expanded when focus moves into dictation controls.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
@@ -1338,8 +1342,8 @@ mention only notifies people who could already open it.
 In Home, a new Agents conversation, and an existing agent session, files can be
 attached to a prompt three ways: drop them anywhere on the composer (a
 "Drop files here to send them to the agent" overlay appears), paste them from the
-clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
-static file service and shows as a chip above the text (media thumbnails, document
+clipboard, or choose **Add photos** / **Add files** from the **+ (Add)** menu.
+Every file uploads to the static file service and shows as a chip above the text (media thumbnails, document
 pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
 receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
 and the sent prompt renders its files in the transcript (image thumbnails and
@@ -1798,12 +1802,12 @@ must stay hidden; subsequent live messages must still appear.
   with a ring so it reads as flushing the queue rather than sending a new message);
   pressing Enter or clicking that button cancels the current turn so the queue drains
   in order, oldest first. Steer on a queued row is the interrupt for that one message;
-  flush sends whatever is already next. The advance is held — the flush control is
-  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
-  advance sent is still unconfirmed (it shows as a pending bubble); once the server
-  confirms that prompt as the running turn, Enter advances the queue again. Two rapid
-  Enters therefore advance one entry, not two: each advance ends the turn the server is
-  actually running. Typed composer text still takes priority and Enter
+  flush sends whatever is already next. Each advance or Steer shows its message as a
+  pending bubble at once and drops its row; consecutive ones never wait on each other in
+  the UI. Their steer requests go out one at a time in press order, each after the
+  previous message leaves the server queue, so three rapid presses send three messages,
+  each once, in that order. A refused steer brings its row back labelled `Not sent`; it
+  stays queued and can be steered again. Typed composer text still takes priority and Enter
   queues that new prompt normally.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
@@ -2015,7 +2019,12 @@ uploaded images as normalized inline content, including attachments from earlier
 turns. Test an image-only prompt and a text-plus-image prompt, then follow up
 without reattaching the image.
 
-Text-only model choices show a description and a composer warning. Pasted,
+Text-only model choices show a description. In the composer’s + menu, only
+**Add photos** is dimmed, with a tooltip beside the row using the model’s house
+name (`"<Model> doesn't support images"`) on hover or arrow-key focus; selecting
+it does nothing and leaves the menu open. Touch shows the reason as the row’s
+second line instead. **Add files** remains available without a tooltip, and no
+warning banner is shown. Pasted,
 dropped, and picked images should be refused before upload; document attachments
 and text should still work. If an image is already attached when switching to a
 text-only model, keep the draft and image chip but disable Send until the image

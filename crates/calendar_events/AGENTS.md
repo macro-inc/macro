@@ -154,6 +154,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   forwarded by email takes the same import through
   `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
   `crates/email`'s `invitation_import` builds from the email's saved snapshot.
+  The other direction, a guest forwarding their copy of an event, reads the
+  same `.ics` through `CalendarEventForwardSource::event_forward`, which also
+  names the inbox holding that copy (`meeting_copies`), and is `None` for a
+  channel share or a delegated inbox's copy; `crates/email`'s
+  `event_forward` sends it. The file names no attendees, so a recipient can
+  only add it to their calendar and nothing reaches the organizer.
 - Asking to join a channel-shared event (`src/domain/join_requests.rs`) is a
   Macro-stored request, not an `entity_access` row: the grant is a provider guest
   write. Eligibility is the invite path's own `copy_capabilities` on the

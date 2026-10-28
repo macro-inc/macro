@@ -18,11 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-static label, matching other blocks. Choose **Rename** in Database actions to
-edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
-a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server

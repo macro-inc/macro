@@ -120,20 +120,22 @@ function CustomizeNavRow(props: {
           fallback={
             <div class="flex shrink-0 flex-col">
               <Button
+                aria-label={t('nav.moveItemUp', { label: props.item.label })}
+                tooltip={t('nav.moveItemUp', { label: props.item.label })}
                 variant="ghost"
                 size="icon-sm"
                 class="size-6"
-                label={t('nav.moveItemUp', { label: props.item.label })}
                 disabled={!canMoveUp()}
                 onClick={() => props.onMove(-1)}
               >
                 <CaretUpIcon class="size-3" />
               </Button>
               <Button
+                aria-label={t('nav.moveItemDown', { label: props.item.label })}
+                tooltip={t('nav.moveItemDown', { label: props.item.label })}
                 variant="ghost"
                 size="icon-sm"
                 class="size-6"
-                label={t('nav.moveItemDown', { label: props.item.label })}
                 disabled={!canMoveDown()}
                 onClick={() => props.onMove(1)}
               >
@@ -218,7 +220,7 @@ export function CustomizeSidebarModal(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <CloseIcon />
+            <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             {t('nav.customizeSidebar')}

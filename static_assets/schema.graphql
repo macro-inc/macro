@@ -3619,6 +3619,10 @@ GraphQL input for selecting database rows through Soup.
 """
 input GraphqlDatabaseRowLiteral @oneOf {
 	"""
+	Include accessible rows of every table; must be true.
+	"""
+	include: Boolean
+	"""
 	Match the rows of a table.
 	"""
 	tableId: ID

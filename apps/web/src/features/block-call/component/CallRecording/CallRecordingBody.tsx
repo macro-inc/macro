@@ -151,6 +151,7 @@ export function CallRecordingBody(props: {
       <SidePanel.HeaderActions>
         <HeaderActionGroup label="Actions">
           <AskMacroButton
+            grouped
             entity={{
               type: 'document',
               id: props.callId,

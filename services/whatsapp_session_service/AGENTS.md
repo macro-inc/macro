@@ -140,7 +140,9 @@ JIDs, phone numbers, QR codes or message text.
 
 - **Stop all WhatsApp traffic**: scale the ECS service to 0 tasks. Accounts
   stay `connected` and are picked up again when it scales back; sends recorded
-  meanwhile expire unsent after ten minutes. The web flag
+  meanwhile expire unsent after ten minutes. A deploy restores the task
+  count in `infra/stacks/whatsapp-session-service/service.ts` (2 in prod, 1 in
+  dev). The web flag
   `enable-whatsapp-linked` only hides the UI; the API keeps answering.
 - **Stuck lease** (an account no replica runs, `accounts_unowned` > 0): find
   the holder with `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND

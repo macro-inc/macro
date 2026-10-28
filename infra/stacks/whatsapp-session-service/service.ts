@@ -35,7 +35,6 @@ type WhatsappSessionServiceArgs = {
   };
   ecsClusterArn: pulumi.Input<string>;
   ecsClusterName: pulumi.Input<string>;
-  desiredCount: number;
   kmsDeletionWindowInDays: number;
   tags: { [key: string]: string };
 };
@@ -240,7 +239,7 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
       BASE_NAME,
       {
         cluster: args.ecsClusterArn,
-        desiredCount: args.desiredCount,
+        desiredCount: stack === 'prod' ? 2 : 1,
         // Start the replacement before stopping the old task: the old task
         // drains and NOTIFYs `whatsapp_account_released` so a running replica
         // takes each account over at once.

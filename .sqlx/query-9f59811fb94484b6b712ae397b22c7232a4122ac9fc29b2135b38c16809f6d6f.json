@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.action_id, a.owner, t.name, t.description, t.trigger_config, t.task,\n                   t.variables, t.created_at, t.updated_at,\n                   (SELECT count(*) FROM scheduled_action s WHERE s.template_id = t.action_id)\n                       AS \"active_count!\"\n            FROM scheduled_action_template t\n            JOIN scheduled_action a ON a.id = t.action_id\n            WHERE t.action_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "task",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "variables",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "active_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "9f59811fb94484b6b712ae397b22c7232a4122ac9fc29b2135b38c16809f6d6f"
+}

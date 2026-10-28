@@ -545,7 +545,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 variant="ghost"
                 aria-label="Document card actions"
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>

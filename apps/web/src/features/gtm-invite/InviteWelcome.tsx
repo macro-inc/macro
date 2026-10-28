@@ -164,7 +164,7 @@ export function InviteWelcome() {
                   </div>
                   <div class="flex flex-col gap-3">
                     <Button
-                      variant="cta"
+                      variant="primary"
                       size="xl"
                       disabled={redeem.isPending}
                       onClick={onContinue}
@@ -239,7 +239,11 @@ function UnavailableInvite(props: { title: string; body: string }) {
         </p>
       </div>
       <div class="flex gap-3">
-        <Button variant="outline" size="lg" onClick={() => navigate('/login')}>
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={() => navigate('/login')}
+        >
           Log in
         </Button>
       </div>
