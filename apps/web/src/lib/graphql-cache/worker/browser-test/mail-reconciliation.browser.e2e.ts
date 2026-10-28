@@ -7,7 +7,9 @@ test('authoritative Mail gaps stay absent on revisits and an OPFS reload', async
   await page.goto(`/mail-reconciliation.html?scope=${scope}`);
   const rows = page.locator('#rows li');
   await expect(rows).toHaveCount(8);
-  await page.getByRole('button', { name: 'Apply authoritative Noise page' }).click();
+  await page
+    .getByRole('button', { name: 'Apply authoritative Noise page' })
+    .click();
   const expected = [20, 16, 8, 6, 4].map(
     (n) =>
       `GraphqlSoupEmailThread:00000000-0000-0000-0000-${String(n).padStart(12, '0')}`
