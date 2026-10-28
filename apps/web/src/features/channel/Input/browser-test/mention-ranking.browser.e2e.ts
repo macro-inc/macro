@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 for (const mobile of [false, true]) {
   test(`project ranks above cached tasks and inserts a mention on ${mobile ? 'phone' : 'desktop'}`, async ({
     browser,
-  }) => {
+  }, testInfo) => {
     const context = await browser.newContext({
       viewport: mobile
         ? { width: 390, height: 844 }
@@ -54,7 +54,9 @@ for (const mobile of [false, true]) {
       );
     }
     await page.screenshot({
-      path: `/tmp/mention-ranking-${mobile ? 'phone' : 'desktop'}.png`,
+      path: testInfo.outputPath(
+        `mention-ranking-${mobile ? 'phone' : 'desktop'}.png`
+      ),
     });
     if (mobile) await project.tap();
     else await page.keyboard.press('Enter');
