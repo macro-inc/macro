@@ -23,6 +23,8 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
+  neutral:
+    'bg-button-neutral-bg text-button-neutral-ink border-transparent shadow-button',
   secondary: cn(
     'bg-button-secondary-bg text-ink border-border-secondary dark-mode:border-transparent shadow-button',
     'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:aria-expanded:border-border-secondary'
@@ -47,6 +49,11 @@ const buttonStyles = createVariants(
       primary: cn(
         buttonFrames.primary,
         'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed aria-expanded:bg-button-primary-pressed aria-expanded:not-data-disabled:hover:bg-button-primary-pressed',
+        buttonPressedStyles
+      ),
+      neutral: cn(
+        buttonFrames.neutral,
+        'not-data-disabled:hover:bg-button-neutral-hover not-data-disabled:active:bg-button-neutral-pressed aria-pressed:bg-button-neutral-pressed aria-pressed:not-data-disabled:hover:bg-button-neutral-pressed aria-expanded:bg-button-neutral-pressed aria-expanded:not-data-disabled:hover:bg-button-neutral-pressed',
         buttonPressedStyles
       ),
       secondary: cn(

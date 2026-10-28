@@ -12,6 +12,7 @@ import { ButtonGroup } from './ButtonGroup';
 
 const VARIANTS: ButtonVariant[] = [
   'primary',
+  'neutral',
   'secondary',
   'outline',
   'ghost',

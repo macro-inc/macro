@@ -42,8 +42,8 @@ shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
-or framing. Primary, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
-Primary Buttons use the theme accent and its resolved contrast color. Use secondary or outline for neutral actions; there is no separate accent variant or inverse neutral primary.
+or framing. Primary, neutral, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
+Primary Buttons use the theme accent and its resolved contrast color. Use `neutral` for solid monochrome emphasis (black in light themes, white in dark themes), and secondary or outline for softer neutral actions. The separate accent variant remains removed.
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
 ## Canonical desktop surfaces
