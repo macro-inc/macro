@@ -156,10 +156,11 @@ color field (Shift makes larger steps). **Reset to default** clears the override
 Visibility and colors share the calendar sidebar's browser-local preferences,
 survive reload, and do not change the Google calendar or booking conflict checks.
 
-The **Sidebar** section's **Show next meeting** switch (on by default, saved in
+The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
 `Now` during a meeting, or minutes until one under an hour away. Turning it off
-hides the badge and stops its upcoming-events fetch.
+hides the badge and stops its upcoming-events fetch. The row previews the
+Calendar button beside the switch, with a sample `23m` pill only while it is on.
 
 The calendar header has a `Booking links` dropdown. Select an active link to
 copy it. The `Manage booking links` footer opens the Scheduling workspace, even

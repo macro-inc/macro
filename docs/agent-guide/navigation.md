@@ -381,7 +381,7 @@ until enabled on the rail.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
   `Agents`, `Customers`. Calendar and Customers appear only when
   their features are enabled. Calendar shows a next-meeting badge (`Now`, or
-  minutes under an hour away) unless **Show next meeting** is off in
+  minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
   photo as a badge in its corner. It opens Settings directly in the active

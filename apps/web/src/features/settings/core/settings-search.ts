@@ -81,6 +81,12 @@ const SETTINGS: Setting[] = [
       'google gmail connect accounts visibility show hide color colour subcalendar',
   },
   {
+    tab: 'Calendar',
+    title: 'Next meeting countdown',
+    target: 'Next meeting countdown',
+    keywords: 'sidebar badge upcoming meeting minutes now timer hide',
+  },
+  {
     tab: 'Agents',
     title: 'Team agents',
     target: 'Team agents',
