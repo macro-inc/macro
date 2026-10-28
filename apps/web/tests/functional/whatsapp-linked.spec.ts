@@ -1352,9 +1352,7 @@ for (const mobile of [false, true]) {
       await expect(
         page.getByRole('textbox', { name: 'Message Design Crit' })
       ).toBeVisible();
-      await page
-        .getByRole('button', { name: mobile ? 'Show details' : /side panel/i })
-        .click();
+      await page.getByRole('button', { name: 'Show details', exact: true }).click();
       const members = page.getByRole('list', { name: 'WhatsApp members' });
       await expect(members).toBeVisible();
       await expect(members.getByRole('listitem')).toHaveText([
