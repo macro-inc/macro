@@ -20,4 +20,4 @@ Create a bot with a name, stable handle, and optional profile. Omit teamId for a
 | `channelId` | string | No | Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also returns the channel webhook URL and a credential proposal the user can mint from the chat card. |
 | `credentialLabel` | string | No | Optional label for the credential the user will mint when channelId is set, such as `github-webhook`. Requires channelId. |
 | `credentialExpiresAt` | string | No | Optional RFC 3339 expiration for the credential the user will mint when channelId is set. Requires channelId. |
-| `hasAgent` | boolean | No | Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false. |
+| `hasAgent` | boolean | No | Set true to make this bot an AI agent: mentions and DMs start an agent session. Defaults to false. |

@@ -71,7 +71,7 @@ async fn backfill_enables_configured_agents_and_preserves_plain_bots(
 
     for _ in 0..2 {
         sqlx::raw_sql(include_str!(
-            "../../../../../macro_db_client/migrations/20261027201315_enable_configured_bot_agents.sql"
+            "../../../../../macro_db_client/migrations/20261028223354_enable_configured_bot_agents.sql"
         ))
         .execute(&pool)
         .await?;

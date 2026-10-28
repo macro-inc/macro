@@ -34,7 +34,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -335,7 +335,7 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -772,7 +772,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -3893,7 +3893,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod

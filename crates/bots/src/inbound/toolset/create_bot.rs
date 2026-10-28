@@ -80,7 +80,7 @@ pub struct CreateBot {
     pub credential_expires_at: Option<DateTime<Utc>>,
     /// Optional coding-agent session flag.
     #[schemars(
-        description = "Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false."
+        description = "Set true to make this bot an AI agent: mentions and DMs start an agent session. Defaults to false."
     )]
     #[serde(default)]
     pub has_agent: Option<bool>,
