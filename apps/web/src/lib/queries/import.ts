@@ -176,6 +176,17 @@ export function useCancelNotionImportMutation() {
   }));
 }
 
+function workspaceImportReportQueryOptions(
+  source: 'notion' | 'linear' | 'jira'
+) {
+  return queryOptions({
+    queryKey: importKeys.workspace(source).queryKey,
+    queryFn: () => throwOnErr(() => importClient.getWorkspaceReport(source)),
+    refetchInterval: (query) =>
+      notionImportInFlight(query.state.data) ? 2_000 : false,
+  });
+}
+
 /** A reviewed workspace report, isolated by source and refreshed on pushes. */
 export function useWorkspaceImportReportQuery(
   source: Accessor<'notion' | 'linear' | 'jira'>
@@ -189,12 +200,7 @@ export function useWorkspaceImportReportQuery(
       'workspace-import'
     );
   });
-  return useQuery(() => ({
-    queryKey: importKeys.workspace(source()).queryKey,
-    queryFn: () => throwOnErr(() => importClient.getWorkspaceReport(source())),
-    refetchInterval: (query) =>
-      notionImportInFlight(query.state.data) ? 2_000 : false,
-  }));
+  return useQuery(() => workspaceImportReportQueryOptions(source()));
 }
 
 /** Cancel only the workspace source displayed by this review. */
