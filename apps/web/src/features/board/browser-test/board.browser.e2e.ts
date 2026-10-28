@@ -119,10 +119,17 @@ test('a closed card stays away until something new happens in it', async ({
   );
 });
 
-test('read items leave after a quiet day and can be shown again', async ({
+test('read items fade, leave after a quiet day, and can be shown again', async ({
   page,
 }) => {
   await openBoard(page);
+  const node = (name: string) =>
+    page.locator('[data-board-node]').filter({
+      has: page.locator(`[role="button"][aria-label^="${name}"]`),
+    });
+  // `ideas` was read hours ago; `general` still has unread messages.
+  await expect(node('ideas')).toHaveCSS('opacity', '0.55');
+  await expect(node('general')).toHaveCSS('opacity', '1');
   const nodes = page.locator('[data-board-node]');
   const total = await nodes.count();
   for (let step = 0; step < 8; step++) {
