@@ -134,7 +134,7 @@ export function Harness(
           backLabel={props.backLabel ?? 'Agents'}
           actions={
             <Button
-              variant="primary"
+              variant="neutral"
               size="sm"
               onClick={() => setPairingDialog({})}
             >

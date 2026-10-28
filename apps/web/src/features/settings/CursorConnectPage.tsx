@@ -236,7 +236,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                     </Button>
                     <Button
                       type="submit"
-                      variant="primary"
+                      variant="neutral"
                       size="sm"
                       disabled={!apiKey().trim() || saveKey.isPending}
                     >
@@ -247,7 +247,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
               >
                 <Button
                   type="button"
-                  variant="primary"
+                  variant="neutral"
                   size="sm"
                   onClick={props.onClose}
                 >
