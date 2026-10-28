@@ -66,6 +66,7 @@ import {
   buildAccountDeletionFeedbackPayload,
   performAccountDeletion,
 } from './account-deletion-feedback';
+import { getBundleDebugInfo } from './app-build';
 import { CurrentPlanCard } from './components/current-plan-card';
 import { resolvePlanTier } from './core/billing-state';
 import {
@@ -850,20 +851,9 @@ function bundleUpdateAction(
   }
 }
 
-type BundleDebugInfo = {
-  bundleBuild: number;
-  source: 'embedded' | 'ota';
-  nativeBuild: number;
-};
-
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [bundleDebugInfo] = createResource(() =>
-    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
-      console.error('[bundle-update] get_bundle_debug_info failed', error);
-      return null;
-    })
-  );
+  const [bundleDebugInfo] = createResource(getBundleDebugInfo);
 
   return (
     <Show when={bundleDebugInfo()}>

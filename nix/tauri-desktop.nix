@@ -297,23 +297,28 @@
         '';
       };
 
+      # Both Tauri workspaces reach the webauthn fork through src-tauri. The
+      # fork lists an absent device-catalog README, and crane inspects every
+      # workspace package while vendoring, including this unused one.
+      vendorWebauthnGitCheckout = packages: drv:
+        if lib.any (package: package.name == "webauthn-authenticator-rs") packages then
+          drv.overrideAttrs (old: {
+            postPatch = (old.postPatch or "") + ''
+              cp README.md device-catalog/README.md
+            '';
+          })
+        else
+          drv;
+      webauthnOutputHashes = {
+        "git+https://github.com/beeper/webauthn-rs?rev=579f9144d37161bedf25ed1236d73486ce303de6#579f9144d37161bedf25ed1236d73486ce303de6" =
+          "sha256-0s6M8lB4EpY6FiUtRqsDXdrzqsfMxWkTBl/wVYvbV/I=";
+      };
+
       tauriCargoVendorDir = craneLib.vendorCargoDeps {
         src = ../apps/web/tauri;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # The pinned fork lists an absent device-catalog README. Crane inspects
-        # every workspace package while vendoring, including this unused one.
-        overrideVendorGitCheckout = packages: drv:
-          if lib.any (package: package.name == "webauthn-authenticator-rs") packages then
-            drv.overrideAttrs (old: {
-              postPatch = (old.postPatch or "") + ''
-                cp README.md device-catalog/README.md
-              '';
-            })
-          else
-            drv;
-        outputHashes = {
-          "git+https://github.com/beeper/webauthn-rs?rev=579f9144d37161bedf25ed1236d73486ce303de6#579f9144d37161bedf25ed1236d73486ce303de6" =
-            "sha256-0s6M8lB4EpY6FiUtRqsDXdrzqsfMxWkTBl/wVYvbV/I=";
+        overrideVendorGitCheckout = vendorWebauthnGitCheckout;
+        outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
@@ -874,7 +879,8 @@
       cefCargoVendorDir = cefCraneLib.vendorCargoDeps {
         src = ../apps/web/tauri/desktop-cef;
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
-        outputHashes = {
+        overrideVendorGitCheckout = vendorWebauthnGitCheckout;
+        outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
             "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
@@ -889,6 +895,36 @@
             "sha256-OdEp5mw0l5Euj0ry7gzNVxdB0jlGUq0N7XINXUhtE+c=";
         };
       };
+      # Both Tauri workspaces build offline from their own vendor dirs. A
+      # src-tauri dependency added to one lockfile but not the other only failed
+      # the macOS release build, so resolve both lockfiles on Linux PRs too.
+      tauriCargoLockfilesCheck =
+        let
+          lockfileSrc = lib.fileset.toSource {
+            root = ../.;
+            fileset = lib.fileset.unions [
+              (cefCraneLib.fileset.commonCargoSources ../.)
+              ../apps/web/tauri/Cargo.lock
+              ../apps/web/tauri/desktop-cef/Cargo.lock
+            ];
+          };
+        in
+        pkgs.runCommand "tauri-cargo-lockfiles" { nativeBuildInputs = [ cefRustToolchain ]; } ''
+          cp -r ${lockfileSrc} source
+          chmod -R u+w source
+          resolve_offline() {
+            export CARGO_HOME="$TMPDIR/cargo-home-$2"
+            install -Dm0644 "$3/config.toml" "$CARGO_HOME/config.toml"
+            if ! cargo metadata --locked --offline --format-version 1 \
+              --manifest-path "source/$1" > /dev/null; then
+              echo "$1: Cargo.lock does not match its manifests. Run cargo metadata in that workspace and commit the lockfile." >&2
+              exit 1
+            fi
+          }
+          resolve_offline apps/web/tauri/Cargo.toml wry ${tauriCargoVendorDir}
+          resolve_offline apps/web/tauri/desktop-cef/Cargo.toml cef ${cefCargoVendorDir}
+          touch "$out"
+        '';
       cefCargoSources = cefCraneLib.fileset.commonCargoSources ../.;
       cefAppSrc = lib.fileset.toSource {
         root = ../.;
@@ -1295,6 +1331,7 @@
     {
       checks = lib.optionalAttrs isX86_64Linux {
         tauri-appimage-packaging = tauriAppImagePackagingTests;
+        tauri-cargo-lockfiles = tauriCargoLockfilesCheck;
       };
 
       apps = lib.optionalAttrs isLinux {

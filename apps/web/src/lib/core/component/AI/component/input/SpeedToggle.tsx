@@ -38,7 +38,7 @@ export function SpeedToggle(props: { model: string }) {
     <Show when={speed()}>
       <Button
         variant="ghost"
-        size="icon-composer"
+        size="icon-md"
         label={label()}
         aria-label={label()}
         aria-pressed={enabled()}

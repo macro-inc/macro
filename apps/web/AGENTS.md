@@ -358,6 +358,8 @@ the user's newest account for that app from the last fifteen minutes.
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
   in the other languages. See the [i18n rule](../../.agents/rules/web/i18n.md).
+  The resolved interface language is reported to PostHog as the person
+  property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
@@ -585,7 +587,10 @@ instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
 Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
 `createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Download hands off directly to browser downloads
+bound to the same controller. Call recording menus and the list-row Download
+(`makeDownloadAction`) use the same controller; the list action runs it under
+its own root, because choosing a context-menu item disposes the menu's owner.
+Download hands off directly to browser downloads
 or the native save picker. Show channel Download on hover or keyboard focus,
 always on touch, without a footer. Keep system Share inside the touch Download
 menu; desktop Share belongs to Macro permissions. Do not add a custom

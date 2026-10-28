@@ -74,10 +74,9 @@ export type DocxEditorViewProps = {
   /** Content below the page (discussion, detached comments). */
   footer?: (comments: DocxComments) => JSX.Element;
   actions?: (download: () => void) => JSX.Element;
-  onDownloadReady?: (download: (() => void) | undefined) => void;
   onDownload: (bytes: Uint8Array) => void;
   onError?: (error: unknown) => void;
-  /** Test hook: the mounted editor. */
+  /** The mounted editor, for actions outside its toolbar (file menu Download). */
   onReady?: (editor: DocxEditor) => void;
 };
 
@@ -90,8 +89,6 @@ export function DocxEditorView(props: DocxEditorViewProps) {
       .then(props.onDownload)
       .catch((error: unknown) => props.onError?.(error));
   };
-  props.onDownloadReady?.(download);
-  onCleanup(() => props.onDownloadReady?.(undefined));
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   let input: HTMLTextAreaElement | undefined;
   let selectionTimer: ReturnType<typeof setTimeout> | undefined;

@@ -15,7 +15,10 @@ use models_permissions::share_permission::{
 use sqlx::{PgPool, Pool, Postgres, Row};
 
 use super::PgProjectRepo;
-use crate::domain::models::{CreateProjectArgs, EditProjectArgs, UploadFolderRepoArgs};
+use crate::domain::models::{
+    CreateProjectArgs, EditProjectArgs, ProjectItemKind, ProjectTree, ProjectTreeFolder,
+    ProjectTreeItem, UploadFolderRepoArgs,
+};
 use crate::domain::ports::ProjectRepo;
 
 #[derive(Clone)]
@@ -1114,5 +1117,60 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
 
     let missing_error = repo.mark_projects_uploaded("missing").await.unwrap_err();
     assert!(matches!(missing_error, sqlx::Error::RowNotFound));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn project_tree_lists_live_descendants_parents_first(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool);
+
+    let tree = repo.get_project_tree(ROOT_ID, 10).await?;
+
+    assert_eq!(
+        tree.folders,
+        vec![
+            ProjectTreeFolder {
+                id: CHILD_ID.to_string(),
+                parent_id: ROOT_ID.to_string(),
+                name: "First child".to_string(),
+            },
+            ProjectTreeFolder {
+                id: "10000000-0000-0000-0000-000000000003".to_string(),
+                parent_id: CHILD_ID.to_string(),
+                name: "Grandchild".to_string(),
+            },
+        ]
+    );
+    assert_eq!(
+        tree.items,
+        vec![
+            ProjectTreeItem {
+                kind: ProjectItemKind::Document,
+                id: DOCUMENT_ID.to_string(),
+                project_id: ROOT_ID.to_string(),
+                name: "Document".to_string(),
+            },
+            ProjectTreeItem {
+                kind: ProjectItemKind::Chat,
+                id: CHAT_ID.to_string(),
+                project_id: ROOT_ID.to_string(),
+                name: "Chat".to_string(),
+            },
+        ]
+    );
+
+    let capped = repo.get_project_tree(ROOT_ID, 1).await?;
+    assert_eq!(capped.folders.len(), 1);
+    assert_eq!(capped.items.len(), 2);
+
+    let leaf = repo
+        .get_project_tree("10000000-0000-0000-0000-000000000003", 10)
+        .await?;
+    assert_eq!(leaf, ProjectTree::default());
     Ok(())
 }

@@ -3,6 +3,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model::folder::FileSystemNode;
 use model::project::Project;
+use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
@@ -106,6 +107,59 @@ pub struct UploadFolderRepoArgs {
     pub upload_request_id: String,
     /// Optional parent for the root project.
     pub parent_id: Option<String>,
+}
+
+/// A live folder below the root of a [`ProjectTree`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTreeFolder {
+    /// Folder identifier.
+    pub id: String,
+    /// Containing folder: the tree's root or another of its folders.
+    pub parent_id: String,
+    /// Folder name.
+    pub name: String,
+}
+
+/// The kinds of item a project tree holds besides folders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectItemKind {
+    /// A document, tasks included.
+    Document,
+    /// A chat.
+    Chat,
+}
+
+/// A live document or chat filed in a [`ProjectTree`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTreeItem {
+    /// Whether the item is a document or a chat.
+    pub kind: ProjectItemKind,
+    /// Item identifier.
+    pub id: String,
+    /// Containing folder: the tree's root or one of its folders.
+    pub project_id: String,
+    /// Display name.
+    pub name: String,
+}
+
+impl ProjectTreeItem {
+    /// The item as an entity reference.
+    pub fn entity(&self) -> Entity<'static> {
+        let entity_type = match self.kind {
+            ProjectItemKind::Document => EntityType::Document,
+            ProjectItemKind::Chat => EntityType::Chat,
+        };
+        entity_type.with_entity_string(self.id.clone())
+    }
+}
+
+/// The live folders, documents, and chats below a project.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProjectTree {
+    /// Folders below the root, every parent before its children.
+    pub folders: Vec<ProjectTreeFolder>,
+    /// Documents and chats filed in the root or one of its folders.
+    pub items: Vec<ProjectTreeItem>,
 }
 
 /// Result returned by project creation and editing.

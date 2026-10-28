@@ -28,7 +28,10 @@ function Root(props: {
   );
 }
 
-function Header(props: { onCreate?: () => void }) {
+function Header(props: {
+  onCreate?: () => void;
+  createButtonRef?: (element: HTMLButtonElement) => void;
+}) {
   return (
     <CollapsibleSection.Header>
       <CollapsibleSection.Trigger>
@@ -38,6 +41,7 @@ function Header(props: { onCreate?: () => void }) {
       <Show when={props.onCreate}>
         {(onCreate) => (
           <CollapsibleSection.Action
+            ref={props.createButtonRef}
             label={t('viewMenus.newSavedView')}
             onClick={onCreate()}
           >

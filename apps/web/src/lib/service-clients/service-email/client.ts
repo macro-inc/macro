@@ -65,6 +65,9 @@ import type {
   UpsertScheduledResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalendarEventErrorCode';
+import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
+import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -104,6 +107,24 @@ async function calendarMutationErrorHandler(response: Response) {
   const code =
     body?.code && body.code in CalendarMutationErrorCode
       ? (body.code as CalendarMutationErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
+}
+
+async function forwardCalendarEventErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in ForwardCalendarEventErrorCode
+      ? (body.code as ForwardCalendarEventErrorCode)
       : undefined;
   if (code) {
     return { code, message: body?.message ?? '' };
@@ -191,6 +212,19 @@ export const emailClient = {
         errorResponseHandler: calendarMutationErrorHandler,
       }
     );
+  },
+  async forwardCalendarEvent(
+    eventId: string,
+    args: ForwardCalendarEventRequest
+  ) {
+    return fetchWithToken<
+      ForwardCalendarEventResponse,
+      ForwardCalendarEventErrorCode
+    >(`${emailHost}/email/calendar-events/${eventId}/forward`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+      errorResponseHandler: forwardCalendarEventErrorHandler,
+    });
   },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
