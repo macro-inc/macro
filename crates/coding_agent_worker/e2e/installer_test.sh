@@ -3,7 +3,7 @@
 # shell, a second run must not add the PATH line again, and --no-modify-path
 # must leave startup files alone. Installs from a directory mirror.
 #
-#   installer_test.sh RELEASES_DIR TAG
+#   installer_test.sh RELEASES_DIR TAG   (INSTALLER_TEST_SHELLS="bash zsh" to pick)
 set -euo pipefail
 
 releases=$(cd "$1" && pwd)
@@ -57,7 +57,7 @@ startup_lines() {
   { cat "$1"/.bashrc "$1"/.bash_profile "$1"/.zshrc "$1"/.config/fish/conf.d/macrod.fish 2>/dev/null || true; } | wc -l | tr -d ' '
 }
 
-for shell in bash zsh fish; do
+for shell in ${INSTALLER_TEST_SHELLS:-bash zsh fish}; do
   if ! command -v "$shell" >/dev/null 2>&1; then
     fail "$shell is not installed here"
     continue
