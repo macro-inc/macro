@@ -92,6 +92,11 @@ Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It types a draft, remounts the composer over it, and checks the blank lines survive.
 
+Block formatting passes a forward copy of the selection to Lexical's
+`$setBlocksType` so backward selections include their first paragraph and keep
+the editor's actual selection direction. The Markdown core browser suite's
+`quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
+
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
 ```sh

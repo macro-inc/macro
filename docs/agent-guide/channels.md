@@ -33,6 +33,16 @@ Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
+## Block formatting
+
+Selecting several paragraphs and choosing Quote or a heading in the floating
+format toolbar applies it to the same paragraphs in either selection direction.
+Verify a selection from the last paragraph back to the start of the first:
+the first paragraph must receive the format too. A range ending at the start of
+the following paragraph leaves that following paragraph unchanged.
+The backend-free quote check is documented in the Markdown browser-test README
+linked above.
+
 ## Empty direct messages
 
 An empty human DM shows the centered conversations illustration and “Say hello”
