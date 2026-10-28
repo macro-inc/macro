@@ -49,9 +49,11 @@ mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
 write. The HTTP API schema is generated with `just openapi`; WebSocket messages
-continue to use the Bebop schema. Regenerate the HTTP client from
+continue to use the Bebop schema. Regenerate the HTTP types from
 `apps/web/src/lib/service-clients` with
-`bun run orval --config orval.config.ts --project syncService`.
+`bun run orval --config orval.config.ts --project syncService`. The existing web
+transport handles binary payloads and permission tokens; Orval generates shared
+models only.
 
 ## Bebop
 The bebop schema is defined in `./bebop/schema.bop`.
