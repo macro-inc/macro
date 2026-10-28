@@ -140,6 +140,12 @@ describe('desktop tab manager', () => {
     expect(tabManager.activeTabId()).toBe(tabManager.tabs()[0]!.id);
     expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
 
+    // No stored English title; the strip renders its translated placeholder
+    // until the tab is activated and gets a live title.
+    const background = tabManager.tabs()[1]!;
+    expect(background.title).toBeUndefined();
+    expect(tabManager.tabTitle(background)).toBeUndefined();
+
     tabManager.activateTab(tabManager.tabs()[1]!.id);
     await flush(router);
     expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);

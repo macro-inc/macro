@@ -34,17 +34,6 @@ const newTabId = () => crypto.randomUUID() as DesktopTabId;
 
 const SURFACE = 'desktop-tabs';
 
-/** A readable placeholder until the tab is activated and gets a live title. */
-function titleForEntry(entry: Entry): string {
-  const leaf = entry.location.route.matches.at(-1)?.id ?? 'tab';
-  const name = leaf
-    .replace(/^view-/, '')
-    .replace(/^md$/, 'document')
-    .replace(/[-_]/g, ' ');
-
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
 function newUrlTab(url: string): DesktopTab {
   return {
     id: newTabId(),
@@ -286,7 +275,10 @@ export function createTabManager(options: TabManagerOptions) {
       };
       const tab: DesktopTab = {
         id: newTabId(),
-        title: titleForEntry(entry),
+        // No stored title until the tab is activated and gets a live one;
+        // the strip renders its translated placeholder meanwhile (i18n.md
+        // bans deriving display text from English route ids).
+        title: undefined,
         paneCount: 1,
         stored: {
           kind: 'snapshot',
