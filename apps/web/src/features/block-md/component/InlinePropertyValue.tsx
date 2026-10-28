@@ -54,6 +54,8 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   return (
     <PropertyValuePill
       property={props.property}
+      variant="secondary"
+      size="xs"
       showLabel={
         props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
         props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
@@ -89,8 +91,9 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       hoverTrailingAction={
         <Show when={canManage()}>
           <Button
+            variant="ghost"
             size="icon-sm"
-            label="Unpin"
+            aria-label="Unpin"
             disabled={removing()}
             onClick={() =>
               ctx.onPropertyUnpinned?.(
@@ -99,7 +102,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
               )
             }
           >
-            <PushPinSlashIcon />
+            <PushPinSlashIcon class="size-3.5 shrink-0" />
           </Button>
         </Show>
       }

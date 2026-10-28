@@ -247,6 +247,7 @@ impl<M> LaidOutModel<M> {
         &self,
         mut request: CompletionRequest,
     ) -> Result<CompletionRequest, CompletionError> {
+        replay_provider_ids(&mut request.chat_history);
         let history: Vec<Message> = request.chat_history.iter().cloned().collect();
         let mut layout = PromptLayout::default();
         if self.layout.shared_system {
@@ -294,6 +295,41 @@ impl<M> LaidOutModel<M> {
         request.additional_params =
             (!params.is_empty()).then_some(serde_json::Value::Object(params));
         Ok(request)
+    }
+}
+
+/// Sends each replayed tool call and result under the id the model first saw.
+///
+/// A persisted call is replayed with an `fc_`-prefixed item id, which OpenAI
+/// requires, and the id it was recorded under as its `call_id`, which
+/// Anthropic ignores. That recorded id is the call's `toolu_…` id (see
+/// [`crate::hook::StreamBridge`]), so sending it as the id makes a replayed
+/// history repeat the live requests byte for byte, and the prompt cache
+/// matches past the first tool call. Calls made this turn carry no `call_id`
+/// and keep their id.
+fn replay_provider_ids(history: &mut rig_core::OneOrMany<Message>) {
+    for message in history.iter_mut() {
+        match message {
+            Message::Assistant { content, .. } => {
+                for content in content.iter_mut() {
+                    if let AssistantContent::ToolCall(call) = content
+                        && let Some(call_id) = &call.call_id
+                    {
+                        call.id = call_id.clone();
+                    }
+                }
+            }
+            Message::User { content } => {
+                for content in content.iter_mut() {
+                    if let UserContent::ToolResult(result) = content
+                        && let Some(call_id) = &result.call_id
+                    {
+                        result.id = call_id.clone();
+                    }
+                }
+            }
+            Message::System { .. } => {}
+        }
     }
 }
 

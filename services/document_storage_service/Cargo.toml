@@ -245,6 +245,7 @@ secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 whatsapp_linked = { path = "../../crates/whatsapp_linked", features = ["inbound", "outbound"] }
+external_chat = { path = "../../crates/external_chat", features = ["inbound", "outbound"] }
 slack_integration = { path = "../../crates/slack_integration", features = [
   "gateway",
   "inbound",

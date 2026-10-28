@@ -1,4 +1,5 @@
 mod lookup;
+mod pull_request_state;
 mod recovery;
 use std::sync::{Arc, Mutex};
 
@@ -27,8 +28,9 @@ use crate::domain::{
         GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
         GithubPullRequestDetails, GithubPullRequestMerge, GithubPullRequestMergeability,
         GithubPullRequestMergeabilityEntry, GithubPullRequestNumber, GithubPullRequestRef,
-        GithubPullRequestUpdateRejection, GithubRepositoryMergeSettings, GithubUserInfo,
-        MergeGithubPullRequestRequest, SetGithubPullRequestDraftRequest,
+        GithubPullRequestState, GithubPullRequestUpdateRejection, GithubRepositoryMergeSettings,
+        GithubStateOutcome, GithubUserInfo, MergeGithubPullRequestRequest,
+        SetGithubPullRequestDraftRequest,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -215,6 +217,8 @@ struct StubGithubOauthState {
     merge_calls: Vec<MergeCall>,
     draft_outcome: Option<GithubDraftOutcome>,
     draft_calls: Vec<(String, u64, bool)>,
+    state_outcome: Option<GithubStateOutcome>,
+    state_calls: Vec<(String, u64, GithubPullRequestState)>,
     mergeability_calls: Vec<Vec<GithubPullRequestNumber>>,
 }
 
@@ -292,6 +296,15 @@ impl StubGithubOauth {
 
     fn draft_calls(&self) -> Vec<(String, u64, bool)> {
         self.state.lock().unwrap().draft_calls.clone()
+    }
+
+    fn with_state_outcome(self, outcome: GithubStateOutcome) -> Self {
+        self.state.lock().unwrap().state_outcome = Some(outcome);
+        self
+    }
+
+    fn state_calls(&self) -> Vec<(String, u64, GithubPullRequestState)> {
+        self.state.lock().unwrap().state_calls.clone()
     }
 
     fn mergeability_calls(&self) -> Vec<Vec<GithubPullRequestNumber>> {
@@ -465,6 +478,24 @@ impl GithubOauth for StubGithubOauth {
             .push((format!("{owner}/{repo}"), number, draft));
         state
             .draft_outcome
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+    }
+
+    async fn set_pull_request_state(
+        &self,
+        _access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        pull_request_state: GithubPullRequestState,
+    ) -> Result<GithubStateOutcome, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state
+            .state_calls
+            .push((format!("{owner}/{repo}"), number, pull_request_state));
+        state
+            .state_outcome
             .clone()
             .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
     }

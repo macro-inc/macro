@@ -153,13 +153,14 @@ function MessageVideoTile(props: {
           <Button
             variant="ghost"
             size="icon-md"
+            aria-label="Open video viewer"
+            tooltip="Open video viewer"
             onClick={(event) => {
               event.stopPropagation();
               props.onOpen();
             }}
-            label="Open video viewer"
           >
-            <ExpandIcon />
+            <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </div>

@@ -875,7 +875,7 @@ pub(crate) struct ApiContext {
     pub reminders_state: DssRemindersState,
     pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,
-    pub whatsapp_linked_state: crate::whatsapp_linked::State,
+    pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,

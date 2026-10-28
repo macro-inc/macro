@@ -258,6 +258,7 @@ export function ComposeLayout(props: {
               <div class="flex shrink-0 items-center">
                 <Show when={!isCcVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowCc(true)}
                     disabled={ctx.disabled()}
@@ -267,6 +268,7 @@ export function ComposeLayout(props: {
                 </Show>
                 <Show when={!isBccVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowBcc(true)}
                     disabled={ctx.disabled()}

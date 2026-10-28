@@ -160,10 +160,11 @@ function ChannelSortDropdown(props: {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+        tooltip={`Sort ${props.label.toLowerCase()}`}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
@@ -433,7 +434,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
-              label={
+              aria-label={
                 props.search.isOpen() ? 'Close search' : 'Search conversations'
               }
               aria-pressed={props.search.isOpen()}

@@ -34,7 +34,7 @@ function ReviewRow(props: { request: AccessRequest; source: SharingSource }) {
         />
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={props.source.busy()}
           onClick={() => fireAndForget(resolve(level()), 'access-requests')}
         >

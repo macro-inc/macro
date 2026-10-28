@@ -93,7 +93,7 @@ export function Company(props: {
                 onOpenContact={props.onOpenContact}
                 actions={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     // Contact emails are pinned to the company's primary
                     // domain; disabled until the company has loaded.
                     disabled={!company()?.domains[0]}

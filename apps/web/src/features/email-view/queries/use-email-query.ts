@@ -70,7 +70,9 @@ export type UseEmailDataSourceOptions = {
 function emailMatchesTab(
   entity: EmailEntity,
   tab: EmailTab,
-  userId: string | undefined
+  userId: string | undefined,
+  /** A search hit, which the service matched across archived mail too. */
+  searchHit: boolean
 ): boolean {
   return (
     match(tab)
@@ -79,7 +81,8 @@ function emailMatchesTab(
       .with('shared', () => userId !== undefined && entity.ownerId !== userId)
       // The inbox views list only threads still in the inbox; a cached page can
       // carry a row whose record was archived after the page was fetched.
-      .with('important', 'noise', () => entity.done !== true)
+      // Searching them still finds archived mail, as it always has.
+      .with('important', 'noise', () => searchHit || entity.done !== true)
       .with(
         'favorites',
         'sent',
@@ -168,10 +171,12 @@ export function useEmailDataSource(
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
+    // Rows and their lookups come from search hits while searching.
+    const searchHits = search.isSearching();
     const selected: EmailEntity[] = [];
     for (const entity of entities) {
       if (!isEmailEntity(entity)) continue;
-      if (!emailMatchesTab(entity, context.tab, userId())) continue;
+      if (!emailMatchesTab(entity, context.tab, userId(), searchHits)) continue;
       if (showsFavorites()) {
         if (entity.isFavorited === false) continue;
         // Search results have no Soup favorite field and use search's ID scope.

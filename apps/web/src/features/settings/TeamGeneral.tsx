@@ -57,7 +57,7 @@ function SaveCancelButtons(props: {
     <div class="flex items-center gap-1 shrink-0">
       <Tooltip label="Save">
         <Button
-          variant="accent"
+          variant="primary"
           size="icon-sm"
           disabled={props.saveDisabled}
           onClick={props.onSave}
@@ -381,7 +381,7 @@ export function TeamGeneral(props: { team: TeamSummary }) {
               hideDescriptionOnMobile
             >
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={handleCopyGithubAutolinkUrl}
               >
@@ -421,7 +421,7 @@ export function TeamGeneral(props: { team: TeamSummary }) {
         <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Dialog.CloseButton>
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Delete Team
@@ -456,7 +456,7 @@ export function TeamGeneral(props: { team: TeamSummary }) {
                 Cancel
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                 onClick={handleDeleteTeam}
               >

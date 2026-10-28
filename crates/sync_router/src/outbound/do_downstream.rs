@@ -14,7 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{connect_async_with_config, tungstenite::protocol::WebSocketConfig};
+use tokio_tungstenite::{
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
+    tungstenite::protocol::WebSocketConfig,
+};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{Instrument, debug, warn};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -125,21 +128,8 @@ async fn pump<Sink: EdgeSink>(
         }
     };
 
-    let upstream = match tokio::time::timeout(
-        Duration::from_secs(10),
-        connect_async_with_config(
-            &url,
-            Some(
-                WebSocketConfig::default()
-                    .max_message_size(Some(crate::session::MAX_FRAME_BYTES - 1024))
-                    .max_frame_size(Some(crate::session::MAX_FRAME_BYTES - 1024)),
-            ),
-            false,
-        ),
-    )
-    .await
-    {
-        Ok(Ok((upstream, _response))) => upstream,
+    let upstream = match tokio::time::timeout(Duration::from_secs(10), connect(&url)).await {
+        Ok(Ok(upstream)) => upstream,
         failure => {
             warn!(timed_out = failure.is_err(), "downstream dial failed");
             events
@@ -216,6 +206,33 @@ async fn pump<Sink: EdgeSink>(
             write.send(Message::Close(None)).await.ok();
         }
     }
+}
+
+/// Select the provider explicitly: workspace feature unification enables both
+/// Rustls providers, so its process-wide automatic selection would panic.
+async fn connect(
+    url: &str,
+) -> anyhow::Result<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>> {
+    let tls = rustls::ClientConfig::builder_with_provider(
+        rustls::crypto::aws_lc_rs::default_provider().into(),
+    )
+    .with_safe_default_protocol_versions()?
+    .with_root_certificates(rustls::RootCertStore::from_iter(
+        webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+    ))
+    .with_no_client_auth();
+    let (socket, _) = connect_async_tls_with_config(
+        url,
+        Some(
+            WebSocketConfig::default()
+                .max_message_size(Some(crate::session::MAX_FRAME_BYTES - 1024))
+                .max_frame_size(Some(crate::session::MAX_FRAME_BYTES - 1024)),
+        ),
+        false,
+        Some(Connector::Rustls(Arc::new(tls))),
+    )
+    .await?;
+    Ok(socket)
 }
 
 /// The current span's context as a W3C traceparent, if a trace is recording.

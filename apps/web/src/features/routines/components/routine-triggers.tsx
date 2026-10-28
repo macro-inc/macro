@@ -433,7 +433,7 @@ function TriggerChip(
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button variant="strong" size="sm" onClick={save}>
+              <Button variant="secondary" size="sm" onClick={save}>
                 {props.trigger ? 'Done' : 'Add trigger'}
               </Button>
             </div>

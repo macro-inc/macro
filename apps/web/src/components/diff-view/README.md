@@ -32,6 +32,9 @@ the sticky row on hover. Hovering the header highlights the row but does not tog
 it; only the disclosure and path controls toggle collapse. Toolbar parts use
 standard `Button` and `Tabs` sizes, and backgrounds come from the
 card's depth.
+The disclosure caret keeps `aria-expanded` and rotates with the diff state, but
+an expanded diff does not give its Button a selected fill. Open popup triggers
+and genuine `aria-pressed` action toggles keep their separate active styling.
 
 The host composes the rest:
 

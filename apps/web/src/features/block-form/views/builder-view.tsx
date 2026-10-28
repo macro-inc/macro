@@ -510,7 +510,7 @@ function BuilderCanvas(
     trigger: JSX.Element;
     triggerLabel?: string;
     triggerClass: string;
-    triggerVariant: 'outline' | 'ghost';
+    triggerVariant: 'outline' | 'secondary' | 'ghost';
     selected?: FormBookingTarget;
     onChoose: (target: FormBookingTarget) => void;
   }) => (
@@ -569,7 +569,7 @@ function BuilderCanvas(
             databaseLink={
               <>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   class={badgeTriggerClasses({
                     variant: 'outline',
@@ -740,7 +740,7 @@ function BuilderCanvas(
                         <InsertionPoint betweenSections>
                           <Dropdown>
                             <Dropdown.Trigger
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               class="h-6 shrink-0 bg-surface px-2"
                               aria-label={`Insert before ${sectionName(layout(), sectionId)}`}
@@ -877,7 +877,7 @@ function BuilderCanvas(
                                       trigger: 'Change',
                                       triggerLabel: 'Change booking link',
                                       triggerClass: 'shrink-0',
-                                      triggerVariant: 'outline',
+                                      triggerVariant: 'secondary',
                                       selected:
                                         current().bookingTarget ?? undefined,
                                       onChoose: (target) =>
@@ -1025,7 +1025,7 @@ function BuilderCanvas(
               aria-label="Add to form"
             >
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
                 class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
                 disabled={props.detail.tableGone}
@@ -1035,7 +1035,7 @@ function BuilderCanvas(
                 Add section
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
                 class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
                 disabled={props.detail.tableGone}
@@ -1046,7 +1046,7 @@ function BuilderCanvas(
               </Button>
               <Show when={booking() || context.booking.available()}>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="md"
                   class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
                   disabled={props.detail.tableGone}
@@ -1158,7 +1158,7 @@ function BuilderCanvas(
                   <For each={relationTables()}>
                     {(relation) => (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         class="justify-start"
                         onClick={() => {
                           const current = pending();

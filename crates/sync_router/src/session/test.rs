@@ -345,3 +345,38 @@ async fn all_document_queues_share_a_byte_budget_until_writes_finish() {
     second.try_send(vec![0; 10]).unwrap();
     assert_eq!(budget.available_permits(), 0);
 }
+
+#[tokio::test]
+async fn tls_handshake_failure_is_reported_without_losing_the_downstream_task() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = Url::parse(&format!("https://{}", listener.local_addr().unwrap())).unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        // Receive a TLS handshake record, then reject the connection.
+        assert_eq!(socket.read_u8().await.unwrap(), 0x16);
+    });
+    let (sender, mut receiver) = mpsc::channel(10);
+    let session = SyncSessionFactory::new(base_url)
+        .unwrap()
+        .open("socket".into(), sender);
+    session
+        .frame(encode(ToRouter::RouterSubscribe {
+            doc_id: "document",
+            token: "token",
+        }))
+        .await
+        .unwrap();
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(2), receiver.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        FromRouter::deserialize(&frame).unwrap(),
+        FromRouter::RouterSubscribeFailed {
+            doc_id: "document",
+            ..
+        }
+    ));
+    session.shutdown().await;
+    server.await.unwrap();
+}

@@ -6,12 +6,14 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
     workspace(&pool).await;
     let (linked, session, _) = services(&pool);
     let pairing = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(pairing.state, PairingState::Waiting);
     assert_eq!(
         linked
+            .whatsapp
             .connect(&person(ALICE), false, SendAuthority::Human)
             .await
             .unwrap()
@@ -21,12 +23,13 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
     );
     assert!(matches!(
         linked
+            .whatsapp
             .pair_state(&person(BOB), pairing.id, SendAuthority::Human)
             .await
             .err()
             .unwrap()
             .current_context(),
-        LinkedError::NotFound
+        ExternalChatError::NotFound
     ));
     let lease = session.begin_lease(pairing.account_id).await.unwrap();
     session
@@ -40,16 +43,18 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
     assert!(
         matches!(
             linked
+                .whatsapp
                 .pair_state(&person(ALICE), pairing.id, SendAuthority::UserApiToken)
                 .await
                 .err()
                 .unwrap()
                 .current_context(),
-            LinkedError::Forbidden
+            ExternalChatError::Forbidden
         ),
         "automation cannot read live enrollment material"
     );
     let state = linked
+        .whatsapp
         .pair_state(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
@@ -66,6 +71,7 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
         .await
         .unwrap();
     let state = linked
+        .whatsapp
         .pair_state(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
@@ -77,15 +83,17 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
     assert_eq!(state.identity_jid.as_deref(), Some(ALICE_JID));
     assert!(matches!(
         linked
+            .whatsapp
             .connect(&person(ALICE), false, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Conflict
+        ExternalChatError::Conflict
     ));
 
     // Bob cannot pair Alice's WhatsApp account.
     let bob = linked
+        .whatsapp
         .connect(&person(BOB), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -100,9 +108,13 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
         )
         .await
         .unwrap_err();
-    assert!(matches!(stolen.current_context(), LinkedError::Forbidden));
+    assert!(matches!(
+        stolen.current_context(),
+        ExternalChatError::Forbidden
+    ));
     assert_eq!(
         linked
+            .whatsapp
             .pair_state(&person(BOB), bob.id, SendAuthority::Human)
             .await
             .unwrap()
@@ -110,13 +122,25 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
         PairingState::Failed
     );
     assert_eq!(
-        linked.account(&person(BOB)).await.unwrap().unwrap().state,
+        linked
+            .whatsapp
+            .account(&person(BOB))
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
         AccountState::Disconnected
     );
 
     // A reconnect must come back as the same identity.
-    let account = linked.account(&person(ALICE)).await.unwrap().unwrap();
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     linked
+        .whatsapp
         .disconnect(
             &person(ALICE),
             account.authorization_generation,
@@ -125,6 +149,7 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
         .await
         .unwrap();
     let reconnect = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -139,7 +164,10 @@ async fn pairing_is_owner_bound_and_a_verified_identity_cannot_change_hands(pool
         )
         .await
         .unwrap_err();
-    assert!(matches!(swapped.current_context(), LinkedError::Conflict));
+    assert!(matches!(
+        swapped.current_context(),
+        ExternalChatError::Conflict
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -147,29 +175,39 @@ async fn cancelling_pairing_ends_consent_and_signals_the_replica(pool: PgPool) {
     workspace(&pool).await;
     let (linked, session, _) = services(&pool);
     let pairing = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(
         linked
+            .whatsapp
             .cancel(&person(ALICE), pairing.id, SendAuthority::Automation)
             .await
             .unwrap_err()
             .current_context(),
-        &LinkedError::Forbidden
+        &ExternalChatError::Forbidden
     );
     linked
+        .whatsapp
         .cancel(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
     linked
+        .whatsapp
         .cancel(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
     let work = session.pairing_work(pairing.id).await.unwrap().unwrap();
     assert_eq!(work.state, PairingState::Cancelled);
     assert_eq!(
-        linked.account(&person(ALICE)).await.unwrap().unwrap().state,
+        linked
+            .whatsapp
+            .account(&person(ALICE))
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
         AccountState::Disconnected
     );
 }
@@ -179,6 +217,7 @@ async fn an_expired_qr_session_reads_as_expired_and_a_new_connect_starts_fresh(p
     workspace(&pool).await;
     let (linked, session, _) = services(&pool);
     let pairing = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -197,16 +236,24 @@ async fn an_expired_qr_session_reads_as_expired_and_a_new_connect_starts_fresh(p
         .unwrap();
     assert_eq!(work.state, PairingState::Expired);
     let state = linked
+        .whatsapp
         .pair_state(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(state.state, PairingState::Expired);
     assert!(state.qr.is_none(), "an expired code is not scannable");
     assert_eq!(
-        linked.account(&person(ALICE)).await.unwrap().unwrap().state,
+        linked
+            .whatsapp
+            .account(&person(ALICE))
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
         AccountState::Disconnected
     );
     let next = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -236,7 +283,7 @@ async fn a_newer_lease_fences_the_previous_replica(pool: PgPool) {
     ] {
         assert!(matches!(
             result.unwrap_err().current_context(),
-            LinkedError::Fenced
+            ExternalChatError::Fenced
         ));
     }
 }

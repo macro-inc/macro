@@ -9,7 +9,7 @@ import type {
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import type { WhatsAppAccount } from '../core/account';
-import type { AdoptFailure } from '../core/adopt';
+import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
 import type { PairingStep } from '../core/pairing';
 import { createOpenSections } from '../primitives/open-sections';
@@ -43,7 +43,6 @@ export function createFakeWhatsApp(initial: {
     initial.account
   );
   const [chats, setChats] = signalRead<WhatsAppChat[]>(initial.chats);
-  const [features] = signalRead({ pairing: true, adoption: true });
   // Pairings are numbered as `connect` starts them; reads are per pairing.
   let started = 0;
   const [pairings, setPairings] = createSignal<
@@ -82,7 +81,6 @@ export function createFakeWhatsApp(initial: {
   });
   const chatsEnabled: Accessor<boolean>[] = [];
   const capabilities = {
-    features,
     account,
     chats: vi.fn((enabled: Accessor<boolean>) => {
       chatsEnabled.push(enabled);
@@ -115,13 +113,15 @@ export function createFakeWhatsApp(initial: {
       ): ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure> =>
         okAsync({ remoteUnlinkRequested: false })
     ),
-    adopt: vi.fn(
-      (_groupJid: string): ResultAsync<{ groupId: string }, AdoptFailure> =>
-        okAsync({ groupId: 'group-new' })
+    add: vi.fn(
+      (
+        _chat: Pick<WhatsAppChat, 'jid' | 'kind'>
+      ): ResultAsync<{ chatId: string }, AddFailure> =>
+        okAsync({ chatId: 'chat-new' })
     ),
     isConnecting: () => false,
     isDisconnecting: () => false,
-    openGroup: vi.fn(),
+    openChat: vi.fn(),
     sections: createOpenSections('test:whatsapp-sections', () => undefined),
   } satisfies WhatsAppLinkedCapabilities;
   return {

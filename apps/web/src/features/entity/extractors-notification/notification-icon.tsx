@@ -1,3 +1,4 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import type { NotificationType } from '@core/types';
 import GithubIcon from '@icon/mcp-github.svg';
 import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
@@ -16,7 +17,6 @@ import AgentIcon from '@icon/system/regular/sparkle.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import type { NotificationStack } from '@notifications';
 import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
-import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -32,7 +32,7 @@ interface NotificationIconProps {
 /**
  * Gets the appropriate icon for a notification type
  */
-function getNotificationIcon(
+export function getNotificationIcon(
   type: NotificationType
 ): (props: { class?: string }) => JSX.Element {
   return match(type)
@@ -50,7 +50,7 @@ function getNotificationIcon(
     .with('initiative_discussion', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
-    .with('whatsapp_group_message', () => WhatsappIcon)
+    .with('external_chat_message', () => ChatIcon)
     .with('channel_message_reaction', () => SmileyIcon)
     .with('new_email', () => EnvelopeIcon)
     .with('entity_access_requested', () => UserPlusIcon)
@@ -94,6 +94,9 @@ export function NotificationIcon(props: NotificationIconProps) {
   const icon = () => {
     const metadata = (props.notification ?? props.stack?.notifications[0])
       ?.notification_metadata;
+    // An external chat's own provider logo, when the metadata names it.
+    if (metadata?.tag === 'external_chat_message')
+      return providerIdentity(metadata.content.provider).icon;
     if (isEntityDiscussionEvent(metadata)) {
       if (metadata.content.reason === 'mention') return AtIcon;
       if (metadata.content.reason === 'reply') return ArrowBendUpLeftIcon;

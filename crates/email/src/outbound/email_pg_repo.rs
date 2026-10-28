@@ -4,8 +4,8 @@ use crate::domain::{
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
         EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
         MessageTimestamps, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput,
-        SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
-        UpsertedContacts, UserProvider,
+        SettledDraftIds, SimpleMessage, SimpleMessageInfo, StagedLabelChange, ThreadRow,
+        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{
         DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
@@ -437,31 +437,44 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
-    async fn set_thread_read_state(
+    async fn stage_thread_label_change(
         &self,
         thread_id: Uuid,
         link_id: Uuid,
-        message_ids: &[Uuid],
-        is_read: bool,
-    ) -> Result<(), Self::Err> {
-        label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
-    }
-
-    async fn set_thread_inbox_state(
-        &self,
-        thread_id: Uuid,
-        link_id: Uuid,
-        message_ids: &[Uuid],
+        provider_label_id: &str,
         add: bool,
-        inbox_visible: bool,
-    ) -> Result<(), Self::Err> {
-        label::set_thread_inbox_state(
+        write_id: Uuid,
+    ) -> Result<Option<StagedLabelChange>, Self::Err> {
+        label::stage_thread_label_change(
             &self.pool,
             thread_id,
             link_id,
-            message_ids,
+            provider_label_id,
             add,
-            inbox_visible,
+            write_id,
+        )
+        .await
+    }
+
+    async fn revert_staged_label_change(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        provider_label_id: &str,
+        add: bool,
+        write_id: Uuid,
+        provider_message_ids: &[Uuid],
+        local_message_ids: &[Uuid],
+    ) -> Result<(), Self::Err> {
+        label::revert_staged_label_change(
+            &self.pool,
+            thread_id,
+            link_id,
+            provider_label_id,
+            add,
+            write_id,
+            provider_message_ids,
+            local_message_ids,
         )
         .await
     }

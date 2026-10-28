@@ -20,7 +20,7 @@ static TITLE: &str = "Mentioning documents, people, dates, agent sessions, and o
 
 static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies (AI chat and agent session transcripts), `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
 
-When referencing a Macro item, person, date/time, agent session, or other mentionable chip, use XML mention tags with a JSON payload. Those tags render as clickable chips. Do not use plain Markdown links or bare names for these. Empty name/label strings are fine — the frontend resolves them.
+When referencing a Macro item, person, date/time, agent session, or other mentionable chip, use XML mention tags with a JSON payload. They render as clickable chips; never use plain Markdown links or bare names instead. Empty names and labels are fine; the frontend fills them in.
 
 ### Documents, channels, and similar items
 
@@ -46,13 +46,12 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - Database mention: `<m-document-mention>{"documentId":"{database_id}","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>`
 - Form mention: `<m-document-mention>{"documentId":"{form_id}","documentName":"","blockName":"form","blockParams":{}}</m-document-mention>`
 
-The `blockName` for a Macro database is always exactly `database` — never `md` or `document`; a database id mentioned as a document renders as deleted. `documentId` is the database id a database tool returned.
-The `blockName` for a form is always exactly `form` — never `md` or `document`. `documentId` is the form id; the chip opens the form builder, so link the `/respond` page as a plain URL.
-The `blockName` for a project is always exactly `initiative`, with the initiative id from an initiative tool result (such as ListInitiatives or ReadInitiative); `project` is a folder.
-The `blockName` for a CRM pipeline is always exactly `pipeline`, with the pipeline id from a pipeline tool result; the chip opens the pipeline in the CRM.
-The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
-The `blockName` for a calendar event is always exactly `calendar` — never `calendar_event`, which the frontend cannot resolve. `documentId` is the `eventId` a calendar tool returned. To point at one instance of a recurring event, pass that occurrence's `recurrenceId` from ListCalendarEvents as the `occurrenceKey` block param; otherwise omit it and the mention previews the nearest instance. A calendar event mention opens for people who have that event on their own calendar. After it is shared with a channel, current members who do not have a copy see a read-only preview instead. Private and confidential events are never shared. To read a calendar event mention you receive, call ReadCalendarEvent with its `documentId` (and its `occurrenceKey` when present); ReadContent and ReadMetadata read documents only.
-When a tool returns both a channel id and a channel message id, link the specific message using the channel message mention format. Do not link only the channel unless you are referring to the whole channel.
+Exact `blockName`s, since any other value renders a broken or deleted chip:
+
+- A database is `database` and a form is `form`, never `md` or `document`. A form chip opens the builder; link its `/respond` page as a plain URL when people should submit responses.
+- A project is `initiative`, with the id from ListInitiatives or ReadInitiative; `project` means a folder. A CRM pipeline is `pipeline`.
+- An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
+- When a tool returns a channel message id, mention that message, not just its channel.
 
 ### People, groups, dates, agent sessions, pull requests, and booking links
 
@@ -66,24 +65,14 @@ These use their own tags — never wrap them in `<m-document-mention>`:
 - GitHub pull request: `<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>`, or `<m-pr-mention>{"id":"{id}","label":""}</m-pr-mention>` when a tool returned the PR's Macro id
 - Booking link: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page)
 
-Date/time chips do not need a looked-up id. `date` is an ISO 8601 datetime; `displayFormat` is the chip label the user sees (e.g. "Mon, Dec 1, 2025", "Today", "Tomorrow", "3:00 PM"). Prefer a date chip over typing a date as plain text when you are naming a specific day or time.
+- Dates: prefer a date chip to a typed date. `date` is ISO 8601 and `displayFormat` is the label shown (e.g. "Mon, Dec 1, 2025", "Today", "3:00 PM"); no lookup needed.
+- Pull requests and booking links: always a chip, never a Markdown link or bare URL. Leave `label` empty and do not repeat the number, title, or URL beside it. A PR chip takes any github.com pull request URL; a booking chip takes the shareable URL plus the `profileId` and `slug` from its `/app/book/{profileId}/{slug}` path. A PR chip you receive carries the PR's URL in `url`. Issues, commits, and other GitHub pages stay Markdown links.
+- Agent sessions: only ids a tool returned. Add `"expanded":true` to insert the live card (Magic Chip) instead of the compact title.
+- Connecting apps: when a tool result hands you an `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include it verbatim; it renders a connect button. Never invent one. In agent sessions the button resumes the conversation once connected, so just tell the user to connect; elsewhere, ask them to say when they have.
 
-Reference a GitHub pull request with a PR chip, never a Markdown link or bare URL, whenever you name one: a PR a tool returned, one you opened, or one in a list. Put its github.com pull request URL in `url` (a `/files` or other subpage URL works too); you do not need to look up a Macro id. The chip shows the PR's number, title, and live status, opens it in Macro, and falls back to GitHub when Macro has not synced the PR, so leave `label` empty and do not repeat the number or title beside it. Issues, commits, repositories, and other GitHub pages stay Markdown links. A PR chip in a message you receive carries the pull request's GitHub URL in `url` (and its `owner/repo#number` in `label`); use them to read or work on that PR.
+Only the tags listed here exist. Never invent a tag or put an id in the wrong one. Anything else, such as a `calendarId` from ListCalendars, is plain text: mention individual events, not calendars.
 
-Reference a Macro booking link with a booking-link chip, never a Markdown link or bare URL, whenever you share one: a link `ListBookingLinks`, `CreateBookingLink`, or `EditBookingLink` returned, or one you are inviting someone to use. Put the shareable URL in `url`, the profile id from that URL's `/app/book/{profileId}/…` path in `profileId`, and the event slug (when present) in `slug`. Leave `label` empty so the chip shows the slug; do not paste the raw URL beside it.
-
-Agent session chips reference an existing session by id from a tool result. An empty `label` is fine. Set `"expanded":true` to insert the card (Magic Chip) that follows the session's latest turn instead of the compact underlined title. Do not invent session ids.
-
-If a tool result tells you an app is not connected for the person you are working for and hands you a `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include that tag verbatim in your reply: it renders as a button that connects the app. Never invent one; only repeat the tag a tool result gave you. In agent sessions, where `DiscoverConnectors` is available, the button resumes the conversation after a successful connection; tell the user to connect to continue, without asking for a separate confirmation message. In other hosts, ask them to let you know once they have connected the app so you can try again.
-
-Only the tag formats listed here can be mentioned. Never invent a tag name or put an id in the wrong tag. A calendar itself is NOT a mentionable entity: never put a `calendarId` (e.g. from ListCalendars) in a mention tag — the frontend cannot resolve it and renders a broken chip. Refer to a calendar by name in plain text and mention only individual events on it. The same goes for any other id with no mention format listed here: plain text, never an improvised tag.
-
-`EditDocument` does not take mention tags in `instructions`. Include each referenced item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url, and so on) so the editing worker can insert the chip itself.
-
-### Example Response
-
-If no inline or node ids are present:
-"See the document for details<m-document-mention>{"documentId":"6a2b138d-dfbe-439a-a78b-282471a1e165","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>."
+`EditDocument` takes no mention tags in `instructions`; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips.
 "##;
 
 static INTENT: &str = "Entities, people, dates, agent sessions, and other chips are referenced \

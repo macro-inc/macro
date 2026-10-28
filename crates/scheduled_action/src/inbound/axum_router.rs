@@ -7,6 +7,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
+use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
 use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
@@ -521,6 +522,9 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(input) = error.downcast_ref::<TemplateInputError>() {
+            return (StatusCode::BAD_REQUEST, input.to_string()).into_response();
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {

@@ -1,6 +1,8 @@
 # Class: WhatsAppNamespace
 
-Operate on an account already paired through the Macro app.
+The current user's WhatsApp account, paired through the Macro app, and its
+chat list. Added chats are external chats: read and send in them through
+`macro.externalChats`.
 
 ## Constructors
 
@@ -34,44 +36,14 @@ Current owner's account, or undefined when no account has been connected.
 
 ***
 
-### byId()
-
-> **byId**(`id`): [`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)
-
-Reference an adopted entity without fetching it.
-
-#### Parameters
-
-| Parameter | Type |
-| ------ | ------ |
-| `id` | `string` |
-
-#### Returns
-
-[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)
-
-***
-
 ### chats()
 
 > **chats**(): `Promise`\<[`WhatsAppChat`](../../chat/classes/WhatsAppChat.md)[]\>
 
 The caller's WhatsApp chat list (groups and direct chats), newest
 activity first: each chat says whether it is added, shared with the caller
-or addable, and `chat.adopt()` adds it.
+or addable, and `chat.add()` adds it.
 
 #### Returns
 
 `Promise`\<[`WhatsAppChat`](../../chat/classes/WhatsAppChat.md)[]\>
-
-***
-
-### groups()
-
-> **groups**(): `Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)[]\>
-
-Adopted groups shared with the caller, including without WhatsApp.
-
-#### Returns
-
-`Promise`\<[`WhatsAppGroup`](../../group/classes/WhatsAppGroup.md)[]\>

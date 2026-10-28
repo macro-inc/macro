@@ -303,7 +303,7 @@ function PipelineToolbar(props: {
       actions={
         <>
           <Show when={props.canEdit}>
-            <Button variant="outline" onClick={() => props.onCompose({})}>
+            <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
               {props.pipeline.recordType === 'company'
                 ? 'Add deal'

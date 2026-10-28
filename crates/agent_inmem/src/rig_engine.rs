@@ -3,10 +3,9 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`crates/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the agent's name and handle, the agent-session
-//! preamble, the static Macro prompt (immediately before any session
-//! instructions), and the owner's memory, with usage recorded per turn
-//! against the session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt, the agent's name and handle, any session instructions, and the
+//! owner's memory, with usage recorded per turn against the session owner.
 //!
 //! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
 //! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
@@ -567,9 +566,9 @@ async fn drive_turn(
             }
         };
         let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
-        let tools_prompt = format!("{}{}", native_tools.prompt, sdk_docs);
         let prompt = system_prompt(
-            &tools_prompt,
+            &native_tools.prompt,
+            &sdk_docs,
             session_id,
             identity.as_ref(),
             instructions.as_deref(),
@@ -838,43 +837,43 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the note that an opening line is already out (see [`opener`]),
-/// the static Macro prompt (how to use the product: mentions,
-/// tools, terminology), then the session's own instructions when there are
-/// any, which session this is, and the owner's memory when there is any.
+/// The turn's system prompt, ordered so the longest possible prefix is
+/// cached: the agent-session preamble (which notes that an opening line may
+/// already be out, see [`opener`]) and the static Macro prompt (how to use the
+/// product: mentions, tools, terminology), which are the same for every
+/// session of every agent; then the agent's identity, the session's own
+/// instructions when there are any, which session this is, and the owner's
+/// memory when there is any; and last the SDK documentation picked for this
+/// turn.
 ///
-/// Identity comes first so a named agent (even one with no instructions)
-/// knows who it is before reading anything else. The static Macro prompt
-/// sits immediately before `<session_instructions>` so it is the preamble
-/// the model reads as it takes in the caller's word — the same reason DCS
-/// puts `additional_instructions` after the standing prompt. Memory stays
-/// last so a remembered fact is never read as an instruction.
-///
-/// The prompt is split after the static Macro prompt: everything before is
-/// the same for every session of the agent and is cached on its own, so a
-/// session whose instructions name its own task still reads it back.
+/// The prompt is split after the static Macro prompt, so every session reads
+/// it back from the cache whatever its agent or instructions. Identity opens
+/// the session's part so a named agent (even one with no instructions) knows
+/// who it is before its instructions, and `<session_instructions>` follows
+/// the standing prompt so the model reads it as the caller's word — the same
+/// reason DCS puts `additional_instructions` after the standing prompt.
+/// Memory stays after the instructions so a remembered fact is never read as
+/// an instruction. The turn's documentation goes after everything the loop
+/// adds, because each turn picks different documentation.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
+    sdk_docs: &str,
     session_id: agent_session::domain::model::AgentSessionId,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
     let mut shared = String::new();
+    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push_str(&tools_prompt.to_string());
+    let mut rest = String::new();
     if let Some(identity) = identity {
-        shared.push_str(&prompt::agent_identity::render(
+        rest.push('\n');
+        rest.push_str(&prompt::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));
-        shared.push('\n');
     }
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push('\n');
-    shared.push_str(opener::ALREADY_OPENED);
-    shared.push('\n');
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
@@ -894,7 +893,7 @@ fn system_prompt(
         rest.push_str(memory);
         rest.push_str("\n</user_memory>");
     }
-    SystemPrompt::split(shared, rest)
+    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
