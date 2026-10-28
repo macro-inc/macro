@@ -76,7 +76,14 @@ function IconOnlyDemo() {
     <div class="flex flex-wrap items-end gap-3">
       <For
         each={
-          ['icon-xs', 'icon-sm', 'icon-md', 'icon-lg', 'icon-composer'] as const
+          [
+            'icon-xs',
+            'icon-sm',
+            'icon-md',
+            'icon-lg',
+            'icon-xl',
+            'icon-composer',
+          ] as const
         }
       >
         {(size) => (
@@ -100,7 +107,7 @@ function SizeCompositionsDemo() {
     { size: 'sm', iconSize: 'icon-sm' },
     { size: 'md', iconSize: 'icon-md' },
     { size: 'lg', iconSize: 'icon-lg' },
-    { size: 'xl', iconSize: undefined },
+    { size: 'xl', iconSize: 'icon-xl' },
   ] as const;
 
   return (

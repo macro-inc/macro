@@ -210,7 +210,8 @@ The floating mobile **New** action is hidden while the call view is open and
 returns when you leave the call view.
 
 Open live chat with **Open chat** at the bottom-right, level with the media controls.
-The toggle stays in this bottom controls row on phones too.
+The toggle stays in this bottom controls row on phones too. Both Copy Meeting Url
+and Open chat use 48px tap targets with larger icons on phones.
 Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
 the participant tiles. Narrow desktop panes overlay chat instead; phones use the

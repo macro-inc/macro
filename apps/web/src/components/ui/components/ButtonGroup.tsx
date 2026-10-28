@@ -57,6 +57,8 @@ export const buttonGroupVariants = createVariants(
       md: '',
       lg: '',
       xl: 'data-[orientation=horizontal]:h-12',
+      'icon-xl':
+        'data-[orientation=horizontal]:h-12 data-[orientation=vertical]:w-12',
       'icon-xs':
         'data-[orientation=horizontal]:h-5 data-[orientation=vertical]:w-5',
       'icon-sm':

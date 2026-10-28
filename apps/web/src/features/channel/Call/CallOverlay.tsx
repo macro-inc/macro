@@ -2,6 +2,7 @@ import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -326,7 +327,7 @@ export function CallOverlay(props: {
     >
       {/* The call owns its controls instead of the mobile New action. */}
       <FloatRegion region="accessory" />
-      <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
+      <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden mobile:overflow-visible">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col @container/call-stage">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>
@@ -446,7 +447,7 @@ export function CallOverlay(props: {
                 </button>
               </Tooltip>
             </Show>
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-0.5 mobile:px-0 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-0 mobile:px-0 mobile:@max-xs/call:w-screen @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
               <div class="min-w-0 max-w-48">{props.footerLeading}</div>
               <div class="flex min-w-0 justify-center">
                 <CallControls onLeave={props.onLeave} />
@@ -456,7 +457,7 @@ export function CallOverlay(props: {
                   <Button
                     ref={chatButton}
                     variant="outline"
-                    size="icon-lg"
+                    size={isMobile() ? 'icon-xl' : 'icon-lg'}
                     label={chatOpen() ? 'Close chat' : 'Open chat'}
                     tooltipPlacement="top"
                     aria-pressed={chatOpen()}
@@ -464,7 +465,7 @@ export function CallOverlay(props: {
                     aria-controls={chatId}
                     onClick={toggleChat}
                   >
-                    <ChatIcon class="size-4" />
+                    <ChatIcon class="size-4 mobile:size-6" />
                   </Button>
                 </Show>
               </div>

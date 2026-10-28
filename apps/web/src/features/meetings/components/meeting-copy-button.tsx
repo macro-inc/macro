@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Check from '@icon/system/regular/check.svg';
 import Copy from '@icon/system/regular/copy.svg';
@@ -45,7 +46,7 @@ export function MeetingCopyButton(props: {
       <Button
         type="button"
         variant="ghost"
-        size="lg"
+        size={isMobile() ? 'icon-xl' : 'lg'}
         label="Copy Meeting Url"
         tooltipPlacement="top"
         disabled={props.disabled || copying()}
@@ -53,8 +54,8 @@ export function MeetingCopyButton(props: {
         class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => fireAndForget(copy(), 'meetings')}
       >
-        <Show when={copied()} fallback={<Copy class="size-4" />}>
-          <Check class="size-4" />
+        <Show when={copied()} fallback={<Copy class="size-4 mobile:size-6" />}>
+          <Check class="size-4 mobile:size-6" />
         </Show>
         <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
       </Button>

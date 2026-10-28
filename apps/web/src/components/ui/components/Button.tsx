@@ -49,6 +49,8 @@ export const buttonVariants = createVariants(
       md: CONTROL_SIZE_VARIANTS.md,
       lg: CONTROL_SIZE_VARIANTS.lg,
       xl: "h-12 gap-2 px-4 text-base [&>svg:not([class*='size-'])]:size-5",
+      'icon-xl':
+        "size-12 aspect-square p-3 [&>svg:not([class*='size-'])]:size-6",
       'icon-lg':
         "size-9 aspect-square p-2 [&>svg:not([class*='size-'])]:size-5",
       'icon-md':
