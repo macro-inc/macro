@@ -59,8 +59,7 @@ fn streamed_echo() -> MockCompletionModel {
 }
 
 /// The call opens when it is named, its fragments follow in order, and the
-/// finished call and its result carry the id it opened under - not the
-/// provider's `call_id`, which was not known when it opened.
+/// finished call and its result preserve the announced provider id.
 #[tokio::test]
 async fn a_streamed_call_opens_early_and_finishes_under_the_same_id() {
     let mut session = util::test_loop()

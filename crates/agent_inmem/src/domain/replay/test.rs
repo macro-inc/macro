@@ -622,7 +622,7 @@ fn a_streamed_call_replays_with_its_finished_arguments() {
         ))),
     ]);
 
-    let [HistoryEntry::User(_), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
         panic!("one turn should replay, got {history:#?}");
     };
     assert_eq!(
@@ -662,7 +662,7 @@ fn a_call_stopped_while_being_written_does_not_replay() {
         ))),
     ]);
 
-    let [HistoryEntry::User(_), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
         panic!("one turn should replay, got {history:#?}");
     };
     assert_eq!(
@@ -700,12 +700,10 @@ fn streamed_mcp_call_replays_its_tool_name_metadata_instead_of_its_label() {
         update_frame(SessionUpdate::ToolCall(
             AcpToolCall::new("call-1", "Search files")
                 .status(ToolCallStatus::Pending)
-                .meta(
-                    serde_json::from_value(
-                        serde_json::json!({"macro": {"toolName": "mcp__files__search"}}),
-                    )
-                    .unwrap(),
-                ),
+                .meta(serde_json::Map::from_iter([(
+                    "macro".to_owned(),
+                    serde_json::json!({"toolName": "mcp__files__search"}),
+                )])),
         )),
         update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
             "call-1",
@@ -720,7 +718,7 @@ fn streamed_mcp_call_replays_its_tool_name_metadata_instead_of_its_label() {
                 .raw_output(serde_json::json!({})),
         ))),
     ]);
-    let [HistoryEntry::User(_), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
         panic!("one turn should replay");
     };
     assert!(

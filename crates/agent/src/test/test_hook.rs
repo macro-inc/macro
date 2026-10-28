@@ -507,7 +507,7 @@ async fn a_finished_call_without_its_delta_id_claims_the_open_announcement() {
     assert_eq!(ids, vec!["provider-id", "provider-id"]);
 }
 
-/// Without streaming the deltas are ignored and ids are the provider's.
+/// Without streaming the deltas emit no progress parts and ids are the provider's.
 #[tokio::test]
 async fn a_bridge_without_streaming_ignores_deltas() {
     let (bridge, mut rx) = bare_bridge();
