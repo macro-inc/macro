@@ -24,8 +24,8 @@ async fn generic_plan_probes_membership_by_notification_id(pool: PgPool) {
     sqlx::query!(
         r#"
         INSERT INTO user_notification(user_id, notification_id, state)
-        SELECT CASE WHEN ord <= 50_900 THEN 'macro|viewer@example.com'
-                    ELSE 'macro|other-' || ((ord - 50_901) / 10)::text || '@example.com' END,
+        SELECT CASE WHEN ord <= 50900 THEN 'macro|viewer@example.com'
+                    ELSE 'macro|other-' || ((ord - 50901) / 10)::text || '@example.com' END,
                id, 'unseen'::notification_state
         FROM unnest($1::uuid[]) WITH ORDINALITY AS records(id, ord)
         "#,
