@@ -1,6 +1,9 @@
 //! Filtered notification edges, limited independently for every requested entity.
 //! The primary, secondary and message-id candidate paths each have their own
 //! index; the message-id path's `COALESCE` must match `idx_notification_message_id`.
+//! Keep lateral ownership lookups fenced with `OFFSET 0`: otherwise PostgreSQL
+//! may flatten the joins and rescan the viewer's full history for every entity.
+//! The large-history generic-plan regression guards this join order.
 
 use std::{collections::HashMap, str::FromStr};
 

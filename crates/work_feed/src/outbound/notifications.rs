@@ -38,7 +38,8 @@ where
         user: MacroUserIdStr<'static>,
         entities: Vec<Entity<'static>>,
     ) -> Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report> {
-        // The default query is the active (unseen and seen) edge, unlimited.
+        // Load the newest 20 active (unseen and seen) notifications per entity.
+        // Older history remains available through the notification feed's pagination.
         Ok(self
             .reader
             .get_entity_notifications_batch::<NotifEvent>(

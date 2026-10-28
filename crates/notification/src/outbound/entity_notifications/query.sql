@@ -19,7 +19,8 @@ channel_scopes AS MATERIALIZED (
         FROM user_notification un
         WHERE un.notification_id = n.id AND un.user_id = $1
           AND un.deleted_at IS NULL AND un.state = ANY($9::notification_state[])
-        -- Keep the primary-key lookup parameterized by the notification ID.
+        -- Keep this ownership lookup correlated to the notification ID rather
+        -- than scanning all channel memberships once per requested entity.
         OFFSET 0
     ) viewer_notification
     WHERE $8::bool AND requested.entity_type = 'channel'
