@@ -43,7 +43,7 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BellIcon from '@icon/system/regular/bell.svg';
-import BoardIcon from '@icon/system/regular/board.svg';
+import BoardIcon from '@icon/system/regular/company-board.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
