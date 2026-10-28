@@ -94,17 +94,10 @@ export function Company(props: {
                 actions={
                   <Button
                     variant="outline"
-                    // Contact emails are pinned to the company's primary
-                    // domain; disabled until the company has loaded.
-                    disabled={!company()?.domains[0]}
-                    onClick={() => {
-                      const domain = company()?.domains[0]?.domain;
-                      if (domain)
-                        openCreateContactModal({
-                          companyId: props.companyId,
-                          domain,
-                        });
-                    }}
+                    disabled={!company()}
+                    onClick={() =>
+                      openCreateContactModal({ companyId: props.companyId })
+                    }
                   >
                     <PlusIcon class="size-4" />
                     Add contact

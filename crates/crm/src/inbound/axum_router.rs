@@ -251,12 +251,6 @@ impl IntoResponse for CrmError {
                     message: "a crm contact with this email already exists for the company".into(),
                 }),
             ),
-            CrmError::ContactEmailDomainMismatch => (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "contact email domain must match one of the company's domains".into(),
-                }),
-            ),
             CrmError::CrmDisabledForTeam => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {

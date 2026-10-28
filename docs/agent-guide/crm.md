@@ -100,9 +100,11 @@ email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
 is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies with a domain) and fixes
-the email to that company's primary domain; **Add contact** on a company's Team
-tab skips the company pill. The company, contact and pipeline dialogs share the
+or domain, from the up to 500 most relevant companies, including name-only
+companies). Enter a full email address; personal addresses and different domains
+are accepted. **Add contact** on a company's Team tab skips the company pill.
+**New company** requires a name; its domain is optional. If supplied, it must be
+a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
 
@@ -327,7 +329,9 @@ the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
 fields can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
-works the same way, and a new contact's email must use a company's domain.
+works the same way. A new company may omit its domain. A new contact accepts a
+full email address and an explicit company choice, including a name-only company.
+An email-domain match suggests a company; the picker can select a different one.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the

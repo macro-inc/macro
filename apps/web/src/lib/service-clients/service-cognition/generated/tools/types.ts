@@ -7382,7 +7382,7 @@ export interface CreateChannelResponse {
   summary: string;
 }
 /**
- * Add a company to the user's team CRM by name and web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company).
+ * Add a company to the user's team CRM by name and optional web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company).
  */
 export interface CreateCompany {
   /**
@@ -7390,9 +7390,9 @@ export interface CreateCompany {
    */
   name: string;
   /**
-   * The company's web domain, e.g. "acme.com" — no scheme or path. Contacts are matched to the company by this domain.
+   * Optional company web domain; omit when unknown. For example, "acme.com" — no scheme or path. Contacts are matched to the company by this domain.
    */
-  domain: string;
+  domain?: string | null;
 }
 /**
  * The created company.
@@ -7468,7 +7468,7 @@ export interface CreateConfirmedCalendarEvent {
   userConfirmation: string;
 }
 /**
- * Add a contact person to a company in the user's team CRM, as Add Contact on a company does. The email's domain must be one of the company's domains. Find the company with ListCompanies, or add it first with CreateCompany.
+ * Add a contact person to a company in the user's team CRM, as Add Contact on a company does. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
  */
 export interface CreateContact {
   /**

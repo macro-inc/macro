@@ -5788,7 +5788,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_contact"],
-        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\nemail's domain must be one of the company's domains (400), the\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
         "operationId": "create_crm_contact",
         "parameters": [
           {
@@ -6162,7 +6162,7 @@
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
-        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies.",
+        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies. Returns 400 when several visible contacts\nmatch; callers must choose an explicit contact ID instead.",
         "operationId": "get_contact_by_email",
         "parameters": [
           {
@@ -6187,7 +6187,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Invalid email or multiple visible contacts match; choose a contact ID.",
             "content": {
               "application/json": {
                 "schema": {
@@ -25564,11 +25564,11 @@
       "CreateCrmCompanyRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies`.",
-        "required": ["name", "domain"],
+        "required": ["name"],
         "properties": {
           "domain": {
-            "type": "string",
-            "description": "The company's email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
+            "type": ["string", "null"],
+            "description": "Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
           },
           "name": {
             "type": "string",
@@ -25583,7 +25583,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "The contact's email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company's domains (400 otherwise)."
+            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain."
           },
           "name": {
             "type": "string",

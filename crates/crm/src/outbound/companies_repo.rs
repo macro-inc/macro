@@ -167,23 +167,22 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    /// Insert a `crm_companies` row (+ its `crm_domains` row) for
-    /// `(team, normalized_domain)`, seeding the interaction columns from
+    /// Insert a company and, when supplied, its domain, seeding interaction columns from
     /// the caller's known range. `custom_name` is the team-scoped
     /// display-name override (manual creation); populate passes `None`.
     /// `manually_created` stamps user-created rows so the depopulate
-    /// orphan cleanup keeps them. The caller must hold the
-    /// per-`(team, domain)` advisory lock.
+    /// orphan cleanup keeps them. When a domain is supplied, the caller must
+    /// hold the per-`(team, domain)` advisory lock.
     ///
     /// Returns `(company_id, created)`. The domain insert carries a
     /// defensive ON CONFLICT — the advisory lock should prevent it, but
     /// if it fires we'd orphan the company we just inserted, so we
     /// recover by deleting it and returning the winner's id with
     /// `created = false`.
-    async fn insert_company_with_domain(
+    async fn insert_company(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         team_id: &uuid::Uuid,
-        normalized_domain: &str,
+        normalized_domain: Option<&str>,
         custom_name: Option<&str>,
         manually_created: bool,
         first_at: DateTime<Utc>,
@@ -192,8 +191,8 @@ impl CompaniesRepositoryImpl {
         let new_company = sqlx::query!(
             r#"
             INSERT INTO crm_companies
-                (team_id, custom_name, manually_created, first_interaction, last_interaction)
-            VALUES ($1, $2, $3, $4, $5)
+                (id, team_id, custom_name, manually_created, first_interaction, last_interaction)
+            VALUES ($6, $1, $2, $3, $4, $5)
             RETURNING id
             "#,
             team_id,
@@ -201,10 +200,15 @@ impl CompaniesRepositoryImpl {
             manually_created,
             first_at,
             last_at,
+            uuid::Uuid::now_v7(),
         )
         .fetch_one(&mut **tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let Some(normalized_domain) = normalized_domain else {
+            return Ok((new_company.id, true));
+        };
 
         let domain_insert = sqlx::query!(
             r#"
@@ -337,10 +341,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 // range so backfilled mail keeps accurate timestamps.
                 // No custom_name: backfill companies resolve their
                 // display name from `crm_domain_directory`.
-                let (id, created) = Self::insert_company_with_domain(
+                let (id, created) = Self::insert_company(
                     &mut tx,
                     team_id,
-                    &normalized_domain,
+                    Some(&normalized_domain),
                     None,
                     false,
                     first_at,
@@ -424,15 +428,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(%team_id), err)]
     async fn create_company_for_team(
         &self,
         team_id: &uuid::Uuid,
-        domain: &str,
+        domain: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
-        let normalized_domain = domain.to_ascii_lowercase();
+        let normalized_domain = domain.map(str::to_ascii_lowercase);
 
         let mut tx = self
             .pool
@@ -440,20 +444,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Same lock populate/depopulate take, so a concurrent populate
-        // for the domain can't slip a row in between our existence
-        // check and insert.
-        Self::lock_team_domain(&mut tx, team_id, &normalized_domain).await?;
+        if let Some(domain) = &normalized_domain {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
 
-        // Manual creation surfaces the killswitch instead of silently
-        // no-oping like populate: the caller expects a company back.
         if !Self::team_crm_enabled(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);
         }
 
-        if Self::find_company_by_domain(&mut tx, team_id, &normalized_domain)
-            .await?
-            .is_some()
+        if let Some(domain) = &normalized_domain
+            && Self::find_company_by_domain(&mut tx, team_id, domain)
+                .await?
+                .is_some()
         {
             return Err(CrmError::CompanyAlreadyExistsForTeam);
         }
@@ -461,10 +463,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // No email history yet: seed both interaction endpoints from
         // `now`; future populates merge real timestamps via
         // LEAST/GREATEST.
-        let (company_id, created) = Self::insert_company_with_domain(
+        let (company_id, created) = Self::insert_company(
             &mut tx,
             team_id,
-            &normalized_domain,
+            normalized_domain.as_deref(),
             Some(name),
             true,
             now,
@@ -491,7 +493,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(%team_id, %company_id), err)]
     async fn create_contact_for_company(
         &self,
         team_id: &uuid::Uuid,
@@ -538,31 +540,6 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let Some(company) = company else {
             return Err(CrmError::CompanyNotFoundForTeam);
         };
-
-        // The contact must live on one of the company's domains —
-        // contacts are keyed by email under a domain-keyed company, and
-        // a foreign-domain contact would never receive populate
-        // updates (its domain resolves to a different company).
-        let Some((_, email_domain)) = normalized_email.split_once('@') else {
-            return Err(CrmError::InvalidRequest("email must contain an '@'".into()));
-        };
-        let domain_matches = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM crm_domains
-                WHERE company_id = $1 AND LOWER(domain) = $2
-            ) AS "exists!"
-            "#,
-            company_id,
-            email_domain,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        if !domain_matches {
-            return Err(CrmError::ContactEmailDomainMismatch);
-        }
 
         // New contacts inherit the company's `hidden` (matches
         // populate). `manually_created = TRUE` shields the row from the
@@ -1457,12 +1434,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let address_statuses: Vec<CrmAddressStatus> = if addresses.is_empty() {
             Vec::new()
         } else {
-            // Hash-join via derived table (avoids LATERAL per-row).
-            // At most one row per (team, email) by virtue of
-            // crm_contacts UNIQUE(company_id, email) +
-            // crm_domains UNIQUE(team_id, lower(domain)).
-            // ORDER BY input.ord preserves input order
-            // (contract on `CrmScopePrecheck.addresses`).
+            // Explicit contacts can repeat an email under different companies.
+            // Collapse the requested addresses within this team, with any
+            // hidden/disabled association retaining its opt-out. Preserve one
+            // result per input, including repeated inputs, in caller order.
             sqlx::query!(
                 r#"
                 SELECT
@@ -1474,13 +1449,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)
                 LEFT JOIN (
                     SELECT
-                        ct.email     AS email,
-                        ct.hidden    AS contact_hidden,
-                        c.hidden     AS company_hidden,
-                        c.email_sync AS email_sync
+                        ct.email AS email,
+                        BOOL_OR(ct.hidden) AS contact_hidden,
+                        BOOL_OR(c.hidden) AS company_hidden,
+                        BOOL_AND(c.email_sync) AS email_sync
                     FROM crm_contacts ct
                     JOIN crm_companies c ON c.id = ct.company_id
-                    WHERE c.team_id = $1
+                    WHERE c.team_id = $1 AND ct.email = ANY($2::text[])
+                    GROUP BY ct.email
                 ) m ON m.email = input.address
                 ORDER BY input.ord
                 "#,
@@ -1862,7 +1838,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .collect())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(%team_id), err)]
     async fn get_contact_by_email_for_team(
         &self,
         team_id: &uuid::Uuid,
@@ -1872,7 +1848,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // Contacts are normalized to lowercase on every write path, so
         // lowercasing the input preserves use of crm_contacts_email_idx. Team
         // scope and hidden-row semantics mirror get_contact_for_team.
-        let row = sqlx::query!(
+        let rows = sqlx::query!(
             r#"
             SELECT
                 ct.id,
@@ -1889,18 +1865,23 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             WHERE ct.email = LOWER($1)
               AND co.team_id = $2
               AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))
-            ORDER BY ct.id DESC
-            LIMIT 1
+            LIMIT 2
             "#,
             email,
             team_id,
             include_hidden,
         )
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        Ok(row.map(|row| CrmContact {
+        if rows.len() > 1 {
+            return Err(CrmError::InvalidRequest(
+                "Multiple contacts use this email. Select a contact by ID instead.".into(),
+            ));
+        }
+
+        Ok(rows.into_iter().next().map(|row| CrmContact {
             id: row.id,
             company_id: row.company_id,
             email: row.email,

@@ -18,10 +18,11 @@ pub struct CreateCrmCompanyRequest {
     /// Display name for the company. Team-scoped: overrides the
     /// domain-directory name on every read path.
     pub name: String,
-    /// The company's email domain, e.g. "acme.com". Must be a bare
+    /// Optional company domain, e.g. "acme.com". Omit for a name-only
+    /// company. When supplied, must be a bare
     /// domain (no scheme, path, or email) and not a generic email
     /// provider domain.
-    pub domain: String,
+    pub domain: Option<String>,
 }
 
 /// Manually create a CRM company for the caller's team. Any team member
@@ -57,7 +58,7 @@ pub async fn handler<
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     let record = state
         .service
-        .create_company(&receipt, &req.name, &req.domain)
+        .create_company(&receipt, &req.name, req.domain.as_deref())
         .await?;
     Ok(Json(record.into()))
 }

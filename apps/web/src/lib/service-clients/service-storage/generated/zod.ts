@@ -4390,8 +4390,9 @@ export const createCrmCompanyBody = zod
   .object({
     domain: zod
       .string()
+      .nullish()
       .describe(
-        'The company\'s email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
+        'Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
       ),
     name: zod
       .string()
@@ -4652,7 +4653,6 @@ export const listCompanyContactsResponse = zod.array(
 [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 that owns the company (hidden companies are reachable for
 admin/owner only, and the new contact then inherits `hidden`). The
-email's domain must be one of the company's domains (400), the
 company must not already track the email (409), and the team's CRM
 killswitch must be on (403).
  */
@@ -4665,7 +4665,7 @@ export const createCrmContactBody = zod
     email: zod
       .string()
       .describe(
-        'The contact\'s email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company\'s domains (400 otherwise).'
+        "The contact's email address, including personal email providers.\nIt need not match a company domain."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -4835,7 +4835,8 @@ export const searchContactsResponse = zod
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
 `contact` when no visible contact exists. Any team member may resolve a
 visible contact; admin/owner callers may also resolve hidden contacts and
-contacts under hidden companies.
+contacts under hidden companies. Returns 400 when several visible contacts
+match; callers must choose an explicit contact ID instead.
  */
 export const getContactByEmailQueryParams = zod.object({
   email: zod

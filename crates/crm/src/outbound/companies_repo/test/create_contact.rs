@@ -80,7 +80,7 @@ async fn create_contact_rejects_duplicate_email(pool: PgPool) -> anyhow::Result<
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_contact_rejects_mismatched_domain(pool: PgPool) -> anyhow::Result<()> {
+async fn create_contact_accepts_explicit_cross_domain_links(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
@@ -88,16 +88,13 @@ async fn create_contact_rejects_mismatched_domain(pool: PgPool) -> anyhow::Resul
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     for email in ["jane@other.com", "jane@gmail.com", "jane@sub.acme.com"] {
-        let err = repo
+        let contact = repo
             .create_contact_for_company(&team_id, &company_id, email, "Jane", Utc::now(), false)
-            .await
-            .unwrap_err();
-        assert!(
-            matches!(err, CrmError::ContactEmailDomainMismatch),
-            "email {email:?}"
-        );
+            .await?;
+        assert_eq!(contact.email, email);
+        assert_eq!(contact.company_id, company_id);
     }
-    assert_eq!(count_contacts(&pool, company_id).await?, 0);
+    assert_eq!(count_contacts(&pool, company_id).await?, 3);
     Ok(())
 }
 
@@ -292,7 +289,7 @@ async fn manual_rows_survive_link_teardown(pool: PgPool) -> anyhow::Result<()> {
     // A fully manual company (no contacts) and a derived company with a
     // populated contact + a manual contact side by side.
     let manual_company = repo
-        .create_company_for_team(&team_id, "manual.com", "Manual Co", Utc::now())
+        .create_company_for_team(&team_id, Some("manual.com"), "Manual Co", Utc::now())
         .await?;
     let derived_company = insert_company(&pool, team_id, true, &["acme.com"]).await?;
     insert_contact_with_source(&pool, derived_company, "bob@acme.com", link_id).await?;
@@ -322,5 +319,52 @@ async fn manual_rows_survive_link_teardown(pool: PgPool) -> anyhow::Result<()> {
         1
     );
     let _ = manual_company;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@test.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+    let enabled = insert_company(&pool, team, true, &["acme.com"]).await?;
+    let disabled = insert_company(&pool, team, false, &["other.com"]).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    for company in [enabled, disabled] {
+        repo.create_contact_for_company(
+            &team,
+            &company,
+            "jane@gmail.com",
+            "Jane",
+            Utc::now(),
+            false,
+        )
+        .await?;
+    }
+    let inputs = vec![
+        "jane@gmail.com".to_string(),
+        "missing@gmail.com".to_string(),
+        "jane@gmail.com".to_string(),
+    ];
+    let before = repo.crm_scope_precheck(&team, &[], &inputs).await?;
+    assert_eq!(before.addresses.len(), inputs.len());
+    assert_eq!(
+        before
+            .addresses
+            .iter()
+            .map(|row| &row.address)
+            .collect::<Vec<_>>(),
+        inputs.iter().collect::<Vec<_>>()
+    );
+    assert!(before.addresses[0].exists);
+    assert!(!before.addresses[0].email_sync);
+    assert!(!before.addresses[1].exists);
+    assert!(!before.addresses[2].email_sync);
+    repo.set_company_hidden(&team, &disabled, true).await?;
+    let after = repo.crm_scope_precheck(&team, &[], &inputs).await?;
+    assert_eq!(after.addresses.len(), inputs.len());
+    assert!(after.addresses[0].contact_hidden);
+    assert!(after.addresses[0].company_hidden);
+    assert!(!after.addresses[0].email_sync);
     Ok(())
 }

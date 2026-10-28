@@ -2491,7 +2491,10 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const CreateCompany = z.object({ name: z.string(), domain: z.string() });
+export const CreateCompany = z.object({
+  name: z.string(),
+  domain: z.union([z.string(), z.null()]).optional(),
+});
 
 export const CreateCompanyResponse = z.object({
   companyId: z.string().uuid(),

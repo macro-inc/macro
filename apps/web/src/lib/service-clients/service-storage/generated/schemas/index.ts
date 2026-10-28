@@ -540,6 +540,7 @@ export * from './createChannelScopedBotRequestTokenExpiresAt';
 export * from './createChannelScopedBotRequestTokenLabel';
 export * from './createChannelScopedBotResponse';
 export * from './createCrmCompanyRequest';
+export * from './createCrmCompanyRequestDomain';
 export * from './createCrmContactRequest';
 export * from './createDatabaseRequest';
 export * from './createDatabaseWebhookRequest';

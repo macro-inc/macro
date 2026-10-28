@@ -4,15 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateCrmCompanyRequestDomain } from './createCrmCompanyRequestDomain';
 
 /**
  * Request body for `POST /crm/companies`.
  */
 export interface CreateCrmCompanyRequest {
-  /** The company's email domain, e.g. "acme.com". Must be a bare
+  /** Optional company domain, e.g. "acme.com". Omit for a name-only
+company. When supplied, must be a bare
 domain (no scheme, path, or email) and not a generic email
 provider domain. */
-  domain: string;
+  domain?: CreateCrmCompanyRequestDomain;
   /** Display name for the company. Team-scoped: overrides the
 domain-directory name on every read path. */
   name: string;

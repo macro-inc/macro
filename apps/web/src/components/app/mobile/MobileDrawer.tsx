@@ -240,7 +240,20 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
  * drawer as usual.
  */
 function dismissesDrawer(event: PointerEvent) {
-  return event.target !== document.documentElement;
+  if (event.target === document.documentElement) return false;
+  // A nested picker can remove its selected option during pointerup, before
+  // Corvu checks containment. The original event path still identifies the
+  // drawer that contained the tap; selecting an option must not dismiss it.
+  if (event.target instanceof Node && !event.target.isConnected) {
+    return !event
+      .composedPath()
+      .some(
+        (node) =>
+          node instanceof HTMLElement &&
+          node.hasAttribute('data-corvu-drawer-content')
+      );
+  }
+  return true;
 }
 
 /**

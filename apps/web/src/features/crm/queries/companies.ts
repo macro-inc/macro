@@ -2,6 +2,7 @@ import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
@@ -141,7 +142,7 @@ function wipeCompanyEmailCache(
 
 /**
  * Manually creates a CRM company via `POST /crm/companies` (a team-scoped
- * display name + one domain). Seeds the company detail cache from the
+ * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
  * team already tracks the domain, 403 when CRM is disabled for the team,
@@ -150,8 +151,15 @@ function wipeCompanyEmailCache(
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
-      mutationFn: ({ name, domain }: { name: string; domain: string }) =>
-        throwOnErr(() => deps.storage.createCompany({ name, domain })),
+      mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
+        Telemetry.span('crm.company.create', async (span) => {
+          span.setAttr('crm.company.has_domain', !!domain);
+          const company = await throwOnErr(() =>
+            deps.storage.createCompany({ name, domain })
+          );
+          span.setAttr('crm.company.id', company.id);
+          return company;
+        }),
       onSuccess: (data) => {
         analytics.track('crm_company_created', { companyId: data.id });
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
@@ -208,9 +216,14 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         name: string;
         email: string;
       }) =>
-        throwOnErr(() =>
-          deps.storage.createContact({ companyId, name, email })
-        ),
+        Telemetry.span('crm.contact.create', async (span) => {
+          span.setAttr('crm.company.id', companyId);
+          const contact = await throwOnErr(() =>
+            deps.storage.createContact({ companyId, name, email })
+          );
+          span.setAttr('crm.contact.id', contact.id);
+          return contact;
+        }),
       onSuccess: (contact, { companyId }) => {
         analytics.track('crm_contact_created', {
           companyId,

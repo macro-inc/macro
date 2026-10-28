@@ -21,8 +21,8 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 pub struct CreateCrmContactRequest {
     /// Display name for the contact.
     pub name: String,
-    /// The contact's email address, e.g. "jane@acme.com". Its domain
-    /// must be one of the company's domains (400 otherwise).
+    /// The contact's email address, including personal email providers.
+    /// It need not match a company domain.
     pub email: String,
 }
 
@@ -30,7 +30,6 @@ pub struct CreateCrmContactRequest {
 /// [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 /// that owns the company (hidden companies are reachable for
 /// admin/owner only, and the new contact then inherits `hidden`). The
-/// email's domain must be one of the company's domains (400), the
 /// company must not already track the email (409), and the team's CRM
 /// killswitch must be on (403).
 #[utoipa::path(

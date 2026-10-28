@@ -173,59 +173,26 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
-    /// Manually creates a CRM company for the caller's team with a
-    /// team-scoped display `name` and a single `domain` — the
-    /// user-driven counterpart of the populate flow's automatic company
-    /// creation. Any team member may create (the receipt only proves
-    /// membership).
+    /// Manually creates a company by name with an optional domain. Any team
+    /// member may create one. A supplied domain must be a bare company domain,
+    /// not a generic email provider, and unique within the team. Omit it for a
+    /// named company without a website; names are not unique identifiers.
     ///
-    /// Validates the inputs first: `name` must be non-blank (and within
-    /// a sane length); `domain` must look like a bare domain
-    /// ("acme.com" — no scheme, path, `@`, or whitespace) and must not
-    /// be a generic email provider domain (gmail.com etc. — a company
-    /// keyed on one would swallow every contact on that provider).
-    /// Rejections surface as [`CrmError::InvalidRequest`].
-    ///
-    /// Like populate, ensures `crm_domain_directory` has an entry for
-    /// the domain (resolving via the
-    /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// on a miss, or leaving it pending for
-    /// [`CrmServiceImpl::enrich_pending_domains`] when the binary has no
-    /// resolver) so the company still picks up icon/description
-    /// enrichment; the user's `name` is stored on `crm_companies.custom_name`
-    /// (never in the shared directory — it's global across teams) and
-    /// overrides the directory name on every read path.
-    ///
-    /// Returns [`CrmError::CrmDisabledForTeam`] when the team-level
-    /// killswitch is off and [`CrmError::CompanyAlreadyExistsForTeam`]
-    /// when the team already tracks the domain. See
-    /// [`crate::domain::companies_repo::CompaniesRepository::create_company_for_team`].
+    /// Domain enrichment runs only when a domain is supplied. The display name
+    /// remains team-scoped. The team CRM killswitch is enforced for both paths.
     fn create_company(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
-        domain: &str,
+        domain: Option<&str>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
-    /// Manually creates a contact under the company addressed by
-    /// `access`, with a display `name` and `email` — the user-driven
-    /// counterpart of populate's automatic contact creation. Any team
-    /// member who can see the company may add one; the receipt's role
-    /// decides whether a hidden company is reachable (and the new
-    /// contact inherits the company's `hidden`).
-    ///
-    /// Validates first: `name` must be non-blank (within a sane
-    /// length); `email` must be a plausible `local@domain` address.
-    /// Rejections surface as [`CrmError::InvalidRequest`]. The email's
-    /// domain must additionally be one of the company's domains —
-    /// enforced in the repository against the company's `crm_domains`
-    /// set ([`CrmError::ContactEmailDomainMismatch`] otherwise).
-    ///
-    /// Returns [`CrmError::CrmDisabledForTeam`] when the team-level
-    /// killswitch is off and
-    /// [`CrmError::ContactAlreadyExistsForCompany`] when the company
-    /// already tracks the email. See
-    /// [`crate::domain::companies_repo::CompaniesRepository::create_contact_for_company`].
+    /// Manually creates a named contact under an authorized company. The email
+    /// is validated and normalized, but need not match any company domain:
+    /// this is an explicit association, separate from automatic inference.
+    /// The contact inherits company visibility; team CRM must be enabled.
+    /// A duplicate email in the same company returns
+    /// [`CrmError::ContactAlreadyExistsForCompany`].
     fn create_contact(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
@@ -362,7 +329,8 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// receipt keeps the lookup scoped to an authorized team; the caller's
     /// role decides whether hidden contacts and hidden parent companies are
     /// visible. The email is validated and normalized before it crosses the
-    /// repository port.
+    /// repository port. Multiple visible matches are an actionable error;
+    /// callers must choose a contact ID.
     fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -462,9 +430,8 @@ fn validate_display_name(raw: &str) -> Result<&str, CrmError> {
 
 /// Validates and normalizes a user-supplied contact email: trims,
 /// lowercases, and requires a `local@domain` shape whose domain passes
-/// the same bare-domain check as company domains. Shape-only — the
-/// company-domain match is enforced in the repository, where the
-/// company's `crm_domains` set lives.
+/// the same bare-domain shape check as company domains. Generic providers
+/// are valid contact addresses; explicit links do not infer an employer.
 fn normalize_contact_email(raw: &str) -> Result<String, CrmError> {
     let email = raw.trim().to_ascii_lowercase();
     if email.is_empty() {
@@ -793,37 +760,31 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn create_company(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
-        domain: &str,
+        domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         let name = validate_display_name(name)?;
-        let domain = normalize_company_domain(domain)?;
+        let domain = domain.map(normalize_company_domain).transpose()?;
 
-        // Same guard populate applies: companies are keyed by domain,
-        // so a generic provider domain would swallow every contact on
-        // that provider.
-        if is_generic_email_domain(&domain) {
-            return Err(CrmError::InvalidRequest(
-                "generic email provider domains cannot be added as crm companies".into(),
-            ));
+        if let Some(domain) = &domain {
+            if is_generic_email_domain(domain) {
+                return Err(CrmError::InvalidRequest(
+                    "generic email provider domains cannot be added as crm companies; omit the domain to create a company by name".into(),
+                ));
+            }
+            self.ensure_domain_directory_entry(domain).await?;
         }
 
-        // Mirror populate: ensure the directory has an entry for the
-        // domain so icon/description enrichment resolves. The user's
-        // name never goes here — the directory is global across teams;
-        // it lands on `crm_companies.custom_name` in the repo instead.
-        self.ensure_domain_directory_entry(&domain).await?;
-
         self.companies_repository
-            .create_company_for_team(&access.team_id(), &domain, name, Utc::now())
+            .create_company_for_team(&access.team_id(), domain.as_deref(), name, Utc::now())
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn create_contact(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
@@ -1038,7 +999,7 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -1200,7 +1161,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("NoOpCrmService.create_company")
     }

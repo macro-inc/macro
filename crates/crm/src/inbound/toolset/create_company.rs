@@ -31,17 +31,17 @@ pub struct CreateCompanyResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateCompany",
-    description = "Add a company to the user's team CRM by name and web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company)."
+    description = "Add a company to the user's team CRM by name and optional web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company)."
 )]
 pub struct CreateCompany {
     /// Display name.
     #[schemars(description = "The company's display name, e.g. \"Acme\".")]
     pub name: String,
-    /// Primary domain.
+    /// Optional primary domain.
     #[schemars(
-        description = "The company's web domain, e.g. \"acme.com\" — no scheme or path. Contacts are matched to the company by this domain."
+        description = "Optional company web domain; omit when unknown. For example, \"acme.com\" — no scheme or path. Contacts are matched to the company by this domain."
     )]
-    pub domain: String,
+    pub domain: Option<String>,
 }
 
 impl ToolAnnotated for CreateCompany {
@@ -67,7 +67,7 @@ where
             caller_team_receipt(&*service_context.entity_access_service, &request_context).await?;
         let created = service_context
             .service
-            .create_company(&team, self.name.trim(), self.domain.trim())
+            .create_company(&team, self.name.trim(), self.domain.as_deref())
             .await
             .map_err(crm_error)?;
 

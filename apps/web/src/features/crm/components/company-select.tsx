@@ -8,7 +8,7 @@ import { badgeTriggerClasses, Layer } from '@ui';
 import { type Accessor, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
-export type CompanyOption = { id: string; name: string; domain: string };
+export type CompanyOption = { id: string; name: string; domain?: string };
 
 const ITEM_HEIGHT = 32;
 
@@ -66,13 +66,15 @@ export function CompanySelect(props: {
   value: CompanyOption | undefined;
   onChange: (company: CompanyOption) => void;
   loading: boolean;
+  disabled?: boolean;
   /** Mount the menu here, e.g. a modal dialog's content, which hides body portals. */
   mount?: HTMLElement;
 }) {
   const [search, setSearch] = createSignal('');
+  let trigger: HTMLButtonElement | undefined;
   const matches = (option: CompanyOption, query: string) =>
     option.name.toLowerCase().includes(query) ||
-    option.domain.toLowerCase().includes(query);
+    (option.domain?.toLowerCase().includes(query) ?? false);
   const hasMatches = () => {
     const query = search().trim().toLowerCase();
     return props.companies.some((option) => matches(option, query));
@@ -80,13 +82,14 @@ export function CompanySelect(props: {
   return (
     <Combobox<CompanyOption>
       multiple={false}
+      disabled={props.disabled}
       options={props.companies}
       value={props.value ?? null}
       onChange={(option) => option && props.onChange(option)}
       onInputChange={setSearch}
       onOpenChange={(open) => !open && setSearch('')}
       optionValue="id"
-      optionTextValue={(option) => `${option.name} ${option.domain}`}
+      optionTextValue={(option) => `${option.name} ${option.domain ?? ''}`}
       // The trigger shows the selection; keep the search box empty on open.
       optionLabel={() => ''}
       defaultFilter={(option, input) =>
@@ -99,6 +102,7 @@ export function CompanySelect(props: {
     >
       <Combobox.Control>
         <Combobox.Trigger
+          ref={trigger}
           id={props.id}
           type="button"
           // Kobalte's default name is "Show suggestions".
@@ -134,7 +138,15 @@ export function CompanySelect(props: {
       </Combobox.Control>
       <Combobox.Portal mount={props.mount}>
         <Layer depth={2}>
-          <Combobox.Content class="menu-surface z-action-menu w-72 overflow-hidden">
+          <Combobox.Content
+            class="menu-surface z-action-menu w-72 overflow-hidden"
+            onCloseAutoFocus={(event) => {
+              // The input lives inside this menu and is being removed. Return
+              // focus to the trigger so the containing drawer stays open.
+              event.preventDefault();
+              trigger?.focus({ preventScroll: true });
+            }}
+          >
             <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
               <Combobox.Input

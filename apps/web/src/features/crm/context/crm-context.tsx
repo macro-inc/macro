@@ -162,7 +162,7 @@ export type CrmContext = {
   };
   openCreateCompany(): void;
   /** Without a company, the dialog asks which company the contact joins. */
-  openCreateContact(company?: { companyId: string; domain: string }): void;
+  openCreateContact(company?: { companyId: string }): void;
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
@@ -175,7 +175,7 @@ export type CrmContext = {
   createTeamViews(): TeamViewsSource;
   createLists(teamId: Accessor<string | undefined>): ListsSource;
   createCompany(): CrmMutation<
-    { name: string; domain: string },
+    { name: string; domain?: string },
     { id: string }
   >;
   createCompanyImporter(): CompanyImporter;

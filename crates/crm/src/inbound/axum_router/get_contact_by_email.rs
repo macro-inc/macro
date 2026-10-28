@@ -29,7 +29,8 @@ pub struct GetContactByEmailResponse {
 /// Look up a CRM contact by email in the caller's team. Returns a null
 /// `contact` when no visible contact exists. Any team member may resolve a
 /// visible contact; admin/owner callers may also resolve hidden contacts and
-/// contacts under hidden companies.
+/// contacts under hidden companies. Returns 400 when several visible contacts
+/// match; callers must choose an explicit contact ID instead.
 #[utoipa::path(
     get,
     path = "/crm/contacts/by-email",
@@ -41,12 +42,12 @@ pub struct GetContactByEmailResponse {
             body = GetContactByEmailResponse,
             description = "The matching contact, or a null contact when none is visible."
         ),
-        (status = 400, body = ErrorResponse),
+        (status = 400, body = ErrorResponse, description = "Invalid email or multiple visible contacts match; choose a contact ID."),
         (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip_all, err, fields(email = %params.email))]
+#[tracing::instrument(skip_all, err)]
 pub async fn handler<
     C: CrmService,
     St,

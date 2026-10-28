@@ -17,13 +17,13 @@ export const recordDetail = (record: RecordOption) =>
     : record.detail;
 
 /** A company a new contact can join, by the domain of its email. */
-export type DomainCompany = { id: string; domain: string };
+export type DomainCompany = { id: string; domain?: string };
 
 /** Whom a new pipeline row is about: a record that exists, or one created with the row. */
 export type RecordChoice =
   | { kind: 'existing'; record: RecordOption }
   | { kind: 'new-company'; name: string; domain: string }
-  | { kind: 'new-contact'; name: string; email: string };
+  | { kind: 'new-contact'; name: string; email: string; companyId?: string };
 
 /** A new record seeded from what was searched: a domain or email goes in its field, anything else is the name. */
 export function newRecordChoice(
@@ -54,7 +54,7 @@ export function contactCompany(
 ): DomainCompany | undefined {
   const domain = EMAIL_PATTERN.exec(email.trim().toLowerCase())?.[1];
   return domain
-    ? companies.find((company) => company.domain.toLowerCase() === domain)
+    ? companies.find((company) => company.domain?.toLowerCase() === domain)
     : undefined;
 }
 
@@ -69,13 +69,14 @@ export function recordChoiceProblem(
       ? 'Enter a company name'
       : 'Enter a name';
   if (choice.kind === 'new-company')
-    return isCompanyDomain(choice.domain.trim())
+    return !choice.domain.trim() || isCompanyDomain(choice.domain.trim())
       ? undefined
       : 'Enter a valid domain like acme.com';
   const email = choice.email.trim();
   const domain = EMAIL_PATTERN.exec(email)?.[1];
   if (!domain) return 'Enter an email like jane@acme.com';
-  return contactCompany(email, companies)
-    ? undefined
-    : `No company uses ${domain.toLowerCase()}. Add the company first.`;
+  const company = choice.companyId
+    ? companies.find((company) => company.id === choice.companyId)
+    : contactCompany(email, companies);
+  return company ? undefined : 'Choose a company for this contact';
 }

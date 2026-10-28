@@ -32,10 +32,7 @@ export function CreateCompanyModal(props: {
   const companyName = createMemo(() => name().trim());
   const companyDomain = createMemo(() => domain().trim().toLowerCase());
   const canSubmit = createMemo(
-    () =>
-      companyName().length > 0 &&
-      companyDomain().length > 0 &&
-      !createCompanyMutation.isPending
+    () => companyName().length > 0 && !createCompanyMutation.isPending
   );
 
   function reset() {
@@ -60,7 +57,7 @@ export function CreateCompanyModal(props: {
       setError('Enter a company name');
       return;
     }
-    if (!isCompanyDomain(companyDomain())) {
+    if (companyDomain() && !isCompanyDomain(companyDomain())) {
       setError('Enter a valid domain like acme.com');
       return;
     }
@@ -69,7 +66,7 @@ export function CreateCompanyModal(props: {
     try {
       const { id } = await createCompanyMutation.mutateAsync({
         name: companyName(),
-        domain: companyDomain(),
+        domain: companyDomain() || undefined,
       });
       resetAndClose();
       props.onCreated(id);
@@ -141,7 +138,7 @@ export function CreateCompanyModal(props: {
                   />
                   <input
                     aria-label="Domain"
-                    placeholder="Domain, like acme.com"
+                    placeholder="Domain (optional), like acme.com"
                     autocomplete="off"
                     spellcheck={false}
                     data-1p-ignore
@@ -169,7 +166,9 @@ export function CreateCompanyModal(props: {
                 <span class="flex min-w-0 items-center gap-1.5 px-2 text-xs text-ink-muted">
                   <EnvelopeIcon class="size-4 shrink-0" />
                   <span class="truncate">
-                    Emails from this domain link to the company
+                    {companyDomain()
+                      ? 'Emails from this domain link to the company'
+                      : 'Add contacts to the company by email'}
                   </span>
                 </span>
                 <EntityComposer.Submit

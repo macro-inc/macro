@@ -32,7 +32,7 @@ pub struct CreateContactResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateContact",
-    description = "Add a contact person to a company in the user's team CRM, as Add Contact on a company does. The email's domain must be one of the company's domains. Find the company with ListCompanies, or add it first with CreateCompany."
+    description = "Add a contact person to a company in the user's team CRM, as Add Contact on a company does. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany."
 )]
 pub struct CreateContact {
     /// Company to add the contact to.

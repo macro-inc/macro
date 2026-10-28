@@ -14,6 +14,7 @@ import {
   Panel,
 } from '@ui';
 import {
+  createMemo,
   createSignal,
   createUniqueId,
   type JSX,
@@ -32,10 +33,12 @@ import type {
 } from '../../database/core/database-view';
 import { canEditCell, titleColumn } from '../../database/core/table';
 import type { RecordCreation } from '../../database/primitives/record-actions';
+import { CompanySelect } from '../components/company-select';
 import { RecordSearch } from '../components/record-search';
 import type { Pipeline } from '../core/pipeline';
 import {
   contactCompany,
+  type DomainCompany,
   newRecordChoice,
   type RecordChoice,
   type RecordOption,
@@ -88,11 +91,21 @@ export function AddPipelineRecordDialog(
           detail: entry.domains[0]?.domain ?? '',
         }));
   const domainCompanies = () =>
-    companies
-      .companies()
-      .flatMap((entry) =>
-        entry.domains.map((domain) => ({ id: entry.id, domain: domain.domain }))
-      );
+    companies.companies().flatMap<DomainCompany>((entry) =>
+      entry.domains.length
+        ? entry.domains.map((domain) => ({
+            id: entry.id,
+            domain: domain.domain,
+          }))
+        : [{ id: entry.id, domain: undefined }]
+    );
+  const companyOptions = createMemo(() =>
+    companies.companies().map((company) => ({
+      id: company.id,
+      name: company.name,
+      domain: company.domains[0]?.domain,
+    }))
+  );
   // One intent per dialog, so submitting again never adds a second row.
   const intentId = `pipeline-record:${createUniqueId()}`;
   const [choice, setChoice] = createSignal<RecordChoice>();
@@ -138,7 +151,7 @@ export function AddPipelineRecordDialog(
       const domain = current.domain.trim().toLowerCase();
       const { id } = await createCompany.mutateAsync({
         name: current.name.trim(),
-        domain,
+        domain: domain || undefined,
       });
       setChoice({
         kind: 'existing',
@@ -147,7 +160,11 @@ export function AddPipelineRecordDialog(
       return id;
     }
     const email = current.email.trim().toLowerCase();
-    const joins = contactCompany(email, domainCompanies());
+    const joins = current.companyId
+      ? companies
+          .companies()
+          .find((company) => company.id === current.companyId)
+      : contactCompany(email, domainCompanies());
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
       companyId: joins.id,
@@ -256,7 +273,7 @@ export function AddPipelineRecordDialog(
             />
             <input
               aria-label="Domain"
-              placeholder="Domain, like acme.com"
+              placeholder="Domain (optional), like acme.com"
               autocomplete="off"
               spellcheck={false}
               data-1p-ignore
@@ -275,36 +292,53 @@ export function AddPipelineRecordDialog(
       </Match>
       <Match when={newContact()}>
         {(draft) => (
-          <NewRecordFields
-            name={draft().name}
-            namePlaceholder="Contact name"
-            disabled={pending()}
-            onName={(name) => changeChoice({ ...draft(), name })}
-            onCancel={() => changeChoice(undefined)}
-            cancelLabel="Choose an existing contact"
-          >
-            <EnvelopeIcon
-              aria-hidden="true"
-              class="size-4 shrink-0 text-ink-muted"
-            />
-            <input
-              aria-label="Email"
-              placeholder="Email, like jane@acme.com"
-              type="email"
-              autocomplete="off"
-              spellcheck={false}
-              data-1p-ignore
-              class="ph-no-capture w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
-              value={draft().email}
+          <>
+            <NewRecordFields
+              name={draft().name}
+              namePlaceholder="Contact name"
               disabled={pending()}
-              onInput={(event) =>
-                changeChoice({
-                  ...draft(),
-                  email: event.currentTarget.value,
-                })
+              onName={(name) => changeChoice({ ...draft(), name })}
+              onCancel={() => changeChoice(undefined)}
+              cancelLabel="Choose an existing contact"
+            >
+              <EnvelopeIcon
+                aria-hidden="true"
+                class="size-4 shrink-0 text-ink-muted"
+              />
+              <input
+                aria-label="Email"
+                placeholder="Email, like jane@acme.com"
+                type="email"
+                autocomplete="off"
+                spellcheck={false}
+                data-1p-ignore
+                class="ph-no-capture w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
+                value={draft().email}
+                disabled={pending()}
+                onInput={(event) =>
+                  changeChoice({
+                    ...draft(),
+                    email: event.currentTarget.value,
+                  })
+                }
+              />
+            </NewRecordFields>
+            <CompanySelect
+              companies={companyOptions()}
+              value={companyOptions().find(
+                (company) =>
+                  company.id ===
+                  (draft().companyId ??
+                    contactCompany(draft().email, domainCompanies())?.id)
+              )}
+              onChange={(company) =>
+                changeChoice({ ...draft(), companyId: company.id })
               }
+              loading={companies.query.isLoading}
+              disabled={pending()}
+              mount={dialog()}
             />
-          </NewRecordFields>
+          </>
         )}
       </Match>
     </Switch>

@@ -4,8 +4,8 @@
 
 ## Properties
 
-| Property | Type |
-| ------ | ------ |
-| <a id="property-400"></a> `400` | [`ErrorResponse`](ErrorResponse.md) |
-| <a id="property-401"></a> `401` | [`ErrorResponse`](ErrorResponse.md) |
-| <a id="property-500"></a> `500` | [`ErrorResponse`](ErrorResponse.md) |
+| Property | Type | Description |
+| ------ | ------ | ------ |
+| <a id="property-400"></a> `400` | [`ErrorResponse`](ErrorResponse.md) | Invalid email or multiple visible contacts match; choose a contact ID. |
+| <a id="property-401"></a> `401` | [`ErrorResponse`](ErrorResponse.md) | - |
+| <a id="property-500"></a> `500` | [`ErrorResponse`](ErrorResponse.md) | - |
