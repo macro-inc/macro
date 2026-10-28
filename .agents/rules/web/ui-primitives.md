@@ -84,7 +84,9 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - Render `Checkbox.Control` or `RadioGroup.ItemControl` once per value; each
   includes its native input and default indicator. Do not add a second Input slot.
 - Use `InlineCheckbox` only as an aria-hidden decoration for an interactive row
-  that owns selection and accessible state. Single-select menus retain their
-  trailing `SingleSelectCheck`, not a checkbox.
+  or selection control that owns selection, focus, and input semantics. Entity
+  list selection uses it inside `MultiSelectCheckbox` to retain shift-click and
+  full-cell hit targets. Single-select menus retain their trailing
+  `SingleSelectCheck`, not a checkbox.
 - Keep checkbox draw/retract and switch press motion CSS-only and respect reduced
   motion. Preserve selection-control focus indicators independently of Button styling.
