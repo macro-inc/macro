@@ -830,6 +830,7 @@ dependencies = [
  "entity_registry_db_utils",
  "genai_telemetry",
  "harness_id",
+ "jev",
  "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
