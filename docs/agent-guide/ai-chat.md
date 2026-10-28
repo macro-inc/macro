@@ -561,16 +561,16 @@ the shimmer.
   In your harness · model · channels" subtitle, plus Edit / Delete actions.
   **Add agent**, the setup strips, and Edit replace the list with full pages,
   not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
-  The agent editor has Profile, Instructions, **Where it runs** (In Macro, In
-  Cursor, In your harness) and **Who can use it** (Private / Team). The selected
+  The agent editor has Look, Name, Instructions, **Where it runs** (In Macro, In
+  Cursor, In your harness), **Who can use it** (Private / Team) and Channels. The selected
   place opens its Model picker inside its card; In your harness adds a Harness
   picker beside it. In Macro on an Anthropic or OpenAI model also shows an
   optional **Anthropic API key** / **OpenAI API key** field (see
   [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired harness is disabled with
   **Connect** / **Set up**, which open the setup guide in place and return to the
-  editor with that option selected. Mention style, permission requests,
-  connections, and channels sit in a collapsed **Advanced** section whose
-  description summarizes the current choices.
+  editor with that option selected. Mention style, permission requests, and
+  connections sit under a collapsed **More options** whose summary line
+  describes the current choices.
   **Connect Cursor** is a three-step guide: a screenshot of Cursor's API & SSH
   Keys page with **Open API & SSH Keys** (cursor.com/dashboard/api), an API key
   field focused on open, and a default model picker that enables once the key is

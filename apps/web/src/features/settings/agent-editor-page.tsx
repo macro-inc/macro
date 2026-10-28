@@ -7,10 +7,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import {
   removeAgentApiKey,
@@ -35,12 +34,14 @@ import {
   AgentChannelFields,
   AgentShareFields,
 } from './components/agent-access-fields';
-import { AgentAvatar } from './components/agent-avatar';
-import { agentFaceImage } from './components/agent-face-paint';
+import { AdvancedGroup } from './components/agent-advanced-group';
 import {
-  AdvancedGroup,
-  AgentFormSection,
-} from './components/agent-form-sections';
+  AgentEditFrame,
+  AgentEditSection,
+} from './components/agent-edit-frame';
+import { AgentFace, createDarkTheme } from './components/agent-face';
+import { agentFaceImage } from './components/agent-face-paint';
+import { AgentLookFields } from './components/agent-look-fields';
 import { AgentModelPicker } from './components/agent-model-picker';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
@@ -50,7 +51,11 @@ import {
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import type { AgentFaceLook } from './core/agent-face';
+import {
+  type AgentFaceLook,
+  agentFaceColor,
+  agentFaceLook,
+} from './core/agent-face';
 import {
   type AgentShare,
   type ChannelMode,
@@ -59,7 +64,7 @@ import {
   slugAgentTag,
 } from './core/agent-settings';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
-import { ChoiceRow, SettingsPage } from './primitives';
+import { ChoiceRow, SettingsSurface } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
 
 /**
@@ -87,6 +92,10 @@ export function AgentEditorPage(props: {
   const [avatarUrl, setAvatarUrl] = createSignal<string | undefined>(
     props.agent?.bot.avatar_url ?? undefined
   );
+  // An existing agent's picture doesn't say which face it shows, so the edit
+  // page's picker starts unchosen, drawn in the face its @tag would get.
+  const [pickedLook, setPickedLook] = createSignal<AgentFaceLook>();
+  const dark = createDarkTheme();
   const uploadAvatar = useUploadAgentAvatarMutation();
   const [uploadingAvatar, setUploadingAvatar] = createSignal(false);
   const busy = () => props.pending || uploadingAvatar();
@@ -228,7 +237,6 @@ export function AgentEditorPage(props: {
     return isCoderHarness(harness?.kind === 'macrod' ? 'macrod' : harness?.id);
   };
   const isCoding = () => codingChoice() ?? harnessCodes();
-  let avatarInputRef: HTMLInputElement | undefined;
   let pageContentRef: HTMLDivElement | undefined;
 
   const [setup, setSetup] = createSignal<'cursor' | 'pairing'>();
@@ -245,16 +253,9 @@ export function AgentEditorPage(props: {
       finished === 'cursor' ? cursorHarness() : macrodHarnesses()[0];
     if (ready) handleHarnessChange(ready.id);
   };
-  const advancedSummary = (options: { channels: boolean }) =>
+  const advancedSummary = () =>
     [
       isCoding() ? 'Coding agent' : 'Chat agent',
-      ...(options.channels
-        ? [
-            channelMode() === 'all'
-              ? 'All channels'
-              : `${selectedChannelIds().length} ${selectedChannelIds().length === 1 ? 'channel' : 'channels'}`,
-          ]
-        : []),
       ...(pipedreamMcp()
         ? [
             mcp().scope === 'owner_connections'
@@ -395,13 +396,13 @@ export function AgentEditorPage(props: {
     setUploadingAvatar(true);
     try {
       setAvatarUrl(await uploadAvatar.mutateAsync(file));
+      setPickedLook(undefined);
     } catch (error) {
       toast.failure(
         error instanceof Error ? error.message : 'Failed to upload avatar'
       );
     } finally {
       setUploadingAvatar(false);
-      if (avatarInputRef) avatarInputRef.value = '';
     }
   };
 
@@ -425,12 +426,12 @@ export function AgentEditorPage(props: {
 
   /**
    * Saves the agent, resolving to its id, or `undefined` when it failed. A
-   * new agent without an uploaded picture saves a picture of its `face`, so
-   * it looks the same wherever agents are shown as images.
+   * chosen `face` replaces the agent's picture with a picture of that face,
+   * so it looks the same wherever agents are shown as images.
    */
   const submit = async (face?: AgentFaceLook) => {
     if (!canCreate()) return undefined;
-    const picture = avatarUrl() ?? (face && (await uploadFace(face)));
+    const picture = face ? await uploadFace(face) : avatarUrl();
     if (face && !picture) return undefined;
 
     const harness = selectedHarness();
@@ -458,56 +459,6 @@ export function AgentEditorPage(props: {
     if (props.agent) close();
     return saved;
   };
-
-  const avatarRow = () => (
-    <>
-      <div class="flex items-center gap-3 border-b border-edge-muted pb-4">
-        <button
-          type="button"
-          aria-label="Upload avatar"
-          disabled={busy()}
-          class="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => avatarInputRef?.click()}
-        >
-          <AgentAvatar
-            id="draft"
-            name={name() || 'Agent'}
-            tag={tag()}
-            avatarUrl={avatarUrl()}
-          />
-        </button>
-        <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium text-ink">Avatar</div>
-          <div class="mt-0.5 text-xs text-ink-muted">
-            Optional · square images work best
-          </div>
-        </div>
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/*"
-          class="hidden"
-          disabled={busy()}
-          onChange={(event) =>
-            fireAndForget(
-              handleAvatarInput(event.currentTarget.files?.[0]),
-              'agent-settings'
-            )
-          }
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy()}
-          onClick={() => avatarInputRef?.click()}
-        >
-          <UploadIcon />
-          {uploadingAvatar() ? 'Uploading…' : 'Upload'}
-        </Button>
-      </div>
-    </>
-  );
 
   const nameFields = (layout: 'row' | 'stack') => (
     <>
@@ -679,7 +630,7 @@ export function AgentEditorPage(props: {
     />
   );
 
-  const advancedOptions = (options: { channels: boolean }) => (
+  const advancedOptions = () => (
     <>
       <div id="agent-advanced" class="flex flex-col">
         <fieldset class="grid gap-2">
@@ -782,15 +733,6 @@ export function AgentEditorPage(props: {
             </Show>
           </AdvancedGroup>
         </Show>
-
-        <Show when={options.channels}>
-          <AdvancedGroup
-            title="Channels"
-            description="Choose whether this agent is global or channel-specific."
-          >
-            {channelFields()}
-          </AdvancedGroup>
-        </Show>
       </div>
     </>
   );
@@ -804,111 +746,173 @@ export function AgentEditorPage(props: {
     />
   );
 
-  const editForm = () => (
-    <SettingsPage
-      title="Edit agent"
-      showTitleInSheet
-      description="Name it, tell it what to do, and pick where it runs."
-      actions={
-        <Button variant="ghost" size="sm" onClick={close} disabled={busy()}>
-          <ArrowLeftIcon /> Back
-        </Button>
+  const editLook = () => pickedLook() ?? agentFaceLook(tag() || name());
+  const editAccent = () =>
+    agentFaceColor(editLook().color).swatch[dark() ? 'dark' : 'light'];
+  const editHero = () => (
+    <Show
+      when={!pickedLook() && avatarUrl()}
+      fallback={
+        <AgentFace
+          look={editLook()}
+          animated
+          followPointer
+          state={props.pending ? 'thinking' : 'idle'}
+          class="size-28 sm:size-32"
+        />
       }
     >
-      <section aria-label="Edit agent" class="@container" ref={pageContentRef}>
-        <form
-          id="agent-form"
-          class="flex flex-col gap-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-            fireAndForget(submit(), 'agent-settings');
-          }}
-        >
-          <AgentFormSection
-            title="Profile"
-            description="How this agent appears in channels and mentions."
-          >
-            {avatarRow()}
-            {nameFields('row')}
-          </AgentFormSection>
-          <AgentFormSection
-            title="Instructions"
-            description="Instructions the agent receives at the start of every conversation."
-          >
-            {instructionsField()}
-          </AgentFormSection>
-          <AgentFormSection
-            title="Where it runs"
-            description="Pick where this agent does its work."
-          >
-            {whereItRunsFields()}
-          </AgentFormSection>
-          <AgentFormSection
-            title="Who can use it"
-            description="Private agents are yours. Team agents work in shared channels."
-          >
-            {shareFields()}
-          </AgentFormSection>
-          <AgentFormSection
-            title="Advanced"
-            description={advancedSummary({ channels: true })}
-            expanded={advancedOpen()}
-            actions={
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-expanded={advancedOpen()}
-                aria-controls="agent-advanced"
-                onClick={() => setAdvancedOpen((open) => !open)}
-              >
-                {advancedOpen() ? 'Hide' : 'Show'}
-              </Button>
+      {(url) => (
+        <img
+          src={url()}
+          alt={`${name()} avatar`}
+          class="size-24 rounded-full object-cover ring ring-edge-muted"
+        />
+      )}
+    </Show>
+  );
+  const lookFields = () => (
+    <AgentLookFields
+      look={editLook()}
+      chosen={pickedLook() !== undefined}
+      onChange={setPickedLook}
+      showPicker
+      busy={busy()}
+      uploading={uploadingAvatar()}
+      uploadLabel="Upload a picture"
+      onUpload={handleAvatarInput}
+      secondary={
+        pickedLook() && avatarUrl()
+          ? {
+              label: 'Keep its current picture',
+              onClick: () => setPickedLook(undefined),
             }
+          : undefined
+      }
+    />
+  );
+
+  const editForm = () => (
+    <AgentEditFrame
+      accent={editAccent()}
+      hero={editHero()}
+      title={name().trim() || 'Untitled agent'}
+      subtitle={
+        <>
+          @{tag() || 'agent'} · {share() === 'Team' ? 'Team' : 'Private'} agent
+        </>
+      }
+      busy={busy()}
+      onBack={close}
+      onSubmit={() => fireAndForget(submit(pickedLook()), 'agent-settings')}
+      contentRef={(element) => {
+        pageContentRef = element;
+      }}
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            onClick={close}
+            disabled={busy()}
           >
-            <Show when={advancedOpen()}>
-              {advancedOptions({ channels: true })}
-            </Show>
-          </AgentFormSection>
-        </form>
-        <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-edge-muted pt-4">
-          <Show when={props.onDelete}>
-            {(onDelete) => (
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="agent-form"
+            variant="cta"
+            size="lg"
+            class="min-w-36"
+            disabled={!canCreate()}
+          >
+            {props.pending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </>
+      }
+    >
+      <AgentEditSection
+        title="Look"
+        description="How it shows up in channels, docs, and tasks."
+      >
+        {lookFields()}
+      </AgentEditSection>
+      <AgentEditSection
+        title="Name"
+        description="Your team mentions it by its @tag, like any teammate."
+      >
+        {nameFields('row')}
+      </AgentEditSection>
+      <AgentEditSection
+        title="Instructions"
+        description="It reads these at the start of every conversation."
+      >
+        {instructionsField()}
+      </AgentEditSection>
+      <AgentEditSection
+        title="Where it runs"
+        description="Where it does its work and which model it uses."
+      >
+        {whereItRunsFields()}
+      </AgentEditSection>
+      <AgentEditSection
+        title="Who can use it"
+        description="Private agents are yours. Team agents work in shared channels."
+      >
+        {shareFields()}
+      </AgentEditSection>
+      <AgentEditSection
+        title="Channels"
+        description="Where people can mention it."
+      >
+        {channelFields()}
+        <div class="mt-6 flex flex-col items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            aria-expanded={advancedOpen()}
+            aria-controls="agent-advanced"
+            onClick={() => setAdvancedOpen((open) => !open)}
+          >
+            More options
+            <CaretDownIcon
+              class={cn(
+                'transition-transform duration-200',
+                advancedOpen() && 'rotate-180'
+              )}
+            />
+          </Button>
+          <p class="text-xs text-ink-muted">{advancedSummary()}</p>
+        </div>
+        <Show when={advancedOpen()}>
+          <SettingsSurface class="mt-3 p-4">
+            {advancedOptions()}
+          </SettingsSurface>
+        </Show>
+      </AgentEditSection>
+      <Show when={props.onDelete}>
+        {(onDelete) => (
+          <AgentEditSection title="Delete agent">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm text-ink-muted">
+                Removes it from every channel. This can’t be undone.
+              </p>
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                class="text-negative"
+                variant="danger"
+                size="md"
                 disabled={busy()}
                 onClick={onDelete()}
               >
                 <TrashIcon /> Delete agent
               </Button>
-            )}
-          </Show>
-          <div class="ml-auto flex gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={close}
-              disabled={busy()}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="agent-form"
-              variant="strong"
-              size="sm"
-              disabled={!canCreate()}
-            >
-              {props.pending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        </div>
-      </section>
-    </SettingsPage>
+            </div>
+          </AgentEditSection>
+        )}
+      </Show>
+    </AgentEditFrame>
   );
 
   const canContinue = (step: WizardStep) =>
@@ -956,9 +960,9 @@ export function AgentEditorPage(props: {
         where: whereItRunsFields,
         share: shareFields,
         channels: channelFields,
-        advanced: () => advancedOptions({ channels: false }),
+        advanced: advancedOptions,
       }}
-      advancedSummary={advancedSummary({ channels: false })}
+      advancedSummary={advancedSummary()}
       onUploadAvatar={handleAvatarInput}
       onClearAvatar={() => setAvatarUrl(undefined)}
       onCreate={submit}

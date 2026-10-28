@@ -526,8 +526,9 @@ keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
 
 `Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` opens a step-by-step wizard and
-`Edit <name>` a full-page form grouped Profile, Instructions, Where it runs, Who can use it, and
-Advanced (answering a mention, permissions, Connections, Channels). Connections is a radio pair:
+`Edit <name>` the same stage as one scrolling page: Look, Name, Instructions, Where it runs,
+Who can use it, and Channels, with `More options` (answering a mention, permissions,
+Connections) under Channels. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
@@ -645,7 +646,14 @@ an uploaded picture saves a picture of its face as its avatar; the wizard ends o
 `<name> is ready` with `Done` and, under it, `Message <name>`. Agents listed without any
 picture show a face derived from their @tag.
 
-Editing an existing agent opens a full-page form. The
+Editing an existing agent opens the same stage as the wizard: Back at the top
+left, the agent's face (or picture) over its color's glow, its name in slab
+with `@tag · Private/Team agent`, then the sections in one column, and
+`Cancel` / `Save changes` held at the bottom of the view. Under Look, the face
+picker starts with nothing chosen, drawn in the face its @tag would get;
+choosing a face or color previews it, and saving replaces the picture with one
+of that face. `Keep its current picture` undoes the choice, and `Upload a
+picture` replaces it with an upload. The
 edit form offers `Delete agent` to the agent's creator, the team owner, and
 team admins for team agents. Confirming removes it from channels and returns
 to the agent list; Cancel keeps the edit form open. Other team members can edit
@@ -659,7 +667,7 @@ with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Advanced` starts collapsed on desktop and mobile, showing only its heading,
 summary, and `Show` action, without an empty card beneath it. `Show` reveals the
 settings; `Hide` collapses them again and preserves the selected options.
-Under `Advanced`, `Answering a mention` chooses between `Coding agent` (a
+Under `More options`, `Answering a mention` chooses between `Coding agent` (a
 channel mention is answered with a magic chip that opens into the live session)
 and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
 agent's own setting and always saved: a new form starts from the selected runtime

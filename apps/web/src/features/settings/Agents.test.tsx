@@ -887,6 +887,70 @@ describe('Agents', () => {
     );
   });
 
+  it('swaps an existing agent’s picture for a chosen face on save', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          avatar_url: 'https://static.example/old.png',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const editor = screen.getByRole('region', { name: 'Edit agent' });
+
+    // The current picture shows until a face is picked; nothing is chosen.
+    expect(
+      within(editor).getByRole('img', { name: 'Bug fixer avatar' })
+    ).toBeTruthy();
+    expect(within(editor).getByRole('radio', { name: 'Rose' })).toHaveProperty(
+      'checked',
+      false
+    );
+
+    fireEvent.click(within(editor).getByRole('radio', { name: 'Rose' }));
+    expect(
+      within(editor).queryByRole('img', { name: 'Bug fixer avatar' })
+    ).toBeNull();
+    // Changing their mind keeps the picture they had.
+    fireEvent.click(
+      within(editor).getByRole('button', { name: 'Keep its current picture' })
+    );
+    expect(
+      within(editor).getByRole('img', { name: 'Bug fixer avatar' })
+    ).toBeTruthy();
+
+    fireEvent.click(within(editor).getByRole('radio', { name: 'Tall' }));
+    fireEvent.click(within(editor).getByRole('radio', { name: 'Rose' }));
+    fireEvent.click(
+      within(editor).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() =>
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          avatarUrl: 'https://static.example/avatar.png',
+        })
+      )
+    );
+    expect(faceImageMock).toHaveBeenCalledWith({
+      style: 'tall',
+      color: 'rose',
+    });
+  });
+
   it('edits and persists an existing agent through the agents API', async () => {
     agentMocks.query.data = [
       {
@@ -913,7 +977,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Bug fixer' })).toBeTruthy();
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Bug fixer'
@@ -922,7 +986,9 @@ describe('Agents', () => {
       'value',
       'bug-fixer'
     );
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'More options' })
+    );
     expect(within(dialog).getByLabelText('Specific channels')).toHaveProperty(
       'checked',
       true
@@ -1938,7 +2004,9 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'More options' })
+    );
     expect(
       within(dialog).getByRole('group', { name: 'Channels' })
     ).toBeTruthy();
@@ -2045,9 +2113,11 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(
-      within(dialog).getByText('Chat agent · All channels · 2 selected apps')
+      within(dialog).getByText('Chat agent · 2 selected apps')
     ).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'More options' })
+    );
     expect(within(dialog).getByLabelText('Specific apps')).toHaveProperty(
       'checked',
       true
