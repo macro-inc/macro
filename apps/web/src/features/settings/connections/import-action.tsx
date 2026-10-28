@@ -36,15 +36,17 @@ export function ImportAction(props: { appSlug: string; name: string }) {
             onClick={() => {
               const active = document.activeElement;
               setOpener(active instanceof HTMLElement ? active : undefined);
+              // Mount only once the dialog's code has loaded, so a failed
+              // chunk load leaves Import available to retry.
               fireAndForget(
                 Telemetry.span('connector_import.open', async (span) => {
                   span.setAttr('connector.app_slug', props.appSlug);
                   await loadDialog();
+                  setOpened(true);
+                  setOpen(true);
                 }),
                 'connections-settings'
               );
-              setOpened(true);
-              setOpen(true);
             }}
           />
           <Show when={opened()}>
