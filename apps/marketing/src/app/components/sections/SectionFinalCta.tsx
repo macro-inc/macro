@@ -89,7 +89,7 @@ export function SectionFinalCta(props: SectionFinalCtaProps) {
               color: 'var(--c0)',
               display: 'grid',
               'font-family': 'display',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.015em',
               'line-height': 1.15,
               margin: '0',

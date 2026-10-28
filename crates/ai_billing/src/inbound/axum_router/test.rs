@@ -1,8 +1,11 @@
 use super::{
-    ReturnUrlError, SettleRequest, SubscriptionPeriodQuery, get_plans_handler, scope_from_query,
-    validate_return_url,
+    ReturnUrlError, SettleRequest, SubscriptionPeriodQuery, UpdateAutoReloadRequest,
+    get_plans_handler, scope_from_query, validate_return_url,
 };
-use crate::domain::{AiPricing, PlanTier, SubscriptionScope};
+use crate::domain::{
+    AUTO_RELOAD_DEFAULT_MINIMUM_CENTS, AUTO_RELOAD_DEFAULT_TARGET_CENTS,
+    AUTO_RELOAD_TARGET_MAX_CENTS, AiPricing, AutoReloadThresholds, PlanTier, SubscriptionScope,
+};
 use axum::extract::{Query, State};
 use macro_uuid::Uuid;
 
@@ -55,8 +58,9 @@ fn return_urls_must_be_https_on_the_calling_origin() {
 #[tokio::test]
 async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
     let pricing = AiPricing::testing();
-    let plans = get_plans_handler(State(pricing)).await.0.plans;
-    let summary = plans
+    let catalog = get_plans_handler(State(pricing)).await.0;
+    let summary = catalog
+        .plans
         .iter()
         .map(|plan| (plan.tier, plan.purchasable, plan.included_ai_cents_per_seat))
         .collect::<Vec<_>>();
@@ -86,6 +90,50 @@ async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
     assert_eq!(summary[0].2, 500);
     assert_eq!(summary[1].2, 2_000);
     assert_eq!(summary[2].2, 10_000);
+
+    // The Auto-Reload dialog reads its starting values and ceiling from here.
+    assert_eq!(
+        catalog.auto_reload_target_max_cents,
+        AUTO_RELOAD_TARGET_MAX_CENTS
+    );
+    assert_eq!(
+        catalog.auto_reload_defaults.minimum_balance_cents,
+        AUTO_RELOAD_DEFAULT_MINIMUM_CENTS
+    );
+    assert_eq!(
+        catalog.auto_reload_defaults.target_balance_cents,
+        AUTO_RELOAD_DEFAULT_TARGET_CENTS
+    );
+}
+
+#[test]
+fn auto_reload_request_reads_camel_case_and_defaults_the_monthly_limit() {
+    let with_limit: UpdateAutoReloadRequest = serde_json::from_str(
+        r#"{"enabled":true,"minimumBalanceCents":500,"targetBalanceCents":2000,"monthlySpendLimitCents":5000}"#,
+    )
+    .unwrap();
+    assert!(with_limit.enabled);
+    assert_eq!(
+        AutoReloadThresholds::from(&with_limit),
+        AutoReloadThresholds {
+            minimum_cents: 500,
+            target_cents: 2_000,
+            monthly_limit_cents: Some(5_000),
+        }
+    );
+
+    let without_limit: UpdateAutoReloadRequest = serde_json::from_str(
+        r#"{"enabled":false,"minimumBalanceCents":500,"targetBalanceCents":2000}"#,
+    )
+    .unwrap();
+    assert!(!without_limit.enabled);
+    assert_eq!(without_limit.monthly_spend_limit_cents, None);
+
+    let null_limit: UpdateAutoReloadRequest = serde_json::from_str(
+        r#"{"enabled":true,"minimumBalanceCents":500,"targetBalanceCents":2000,"monthlySpendLimitCents":null}"#,
+    )
+    .unwrap();
+    assert_eq!(null_limit.monthly_spend_limit_cents, None);
 }
 
 #[test]

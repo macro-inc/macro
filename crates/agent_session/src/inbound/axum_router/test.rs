@@ -73,6 +73,21 @@ fn openapi_documents_session_admission_failures() {
     assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
 }
 
+/// A read answers "not yours" and "not there" differently, and says so in the
+/// contract: a client that cannot tell them apart has no way to know a
+/// refusal of a session it has only just created is worth trying again.
+#[test]
+fn openapi_separates_a_missing_session_from_a_refused_one() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(get_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    let responses = &schema["paths"]["/agent-sessions/{session_id}"]["get"]["responses"];
+    assert!(responses["401"].is_object());
+    assert!(responses["404"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";
@@ -83,12 +98,19 @@ const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -112,6 +134,8 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
                     .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
                 Some(MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -158,6 +182,8 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
+                agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -178,6 +204,14 @@ struct RecordingOpener {
 }
 
 impl SessionOpener for RecordingOpener {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
@@ -186,6 +220,7 @@ impl SessionOpener for RecordingOpener {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -206,6 +241,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.opened.lock().unwrap().push(request);
         Ok(session)
@@ -223,6 +260,7 @@ impl SessionOpener for RecordingOpener {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -243,6 +281,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.managed.lock().unwrap().push(request);
         Ok(session)
@@ -439,6 +479,7 @@ impl ExternalSessionRequester for RecordingRequester {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -462,6 +503,8 @@ impl ExternalSessionRequester for RecordingRequester {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.requested.lock().unwrap().push(request);
         Ok(session)
@@ -1301,6 +1344,8 @@ async fn an_external_open_carries_its_instructions() {
     );
 }
 
+mod coding_preferences;
+mod owned_purge;
 mod read;
 mod user_cleanup;
 
@@ -1338,6 +1383,7 @@ fn an_unnamed_control_request_omits_the_field() {
     let body = serde_json::to_value(ControlRequest {
         action_id: None,
         action: AgentAction::Stop,
+        context: None,
     })
     .expect("a control request serializes");
 
@@ -1428,4 +1474,44 @@ async fn macrod_rejects_an_unsupported_base_before_dispatch() {
     .unwrap();
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+mod tool_actions;
+
+#[tokio::test]
+async fn internal_notifications_use_the_session_mount_once() {
+    use crate::inbound::notifications::{NotificationRouterState, notification_router};
+    let authorization = MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".into(),
+            default_user_id: None,
+        },
+        SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    )));
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://user:password@localhost/macrodb")
+        .unwrap();
+    let service = Arc::new(crate::domain::notifications::NotificationService(Arc::new(
+        crate::outbound::notifications::PgNotificationStore(pool),
+    )));
+    let app = Router::new().nest(
+        "/agent-sessions",
+        notification_router(NotificationRouterState {
+            authorization,
+            service,
+        }),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agent-sessions/internal/notifications")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

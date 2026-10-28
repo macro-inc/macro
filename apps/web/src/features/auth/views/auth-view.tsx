@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Stepper } from '@ui/components/Stepper';
 import {
   type Accessor,
@@ -62,7 +63,7 @@ export function AuthView(props: {
     onVerified: props.onVerified,
   });
   createSessionIdentity(context);
-  redeemSessionToken(context, props.token);
+  redeemSessionToken(context, () => props.token);
   onMount(() => context.pageView(props.intent));
 
   const user = () => {
@@ -106,8 +107,15 @@ export function AuthView(props: {
             <Stepper.Step>
               <LoginPicker
                 showApple={props.showApple}
-                onGoogle={() => void context.startSso('google', props.intent)}
-                onApple={() => void context.startSso('apple', props.intent)}
+                onGoogle={() =>
+                  fireAndForget(
+                    context.startSso('google', props.intent),
+                    'auth'
+                  )
+                }
+                onApple={() =>
+                  fireAndForget(context.startSso('apple', props.intent), 'auth')
+                }
                 onEmail={login.chooseEmail}
               />
             </Stepper.Step>
@@ -168,7 +176,7 @@ function VerifyStep(props: { login: EmailLogin }) {
       error={props.login.verifyError() ?? props.login.sendError()}
       onCodeInput={props.login.setCode}
       onVerify={props.login.verify}
-      onResend={() => void props.login.resend()}
+      onResend={() => fireAndForget(props.login.resend(), 'auth')}
       onBack={props.login.back}
     />
   );

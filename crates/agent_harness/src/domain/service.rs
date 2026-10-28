@@ -18,12 +18,19 @@ mod test;
 
 mod admission;
 mod deliver;
+mod external_replies;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
+mod present;
 mod queue;
+mod session_mcp;
+mod warm;
 
+use futures::FutureExt as _;
 use std::sync::Arc;
+
+type NotificationDrain = futures::future::Shared<futures::future::BoxFuture<'static, ()>>;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
@@ -46,6 +53,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument as _;
 use tracing::instrument::WithSubscriber as _;
+use trigger_context::TriggerContext;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
@@ -126,6 +134,7 @@ struct AgentHarnessInner<
 > {
     sessions: Sessions,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -135,6 +144,21 @@ struct AgentHarnessInner<
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
     coding_agents: Box<dyn ErasedCodingAgentSource>,
+    conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+    conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
+    notification_store: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    /// Discovery advances past busy or unreachable sessions and wraps each cycle.
+    notification_cursor: tokio::sync::Mutex<Option<AgentSessionId>>,
+    notification_drains:
+        tokio::sync::Mutex<std::collections::HashMap<AgentSessionId, NotificationDrain>>,
+    notification_batches:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationBatch>,
+    notification_completions:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationOutcome>,
+    /// Bounded recent completions suppress duplicate observer callbacks.
+    notification_finished:
+        tokio::sync::Mutex<std::collections::VecDeque<(AgentSessionId, AgentActionId)>>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory working copy; the session store is the durable source.
@@ -162,6 +186,21 @@ struct AgentHarnessInner<
     mentions: Mentions,
     /// Where the notifications a fact warrants go.
     notifier: Notifier,
+    /// How a running turn's reply was last reported, keyed by session: the
+    /// reply's segments as the fold reported them, for the turn's end to
+    /// show. Only ever touched from the session's own command worker.
+    projections: DashMap<
+        AgentSessionId,
+        (
+            agent_fold::domain::model::TurnId,
+            Vec<agent_fold::domain::model::ProjectedSegment>,
+        ),
+    >,
+    /// What each running turn's agent is doing, for its typing indicator.
+    typing_phases: DashMap<AgentSessionId, agent_fold::domain::model::TurnPhase>,
+    /// The shape each reply message was last shown with, so a report that
+    /// changes nothing it shows does not rewrite it.
+    presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -219,6 +258,9 @@ pub struct AgentHarnessService<
     >,
     workers: Arc<SessionWorkers>,
     repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_tools: Arc<dyn agent_session::domain::ports::SessionToolCatalog>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -255,6 +297,9 @@ impl<
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
             repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_tools: Arc::clone(&self.warm_tools),
+            warm_reservations: Arc::clone(&self.warm_reservations),
         }
     }
 }
@@ -301,6 +346,7 @@ where
     /// them into a struct would only move the same list one level down.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
         sessions: Sessions,
         containers: Containers,
         announcer: Announcer,
@@ -321,6 +367,7 @@ where
             inner: Arc::new(AgentHarnessInner {
                 sessions,
                 admission: Arc::new(ai_billing::DisabledAiAdmissionService),
+                agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
                 containers,
                 announcer,
                 runtimes,
@@ -330,6 +377,15 @@ where
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
                 coding_agents: Box::new(coding_agents),
+                conversations,
+                conversation_turns: None,
+                external_replies: None,
+                notification_store: None,
+                notification_cursor: tokio::sync::Mutex::new(None),
+                notification_drains: Default::default(),
+                notification_batches: DashMap::new(),
+                notification_completions: DashMap::new(),
+                notification_finished: Default::default(),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
@@ -337,10 +393,235 @@ where
                 lifecycle_publisher,
                 mentions,
                 notifier,
+                projections: DashMap::new(),
+                typing_phases: DashMap::new(),
+                presented_shapes: DashMap::new(),
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
+            warm_lifecycle: None,
+            warm_tools: Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+            warm_reservations: Arc::default(),
         }
+    }
+
+    /// Enable durable conversation admission and recovery before sharing this service.
+    pub fn with_conversation_turns(
+        mut self,
+        store: Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure journal before cloning the harness")
+            .conversation_turns = Some(store);
+        self
+    }
+
+    /// Configure durable system-event delivery before cloning the harness.
+    pub fn with_notifications(
+        mut self,
+        store: Arc<dyn agent_session::domain::notifications::NotificationStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure outbox before cloning harness")
+            .notification_store = Some(store);
+        self
+    }
+
+    /// Reconcile durable events through the same routed worker as user prompts.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn recover_notifications(&self) -> Result<()> {
+        let Some(store) = &self.inner.notification_store else {
+            return Ok(());
+        };
+        let leases: Vec<_> = self
+            .inner
+            .notification_batches
+            .iter()
+            .map(|batch| batch.lease_id)
+            .collect();
+        for lease in leases {
+            if let Err(error) = store.renew(lease).await {
+                tracing::warn!(?error, %lease, "notification lease renewal failed");
+            }
+        }
+        let mut cursor = self.inner.notification_cursor.lock().await;
+        let mut sessions = store.pending_sessions(*cursor).await?;
+        if sessions.is_empty() && cursor.is_some() {
+            sessions = store.pending_sessions(None).await?;
+        }
+        *cursor = sessions.last().copied();
+        drop(cursor);
+        sessions.extend(
+            self.inner
+                .notification_completions
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.extend(
+            self.inner
+                .notification_batches
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.sort_by_key(AgentSessionId::as_uuid);
+        sessions.dedup();
+        // The command worker keeps running when the recovery budget expires.
+        // Retain its result future so the next tick neither queues a duplicate
+        // nor waits for a slow session before renewing other delivery leases.
+        let mut drains = self.inner.notification_drains.lock().await;
+        drains.retain(|_, drain| drain.peek().is_none());
+        for session in sessions {
+            drains.entry(session).or_insert_with(|| {
+                let drain = self.enqueue(session, HarnessCommand::DrainNotifications, true);
+                async move {
+                    if let Err(error) = drain.await {
+                        tracing::warn!(?error, %session, "system event delivery will retry");
+                    }
+                }
+                .boxed()
+                .shared()
+            });
+        }
+        let pending: Vec<_> = drains.values().cloned().collect();
+        drop(drains);
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            futures::future::join_all(pending),
+        )
+        .await;
+        Ok(())
+    }
+
+    /// Save a conversation message before acknowledging its broker event. Returns its
+    /// original segment and payload when the source message was already seen.
+    ///
+    /// `None` is a message no attempt can ever admit: its conversation was
+    /// deleted, or its sender may not prompt it. The caller acknowledges it
+    /// instead of having the broker redeliver it forever. A context that
+    /// another replica is changing is waited out; only one that stays busy is
+    /// an error.
+    pub async fn admit_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<Option<(AgentSessionId, OpenSession)>> {
+        match self.journal_conversation_message(session, command).await {
+            Err(HarnessError::Session(AgentSessionError::Forbidden)) => Ok(None),
+            admitted => admitted.map(Some),
+        }
+    }
+
+    async fn journal_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<(AgentSessionId, OpenSession)> {
+        let origin = command.origin.announcement();
+        if origin.reply_placement != crate::domain::model::ReplyPlacement::Timeline {
+            return Err(AgentSessionError::Forbidden.into());
+        }
+        if let Some(policy) = &self.inner.conversations
+            && !policy
+                .validate_binding(session, command.bot_id, Some(command.origin.actor()))
+                .await?
+        {
+            return Err(AgentSessionError::Forbidden.into());
+        }
+        let Some(store) = &self.inner.conversation_turns else {
+            return Ok((session, command));
+        };
+        let messages::domain::models::MessageParent::Channel(channel) = origin.parent else {
+            return Err(AgentSessionError::Forbidden.into());
+        };
+        if let Some(record) = store.get(origin.message_id, command.bot_id).await? {
+            if record.channel_id != channel {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            return Ok((record.session_id, record.command));
+        }
+        // An event can have reserved its segment before the user pressed Start
+        // fresh. Serialize first admission with reset and select the current
+        // segment again; replays above always retain their original identity.
+        // The context lease is also taken by every claim and retry of the
+        // session, each a few queries long, so a busy lease is waited out.
+        let mut backoff = std::time::Duration::from_millis(50);
+        for _ in 0..8 {
+            let current = match &self.inner.conversations {
+                Some(policy) => policy.current_context(session).await?,
+                None => session,
+            };
+            let Some(_lease) = store.claim_context(current).await? else {
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(1));
+                continue;
+            };
+            if let Some(policy) = &self.inner.conversations
+                && policy.current_context(session).await? != current
+            {
+                continue;
+            }
+            let record = store.admit(current, channel, command).await?;
+            return Ok((record.session_id, record.command));
+        }
+        Err(AgentSessionError::RuntimeUnavailable(
+            "conversation context stayed busy; retry admission",
+        )
+        .into())
+    }
+
+    /// Reconcile journaled work after process loss. Only undispatched prompts
+    /// may run automatically; ambiguous attempts are marked interrupted.
+    pub async fn recover_conversations(&self) -> Result<()> {
+        let Some(store) = &self.inner.conversation_turns else {
+            return Ok(());
+        };
+        for record in store.running(100).await? {
+            let management = self.inner.sessions.management(record.session_id).await?;
+            if matches!(management, SessionManagement::Unmanaged)
+                || (matches!(management, SessionManagement::Ours)
+                    && !self.inner.busy.is_pending(record.session_id))
+            {
+                store
+                    .finish(
+                        record.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Interrupted,
+                        ReplyOutcome::Failed,
+                    )
+                    .await?;
+                tracing::warn!(session_id = %record.session_id, action_id = %record.action_id, "conversation turn interrupted; explicit retry required");
+            }
+        }
+        for record in store.pending_replies(100).await? {
+            let Some(outcome) = record.outcome else {
+                continue;
+            };
+            if let Some(turn) = &record.in_flight {
+                self.inner
+                    .resolve_reply(record.session_id, Some(turn), outcome)
+                    .await;
+            } else {
+                store.finalize_reply(record.action_id, &outcome).await?;
+            }
+        }
+        let pending = store.pending(50).await?;
+        let work: Vec<_> = pending
+            .into_iter()
+            .map(|record| {
+                self.execute(
+                    record.session_id,
+                    HarnessCommand::ConversationMessage(record.command),
+                )
+            })
+            .collect();
+        for result in futures::future::join_all(work).await {
+            if let Err(error) = result {
+                tracing::warn!(
+                    ?error,
+                    "durable conversation recovery could not dispatch a queued prompt"
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Configure shared admission before cloning the harness or starting workers.
@@ -348,6 +629,19 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure admission before sharing the harness")
             .admission = admission;
+        self
+    }
+
+    /// Let in-memory sessions of agents with their own usable API key past
+    /// the allowance gate: their turns never run on Macro usage. Configure
+    /// before sharing the harness.
+    pub fn with_agent_keys(
+        mut self,
+        agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure agent keys before sharing the harness")
+            .agent_keys = agent_keys;
         self
     }
 
@@ -421,9 +715,17 @@ where
         }
 
         let persona = self.inner.reply_persona(&session).await?;
+        if !persona.is_coding && self.inner.external_replies.is_some() {
+            return self
+                .inner
+                .announce_external_reply(session_id, prompt.origin, prompt.sender)
+                .await;
+        }
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reply_message_id: None,
+                reply_placement: prompt.origin.reply_placement,
                 reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,

@@ -1,13 +1,14 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
-
-import { Routine } from './routine-detail';
+import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'routine',
   description: 'view and edit a single routine',
   defaultFilename: 'Untitled routine',
-  component: Routine,
+  component: lazy(async () => ({
+    default: (await import('./routine-detail')).Routine,
+  })),
   accepted: {},
   async load(source, intent) {
     if (source.type === 'dss') {

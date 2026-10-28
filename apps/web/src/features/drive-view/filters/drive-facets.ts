@@ -34,6 +34,7 @@ type DriveFacetOption = FacetOption<DriveFacetEntity, DriveFacetContext>;
 
 type DocumentTypeOptionId =
   | 'database'
+  | 'form'
   | 'doc-markdown'
   | 'doc-canvas'
   | 'doc-spreadsheet'
@@ -65,6 +66,11 @@ const TYPE_OPTIONS: DriveFacetOption[] = [
     'database',
     clause.eq('id', NIL_UUID),
     (entity) => entity.type === 'database'
+  ),
+  typeOption(
+    'form',
+    clause.eq('id', NIL_UUID),
+    (entity) => entity.type === 'form'
   ),
   typeOption(
     'doc-markdown',

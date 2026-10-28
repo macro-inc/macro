@@ -10,12 +10,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarEventTypeInput, CalendarToolContext, EventRemindersInput,
-    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, mutation_tool_error,
+    AttendeeInput, CalendarEventTypeInput, CalendarLabels, CalendarToolContext,
+    EventRemindersInput, EventTimeInput, OutOfOfficeInput, ToolCalendarEvent,
+    macro_call_create_tool_error, mutation_tool_error,
 };
 use crate::domain::{
-    models::{CalendarEventDraft, ConferenceChange},
-    ports::{CalendarMutationService, CalendarOccurrenceService},
+    meeting_links::create_event_with_macro_call,
+    models::{CalendarEventDraft, ConferenceChange, GuestPolicy},
+    ports::{CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider},
 };
 
 /// Create a calendar event.
@@ -24,10 +26,10 @@ use crate::domain::{
 #[schemars(
     title = "CreateCalendarEvent",
     description = "\
-Prepare an event on the user's calendar, inviting any listed attendees through Google \
-Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and \
+Prepare an event on the user's calendar, inviting any listed attendees through its connected \
+provider. In Macro chat this tool opens an inline composer so the user can review, edit, and \
 confirm the event; use the tool to present the proposal instead of asking for a redundant \
-confirmation in prose. When the pending call is executed, the event is written to Google \
+confirmation in prose. When the pending call is executed, the event is written to the calendar provider \
 immediately and attendees receive invitations. Other clients should confirm attendee events \
 before executing the call. Do NOT use it for a prompt that came from a channel or document \
 thread — the context block names a conversation parent when it did, and there is no surface \
@@ -39,11 +41,18 @@ targets another one. For recurring events pass RFC 5545 lines in `recurrenceLine
 [\"RRULE:FREQ=WEEKLY;BYDAY=MO\"]. Returns the created event with its `eventId` for later \
 updates or deletion. Fails if the user has no writable calendar connected.\n\
 \n\
+For video conferencing pick at most one of `addMacroCall` (a Macro meeting link, the \
+default choice for a Macro user's meeting) or `addConference` (Google Meet or Microsoft Teams, per calendar capabilities). \
+A Macro call is created for the user, scheduled to the event's times, and its join link is \
+appended to the event's description so every attendee's invitation carries it; it also \
+becomes the event's `location` unless a physical `location` was supplied. The returned \
+event's `macroCallUrl` holds the link.\n\
+\n\
 Set `eventType` to \"out_of_office\" to mark the user as out of office (e.g. \"mark me out \
 of office Thursday\"). Out-of-office events must land on the user's primary calendar (omit \
-`calendarId`), must be timed rather than all-day, and take no attendees or Google Meet \
-(leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings \
-are auto-declined. The type cannot be changed afterward."
+`calendarId`), must be timed rather than all-day, and take no attendees or video \
+conferencing (leave `addMacroCall` and `addConference` false); use `outOfOffice` to control \
+whether conflicting meetings are auto-declined. The type cannot be changed afterward."
 )]
 pub struct CreateCalendarEvent {
     /// Display title.
@@ -70,7 +79,7 @@ pub struct CreateCalendarEvent {
 
     /// Attendees to invite.
     #[schemars(
-        description = "Attendees to invite by email. They are notified by Google Calendar as \
+        description = "Attendees to invite by email. They are notified by the calendar provider as \
                        soon as the event is created. Omit for a solo event."
     )]
     #[serde(default)]
@@ -99,12 +108,21 @@ pub struct CreateCalendarEvent {
     #[serde(default)]
     pub reminders: Option<EventRemindersInput>,
 
-    /// Whether to attach a Google Meet conference.
+    /// Whether to attach a Macro meeting link.
     #[schemars(
-        description = "Attach a freshly generated Google Meet video conference to the event."
+        description = "Attach a freshly created Macro call to the event: a Macro meeting link \
+                       scheduled to the event's times, written into the event's location and \
+                       description. Mutually exclusive with `addConference`."
     )]
     #[serde(default)]
-    pub add_google_meet: bool,
+    pub add_macro_call: bool,
+
+    /// Whether to attach the calendar provider's meeting conference.
+    #[schemars(
+        description = "Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first."
+    )]
+    #[serde(default, alias = "addGoogleMeet")]
+    pub add_conference: bool,
 
     /// Kind of event to create.
     #[schemars(
@@ -120,10 +138,20 @@ pub struct CreateCalendarEvent {
         description = "Out-of-office decline behavior, used only when eventType is \
                        \"out_of_office\". Omit to just block the time; set \
                        `autoDeclineMode` to \"decline_all\" or \"decline_new_only\" to have \
-                       Google decline conflicting meetings, optionally with a `declineMessage`."
+                       the calendar integration decline conflicting meetings, optionally with a `declineMessage`."
     )]
     #[serde(default)]
     pub out_of_office: Option<OutOfOfficeInput>,
+
+    /// What guests may do with the event.
+    #[schemars(
+        description = "What guests may do: `canModify` (change the event; implies \
+                       `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`. Omit for \
+                       the defaults: guests may invite others and see the guest list but not \
+                       modify the event. Google calendars only; an Outlook calendar refuses it."
+    )]
+    #[serde(default)]
+    pub guest_policy: Option<GuestPolicy>,
 }
 
 impl ToolAnnotated for CreateCalendarEvent {
@@ -132,25 +160,39 @@ impl ToolAnnotated for CreateCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for CreateCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for CreateCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ToolCalendarEvent;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(
             calendar_id=?self.calendar_id,
             attendee_count = self.attendees.len(),
-            add_google_meet = self.add_google_meet,
+            add_conference = self.add_conference,
+            add_macro_call = self.add_macro_call,
             "Create calendar event"
         );
+
+        if self.add_macro_call && self.add_conference {
+            return Err(ToolCallError {
+                description: "`addMacroCall` and `addConference` are mutually exclusive; pick \
+                              one kind of video conferencing."
+                    .to_string(),
+                internal_error: anyhow::Error::from_boxed(
+                    rootcause::report!("both Macro call and provider conference requested")
+                        .into_boxed_error(),
+                ),
+            });
+        }
 
         let requester_id = request_context.user_id.to_string();
         let out_of_office = match self.event_type {
@@ -183,9 +225,29 @@ where
             visibility: None,
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
-            conference: self.add_google_meet.then_some(ConferenceChange::GoogleMeet),
+            conference: self
+                .add_conference
+                .then_some(ConferenceChange::ProviderDefault),
             out_of_office,
+            guest_policy: self.guest_policy,
         };
+
+        if self.add_macro_call {
+            let created = create_event_with_macro_call(
+                &*service_context.mutations,
+                &*service_context.meeting_links,
+                &requester_id,
+                None,
+                self.calendar_id,
+                draft,
+            )
+            .await
+            .map_err(macro_call_create_tool_error)?;
+            let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+            return Ok(ToolCalendarEvent::from_event_with_macro_call(
+                &created, &labels,
+            ));
+        }
 
         let event = service_context
             .mutations
@@ -193,6 +255,7 @@ where
             .await
             .map_err(|error| mutation_tool_error("create the calendar event", error))?;
 
-        Ok(ToolCalendarEvent::from_event(&event))
+        let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+        Ok(ToolCalendarEvent::from_event(&event, &labels))
     }
 }

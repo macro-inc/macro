@@ -5,10 +5,12 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
+miniz_oxide = { workspace = true }
 postcard = { workspace = true }
 predicate-index = { path = "../../predicate_index" }
 serde = { workspace = true }
@@ -19,8 +21,8 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [build-dependencies]
-apollo-compiler = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
 pollster = { workspace = true }
+proptest = { workspace = true }

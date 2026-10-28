@@ -13,7 +13,11 @@ function Composer() {
   const layout = useSplitLayout();
   const userId = useUserId();
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession({ ...conversation, userId: userId() });
+    const id = startPendingSession({
+      ...conversation,
+      userId: userId(),
+      submitSurface: 'mobile_composer',
+    });
     layout.openWithSplit({ type: 'agent', id }, { referredFrom: 'agents' });
   };
   return (

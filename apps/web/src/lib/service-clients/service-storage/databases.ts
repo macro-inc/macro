@@ -19,12 +19,14 @@ import type { Awareness } from './generated/schemas/awareness';
 import type { ColumnCast } from './generated/schemas/columnCast';
 import type { ColumnConversion } from './generated/schemas/columnConversion';
 import type { CreateDatabaseRequest } from './generated/schemas/createDatabaseRequest';
+import type { CreatedDatabaseWebhookResponse } from './generated/schemas/createdDatabaseWebhookResponse';
 import type { Database } from './generated/schemas/database';
 import type { DatabaseDetail } from './generated/schemas/databaseDetail';
 import type { ErrorResponse } from './generated/schemas/errorResponse';
 import type { ImportTable } from './generated/schemas/importTable';
 import type { InferColumnTypeOutcome } from './generated/schemas/inferColumnTypeOutcome';
 import type { InferColumnTypeRequest } from './generated/schemas/inferColumnTypeRequest';
+import type { ListDatabaseWebhooksResponse } from './generated/schemas/listDatabaseWebhooksResponse';
 import type { ListedDatabase } from './generated/schemas/listedDatabase';
 import type { OpRefusalResponse } from './generated/schemas/opRefusalResponse';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
@@ -55,6 +57,11 @@ export type DatabaseColumnConversion = Omit<ColumnConversion, 'cells'> & {
 };
 
 const documentStorageHost = SERVER_HOSTS['document-storage-service'];
+
+/** The URL a webhook's token is POSTed to; the token is the whole credential. */
+export function databaseWebhookUrl(token: string) {
+  return `${documentStorageHost}/databases/webhooks/${token}`;
+}
 
 function isErrorResponse(body: unknown): body is ErrorResponse {
   return (
@@ -263,24 +270,7 @@ export const databasesClient = {
     /** The engine's ops: the generated `ApplyOpsRequest` drops `null` from optional fields. */
     request: { ops: DatabaseOp[]; baseVersions?: Record<string, number> };
   }): ResultAsync<ApplyOpsResponse, DatabaseOpsError[]> {
-    return new ResultAsync(
-      fetchWithToken<ApplyOpsResponse, 'INVALID_OP'>(
-        `${documentStorageHost}/databases/${id}/ops`,
-        {
-          method: 'POST',
-          body: JSON.stringify(request),
-          errorResponseHandler: async (response): Promise<DatabaseOpsError> => {
-            const { body, message } = await errorBody(response);
-            const code = statusCode(response.status, 'INVALID_OP');
-            return {
-              code,
-              message,
-              refusal: code === 'INVALID_OP' ? opRefusalOf(body) : null,
-            };
-          },
-        }
-      )
-    ).mapErr((errors) => errors.map(withRefusal));
+    return fetchDatabaseOps(`/databases/${id}/ops`, request);
   },
 
   /**
@@ -317,6 +307,29 @@ export const databasesClient = {
     );
   },
 
+  /** The database's webhooks, oldest first; editors only. */
+  listWebhooks({ id }: { id: string }) {
+    return databasesFetch<ListDatabaseWebhooksResponse>(
+      `/databases/${id}/webhooks`
+    );
+  },
+
+  /** A webhook that inserts rows into the table. Its token is shown only in this response. */
+  createWebhook({ id, tableId }: { id: string; tableId: string }) {
+    return databasesFetch<CreatedDatabaseWebhookResponse>(
+      `/databases/${id}/webhooks`,
+      { method: 'POST', body: JSON.stringify({ tableId }) }
+    );
+  },
+
+  /** Delete a webhook; its URL stops working. Responds 204. */
+  deleteWebhook({ id, webhookId }: { id: string; webhookId: string }) {
+    return databasesFetch<Record<string, never>>(
+      `/databases/${id}/webhooks/${webhookId}`,
+      { method: 'DELETE' }
+    );
+  },
+
   /** Tell the database's other viewers where the caller is. Responds 204. */
   shareAwareness({ id, state }: { id: string; state: Awareness }) {
     return databasesFetch<Record<string, never>>(`/databases/${id}/awareness`, {
@@ -325,3 +338,28 @@ export const databasesClient = {
     });
   },
 };
+
+/** Typed database operations can be hosted by another entity’s authorized endpoint. */
+export function fetchDatabaseOps(
+  path: string,
+  request: { ops: DatabaseOp[]; baseVersions?: Record<string, number> }
+): ResultAsync<ApplyOpsResponse, DatabaseOpsError[]> {
+  return new ResultAsync(
+    fetchWithToken<ApplyOpsResponse, 'INVALID_OP'>(
+      `${documentStorageHost}${path}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        errorResponseHandler: async (response): Promise<DatabaseOpsError> => {
+          const { body, message } = await errorBody(response);
+          const code = statusCode(response.status, 'INVALID_OP');
+          return {
+            code,
+            message,
+            refusal: code === 'INVALID_OP' ? opRefusalOf(body) : null,
+          };
+        },
+      }
+    )
+  ).mapErr((errors) => errors.map(withRefusal));
+}

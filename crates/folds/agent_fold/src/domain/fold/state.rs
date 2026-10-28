@@ -14,6 +14,7 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::context::ContextSummaryNotification;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::domain::tool_approval::TOOL_APPROVAL_METHOD;
 use serde::Deserialize;
@@ -161,6 +162,10 @@ pub(super) struct ToolPath {
 #[derive(Debug, Clone)]
 pub(super) struct Turn {
     pub(super) id: TurnId,
+    pub(super) notification: bool,
+    pub(super) noop_buffer: String,
+    pub(super) pending_thought: String,
+    pub(super) can_noop: bool,
     /// The prompt that opened this turn is speculative: on the wire, not yet
     /// in the log. Reads as [`TurnState::Starting`] until the agent answers.
     pub(super) prompt_pending: bool,
@@ -183,14 +188,6 @@ pub(super) struct Turn {
     /// Where this turn's plan sits in the agent message's parts, so later
     /// plan updates can replace it.
     pub(super) plan_position: Option<usize>,
-    /// Whether closing this turn needs an agent message to record its stop
-    /// reason on, minting one if the agent never produced a part.
-    ///
-    /// True for a turn a prompt opened: the user's bubble is then the
-    /// transcript's newest turn message, and readers take one without a stop
-    /// reason to mean the agent is still working. False for a turn a control
-    /// opened (`/compact`), whose own message readers skip.
-    pub(super) expects_reply: bool,
 }
 
 impl FoldState {
@@ -213,12 +210,18 @@ impl FoldState {
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
-            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp))
+            | Message::Notification(message @ ToRuntimeMessage::Acp(acp)) => {
                 // Before the control dispatch, which returns early for the
                 // set-model request whose response this correlates.
                 self.note_config_request(&acp.0);
                 self.note_initialize_request(&acp.0);
-                if let Some(action) = AgentAction::control_from_runtime(message) {
+                // `/compact` is a prompt like any other, folded below: a
+                // compaction shows when the agent reports one, not when
+                // someone asks for it.
+                let control = AgentAction::control_from_runtime(message)
+                    .filter(|action| !matches!(action, AgentAction::Compact));
+                if let Some(action) = control {
                     return StepChange::message(match action {
                         AgentAction::SetModel(action) => {
                             let request_id = match &acp.0 {
@@ -247,12 +250,6 @@ impl FoldState {
                                 entry.user_id.clone(),
                             )
                         }
-                        AgentAction::Compact => match &acp.0 {
-                            RawJsonRpcMessage::Request(request) => {
-                                self.begin_compact(&request.id, entry.user_id.clone())
-                            }
-                            _ => None,
-                        },
                         // A stop is a notification: nothing can answer it, so
                         // it is accepted the moment it is sent. The turn it
                         // interrupts ends through the agent's own stop event.
@@ -266,6 +263,7 @@ impl FoldState {
                         // is folded below, and an elicitation answer is a
                         // response frame, correlated by the agent's id.
                         AgentAction::Prompt(_)
+                        | AgentAction::Compact
                         | AgentAction::RespondElicitation(_)
                         | AgentAction::RespondToPermission(_) => None,
                     });
@@ -276,7 +274,12 @@ impl FoldState {
                     && PromptRequest::matches_method(&request.method)
                 {
                     return self
-                        .begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                        .begin_turn(
+                            &request.id,
+                            request.params.as_ref(),
+                            entry.user_id.clone(),
+                            entry.logged_at,
+                        )
                         .into_iter()
                         .map(StepChange::Message)
                         .collect();
@@ -329,6 +332,12 @@ impl FoldState {
                         }
                     });
                     StepChange::message(stop.and_then(|stop| self.close_turn(Some(stop))))
+                }
+                // The agent summarized its own context.
+                RawJsonRpcMessage::Notification(notification)
+                    if ContextSummaryNotification::matches_method(&notification.method) =>
+                {
+                    StepChange::message(self.record_compaction())
                 }
                 // The bulk of the log: streamed content and tool activity.
                 RawJsonRpcMessage::Notification(notification)
@@ -424,7 +433,7 @@ impl FoldState {
             }
 
             // The wrapped protocol enums are `#[non_exhaustive]`.
-            Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
+            Message::Notification(_) | Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
         }
     }
 

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import {
   applyDatabaseOps,
@@ -6,8 +7,8 @@ import {
 import { databasesKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { ResultAsync } from 'neverthrow';
-import type { DatabaseSchemaChange } from '../core/column-schema';
-import { createKeyedSerializer } from '../core/keyed-serializer';
+import type { DatabaseSchemaChange } from '../../database/core/column-schema';
+import { createKeyedSerializer } from '../../database/core/keyed-serializer';
 
 function withTableOrder(
   detail: DatabaseDetail,
@@ -81,7 +82,7 @@ export function reorderDatabaseTables(params: {
           : current
       );
       // setQueryData during rollback marks the cache fresh; reconcile after it.
-      void invalidateDatabase(params.databaseId);
+      fireAndForget(invalidateDatabase(params.databaseId), 'database-cache');
       return result.map(() => undefined);
     }
     return result.map(() => undefined);

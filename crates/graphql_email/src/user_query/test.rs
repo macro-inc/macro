@@ -14,13 +14,33 @@ use uuid::Uuid;
 
 use super::GraphqlEmailQuery;
 
+mod senders;
+
 #[derive(Default)]
 struct FakeEmailUserService {
     requested_users: Mutex<Vec<MacroUserIdStr<'static>>>,
     fail: bool,
+    unavailable_inbox: bool,
 }
 
 impl EmailUserService for FakeEmailUserService {
+    async fn get_user_email_senders(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> Result<Vec<email::domain::senders::SendAsAddress>, EmailErr> {
+        self.requested_users.lock().unwrap().push(macro_id);
+        if link_id == Uuid::from_u128(3) {
+            return Err(EmailErr::SendAsPermissionRequired);
+        }
+        assert_eq!(link_id, Uuid::from_u128(2));
+        Ok(vec![email::domain::senders::SendAsAddress {
+            email_address: EmailStr::try_from("alias@example.com".to_owned()).unwrap(),
+            display_name: Some("Alias".to_owned()),
+            verified: true,
+        }])
+    }
+
     async fn get_user_email_labels(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -44,7 +64,13 @@ impl EmailUserService for FakeEmailUserService {
                 "sensitive link database detail".to_owned(),
             ));
         }
-        Ok(vec![link()])
+        let mut links = vec![link()];
+        if self.unavailable_inbox {
+            let mut unavailable = link();
+            unavailable.id = Uuid::from_u128(3);
+            links.push(unavailable);
+        }
+        Ok(links)
     }
 }
 
@@ -81,6 +107,9 @@ fn link() -> UserEmailLink {
             signature: Some("<p>Regards</p>".to_owned()),
         },
         is_primary: false,
+        needs_calendar_permission: true,
+        calendar_disabled: false,
+        has_calendar_data: true,
         created_at: Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
         updated_at: Utc.with_ymd_and_hms(2025, 2, 3, 4, 5, 6).unwrap(),
     }
@@ -106,7 +135,8 @@ async fn resolves_labels_and_links_for_the_bound_authenticated_user() {
                 emailLinks {
                     id macroId emailAddress photoUrl provider isSyncActive syncStatus
                     needsReauth settings { signatureOnRepliesForwards signature }
-                    isPrimary createdAt updatedAt
+                    isPrimary needsCalendarPermission calendarDisabled hasCalendarData
+                    createdAt updatedAt
                 }
             }"#,
         )
@@ -130,6 +160,9 @@ async fn resolves_labels_and_links_for_the_bound_authenticated_user() {
     assert_eq!(link["needsReauth"], true);
     assert_eq!(link["settings"]["signatureOnRepliesForwards"], true);
     assert_eq!(link["settings"]["signature"], "<p>Regards</p>");
+    assert_eq!(link["needsCalendarPermission"], true);
+    assert_eq!(link["calendarDisabled"], false);
+    assert_eq!(link["hasCalendarData"], true);
     assert_eq!(
         *service.requested_users.lock().unwrap(),
         vec![user_id(), user_id()]

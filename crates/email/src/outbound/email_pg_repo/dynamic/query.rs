@@ -124,13 +124,14 @@ fn push_thread_candidate_select(
 ) {
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
-    // Multi-inbox owned scans fan out one ordered, LIMITed subscan per link:
-    // `link_id = ANY(...)` index scans can't return ordered output (pre-PG17),
-    // forcing a fetch-and-sort of every candidate thread across all inboxes.
-    // Per-link scans walk the index in order and stop at LIMIT.
+    // Owned scans fan out one ordered, LIMITed subscan per link.
+    // `link_id = ANY(...)` cannot return index order, even for a single id,
+    // so the planner fetches every matching thread and sorts. A per-link
+    // equality walk stops at LIMIT. Team scope stays on ANY: a per-link
+    // LIMIT would starve the cross-mailbox dedupe.
     let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
         && params.team_id.is_none()
-        && params.link_ids.len() > 1;
+        && !params.link_ids.is_empty();
 
     if per_link_fanout {
         builder.push(
@@ -512,9 +513,8 @@ fn build_query(
         builder.push("t.viewed_at,");
     }
 
-    // The is_important output column reflects Gmail's IMPORTANT label — a
-    // different notion from the Importance filter, which reads the
-    // denormalized email_threads.is_signal heuristic.
+    // Provider attention is evidence. The Importance filter separately uses
+    // Macro Signal, including the user's overrides.
     builder.push(
         r#"
             t.project_id,
@@ -533,16 +533,13 @@ fn build_query(
                     SELECT EXISTS (
                         SELECT 1
                         FROM email_messages m_imp
-                        JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE m_imp.thread_id = t.id
-                          AND l.name = 'IMPORTANT'
-                          AND l.link_id = t.link_id
+                        JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                        WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                     )
                 )
             END AS is_important,
             c.email_address AS sender_email,
-            c.name AS sender_name,
+            COALESCE(lmp.from_name, c.name) AS sender_name,
             c.sfs_photo_url as sender_photo_url,
             el.macro_id AS owner_id,
             el.id AS link_id
@@ -664,6 +661,7 @@ fn build_query(
                    m.subject,
                    m.snippet,
                    m.from_contact_id,
+                   m.from_name,
                    m.is_draft
             FROM email_messages m
             WHERE m.thread_id = t.id

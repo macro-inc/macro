@@ -22,13 +22,6 @@ const mocks = vi.hoisted(() => ({
     },
     data: { connected: false, environmentId: null as string | null },
   },
-  claude: {
-    isLoading: false,
-    get isPending(): boolean {
-      return this.isLoading;
-    },
-    data: { connected: false },
-  },
 }));
 vi.mock('@app/features/agents-view/primitives/open-page', () => ({
   openAgentsPage: mocks.openAgentsPage,
@@ -36,14 +29,8 @@ vi.mock('@app/features/agents-view/primitives/open-page', () => ({
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({}),
 }));
-vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'macro|reader@example.com',
-}));
 vi.mock('@queries/auth/codex', () => ({
   useCodexStatusQuery: vi.fn(() => mocks.codex),
-}));
-vi.mock('@queries/claude-auth/connection', () => ({
-  useClaudeConnectionStatusQuery: vi.fn(() => mocks.claude),
 }));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
@@ -67,6 +54,7 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
 // than the context object this chip reads its selection from.
 vi.mock('../../plugins', () => ({}));
 
+import { AppConnectionContext } from '@core/pipedream/connection-context';
 import { ConnectApp } from './ConnectApp';
 
 beforeEach(() => {
@@ -75,12 +63,53 @@ beforeEach(() => {
   mocks.cursor.isLoading = false;
   mocks.codex.isLoading = false;
   mocks.codex.data = { connected: false, environmentId: null };
-  mocks.claude.isLoading = false;
-  mocks.claude.data = { connected: false };
   mocks.cursor.data = { registered: false };
 });
 
 describe('connect-app chip', () => {
+  it('connects in place when an agent session owns the continuation', () => {
+    const connect = vi.fn(async () => {});
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
+        <ConnectApp
+          appSlug="linear"
+          name="Linear"
+          target="connections"
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
+    expect(connect).toHaveBeenCalledExactlyOnceWith({
+      appSlug: 'linear',
+      name: 'Linear',
+    });
+    expect(mocks.openAgentsPage).not.toHaveBeenCalled();
+    expect(mocks.requestConnectApp).not.toHaveBeenCalled();
+  });
+
+  it('disables connection while the agent session cannot safely continue', () => {
+    const connect = vi.fn(async () => {});
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => true }}>
+        <ConnectApp
+          appSlug="linear"
+          name="Linear"
+          target="connections"
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    expect(
+      screen
+        .getByRole('button', { name: 'Connect Linear' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it('sends a Pipedream chip to Connections with the app queued', () => {
     render(() => (
       <ConnectApp
@@ -164,10 +193,7 @@ describe('connect-app chip', () => {
     expect(screen.getByRole('button', { name: 'Connect Cursor' })).toBeTruthy();
   });
 
-  it.each([
-    ['codex-cloud', 'Codex'],
-    ['claude-cloud', 'Claude'],
-  ])(
+  it.each([['codex-cloud', 'Codex']])(
     'opens Harness settings for an unconnected %s account',
     (appSlug, name) => {
       render(() => (
@@ -185,24 +211,25 @@ describe('connect-app chip', () => {
     }
   );
 
-  it.each([
-    ['codex-cloud', 'Codex'],
-    ['claude-cloud', 'Claude'],
-  ])('recognizes the reader’s connected %s account', (appSlug, name) => {
-    mocks.codex.data = { connected: true, environmentId: 'env-selected' };
-    mocks.claude.data = { connected: true };
-    render(() => (
-      <ConnectApp
-        appSlug={appSlug}
-        name={name}
-        target="harness"
-        key="node"
-        theme={{}}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: `${name} connected` }));
-    expect(mocks.openSettings).not.toHaveBeenCalled();
-  });
+  it.each([['codex-cloud', 'Codex']])(
+    'recognizes the reader’s connected %s account',
+    (appSlug, name) => {
+      mocks.codex.data = { connected: true, environmentId: 'env-selected' };
+      render(() => (
+        <ConnectApp
+          appSlug={appSlug}
+          name={name}
+          target="harness"
+          key="node"
+          theme={{}}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', { name: `${name} connected` })
+      );
+      expect(mocks.openSettings).not.toHaveBeenCalled();
+    }
+  );
 
   it('keeps Codex setup available until an environment is selected', () => {
     mocks.codex.data = { connected: true, environmentId: null };

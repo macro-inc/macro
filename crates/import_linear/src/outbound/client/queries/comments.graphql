@@ -1,0 +1,6 @@
+query ImportComments($id: String!, $after: String) {
+  issue(id: $id) { comments(first: 50, after: $after) {
+    nodes { id body createdAt user { name } }
+    pageInfo { hasNextPage endCursor }
+  } }
+}

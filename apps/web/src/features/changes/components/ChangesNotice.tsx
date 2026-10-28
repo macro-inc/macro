@@ -1,7 +1,7 @@
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CircleNotchIcon from '@phosphor/circle-notch.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CircleNotchIcon from '@icon/system/regular/circle-notch.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -27,14 +27,18 @@ export function ChangesNotice(props: {
       </Show>
       <Show when={props.onRefresh}>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="mt-2 gap-1.5"
           disabled={props.refreshing}
           onClick={() => props.onRefresh?.()}
         >
           <ArrowsClockwiseIcon
-            class={props.refreshing ? 'animate-spin' : undefined}
+            class={
+              props.refreshing
+                ? 'size-3 shrink-0 touch:size-6 animate-spin'
+                : 'size-3 shrink-0 touch:size-6'
+            }
           />
           <span>Refresh changes</span>
         </Button>

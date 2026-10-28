@@ -17,3 +17,12 @@ describe('command menu hint', () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+describe('command menu query', () => {
+  it('does not carry a closed search into the next opening', () => {
+    CommandState.onMenuOpen();
+    CommandState.setQuery('kappelhoff');
+    CommandState.onMenuClose();
+    expect(CommandState.query()).toBe('');
+  });
+});

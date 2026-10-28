@@ -59,7 +59,7 @@ export function useSetNotificationTypeEnabledMutation() {
       );
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: notificationKeys.preferences.queryKey,
       });
     },

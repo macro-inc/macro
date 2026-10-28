@@ -20,6 +20,7 @@ import type {
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -28,7 +29,6 @@ import type {
   InitiativeEntity,
   Notification,
   ProjectEntity,
-  ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
@@ -47,17 +47,15 @@ import type {
 } from '@service-search/generated/models';
 import type {
   GithubPullRequest,
-  SoupApiItem,
+  SoupAttachment,
   SoupCalendarEventTime,
   SoupPage,
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
-import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
-import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -95,7 +93,7 @@ type SoupEntity =
   | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
-  | ReminderEntity
+  | CrmContactEntity
   | CalendarEventEntity
   | ForeignEntity;
 
@@ -326,9 +324,14 @@ const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
 export const useSearchResponseItemMapper = () => {
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
+  const { channels } = useChannelsContext();
+  return (result: UnifiedSearchResponseItem, searchQuery: string) =>
+    createSearchResponseItemMapper(channels())(result, searchQuery);
+};
 
+export const createSearchResponseItemMapper = (
+  channels: ReadonlyArray<{ id: string; name?: string | null }>
+) => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
@@ -501,8 +504,7 @@ export const useSearchResponseItemMapper = () => {
           source: 'service',
         };
         const channelName =
-          channels().find((channel) => channel.id === result.channel_id)
-            ?.name ??
+          channels.find((channel) => channel.id === result.channel_id)?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -523,7 +525,7 @@ export const useSearchResponseItemMapper = () => {
       }
       case 'channelMessage': {
         const channelName =
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           blockNameToDefaultFile('channel');
         const search = getSearchData({ type: 'channel', results: [result] });
         const content = search.contentHitData?.[0]?.content ?? '';
@@ -625,7 +627,7 @@ export const useSearchResponseItemMapper = () => {
 
         const channelName: string | undefined =
           result.metadata.channel_name ??
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           undefined;
         const status = result.metadata.status;
 
@@ -685,6 +687,13 @@ function normalizeSentinelTs(
   return Date.parse(ts) > 0 ? ts : undefined;
 }
 
+function isCalendarAttachment(attachment: SoupAttachment): boolean {
+  return (
+    attachment.mimeType === 'text/calendar' ||
+    attachment.filename?.toLowerCase().endsWith('.ics') === true
+  );
+}
+
 function withRawNotifications<T extends SoupEntity>(
   entity: T,
   item: DisplayableSoupItem
@@ -714,7 +723,9 @@ function calendarReminderTimestamp(
   for (const notification of notifications ?? []) {
     if (
       !notification.deleted_at &&
-      notification.notification_metadata.tag === 'calendar_event_reminder'
+      (notification.notification_metadata.tag === 'calendar_event_reminder' ||
+        notification.notification_metadata.tag ===
+          'calendar_event_join_request')
     ) {
       include(notification.created_at);
     }
@@ -771,10 +782,14 @@ export const mapApiSoupItemToEntity = (
         name: p.name ?? '',
       }));
 
-      const hasIcsAttachment = item.data.attachments?.some(
+      const hasIcsAttachment =
+        item.data.attachments?.some(isCalendarAttachment);
+
+      // Inline images (signature logos, pasted screenshots) carry a Content-ID.
+      const hasFileAttachment = item.data.attachments?.some(
         (a) =>
-          a.mimeType === 'text/calendar' ||
-          a.filename?.toLowerCase().endsWith('.ics')
+          !isCalendarAttachment(a) &&
+          !(a.contentId && a.mimeType?.startsWith('image/'))
       );
 
       const attachments = item.data.attachments?.map((a) => ({
@@ -806,6 +821,7 @@ export const mapApiSoupItemToEntity = (
         linkId,
         participants,
         hasIcsAttachment,
+        hasFileAttachment,
         attachments,
       } satisfies EmailEntity;
     })
@@ -913,6 +929,8 @@ export const mapApiSoupItemToEntity = (
         authorLogin?: string | null;
         authorId?: number | null;
         labels?: GithubPullRequestLabel[] | null;
+        description?: string | null;
+        head?: { name?: string | null } | null;
       };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
@@ -948,6 +966,8 @@ export const mapApiSoupItemToEntity = (
           labels: metadata.labels ?? [],
           authorLogin: metadata.authorLogin ?? undefined,
           authorId: metadata.authorId ?? undefined,
+          description: metadata.description ?? undefined,
+          headBranch: metadata.head?.name ?? undefined,
         },
       };
 
@@ -964,6 +984,14 @@ export const mapApiSoupItemToEntity = (
       projectId: item.data.projectId ?? undefined,
       subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
+    }))
+    .with({ tag: 'crmContact' }, (item) => ({
+      ...item.data,
+      type: 'crm_contact' as const,
+      name: item.data.name?.trim() || item.data.email,
+      ownerId: item.data.teamId,
+      sortTs: item.data.lastInteraction,
+      frecencyScore: item.frecency_score,
     }))
     .with({ tag: 'crmCompany' }, (item) => {
       const primaryDomain = item.data.domains[0]?.domain;
@@ -990,9 +1018,6 @@ export const mapApiSoupItemToEntity = (
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
-    .with({ tag: 'reminder' }, (item) =>
-      reminderEntityFromData(item.data, item.frecency_score)
-    )
     .with({ tag: 'calendarEvent' }, (item) => {
       return {
         type: 'calendar_event',
@@ -1009,7 +1034,12 @@ export const mapApiSoupItemToEntity = (
         frecencyScore: item.frecency_score,
       } satisfies CalendarEventEntity;
     })
-    .exhaustive();
+    .exhaustive(() => ({
+      type: 'document' as const,
+      id: 'id' in item.data ? item.data.id : '',
+      name: '',
+      ownerId: '',
+    }));
 
   // Attached once for every tag: only touched_by_me pages carry the field,
   // and the Recent feed's client sort reads it off the entity. Resolved
@@ -1041,21 +1071,9 @@ const toCalendarEventTime = (
     ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
     : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
-export const isInstructionsMdDoc = (
-  item: SoupApiItem,
-  instructionsIdQuery: UseQueryResult<string | null | undefined, Error>
-) => {
-  if (item.tag !== 'document') return false;
-
-  if (!instructionsIdQuery.isSuccess) return false;
-
-  return item.data.id === instructionsIdQuery.data;
-};
-
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
-    instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
     showSupportedForeignEntities?: boolean;
   }
 ) => SoupEntity[] = (data, options) => {
@@ -1063,16 +1081,10 @@ export const mapSoupPageToEntityList: (
     .filter((item): item is DisplayableSoupItem => {
       if (!isDisplayableSoupItem(item)) return false;
 
-      if (item.tag === 'foreignEntity') {
-        return (
-          options.showSupportedForeignEntities === true &&
-          item.data.foreignEntitySource === 'github_pull_request'
-        );
-      }
-
       return (
-        item.tag !== 'document' ||
-        !isInstructionsMdDoc(item, options.instructionsIdQuery)
+        item.tag !== 'foreignEntity' ||
+        (options.showSupportedForeignEntities === true &&
+          item.data.foreignEntitySource === 'github_pull_request')
       );
     })
     .map(mapApiSoupItemToEntity);

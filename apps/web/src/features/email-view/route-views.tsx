@@ -5,10 +5,12 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { Show } from 'solid-js';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { emailDetailSearch } from './email-route';
 import { EmailView } from './email-view';
+import { EmailViewSkeleton } from './email-view-skeleton';
 
 function MailLegacyRouteView() {
   const params = useParams<{ threadId?: string }>();
@@ -27,6 +29,7 @@ function MailLegacyRouteView() {
 }
 
 export const MailRouteView = withAuth(() => {
+  useViewRestoration();
   const params = useParams<{ threadId?: string }>();
   const detailRequested = () => typeof params.threadId === 'string';
 
@@ -40,4 +43,4 @@ export const MailRouteView = withAuth(() => {
       <EmailView />
     </AppView>
   );
-});
+}, EmailViewSkeleton);

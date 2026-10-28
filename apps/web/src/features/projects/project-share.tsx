@@ -52,6 +52,7 @@ export function useProjectShareModal(
       owner: current.ownerId,
       userPermissions: getPermissions(current.access),
       people: Collaborators,
+      directPeopleIds: current.memberIds,
       hasDirectShares: current.memberIds.some((id) => id !== current.ownerId),
     };
   }, options);

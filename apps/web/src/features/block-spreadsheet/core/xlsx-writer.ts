@@ -6,6 +6,8 @@ import {
   parseChartReference,
   type SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
+import { sheetTableLayouts } from '@macro-inc/spreadsheet/sheet-tables';
+import { qualifyStructuredReferences } from '@macro-inc/spreadsheet/structured-references';
 import { parseWorkbookMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { strToU8, zipSync } from 'fflate';
 import type { CalculatedCell } from './calculation';
@@ -26,6 +28,12 @@ import {
   XLSX_MAX_SHEETS,
 } from './workbook-file-types';
 import {
+  CHECKBOX_BAGS,
+  CHECKBOX_CONTENT_TYPE,
+  CHECKBOX_PART,
+  CHECKBOX_RELATIONSHIP,
+} from './xlsx-checkboxes';
+import {
   type CellChartValue,
   type ChartValues,
   chartPart,
@@ -40,16 +48,20 @@ import {
 } from './xlsx-formula';
 import { connectionsPart, pivotParts, pivotTableName } from './xlsx-pivots';
 import {
+  choiceColorFormats,
   conditionalFormattingXml,
   dataValidationsXml,
-  differentialXml,
   notesParts,
 } from './xlsx-sheet-rules';
+import { cellNumberFormat } from './xlsx-styles';
+import { withTableHeaders, xlsxTablePart } from './xlsx-tables';
 import {
-  cellNumberFormat,
-  type XlsxCellStyle,
-  xlsxCellStyle,
-} from './xlsx-styles';
+  escapeText,
+  escapeXml,
+  numberText,
+  SharedStrings,
+  StyleTable,
+} from './xlsx-workbook-parts';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const RELATIONSHIPS =
@@ -68,231 +80,6 @@ const KNOWN_ERRORS = new Set([
 /** Macro's default column width in Excel character units. */
 const DEFAULT_COLUMN_CHARACTERS =
   Math.round(((DEFAULT_COLUMN_WIDTH - 5) / 7) * 256) / 256;
-const BUILTIN_FORMATS: Record<string, number> = {
-  General: 0,
-  '0': 1,
-  '0.00': 2,
-  '#,##0': 3,
-  '#,##0.00': 4,
-  '0%': 9,
-  '0.00%': 10,
-  '0.00E+00': 11,
-  '@': 49,
-};
-
-/** Escape text for XML, including characters XML 1.0 cannot carry. */
-export function escapeXml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('\r', '&#13;');
-}
-
-/** Cell text uses OOXML's `_xHHHH_` escape for control characters. */
-function escapeText(value: string) {
-  return escapeXml(
-    value.replace(/_(x[0-9a-f]{4}_)/gi, '_x005F_$1').replace(
-      // Everything XML 1.0 cannot carry: control characters other than tab,
-      // line feed and carriage return, and U+FFFE/U+FFFF.
-      /[^\t\n\r -\ud7ff\ud800-\udfff\ue000-\ufffd]/g,
-      (character) =>
-        `_x${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}_`
-    )
-  );
-}
-
-function text(value: string) {
-  return /^\s|\s$/.test(value)
-    ? `<t xml:space="preserve">${escapeText(value)}</t>`
-    : `<t>${escapeText(value)}</t>`;
-}
-
-function numberText(value: number) {
-  return Number.isFinite(value) ? String(value) : '0';
-}
-
-/** Deduplicate fonts, fills, borders, formats and cell formats. */
-class StyleTable {
-  private formats = new Map<string, number>();
-  private fonts = new Map<string, number>();
-  private fills = new Map<string, number>([
-    ['<patternFill patternType="none"/>', 0],
-    ['<patternFill patternType="gray125"/>', 1],
-  ]);
-  private borders = new Map<string, number>([['', 0]]);
-  private xfs = new Map<string, number>();
-  private cache = new Map<string, number>();
-  private dxfs = new Map<string, number>();
-
-  /** The `dxfId` of a conditional format's differential format. */
-  dxf(style: Parameters<typeof differentialXml>[0]): number {
-    const key = differentialXml(
-      style,
-      style?.numberFormat ? this.format(style.numberFormat) : undefined
-    );
-    let index = this.dxfs.get(key);
-    if (index === undefined) {
-      index = this.dxfs.size;
-      this.dxfs.set(key, index);
-    }
-    return index;
-  }
-
-  constructor(defaultFont: { name: string; size: number }) {
-    this.font({
-      ...defaultFont,
-      bold: false,
-      italic: false,
-      underline: false,
-      strike: false,
-    });
-    this.xfs.set('0,0,0,0,', 0);
-  }
-
-  /** The `numFmtId` of a number format code. */
-  format(code: string): number {
-    let format: number | undefined = BUILTIN_FORMATS[code];
-    if (format === undefined) {
-      format = this.formats.get(code);
-      if (format === undefined) {
-        format = 164 + this.formats.size;
-        this.formats.set(code, format);
-      }
-    }
-    return format;
-  }
-
-  private font(font: XlsxCellStyle['font']) {
-    const key = [
-      font.bold && '<b/>',
-      font.italic && '<i/>',
-      font.strike && '<strike/>',
-      font.underline && '<u/>',
-      `<sz val="${numberText(font.size)}"/>`,
-      font.color && `<color rgb="FF${font.color}"/>`,
-      `<name val="${escapeXml(font.name)}"/>`,
-    ]
-      .filter(Boolean)
-      .join('');
-    let index = this.fonts.get(key);
-    if (index === undefined) {
-      index = this.fonts.size;
-      this.fonts.set(key, index);
-    }
-    return index;
-  }
-
-  /** The `s` index for a cell, or 0 for the workbook default. */
-  index(
-    cell: SpreadsheetCell,
-    defaultFont?: { name: string; size: number }
-  ): number {
-    const key = JSON.stringify([{ ...cell, value: '' }, defaultFont]);
-    const cached = this.cache.get(key);
-    if (cached !== undefined) return cached;
-    const style = xlsxCellStyle(cell, defaultFont);
-    const format = this.format(style.numFmt);
-    const font = this.font(style.font);
-    let fill = 0;
-    if (style.fill) {
-      const key = `<patternFill patternType="solid"><fgColor rgb="FF${style.fill}"/><bgColor indexed="64"/></patternFill>`;
-      fill = this.fills.get(key) ?? this.fills.size;
-      this.fills.set(key, fill);
-    }
-    const borderKey = (['left', 'right', 'top', 'bottom'] as const)
-      .map((edge) => {
-        const line = style.border[edge];
-        return line
-          ? `<${edge} style="${line.style}"><color rgb="FF${line.color}"/></${edge}>`
-          : `<${edge}/>`;
-      })
-      .join('');
-    const border = Object.keys(style.border).length
-      ? (this.borders.get(borderKey) ?? this.borders.size)
-      : 0;
-    if (border) this.borders.set(borderKey, border);
-    const alignment = [
-      style.alignment.horizontal &&
-        `horizontal="${style.alignment.horizontal}"`,
-      style.alignment.vertical !== 'bottom' &&
-        `vertical="${style.alignment.vertical}"`,
-      style.alignment.wrapText && 'wrapText="1"',
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const xfKey = `${format ?? 0},${font},${fill},${border},${alignment}`;
-    let index = this.xfs.get(xfKey);
-    if (index === undefined) {
-      index = this.xfs.size;
-      this.xfs.set(xfKey, index);
-    }
-    this.cache.set(key, index);
-    return index;
-  }
-
-  xml(): string {
-    const formats = [...this.formats]
-      .map(
-        ([code, id]) =>
-          `<numFmt numFmtId="${id}" formatCode="${escapeXml(code)}"/>`
-      )
-      .join('');
-    const xfs = [...this.xfs.keys()]
-      .map((key) => {
-        const [format, font, fill, border, ...rest] = key.split(',');
-        const alignment = rest.join(',');
-        return `<xf numFmtId="${format}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"${format !== '0' ? ' applyNumberFormat="1"' : ''}${font !== '0' ? ' applyFont="1"' : ''}${fill !== '0' ? ' applyFill="1"' : ''}${border !== '0' ? ' applyBorder="1"' : ''}${alignment ? ` applyAlignment="1"><alignment ${alignment}/></xf>` : '/>'}`;
-      })
-      .join('');
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="${MAIN}">${
-      this.formats.size
-        ? `<numFmts count="${this.formats.size}">${formats}</numFmts>`
-        : ''
-    }<fonts count="${this.fonts.size}">${[...this.fonts.keys()]
-      .map((font) => `<font>${font}</font>`)
-      .join('')}</fonts><fills count="${this.fills.size}">${[
-      ...this.fills.keys(),
-    ]
-      .map((fill) => `<fill>${fill}</fill>`)
-      .join('')}</fills><borders count="${this.borders.size}">${[
-      ...this.borders.keys(),
-    ]
-      .map(
-        (border) =>
-          `<border>${border || '<left/><right/><top/><bottom/>'}<diagonal/></border>`
-      )
-      .join(
-        ''
-      )}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${this.xfs.size}">${xfs}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="${this.dxfs.size}">${[...this.dxfs.keys()].join('')}</dxfs><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>`;
-  }
-}
-
-class SharedStrings {
-  private strings = new Map<string, number>();
-  private count = 0;
-
-  index(value: string) {
-    this.count++;
-    let index = this.strings.get(value);
-    if (index === undefined) {
-      index = this.strings.size;
-      this.strings.set(value, index);
-    }
-    return index;
-  }
-
-  xml() {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<sst xmlns="${MAIN}" count="${this.count}" uniqueCount="${this.strings.size}">${[
-      ...this.strings.keys(),
-    ]
-      .map((value) => `<si>${text(value)}</si>`)
-      .join('')}</sst>`;
-  }
-}
 
 type WrittenValue =
   | { kind: 'number'; value: number }
@@ -488,6 +275,11 @@ export function writeXlsxWorkbook(
   let pivotCount = 0;
   const pivotRecords: number[] = [];
   const connections: string[] = [];
+  // Tables, numbered from 1 across the workbook, which formulas name.
+  let tableCount = 0;
+  const tableLayouts = input.sheets.flatMap((sheet) =>
+    sheetTableLayouts(sheet)
+  );
   // Pivot charts stay linked only to pivot tables the download contains.
   const pivotNames = new Set(
     input.sheets.flatMap((sheet) =>
@@ -531,7 +323,8 @@ export function writeXlsxWorkbook(
     let maxRow = 0;
     let maxColumn = 0;
     const children = new Map<string, CalculatedCell>();
-    for (const [address, cell] of Object.entries(sheet.cells)) {
+    const cells = withTableHeaders(sheet.cells, metadata.tables);
+    for (const [address, cell] of Object.entries(cells)) {
       const position = parseCellAddress(address)!;
       const calculated = values[address];
       const written = writtenValue(cell, calculated, warnings);
@@ -570,7 +363,13 @@ export function writeXlsxWorkbook(
           const formula = escapeXml(
             addFunctionPrefixes(
               exportImplicitIntersections(
-                written.formula,
+                qualifyStructuredReferences(
+                  written.formula,
+                  tableLayouts,
+                  sheet.name,
+                  position.row,
+                  position.column
+                ),
                 rangeNames,
                 !legacy && !dynamic
               )
@@ -826,6 +625,19 @@ export function writeXlsxWorkbook(
       );
       relate('pivotTable', `../pivotTables/pivotTable${number}.xml`);
     }
+    const tableIds = (metadata.tables ?? []).map((table) => {
+      const number = ++tableCount;
+      files[`xl/tables/table${number}.xml`] = strToU8(
+        xlsxTablePart({
+          table,
+          id: number,
+          sheet: sheet.name,
+          cells: sheet.cells,
+          tables: tableLayouts,
+        })
+      );
+      return relate('table', `../tables/table${number}.xml`);
+    });
     if (drawing) {
       files[`xl/drawings/drawing${drawingNumber}.xml`] = strToU8(drawing.xml);
       files[`xl/drawings/_rels/drawing${drawingNumber}.xml.rels`] = strToU8(
@@ -845,10 +657,13 @@ export function writeXlsxWorkbook(
       }<dimension ref="${dimension}"/><sheetViews><sheetView workbookViewId="0"${sheetIndex === firstVisible ? ' tabSelected="1"' : ''}${metadata.gridlines === false ? ' showGridLines="0"' : ''}${pane ? `>${pane}</sheetView>` : '/>'}</sheetViews><sheetFormatPr defaultColWidth="${DEFAULT_COLUMN_CHARACTERS}" defaultRowHeight="${defaultRowHeight}"/>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${rowXml}</sheetData>${
         metadata.autoFilter ? `<autoFilter ref="${metadata.autoFilter}"/>` : ''
       }${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}${conditionalFormattingXml(
-        metadata.conditionalFormats,
+        [
+          ...(metadata.conditionalFormats ?? []),
+          ...choiceColorFormats(metadata.validations),
+        ],
         (style) => styles.dxf(style),
         addFunctionPrefixes
-      )}${dataValidationsXml(metadata.validations, addFunctionPrefixes)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${drawingId ? `<drawing r:id="${drawingId}"/>` : ''}${notesId ? `<legacyDrawing r:id="${notesId}"/>` : ''}</worksheet>`
+      )}${dataValidationsXml(metadata.validations, addFunctionPrefixes)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${drawingId ? `<drawing r:id="${drawingId}"/>` : ''}${notesId ? `<legacyDrawing r:id="${notesId}"/>` : ''}${tableIds.length ? `<tableParts count="${tableIds.length}">${tableIds.map((id) => `<tablePart r:id="${id}"/>`).join('')}</tableParts>` : ''}</worksheet>`
     );
     if (notes) {
       const number = sheetIndex + 1;
@@ -880,6 +695,7 @@ export function writeXlsxWorkbook(
     )
     .join('');
   const count = input.sheets.length;
+  const checkboxes = styles.hasCheckboxes();
   files['[Content_Types].xml'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${noted.length ? '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>' : ''}${[
@@ -910,7 +726,11 @@ export function writeXlsxWorkbook(
       connections.length
         ? '<Override PartName="/xl/connections.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml"/>'
         : ''
-    }${noted
+    }${Array.from(
+      { length: tableCount },
+      (_, index) =>
+        `<Override PartName="/xl/tables/table${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`
+    ).join('')}${noted
       .map(
         (number) =>
           `<Override PartName="/xl/comments${number}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`
@@ -924,7 +744,7 @@ export function writeXlsxWorkbook(
       )
       .join(
         ''
-      )}<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>${dynamicArrays ? '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>' : ''}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`
+      )}<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${checkboxes ? `<Override PartName="/${CHECKBOX_PART}" ContentType="${CHECKBOX_CONTENT_TYPE}"/>` : ''}<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>${dynamicArrays ? '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>' : ''}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`
   );
   files['_rels/.rels'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -971,8 +791,13 @@ export function writeXlsxWorkbook(
       connections.length
         ? `<Relationship Id="rId${count + 5 + pivotCount}" Type="${RELATIONSHIPS}/connections" Target="connections.xml"/>`
         : ''
+    }${
+      checkboxes
+        ? `<Relationship Id="rId${count + 6 + pivotCount}" Type="${CHECKBOX_RELATIONSHIP}" Target="featurePropertyBag/featurePropertyBag.xml"/>`
+        : ''
     }</Relationships>`
   );
+  if (checkboxes) files[CHECKBOX_PART] = strToU8(CHECKBOX_BAGS);
   if (connections.length)
     files['xl/connections.xml'] = strToU8(connectionsPart(connections));
   // Charts without their own colors take them from the theme they came with.

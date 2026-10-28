@@ -12,7 +12,9 @@ export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
 
 /** Select chronological messages and reply drafts without mutating the source. */
 export function selectThreadMessages(thread: EmailThread) {
-  const messages = [...thread.messages];
+  const messages = thread.messages.filter(
+    (message) => message.operation?.state !== 'DELETED'
+  );
   // Sort all messages by recency
   messages.sort((a, b) => {
     if (a.internal_date_ts && b.internal_date_ts) {
@@ -45,7 +47,13 @@ export function selectThreadMessages(thread: EmailThread) {
 
     if (!replyingToId) continue;
 
-    messageDraftMap[replyingToId] = message;
+    const previous = messageDraftMap[replyingToId];
+    if (
+      !previous ||
+      Date.parse(message.updated_at) > Date.parse(previous.updated_at)
+    ) {
+      messageDraftMap[replyingToId] = message;
+    }
   }
 
   return {

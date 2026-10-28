@@ -2,7 +2,11 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import type { ScheduleDraft } from '../core/draft';
-import { formatDateTime, validateRoutineDraft } from '../core/routine-draft';
+import {
+  formatDateTime,
+  validateRoutineApps,
+  validateRoutineDraft,
+} from '../core/routine-draft';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from './routine-autosave';
 
@@ -17,6 +21,7 @@ export function createRoutineDetail(
   source: RoutineDetailSource,
   options: {
     userId: Accessor<string | undefined>;
+    connectedApps: Accessor<ReadonlySet<string> | undefined>;
     onRename(name: string): void;
   }
 ) {
@@ -37,7 +42,11 @@ export function createRoutineDetail(
 
   const formError = () => {
     const draft = state();
-    return draft ? validateRoutineDraft(draft) : null;
+    if (!draft) return null;
+    return (
+      validateRoutineDraft(draft) ??
+      validateRoutineApps(draft.apps, options.connectedApps())
+    );
   };
 
   const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
@@ -66,6 +75,19 @@ export function createRoutineDetail(
     }
     autosave.queue(formError() ? undefined : next);
   }
+
+  // An edit held back only by an unconnected app saves once it is connected.
+  createEffect(
+    on(
+      formError,
+      (error, previous) => {
+        const draft = state();
+        if (!error && previous && draft && autosave.dirty())
+          autosave.queue(draft);
+      },
+      { defer: true }
+    )
+  );
 
   function runNow(): void {
     if (

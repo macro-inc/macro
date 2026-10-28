@@ -4,11 +4,13 @@ use ::axum::{
 };
 use rootcause::Report;
 
-use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
+use crate::{
+    CredentialOrigin, MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
+};
 
 use super::{
-    MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection,
-    status_rejection,
+    MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    log_authorization_failure, rejection, status_rejection,
 };
 
 /// Header carrying a user API key.
@@ -30,7 +32,7 @@ where
         .await
         .map_err(user_api_key_authorization_rejection)?;
 
-    authenticated_user(user_context)
+    authenticated_user(user_context, CredentialOrigin::UserApiKey)
 }
 
 fn user_api_key(headers: &HeaderMap) -> Result<String, MacroAuthorizationRejection> {
@@ -57,6 +59,6 @@ fn user_api_key_authorization_rejection(
             status_rejection(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
         }
     };
-    tracing::error!(error=?error, "user api key authorization failed");
+    log_authorization_failure(&error, "user api key authorization failed");
     rejection
 }

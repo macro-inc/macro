@@ -1,0 +1,64 @@
+local.file "otlp_token" {
+  filename = sys.env("CREDENTIALS_DIRECTORY") + "/otlp_token"
+  is_secret = true
+}
+
+otelcol.auth.bearer "ingest" {
+  token = local.file.otlp_token.content
+}
+
+otelcol.receiver.otlp "ingest" {
+  http {
+    endpoint = "127.0.0.1:4318"
+    auth = otelcol.auth.bearer.ingest.handler
+    max_request_body_size = "8MiB"
+  }
+  output {
+    logs = [otelcol.processor.memory_limiter.ingest.input]
+    traces = [otelcol.processor.memory_limiter.ingest.input]
+    metrics = [otelcol.processor.memory_limiter.ingest.input]
+  }
+}
+
+otelcol.processor.memory_limiter "ingest" {
+  check_interval = "1s"
+  limit = "768MiB"
+  spike_limit = "128MiB"
+  output {
+    logs = [otelcol.processor.batch.ingest.input]
+    traces = [otelcol.processor.batch.ingest.input]
+    metrics = [otelcol.processor.batch.ingest.input]
+  }
+}
+
+otelcol.processor.batch "ingest" {
+  timeout = "1s"
+  send_batch_size = 512
+  send_batch_max_size = 1024
+  output {
+    logs = [otelcol.exporter.otlphttp.loki.input]
+    traces = [otelcol.exporter.otlp.tempo.input]
+    metrics = [otelcol.exporter.prometheus.metrics.input]
+  }
+}
+
+otelcol.exporter.otlphttp "loki" {
+  client { endpoint = "http://127.0.0.1:3100/otlp" }
+  sending_queue { queue_size = 256 }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "127.0.0.1:4317"
+    tls { insecure = true }
+  }
+  sending_queue { queue_size = 256 }
+}
+
+otelcol.exporter.prometheus "metrics" {
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.remote_write "local" {
+  endpoint { url = "http://127.0.0.1:9090/api/v1/write" }
+}

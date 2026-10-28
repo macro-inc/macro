@@ -6,6 +6,7 @@
  */
 import type { AgentModelDtoDescription } from './agentModelDtoDescription';
 import type { AgentModelDtoGroup } from './agentModelDtoGroup';
+import type { AgentModelDtoSupportsImages } from './agentModelDtoSupportsImages';
 
 /**
  * One model picker option.
@@ -19,4 +20,6 @@ export interface AgentModelDto {
   id: string;
   /** Display name. */
   name: string;
+  /** Image input support, absent when the runtime does not advertise it. */
+  supportsImages?: AgentModelDtoSupportsImages;
 }

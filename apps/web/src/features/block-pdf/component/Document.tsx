@@ -17,7 +17,9 @@ import {
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { observedSize } from '@core/directive/observedSize';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isInDOMRect } from '@core/util/rect';
+import { Telemetry } from '@macro-inc/observability';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
@@ -251,7 +253,8 @@ export function Document() {
         rootViewer = undefined;
         pdfViewer.clearPair();
         setDestroying(false);
-      });
+      })
+      .catch((error) => Telemetry.error(error, { surface: 'pdf-document' }));
   });
 
   const saveModificationData = useSaveModificationData();
@@ -272,7 +275,11 @@ export function Document() {
       const annotationsPromise = loadAnnotations(documentProxy);
 
       if (updateModificationDataOnLoad()) {
-        annotationsPromise.then(saveModificationData);
+        annotationsPromise
+          .then(() => saveModificationData())
+          .catch((error) =>
+            Telemetry.error(error, { surface: 'pdf-document' })
+          );
       }
 
       const documentId = pdf.documentId();
@@ -533,7 +540,10 @@ export function Document() {
       const revision = currentRevision();
       if (revision <= savedRevision()) return;
 
-      saveModificationData().then(() => setSavedRevision(revision));
+      fireAndForget(
+        saveModificationData().then(() => setSavedRevision(revision)),
+        'pdf-document'
+      );
     });
   }
 
@@ -595,5 +605,7 @@ export function Document() {
 export default Document;
 
 if (import.meta.hot) {
-  import('./PageOverlay');
+  import('./PageOverlay').catch((error) =>
+    Telemetry.error(error, { surface: 'pdf-document' })
+  );
 }

@@ -1,4 +1,3 @@
-import { pipedreamAppAvailableInEnv } from '@core/component/AI/constant/mcpServers';
 import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
 import GithubIcon from '@icon/mcp-github.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
@@ -42,9 +41,6 @@ export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
   ...SLACK_PIPEDREAM_SLUGS,
   'cursor',
 ]);
-
-export const availableStarters = () =>
-  EMPTY_STARTERS.filter((item) => pipedreamAppAvailableInEnv(item.id));
 
 export function isPipedreamBrowseHidden(appSlug: string): boolean {
   return PIPEDREAM_BROWSE_HIDDEN_SLUGS.has(appSlug);

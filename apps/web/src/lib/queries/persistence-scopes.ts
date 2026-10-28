@@ -1,5 +1,6 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { hasCachedUserIdentity } from './auth/user-info-cache';
@@ -23,29 +24,35 @@ export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
 export function createQueryPersistenceScopes(
   buster: string
 ): readonly PersistScope[] {
+  // A failed durable logout wipe can rotate this shared scope before relaunch.
+  const accountScope = getOrCreateCacheScope();
+  const scopedKey = (name: string) =>
+    createPersistenceKey(`${name}-${accountScope}`, 1);
   return [
     {
       store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('channels', 1),
+        dbName: scopedKey('channels'),
       }),
       maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: shouldPersistChannelQuery,
+      shouldRestore: hasLoginCookie,
     },
     {
       store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('email-threads', 1),
+        dbName: scopedKey('email-threads'),
       }),
       maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: (queryKey) =>
         partialMatchKey(queryKey, ['email', 'threadMessages']),
+      shouldRestore: hasLoginCookie,
     },
     ...(isNativeMobilePlatform()
       ? [
           {
             store: createPerQueryIDBStore({
-              dbName: createPersistenceKey('soup-list-queries', 1),
+              dbName: scopedKey('soup-list-queries'),
             }),
             maxAge: { value: 7, unit: 'd' },
             buster,
@@ -55,7 +62,7 @@ export function createQueryPersistenceScopes(
           } satisfies PersistScope,
           {
             store: createPerQueryIDBStore({
-              dbName: createPersistenceKey('user-info', 1),
+              dbName: scopedKey('user-info'),
             }),
             buster,
             shouldPersist: (queryKey: QueryKey) =>

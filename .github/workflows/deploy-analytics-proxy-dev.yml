@@ -1,0 +1,47 @@
+name: Deploy analytics proxy dev
+on:
+  push:
+    branches: [main]
+    paths:
+      - services/analytics-proxy/**
+      - .github/workflows/deploy-analytics-proxy-dev.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-analytics-proxy-dev
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: namespace-profile-linux-small
+    defaults:
+      run:
+        working-directory: services/analytics-proxy
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: bun install --frozen-lockfile
+      - run: bun run gen-types && bun run check
+      - name: Set server-side ingestion credential
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          aws secretsmanager get-secret-value --secret-id observability/dev-ingest --query SecretString --output text |
+            bunx wrangler secret put GRAFANA_OTLP_TOKEN --env dev
+      - name: Deploy dev proxy
+        run: bun run deploy-dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

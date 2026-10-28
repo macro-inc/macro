@@ -16,7 +16,7 @@ import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { References } from '@core/component/References';
 import { openExternalUrl } from '@core/util/url';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
@@ -24,6 +24,7 @@ import { sessionStatus } from '../../state/session-status';
 import { activityCounts, latestPlan } from '../../state/session-summary';
 import { CountSummary, SessionStatusPill, TodoList } from '../../ui';
 import { AgentPullRequestChip } from '../AgentPullRequestChip';
+import { AgentTaskChip } from '../AgentTaskChip';
 import {
   modelDisplayName,
   sessionHarnessTitle,
@@ -98,6 +99,13 @@ export function AgentSidePanelSections() {
                   <GitBranch class="size-3 shrink-0" />
                   <span class="truncate">{repoName(url())}</span>
                 </button>
+              </SidePanel.Row>
+            )}
+          </Show>
+          <Show when={session()?.taskId}>
+            {(taskId) => (
+              <SidePanel.Row label="Task">
+                <AgentTaskChip taskId={taskId()} />
               </SidePanel.Row>
             )}
           </Show>

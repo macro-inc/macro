@@ -1,3 +1,5 @@
+import { Telemetry } from '@macro-inc/observability';
+import type { BeforeLeaveEventArgs } from '@solidjs/router';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -7,19 +9,28 @@ import { PdfDocument, type PdfDocumentMethods } from './PdfDocument';
 const state = vi.hoisted(() => ({
   ready: (): boolean => false,
   visible: (): boolean => false,
+  nested: true,
   navigate: vi.fn(),
   initial: vi.fn(),
   clearOverlays: vi.fn(),
+  save: vi.fn(),
+  beforeLeave: undefined as ((event: BeforeLeaveEventArgs) => void) | undefined,
 }));
 
-vi.mock('@solidjs/router', () => ({ useBeforeLeave: () => {} }));
+vi.mock('@solidjs/router', () => ({
+  useBeforeLeave: (handler: (event: BeforeLeaveEventArgs) => void) => {
+    state.beforeLeave = handler;
+  },
+}));
+vi.mock('@macro/tauri', () => ({ useTauri: () => undefined }));
 vi.mock('../context/pdf-document-context', () => ({
   PdfDocumentProvider: (props: { children: JSX.Element }) => props.children,
   usePdfDocument: () => ({
-    isNested: () => true,
+    isNested: () => state.nested,
     documentVersionId: () => undefined,
     setPersistedViewLocation: () => {},
     locationParams: () => ({ pageNumber: '3', yPos: '0' }),
+    persistence: { isSaving: () => false },
   }),
 }));
 vi.mock('../context/pdf-viewer-context', () => ({
@@ -40,7 +51,7 @@ vi.mock('../signal/location', () => ({
   useGoToLinkLocation: () => state.initial,
   useGoToLinkLocationFromParams: () => state.navigate,
 }));
-vi.mock('../signal/save', () => ({ usePdfSave: () => vi.fn() }));
+vi.mock('../signal/save', () => ({ usePdfSave: () => state.save }));
 vi.mock('../signal/setting', () => ({ useUpdateColorsEffect: () => {} }));
 vi.mock('../store/comments/commentStore', () => ({
   usePdfCommentProjection: () => ({}),
@@ -51,8 +62,15 @@ vi.mock('../store/placeables', () => ({
 vi.mock('../websocket/preprocess', () => ({ preprocess: vi.fn() }));
 vi.mock('./Document', () => ({ Document: () => null }));
 
-beforeEach(() => vi.clearAllMocks());
-afterEach(cleanup);
+beforeEach(() => {
+  vi.clearAllMocks();
+  state.nested = true;
+  state.beforeLeave = undefined;
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function setup(initialTarget?: LocationBlockParams, initiallyReady = false) {
   const [target, setTarget] = createSignal(initialTarget);
@@ -139,4 +157,31 @@ it('keeps legacy initial-location navigation when there is no route target', () 
     yPos: '0',
   });
   expect(state.navigate).not.toHaveBeenCalled();
+});
+
+it('reports a location navigation that fails', async () => {
+  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const failure = new Error('viewer gone');
+  state.initial.mockRejectedValueOnce(failure);
+  const test = setup();
+  test.setReady(true);
+  await vi.waitFor(() =>
+    expect(report).toHaveBeenCalledWith(failure, { surface: 'pdf-location' })
+  );
+});
+
+it('still leaves the page when the save before leaving fails', async () => {
+  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const failure = new Error('offline');
+  state.nested = false;
+  state.save.mockRejectedValueOnce(failure);
+  setup();
+  const event = {
+    preventDefault: vi.fn(),
+    retry: vi.fn(),
+  } as unknown as BeforeLeaveEventArgs;
+  state.beforeLeave?.(event);
+  expect(event.preventDefault).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(event.retry).toHaveBeenCalledWith(true));
+  expect(report).toHaveBeenCalledWith(failure, { surface: 'pdf-save' });
 });

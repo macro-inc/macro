@@ -73,7 +73,12 @@ afterEach(() => {
   fixtures.touch = false;
 });
 const projectId = '01992d2f-8444-7000-8000-000000000001';
-const draft = { name: 'Launch', shareWithTeam: true, properties: [] };
+const draft = {
+  name: 'Launch',
+  description: '',
+  shareWithTeam: true,
+  properties: [],
+};
 const project = { id: projectId } as ProjectDetail;
 function submit(popover: boolean) {
   fixtures.popover = popover;

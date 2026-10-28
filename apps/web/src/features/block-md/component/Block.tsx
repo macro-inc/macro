@@ -27,7 +27,6 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownData } from '../definition';
@@ -39,7 +38,7 @@ import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
-import { InstructionsTopBar, TopBar } from './TopBar';
+import { TopBar } from './TopBar';
 import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
@@ -74,9 +73,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   });
   const persistedName = useBlockDocumentName('');
   const fallbackName = useBlockDocumentName();
-  const instructionsMdId = useInstructionsMdIdQuery();
-  const isInstructions = () =>
-    instructionsMdId.isSuccess && documentId === instructionsMdId.data;
   const markdownState = createMarkdownDocumentState();
   if (!useIsNestedBlock())
     createMarkdownRouteNavigation(
@@ -137,7 +133,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       >
         <ModalsProvider>
           <SidePanel.Layout floating>
-            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
+            <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
               <MarkdownSidePanelSections />
             </Show>
             <div class="flex flex-col size-full">
@@ -154,18 +150,14 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                   </Show>
                 </SplitHeaderRight>
                 <Suspense>
-                  <Show when={isInstructions()} fallback={<ManagedTopBar />}>
-                    <InstructionsTopBar />
-                  </Show>
+                  <ManagedTopBar />
                 </Suspense>
                 <Suspense>
-                  <Show when={!isInstructions()}>
-                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
-                      <FindAndReplace
-                        hotkeyScope={blockHotkeyScopeSignal.get()}
-                      />
-                    </div>
-                  </Show>
+                  <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
+                    <FindAndReplace
+                      hotkeyScope={blockHotkeyScopeSignal.get()}
+                    />
+                  </div>
                 </Suspense>
               </div>
               <DocumentDebouncedNotificationReadMarker
@@ -173,7 +165,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                 documentId={documentId}
               />
               <MarkdownDocumentContent
-                isInstructions={isInstructions()}
                 hotkeyScope={blockHotkeyScopeSignal.get()}
                 autoFocus={canAutofocus && !navigatedFromJK()}
                 doInitialSync={data()?.doInitialSync}

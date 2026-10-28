@@ -9,8 +9,7 @@ import type { EntityData } from '../../types/entity';
 
 /** Preview identity for a selected row. Reminders are not storage items. */
 function previewEntity(entity: EntityData): ItemEntity | undefined {
-  if (entity.type === 'reminder' || entity.type === 'initiative')
-    return undefined;
+  if (entity.type === 'initiative') return undefined;
   if (entity.type === 'channel') return { id: entity.id, type: 'channel' };
   return { id: entity.id, type: entity.type };
 }
@@ -39,6 +38,7 @@ export function EntityActionSelection(props: {
           </For>
           <Show when={props.entities.length > 2}>
             <Button
+              variant="ghost"
               type="button"
               size="sm"
               disabled={props.disabled}

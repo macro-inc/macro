@@ -1,34 +1,44 @@
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
+import { EventDetails } from '@app/features/calendar/components/EventDetails';
+import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import {
-  EventAttendeesSection,
-  EventDetails,
-} from '@app/features/calendar/components/EventDetails';
+  useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
+  useCalendarMeetingNotesFlag,
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
   type CalendarEvent,
   type CalendarTimeFormat,
   reminderCalendarIdOf,
 } from '@app/features/calendar/types';
 import {
-  eventEmailRecipients,
-  guestEmails,
-} from '@app/features/calendar/utils/guest-emails';
+  canDeleteCalendarEvent,
+  canEditCalendarEvent,
+} from '@app/features/calendar/utils/event-interaction';
+import { eventEmailRecipients } from '@app/features/calendar/utils/guest-emails';
 import { handleOpenEventOutsidePress } from '@app/features/calendar/utils/open-event-outside-press';
+import { CalendarMeetingNotes } from '@app/features/calendar-notes/calendar-meeting-notes';
+import { TeamEventDetails } from '@app/features/calendar-team/components/team-event-details';
+import { EventGuests } from '@app/features/calendar-view/components/EventGuests';
+import { EventJoinRequests } from '@app/features/calendar-view/components/EventJoinRequests';
 import { EventRsvpSection } from '@app/features/calendar-view/components/EventRsvpSection';
+import { useForwardEventEmail } from '@app/features/calendar-view/components/use-forward-event-email';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
-import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
 import { copyCalendarEventMention } from '@app/features/calendar-view/copy-event-mention';
-import { copyGuestEmails } from '@app/features/calendar-view/copy-guest-emails';
+import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-event-ics';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { openExternalUrl } from '@core/util/url';
+import ArrowBendUpRightIcon from '@icon/system/regular/arrow-bend-up-right.svg';
+import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import CopyIcon from '@phosphor/copy.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import ExclamationIcon from '@phosphor/exclamation-mark.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
@@ -44,6 +54,7 @@ import {
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 
 interface SelectedEventDetailsProps {
+  boundary: HTMLElement;
   anchor: Accessor<HTMLElement | undefined>;
   event: Accessor<CalendarEvent | undefined>;
   timeFormat: Accessor<CalendarTimeFormat>;
@@ -94,6 +105,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
             <Show when={props.event()}>
               {(currentEvent) => (
                 <EventDetailsPopover
+                  boundary={props.boundary}
                   anchor={selected.anchor}
                   event={currentEvent()}
                   timeFormat={props.timeFormat()}
@@ -135,12 +147,14 @@ interface EventDetailsOverlayProps {
 
 function EveryoneElseDeclinedNotice(props: {
   event: CalendarEvent;
-  canModify: boolean;
+  canEdit: boolean;
   onDelete: () => void;
   onReschedule: () => void;
 }) {
   return (
-    <Show when={hasEveryoneElseDeclined(props.event)}>
+    <Show
+      when={!props.event.teamProjection && hasEveryoneElseDeclined(props.event)}
+    >
       <div class="border-edge-muted mx-3 mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 rounded-lg border bg-active p-3 text-sm text-ink-muted sm:mt-2 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:text-xs">
         <span
           aria-hidden="true"
@@ -152,12 +166,12 @@ function EveryoneElseDeclinedNotice(props: {
           <div role="status" class="font-medium text-ink">
             Everyone else declined this event
           </div>
-          <Show when={props.canModify}>
+          <Show when={props.canEdit}>
             <div class="flex justify-end gap-1">
               <Button variant="ghost" size="sm" onClick={props.onDelete}>
                 Delete
               </Button>
-              <Button variant="cta" size="sm" onClick={props.onReschedule}>
+              <Button variant="primary" size="sm" onClick={props.onReschedule}>
                 Reschedule
               </Button>
             </div>
@@ -168,76 +182,61 @@ function EveryoneElseDeclinedNotice(props: {
   );
 }
 
-/**
- * The guest-row actions Google Calendar users know: copy every guest's
- * address, or start an email to the other guests (hidden when the viewer is
- * the only one). Emailing closes the details first: closing hands focus back
- * to the calendar chip, and the composer's To field has to win that exchange.
- */
-function EventGuestActions(props: {
-  event: CalendarEvent;
-  closeDetails: () => void;
-}) {
-  const openEventEmail = useOpenEventEmail();
-
-  return (
-    <>
-      <Button
-        label="Copy guest emails"
-        variant="ghost"
-        size="icon-sm"
-        depth={3}
-        class="text-ink-muted [&_svg]:size-4"
-        onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
-      >
-        <CopyIcon />
-      </Button>
-      <Show when={eventEmailRecipients(props.event).length > 0}>
-        <Button
-          label="Email guests"
-          variant="ghost"
-          size="icon-sm"
-          depth={3}
-          class="text-ink-muted [&_svg]:size-4"
-          onClick={() => {
-            const event = props.event;
-            props.closeDetails();
-            openEventEmail(event);
-          }}
-        >
-          <EnvelopeIcon />
-        </Button>
-      </Show>
-    </>
-  );
-}
-
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
+  const meetingNotesEnabled = useCalendarMeetingNotesFlag();
+  const [notesOpen, setNotesOpen] = createSignal(false);
+  let content: HTMLDivElement | undefined;
+  const { openWithSplit } = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
-  const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+  const invites = createGuestInviteController(
+    () => props.event,
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
+  );
+  const canEdit = () => canEditCalendarEvent(props.event);
+  const canDelete = () => canDeleteCalendarEvent(props.event);
   const openEditor = () => {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
+  const forwardEventEmail = useForwardEventEmail();
+  const forwardByEmail = () =>
+    forwardEventEmail(props.event, {
+      timeFormat: props.timeFormat,
+      closeDetails: () => props.onOpenChange(false),
+    });
 
   return (
     <MobileDrawer
       side="bottom"
       open
       onOpenChange={(open) => {
-        if (!open && deleteDialog.isOpen()) return;
+        if (
+          !open &&
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
+        )
+          return;
         props.onOpenChange(open);
       }}
       preventScroll={false}
       preventScrollbarShift={false}
+      trapFocus={!notesOpen()}
+      onInitialFocus={(event) => {
+        if (notesOpen() || content?.contains(document.activeElement))
+          event.preventDefault();
+      }}
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
+          ref={content}
           aria-label={props.event.title}
           class="overflow-hidden"
         >
@@ -248,42 +247,65 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
-              depth={3}
-              class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
+              class="size-11 rounded-full bg-ink/6 text-ink-muted"
             >
-              <CloseIcon />
+              <CloseIcon class="size-5 shrink-0" />
             </MobileDrawer.Close>
             <div class="flex items-center gap-1">
-              <Button
-                aria-label="Copy event"
-                variant="ghost"
-                size="icon-md"
-                depth={3}
-                class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
-                onClick={() => copyCalendarEventMention(props.event)}
-              >
-                <LinkIcon />
-              </Button>
-              <Show when={canModify()}>
+              <Show when={!props.event.teamProjection}>
                 <Button
-                  aria-label="Edit event"
+                  aria-label="Copy event"
+                  tooltip="Copy event"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
-                  onClick={openEditor}
+                  class="size-11 bg-ink/6 text-ink-muted"
+                  onClick={() => copyCalendarEventMention(props.event)}
                 >
-                  <PencilSimpleIcon />
+                  <LinkIcon class="size-5 shrink-0" />
                 </Button>
                 <Button
-                  aria-label="Delete event"
+                  aria-label="Download .ics"
+                  tooltip="Download .ics"
                   variant="ghost"
                   size="icon-md"
-                  depth={3}
-                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  class="size-11 bg-ink/6 text-ink-muted"
+                  onClick={() => downloadCalendarEventIcs(props.event)}
+                >
+                  <DownloadSimpleIcon class="size-5 shrink-0" />
+                </Button>
+                <Button
+                  aria-label="Forward by email"
+                  tooltip="Forward by email"
+                  variant="ghost"
+                  size="icon-md"
+                  class="size-11 bg-ink/6 text-ink-muted"
+                  onClick={forwardByEmail}
+                >
+                  <ArrowBendUpRightIcon class="size-5 shrink-0" />
+                </Button>
+              </Show>
+              <Show when={canEdit()}>
+                <Button
+                  aria-label="Edit event"
+                  tooltip="Edit event"
+                  variant="ghost"
+                  size="icon-md"
+                  class="size-11 bg-ink/6 text-ink-muted"
+                  onClick={openEditor}
+                >
+                  <PencilSimpleIcon class="size-5 shrink-0" />
+                </Button>
+              </Show>
+              <Show when={canDelete()}>
+                <Button
+                  aria-label={deleteEventLabel(props.event)}
+                  tooltip={deleteEventLabel(props.event)}
+                  variant="ghost"
+                  size="icon-md"
+                  class="size-11 bg-ink/6 text-ink-muted"
                   onClick={deleteDialog.open}
                 >
-                  <TrashIcon />
+                  <TrashIcon class="size-5 shrink-0" />
                 </Button>
               </Show>
             </div>
@@ -291,27 +313,59 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
           <MobileDrawer.ScrollBody>
             <EveryoneElseDeclinedNotice
               event={props.event}
-              canModify={canModify()}
+              canEdit={canEdit()}
               onDelete={deleteDialog.open}
               onReschedule={openEditor}
             />
-            <div class="px-3">
-              <EventDetails
-                event={props.event}
-                timeFormat={props.timeFormat}
-                defaultReminders={props.defaultReminders}
-              />
-            </div>
-            <EventAttendeesSection
-              attendees={props.event.attendees}
-              actions={
-                <EventGuestActions
-                  event={props.event}
-                  closeDetails={() => props.onOpenChange(false)}
-                />
-              }
+            <EventJoinRequests
+              eventId={props.event.eventId}
+              canModify={canEdit()}
             />
-            <EventRsvpSection event={props.event} buttonSize="md" />
+            <div class="px-3">
+              <Show
+                when={props.event.teamProjection}
+                fallback={
+                  <EventDetails
+                    event={props.event}
+                    timeFormat={props.timeFormat}
+                    defaultReminders={props.defaultReminders}
+                  />
+                }
+              >
+                <TeamEventDetails
+                  event={props.event}
+                  timeFormat={props.timeFormat}
+                  onOpenLink={openExternalUrl}
+                />
+              </Show>
+            </div>
+            <Show
+              when={
+                meetingNotesEnabled() &&
+                props.event.teamProjection?.kind !== 'busy' &&
+                !props.event.isCancelled &&
+                !props.event.isSnapshot
+              }
+            >
+              <CalendarMeetingNotes
+                event={props.event}
+                onDialogChange={setNotesOpen}
+                onOpenDocument={(id) => {
+                  openWithSplit({ type: 'md', id }, { preferNewSplit: false });
+                  props.onOpenChange(false);
+                }}
+              />
+            </Show>
+            <Show when={!props.event.teamProjection}>
+              <EventGuests
+                event={props.event}
+                invites={invites}
+                closeDetails={() => props.onOpenChange(false)}
+              />
+            </Show>
+            <Show when={!props.event.teamProjection}>
+              <EventRsvpSection event={props.event} buttonSize="md" />
+            </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -321,6 +375,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
 
 interface EventDetailsPopoverProps extends EventDetailsOverlayProps {
   anchor: HTMLElement;
+  boundary: HTMLElement;
 }
 
 function useDeleteEventDialog(props: {
@@ -339,6 +394,11 @@ function useDeleteEventDialog(props: {
     });
 
   return { open, isOpen: dialog.isOpen };
+}
+
+/** A snapshot is the viewer's own copy; deleting it leaves the meeting alone. */
+function deleteEventLabel(event: CalendarEvent) {
+  return event.isSnapshot ? 'Delete your copy' : 'Delete event';
 }
 
 const DELETE_SCOPE_OPTIONS = [
@@ -381,28 +441,28 @@ function DeleteEventDialog(
     });
   };
 
+  const title = () => props.event.title || 'Untitled event';
+  const prompt = () => {
+    if (props.event.isSnapshot) {
+      return `Delete your copy of “${title()}”? The shared event stays as it is.`;
+    }
+    const question = `${isRecurring() ? 'Remove' : 'Delete'} “${title()}”?`;
+    return eventEmailRecipients(props.event).length > 0
+      ? `${question} Guests will be notified.`
+      : question;
+  };
+
   return (
     <DeleteDialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title="Delete event"
+      title={deleteEventLabel(props.event)}
       pending={deleteEvent.isPending}
       onDelete={confirm}
     >
-      <Show
-        when={isRecurring()}
-        fallback={
-          <p>
-            Delete “{props.event.title || 'Untitled event'}”? Guests will be
-            notified.
-          </p>
-        }
-      >
+      <Show when={isRecurring()} fallback={<p>{prompt()}</p>}>
         <div class="flex flex-col gap-3">
-          <p>
-            Remove “{props.event.title || 'Untitled event'}”? Guests will be
-            notified.
-          </p>
+          <p>{prompt()}</p>
           <RadioGroup
             value={scope()}
             onChange={(value) => setScope(value as CalendarDeletionScope)}
@@ -425,40 +485,71 @@ function DeleteEventDialog(
 
 /**
  * Anchors event details and actions to a rendered calendar event.
- * The card stops at 32rem, or sooner when the space beside the event is
- * shorter. Details scroll inside that cap; the RSVP row stays pinned.
+ * The calendar viewport contains both the portal and its collision boundary.
+ * Wide events can overlap the card so it stays inside that viewport. Details
+ * scroll within 32rem or the available height; the RSVP row stays pinned.
  */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
+  const meetingNotesEnabled = useCalendarMeetingNotesFlag();
+  const [notesOpen, setNotesOpen] = createSignal(false);
+  let openingDocument = false;
+  const { openWithSplit } = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
-  const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+  const invites = createGuestInviteController(
+    () => props.event,
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
+  );
+  const canEdit = () => canEditCalendarEvent(props.event);
+  const canDelete = () => canDeleteCalendarEvent(props.event);
   const openEditor = () => {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
+  const forwardEventEmail = useForwardEventEmail();
+  const forwardByEmail = () =>
+    forwardEventEmail(props.event, {
+      timeFormat: props.timeFormat,
+      closeDetails: () => props.onOpenChange(false),
+    });
 
   return (
     <Popover
       anchorRef={() => props.anchor}
+      boundary={() => props.boundary}
       open
       onOpenChange={(open) => {
-        // Keep the popover mounted while its delete dialog is open.
-        if (!open && deleteDialog.isOpen()) return;
+        // Keep the popover mounted while its delete dialog or guest editor
+        // is open.
+        if (
+          !open &&
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
+        )
+          return;
         props.onOpenChange(open);
       }}
       placement="right-start"
       gutter={8}
-      flip
+      // Flip only to the other side, never to an end alignment: sections
+      // that arrive after opening (join requests, meeting notes) change the
+      // height, and an end fallback would re-place the popover from below
+      // the event to above it. Slide keeps a tall popover in view instead.
+      flip="left-start"
       slide
+      overlap
       fitViewport
     >
-      <Popover.Portal>
+      <Popover.Portal mount={props.boundary}>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
+            class="portal-scope z-modal max-w-[var(--kb-popper-content-available-width)] outline-none"
             onInteractOutside={handleOpenEventOutsidePress}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
@@ -477,7 +568,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               event.preventDefault();
             }}
             onCloseAutoFocus={(event) => {
-              const shouldRestoreFocus = !event.defaultPrevented;
+              const shouldRestoreFocus =
+                !openingDocument && !event.defaultPrevented;
               event.preventDefault();
               if (shouldRestoreFocus && props.anchor.isConnected) {
                 props.anchor.focus();
@@ -485,78 +577,139 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl glass bg-menu-glass text-ink">
+            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,var(--kb-popper-content-available-width,20rem))] max-w-[min(24rem,var(--kb-popper-content-available-width,24rem))] flex-col overflow-hidden menu-surface">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
-                <Button
-                  aria-label="Copy event"
-                  variant="ghost"
-                  size="icon-sm"
-                  depth={3}
-                  class="text-ink-muted [&_svg]:size-4"
-                  onClick={() => copyCalendarEventMention(props.event)}
-                >
-                  <LinkIcon />
-                </Button>
-                <Show when={canModify()}>
+                <Show when={!props.event.teamProjection}>
                   <Button
-                    aria-label="Edit event"
+                    aria-label="Copy event"
+                    tooltip="Copy event"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
-                    onClick={openEditor}
+                    class="text-ink-muted"
+                    onClick={() => copyCalendarEventMention(props.event)}
                   >
-                    <PencilSimpleIcon />
+                    <LinkIcon class="size-4 shrink-0" />
                   </Button>
                   <Button
-                    aria-label="Delete event"
+                    aria-label="Download .ics"
+                    tooltip="Download .ics"
                     variant="ghost"
                     size="icon-sm"
-                    depth={3}
-                    class="text-ink-muted [&_svg]:size-4"
-                    onClick={deleteDialog.open}
+                    class="text-ink-muted"
+                    onClick={() => downloadCalendarEventIcs(props.event)}
                   >
-                    <TrashIcon />
+                    <DownloadSimpleIcon class="size-4 shrink-0" />
+                  </Button>
+                  <Button
+                    aria-label="Forward by email"
+                    tooltip="Forward by email"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="text-ink-muted"
+                    onClick={forwardByEmail}
+                  >
+                    <ArrowBendUpRightIcon class="size-4 shrink-0" />
                   </Button>
                 </Show>
+                <Show when={canEdit()}>
+                  <Button
+                    aria-label="Edit event"
+                    tooltip="Edit event"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="text-ink-muted"
+                    onClick={openEditor}
+                  >
+                    <PencilSimpleIcon class="size-4 shrink-0" />
+                  </Button>
+                </Show>
+                <Show when={canDelete()}>
+                  <Button
+                    aria-label={deleteEventLabel(props.event)}
+                    tooltip={deleteEventLabel(props.event)}
+                    variant="ghost"
+                    size="icon-sm"
+                    class="text-ink-muted"
+                    onClick={deleteDialog.open}
+                  >
+                    <TrashIcon class="size-4 shrink-0" />
+                  </Button>
+                </Show>
+                {/* Kobalte names the button "Dismiss" unless it gets an aria-label. */}
                 <Popover.CloseButton
                   as={Button}
                   aria-label="Close event details"
+                  tooltip="Close event details"
                   variant="ghost"
                   size="icon-sm"
-                  depth={3}
-                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                  class="rounded-md text-ink-muted"
                 >
-                  <CloseIcon />
+                  <CloseIcon class="size-4 shrink-0" />
                 </Popover.CloseButton>
               </div>
               <div class="min-h-0 flex-auto overflow-y-auto overscroll-contain">
                 <EveryoneElseDeclinedNotice
                   event={props.event}
-                  canModify={canModify()}
+                  canEdit={canEdit()}
                   onDelete={deleteDialog.open}
                   onReschedule={openEditor}
                 />
-                <div class="px-3 pb-3">
-                  <EventDetails
-                    event={props.event}
-                    timeFormat={props.timeFormat}
-                    defaultReminders={props.defaultReminders}
-                  />
-                </div>
-                <EventAttendeesSection
-                  attendees={props.event.attendees}
-                  actions={
-                    <EventGuestActions
-                      event={props.event}
-                      closeDetails={() => props.onOpenChange(false)}
-                    />
-                  }
+                <EventJoinRequests
+                  eventId={props.event.eventId}
+                  canModify={canEdit()}
                 />
+                <div class="px-3 pb-3">
+                  <Show
+                    when={props.event.teamProjection}
+                    fallback={
+                      <EventDetails
+                        event={props.event}
+                        timeFormat={props.timeFormat}
+                        defaultReminders={props.defaultReminders}
+                      />
+                    }
+                  >
+                    <TeamEventDetails
+                      event={props.event}
+                      timeFormat={props.timeFormat}
+                      onOpenLink={openExternalUrl}
+                    />
+                  </Show>
+                </div>
+                <Show
+                  when={
+                    meetingNotesEnabled() &&
+                    props.event.teamProjection?.kind !== 'busy' &&
+                    !props.event.isCancelled &&
+                    !props.event.isSnapshot
+                  }
+                >
+                  <CalendarMeetingNotes
+                    event={props.event}
+                    onDialogChange={setNotesOpen}
+                    onOpenDocument={(id) => {
+                      openingDocument = true;
+                      openWithSplit(
+                        { type: 'md', id },
+                        { preferNewSplit: true }
+                      );
+                      props.onOpenChange(false);
+                    }}
+                  />
+                </Show>
+                <Show when={!props.event.teamProjection}>
+                  <EventGuests
+                    event={props.event}
+                    invites={invites}
+                    closeDetails={() => props.onOpenChange(false)}
+                  />
+                </Show>
               </div>
               <div class="shrink-0">
-                <EventRsvpSection event={props.event} />
+                <Show when={!props.event.teamProjection}>
+                  <EventRsvpSection event={props.event} />
+                </Show>
               </div>
             </div>
           </Popover.Content>

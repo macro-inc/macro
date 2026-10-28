@@ -66,10 +66,10 @@ struct CallVideoOverlayTheme: Equatable {
 /// overlay, structural work (hierarchy changes, visibility flips on
 /// hit-testable views, frame/scroll geometry) is deferred and only safe
 /// restyles run; the pending state flushes when the interaction settles.
-/// Mutating the hierarchy mid-touch corrupts UIKit's delayed-touch gesture
-/// machinery (-[UIGestureRecognizer _delayTouchesForEvent:] throws
-/// NSInvalidArgumentException and the app dies), and structural/geometry
-/// updates applied non-atomically leave the participant strip unscrollable.
+/// Participant tiles are visual-only: the persistent strip scroll view owns
+/// their touches, so replacing a participant never detaches UIKit's touch
+/// target. Deferral keeps the primary and row stable during interaction; it
+/// isn't the safety boundary for the lifetime of a participant's touch target.
 final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, UIScrollViewDelegate, @unchecked Sendable {
     private let rootView = PassthroughOverlayView()
     private let modalOverlayView = UIView()
@@ -82,8 +82,8 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     private let primaryInitialsLabel = UILabel()
     private let primaryEmptyStateLabel = UILabel()
     private let primaryParticipantLabel = UILabel()
-    private let stripScrollView = TileStripScrollView()
-    private let stripStackView = UIStackView()
+    private let stripScrollView = ParticipantStripScrollView(frame: .zero)
+    private let stripContentView = UIView()
     private let localTileView = RemoteVideoTileView(isMirrored: true)
     private let controlsView = UIStackView()
     private let microphoneButton = UIButton(type: .system)
@@ -110,6 +110,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     var onSelectRemoteParticipant: ((String) -> Void)?
     var onOpenDrawerFromThumbnail: (() -> Void)?
     var onModeChanged: ((CallVideoOverlayMode) -> Void)?
+    /// Whether a call is running behind the overlay. Read on main when a
+    /// setter applies, so a late update queued before teardown can never
+    /// present a drawer, thumbnail, or edge tab with no call to leave.
+    var isCallActive: () -> Bool = { false }
 
     /// Everything the overlay renders, in one value. Setters mutate `desired`;
     /// the apply pass owns moving it into the view tree and records what it
@@ -172,7 +176,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     private var audioRoute: CallAudioRouteSnapshot { desired.audioRoute }
     private var isLocalVideoEnabled: Bool { desired.isLocalVideoEnabled }
     private var localVideoTrack: VideoTrack? { desired.localVideoTrack }
-    private var primaryRemoteParticipantId: String? { desired.primaryRemoteParticipantId }
     private var pinnedRemoteParticipantId: String? { desired.participants.first(where: { $0.isPinned })?.id }
 
     private var primaryRemoteParticipant: NativeVideoParticipant? {
@@ -187,7 +190,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     private var primaryRemoteVideoTrack: VideoTrack? { primaryRemoteParticipant?.track }
 
     private var stripParticipants: [NativeVideoParticipant] {
-        desired.participants.filter { $0.id != desired.primaryRemoteParticipantId }
+        desired.participants.filter { $0.id != primaryRemoteParticipant?.id }
     }
 
     override init() {
@@ -204,12 +207,16 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         }
     }
 
-    func setMode(_ mode: CallVideoOverlayMode) {
+    func setMode(_ requestedMode: CallVideoOverlayMode) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            let mode = self.isCallActive() ? requestedMode : .hidden
+            if mode != requestedMode {
+                callKitLog("Native video overlay hiding instead of mode=\(requestedMode.rawValue); no active call")
+            }
             self.desired.mode = mode
             self.scheduleApply()
-            print("[CallKit] Native video overlay mode=\(mode.rawValue)")
+            callKitLog("Native video overlay mode=\(mode.rawValue)")
             self.onModeChanged?(mode)
         }
     }
@@ -224,7 +231,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.channelTitle = "Call"
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay channelTitle=\(self.desired.channelTitle)")
+            callKitLog("Native video overlay channelTitle hasTitle=\(trimmedTitle?.isEmpty == false)")
         }
     }
 
@@ -233,7 +240,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.theme = theme ?? .fallback
             self.scheduleApply()
-            print("[CallKit] Native video overlay theme updated")
+            callKitLog("Native video overlay theme updated")
         }
     }
 
@@ -248,17 +255,22 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     func presentForActiveCallIfNeeded() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard self.desired.mode == .hidden, !self.didAutoPresent else { return }
+            guard self.isCallActive(), self.desired.mode == .hidden, !self.didAutoPresent else { return }
             self.didAutoPresent = true
             self.desired.mode = .expanded
             self.scheduleApply()
-            print("[CallKit] Native video overlay auto-presented for active call")
+            callKitLog("Native video overlay auto-presented for active call")
         }
     }
 
     func setRemoteVideoParticipants(_ participants: [NativeVideoParticipant], primaryId: String?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // Remote participants show the edge tab even while hidden.
+            guard self.isCallActive() else {
+                callKitLog("Native video overlay ignoring remote participants; no active call")
+                return
+            }
             self.desired.participants = participants
             self.desired.primaryRemoteParticipantId = primaryId
             if self.primaryRemoteParticipant != nil, self.desired.mode == .hidden, !self.didAutoPresent {
@@ -272,6 +284,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     func setLocalVideoTrack(_ track: VideoTrack?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.isCallActive() else {
+                callKitLog("Native video overlay ignoring localTrack=\(track == nil ? "nil" : "set"); no active call")
+                return
+            }
             self.desired.localVideoTrack = track
             self.desired.isLocalVideoEnabled = track != nil
             if track != nil, self.desired.mode == .hidden, !self.didAutoPresent {
@@ -279,7 +295,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.mode = .expanded
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay localTrack=\(track == nil ? "nil" : "set")")
+            callKitLog("Native video overlay localTrack=\(track == nil ? "nil" : "set")")
         }
     }
 
@@ -293,7 +309,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
                 self.desired.localParticipantTitle = "You"
             }
             self.scheduleApply()
-            print("[CallKit] Native video overlay localParticipantTitle=\(self.desired.localParticipantTitle)")
+            callKitLog("Native video overlay localParticipantTitle hasTitle=\(trimmedTitle?.isEmpty == false)")
         }
     }
 
@@ -302,7 +318,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.isLocalVideoEnabled = enabled
             self.scheduleApply()
-            print("[CallKit] Native video overlay localVideoEnabled=\(enabled)")
+            callKitLog("Native video overlay localVideoEnabled=\(enabled)")
         }
     }
 
@@ -311,7 +327,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.isAudioMuted = muted
             self.scheduleApply()
-            print("[CallKit] Native video overlay audioMuted=\(muted)")
+            callKitLog("Native video overlay audioMuted=\(muted)")
         }
     }
 
@@ -320,7 +336,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             guard let self else { return }
             self.desired.audioRoute = route
             self.scheduleApply()
-            print("[CallKit] Native video overlay audioRoute input=\(route.input.rawValue) output=\(route.output.rawValue) speakerForced=\(route.isSpeakerForced) supportsSpeakerToggle=\(route.supportsSpeakerToggle)")
+            callKitLog("Native video overlay audioRoute input=\(route.input.rawValue) output=\(route.output.rawValue) speakerForced=\(route.isSpeakerForced) supportsSpeakerToggle=\(route.supportsSpeakerToggle)")
         }
     }
 
@@ -330,9 +346,10 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             var next = OverlayViewState()
             next.theme = self.desired.theme
             self.desired = next
+            self.stripScrollView.invalidateSelection()
             self.didAutoPresent = false
             self.scheduleApply()
-            print("[CallKit] Native video overlay reset")
+            callKitLog("Native video overlay reset")
         }
     }
 
@@ -363,7 +380,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         guard !isOverlayInteracting else {
             if deferredApplyStart == nil {
                 deferredApplyStart = CACurrentMediaTime()
-                print("[CallKit] Native video overlay deferring structural apply while interacting \(interactionDebugDescription)")
+                callKitLog("Native video overlay deferring structural apply while interacting \(interactionDebugDescription)")
             }
             applyRestyleOnly()
             scheduleDeferredFlush()
@@ -371,7 +388,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         }
         if let start = deferredApplyStart {
             deferredApplyStart = nil
-            print(String(format: "[CallKit] Native video overlay flushed deferred apply after %.2fs", CACurrentMediaTime() - start))
+            callKitLog(String(format: "Native video overlay flushed deferred apply after %.2fs", CACurrentMediaTime() - start))
         }
         applyFullState()
         applied = desired
@@ -406,7 +423,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         layoutFrames()
         bringOverlayToFrontIfNeeded()
         if participantsChanged {
-            print("[CallKit] Native video overlay applied remoteParticipants=\(desired.participants.count) primary=\(primaryRemoteParticipant?.id ?? "nil")")
+            callKitLog("Native video overlay applied remoteParticipants=\(desired.participants.count) hasPrimary=\(primaryRemoteParticipant != nil)")
         }
     }
 
@@ -417,12 +434,19 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     /// flips on hit-testable views, no video track swaps.
     private func applyRestyleOnly() {
         applyTextContent()
-        for participant in stripParticipants {
-            guard let tile = stripTileViews[participant.id] else { continue }
-            tile.restyle(participant: participant, isPrimary: participant.id == primaryRemoteParticipantId)
+        // Restyle the identities actually on screen. `desired` may already
+        // name a different primary or omit a participant who just left.
+        for item in stripScrollView.displayedItems {
+            guard let participant = desired.participants.first(where: { $0.id == item.id }),
+                  let tile = stripTileViews[item.id] else { continue }
+            tile.restyle(participant: participant, isPrimary: false)
         }
-        primaryParticipantLabel.text = primaryRemoteParticipantTitle
-        primaryInitialsLabel.text = primaryRemoteParticipantTitle.map(initials)
+        let displayedPrimary = applied.participants.first { $0.id == applied.primaryRemoteParticipantId }
+            ?? applied.participants.first
+        let primary = desired.participants.first { $0.id == displayedPrimary?.id } ?? displayedPrimary
+        let title = primary.map { $0.isScreenShare ? "Screen" : $0.title }
+        primaryParticipantLabel.text = title
+        primaryInitialsLabel.text = title.map(initials)
         configureControlState()
     }
 
@@ -447,7 +471,9 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         rootView.blocksBackgroundTouches = desired.mode == .expanded
 
         localTileView.isHidden = !shouldShowDrawer
-        stripScrollView.isHidden = !shouldShowDrawer || stripParticipants.isEmpty
+        // Keep the gesture surface attached and visible even when the row
+        // becomes empty. Only the drawer's presentation controls its lifetime.
+        stripScrollView.isHidden = !shouldShowDrawer
         unpinButton.isHidden = pinnedRemoteParticipantId == nil
         switchCameraButton.isHidden = !desired.isLocalVideoEnabled || localTileView.isHidden
     }
@@ -460,7 +486,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             rootView.frame = parent.bounds
             rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             parent.addSubview(rootView)
-            print("[CallKit] Attached native video overlay parent=\(type(of: parent)) frame=\(parent.bounds)")
+            callKitLog("Attached native video overlay parent=\(type(of: parent)) frame=\(parent.bounds)")
         } else if rootView.frame != parent.bounds {
             rootView.frame = parent.bounds
         }
@@ -476,7 +502,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             "document.activeElement && document.activeElement.blur && document.activeElement.blur()",
             completionHandler: nil
         )
-        print("[CallKit] Native video overlay dismissed webview keyboard for drawer")
+        callKitLog("Native video overlay dismissed webview keyboard for drawer")
     }
 
     /// Reordering the window's subviews while a touch is in flight destabilizes
@@ -500,8 +526,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             || stripScrollView.isDragging
             || stripScrollView.isDecelerating
             || stripScrollView.panGestureRecognizer.state != .possible
-            || stripTileViews.values.contains(where: \.isTracking)
-            || localTileView.isTracking
             || drawerPanIsActive
     }
 
@@ -516,8 +540,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             + " scrollDragging=\(stripScrollView.isDragging)"
             + " scrollDecelerating=\(stripScrollView.isDecelerating)"
             + " scrollPanState=\(stripScrollView.panGestureRecognizer.state.rawValue)"
-            + " tileTracking=\(stripTileViews.values.contains(where: \.isTracking))"
-            + " localTileTracking=\(localTileView.isTracking)"
             + " drawerPanState=\(drawerPanRecognizer.map { String($0.state.rawValue) } ?? "nil")"
     }
 
@@ -602,6 +624,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         primaryEmptyStateLabel.numberOfLines = 0
         primaryPlaceholderView.addSubview(primaryEmptyStateLabel)
 
+        primaryParticipantLabel.accessibilityIdentifier = "call.primary-participant"
         primaryParticipantLabel.textColor = theme.textColor
         primaryParticipantLabel.font = .systemFont(ofSize: 14, weight: .semibold)
         primaryParticipantLabel.lineBreakMode = .byTruncatingTail
@@ -614,15 +637,15 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         stripScrollView.showsHorizontalScrollIndicator = false
         stripScrollView.alwaysBounceHorizontal = true
         stripScrollView.backgroundColor = .clear
-        stripScrollView.delaysContentTouches = false
         stripScrollView.delegate = self
+        stripScrollView.accessibilityIdentifier = "call.participant-row"
+        stripScrollView.onSelectParticipant = { [weak self] id in
+            self?.selectDisplayedParticipant(id)
+        }
         drawerView.addSubview(stripScrollView)
 
-        stripStackView.axis = .horizontal
-        stripStackView.alignment = .fill
-        stripStackView.distribution = .fill
-        stripStackView.spacing = 10
-        stripScrollView.addSubview(stripStackView)
+        stripContentView.isUserInteractionEnabled = false
+        stripScrollView.addSubview(stripContentView)
 
         localTileView.applyTheme(theme)
         localTileView.configure(
@@ -637,7 +660,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             ),
             isPrimary: false
         )
-        localTileView.onTrackingEnded = { [weak self] in self?.scheduleApply() }
         drawerView.addSubview(localTileView)
 
         controlsView.axis = .horizontal
@@ -815,10 +837,8 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
 
     // MARK: - Participant strip
 
-    /// Structural sync of strip tiles to `desired`. Runs only inside the gated
-    /// full apply, never while a touch is active — inserting, removing, or
-    /// reordering tiles while UIKit is delivering a touch through the strip
-    /// corrupts the delayed-touch gesture machinery.
+    /// Structural sync of visual-only tiles. Runs with geometry and primary
+    /// updates in the same gated pass so the row doesn't move under a finger.
     private func syncParticipantStrip() {
         let participants = stripParticipants
 
@@ -827,32 +847,27 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
         for id in staleIds {
             guard let tile = stripTileViews.removeValue(forKey: id) else { continue }
             tile.prepareForRemoval()
-            stripStackView.removeArrangedSubview(tile)
             tile.removeFromSuperview()
         }
 
-        for (index, participant) in participants.enumerated() {
+        for participant in participants {
             let tile = stripTileViews[participant.id] ?? RemoteVideoTileView()
             stripTileViews[participant.id] = tile
-            configureStripTile(tile, participant: participant)
-            tile.ensureFixedSize()
-            let arrangedTiles = stripStackView.arrangedSubviews
-            if index >= arrangedTiles.count || arrangedTiles[index] !== tile {
-                stripStackView.insertArrangedSubview(tile, at: min(index, arrangedTiles.count))
+            tile.applyTheme(theme)
+            tile.configure(participant: participant, isPrimary: false)
+            tile.accessibilityIdentifier = "call.participant.\(participant.id)"
+            tile.onAccessibilityActivate = { [weak self] in
+                self?.selectDisplayedParticipant(participant.id)
             }
+            if tile.superview !== stripContentView { stripContentView.addSubview(tile) }
         }
     }
 
-    private func configureStripTile(_ tile: RemoteVideoTileView, participant: NativeVideoParticipant) {
-        tile.applyTheme(theme)
-        tile.configure(participant: participant, isPrimary: participant.id == primaryRemoteParticipantId)
-        tile.onTap = { [weak self] id in
-            print("[CallKit] Native video overlay remote tile tapped id=\(id)")
-            self?.onSelectRemoteParticipant?(id)
-        }
-        tile.onTrackingEnded = { [weak self] in
-            self?.scheduleApply()
-        }
+    private func selectDisplayedParticipant(_ id: String) {
+        // A departure may have arrived while the displayed row was frozen.
+        guard desired.participants.contains(where: { $0.id == id }) else { return }
+        callKitLog("Native video overlay remote tile selected")
+        onSelectRemoteParticipant?(id)
     }
 
     // MARK: - Theme
@@ -1073,17 +1088,20 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             width: max(0, drawerView.bounds.width - scrollX - rowHorizontalInset),
             height: stripHeight
         )
-        stripStackView.frame = CGRect(
+        stripContentView.frame = CGRect(
             x: 0,
             y: 0,
             width: CGFloat(stripParticipantCount) * tileWidth + CGFloat(max(stripParticipantCount - 1, 0)) * tileSpacing,
             height: stripHeight
         )
-        let stripContentSize = CGSize(width: stripStackView.frame.width, height: stripHeight)
-        if stripScrollView.contentSize != stripContentSize {
-            stripScrollView.contentSize = stripContentSize
+        let items = stripParticipants.enumerated().map { index, participant in
+            ParticipantStripScrollView.Item(
+                id: participant.id,
+                frame: CGRect(x: CGFloat(index) * (tileWidth + tileSpacing), y: 0, width: tileWidth, height: stripHeight)
+            )
         }
-        stripStackView.arrangedSubviews.forEach { $0.frame.size = CGSize(width: tileWidth, height: stripHeight) }
+        for item in items { stripTileViews[item.id]?.frame = item.frame }
+        stripScrollView.updateItems(items, contentSize: stripContentView.bounds.size)
 
         switchCameraButton.frame = CGRect(
             x: localTileView.frame.maxX - 44,
@@ -1212,34 +1230,34 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
     }
 
     @objc private func toggleMicrophone() {
-        print("[CallKit] Native video overlay microphone toggle tapped currentMuted=\(isAudioMuted)")
+        callKitLog("Native video overlay microphone toggle tapped currentMuted=\(isAudioMuted)")
         onToggleMicrophone?()
     }
 
     @objc private func toggleSpeaker() {
-        print("[CallKit] Native video overlay speaker toggle tapped output=\(audioRoute.output.rawValue) speakerForced=\(audioRoute.isSpeakerForced) supportsSpeakerToggle=\(audioRoute.supportsSpeakerToggle)")
+        callKitLog("Native video overlay speaker toggle tapped output=\(audioRoute.output.rawValue) speakerForced=\(audioRoute.isSpeakerForced) supportsSpeakerToggle=\(audioRoute.supportsSpeakerToggle)")
         guard audioRoute.supportsSpeakerToggle else { return }
         onToggleSpeaker?()
     }
 
     @objc private func toggleCamera() {
-        print("[CallKit] Native video overlay camera toggle tapped currentEnabled=\(isLocalVideoEnabled)")
+        callKitLog("Native video overlay camera toggle tapped currentEnabled=\(isLocalVideoEnabled)")
         onToggleCamera?()
     }
 
     @objc private func switchCamera() {
-        print("[CallKit] Native video overlay camera switch tapped")
+        callKitLog("Native video overlay camera switch tapped")
         onSwitchCamera?()
     }
 
     @objc private func unpinRemoteParticipant() {
         guard let pinnedRemoteParticipantId else { return }
-        print("[CallKit] Native video overlay unpin tapped id=\(pinnedRemoteParticipantId)")
+        callKitLog("Native video overlay unpin tapped")
         onSelectRemoteParticipant?(pinnedRemoteParticipantId)
     }
 
     @objc private func endCall() {
-        print("[CallKit] Native video overlay end call tapped")
+        callKitLog("Native video overlay end call tapped")
         onEndCall?()
     }
 
@@ -1329,6 +1347,9 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard gestureRecognizer.view === drawerView else { return true }
+        // The strip owns both horizontal scrolling and participant selection;
+        // the drawer pan must not compete with a touch that starts in the row.
+        if let view = touch.view, view.isDescendant(of: stripScrollView) { return false }
         return !(touch.view is UIControl)
     }
 
@@ -1347,7 +1368,7 @@ private enum ThumbnailCorner {
     case bottomRight
 }
 
-private final class RemoteVideoTileView: UIControl {
+private final class RemoteVideoTileView: UIView {
     private let videoView = VideoView()
     private let placeholderView = UIView()
     private let initialsLabel = UILabel()
@@ -1355,11 +1376,10 @@ private final class RemoteVideoTileView: UIControl {
     private let speakingIndicator = UIView()
     private let isMirrored: Bool
     private var theme = CallVideoOverlayTheme.fallback
-    private var participantId: String?
     private var hasVideoTrack = false
-    private var didInstallFixedSizeConstraints = false
-    var onTap: ((String) -> Void)?
-    var onTrackingEnded: (() -> Void)?
+    var onAccessibilityActivate: (() -> Void)? {
+        didSet { accessibilityTraits = onAccessibilityActivate == nil ? .staticText : .button }
+    }
 
     init(frame: CGRect = .zero, isMirrored: Bool = false) {
         self.isMirrored = isMirrored
@@ -1373,11 +1393,8 @@ private final class RemoteVideoTileView: UIControl {
         configureViews()
     }
 
-    /// Full sync, including the video track swap. VideoView replaces internal
-    /// renderer subviews when its track changes, so this must only run from the
-    /// gated apply pass, never while this control is tracking a touch.
+    /// Full sync, including the video track swap, for this visual-only tile.
     func configure(participant: NativeVideoParticipant, isPrimary: Bool) {
-        participantId = participant.id
         hasVideoTrack = participant.track != nil
         if videoView.track !== participant.track {
             videoView.track = participant.track
@@ -1391,6 +1408,7 @@ private final class RemoteVideoTileView: UIControl {
     func restyle(participant: NativeVideoParticipant, isPrimary: Bool) {
         initialsLabel.text = initials(from: participant.avatarTitle ?? participant.title)
         label.text = participant.isScreenShare ? "Screen" : participant.title
+        accessibilityLabel = label.text
         applyLabelBackground()
         speakingIndicator.isHidden = !participant.isSpeaking
         layer.borderColor = (isPrimary ? theme.edgeColor : theme.edgeMutedColor).cgColor
@@ -1399,24 +1417,17 @@ private final class RemoteVideoTileView: UIControl {
     }
 
     func prepareForRemoval() {
-        onTrackingEnded = nil
-        cancelTracking(with: nil)
         videoView.track = nil
         placeholderView.isHidden = false
-        onTap = nil
-        participantId = nil
+        onAccessibilityActivate = nil
         hasVideoTrack = false
         applyLabelBackground()
     }
 
-    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
-        super.endTracking(touch, with: event)
-        onTrackingEnded?()
-    }
-
-    override func cancelTracking(with event: UIEvent?) {
-        super.cancelTracking(with: event)
-        onTrackingEnded?()
+    override func accessibilityActivate() -> Bool {
+        guard let onAccessibilityActivate else { return false }
+        onAccessibilityActivate()
+        return true
     }
 
     func applyTheme(_ theme: CallVideoOverlayTheme) {
@@ -1431,13 +1442,6 @@ private final class RemoteVideoTileView: UIControl {
         speakingIndicator.backgroundColor = theme.successColor
     }
 
-    func ensureFixedSize() {
-        guard !didInstallFixedSizeConstraints else { return }
-        didInstallFixedSizeConstraints = true
-        widthAnchor.constraint(equalToConstant: 128).isActive = true
-        heightAnchor.constraint(equalToConstant: 92).isActive = true
-    }
-
     private func configureViews() {
         backgroundColor = theme.messageBackgroundColor
         layer.cornerRadius = 6
@@ -1446,9 +1450,7 @@ private final class RemoteVideoTileView: UIControl {
         videoView.layoutMode = .fill
         videoView.mirrorMode = isMirrored ? .auto : .off
         videoView.backgroundColor = theme.messageBackgroundColor
-        // Keep hit-testing on the control itself: VideoView swaps its internal
-        // renderer subviews when tracks change, and detaching the view UIKit
-        // associated with an in-flight touch corrupts touch delivery.
+        // Rendering never participates in hit-testing; the row owns touches.
         videoView.isUserInteractionEnabled = false
         addSubview(videoView)
 
@@ -1476,7 +1478,9 @@ private final class RemoteVideoTileView: UIControl {
         speakingIndicator.isUserInteractionEnabled = false
         addSubview(speakingIndicator)
 
-        addTarget(self, action: #selector(tapped), for: .touchUpInside)
+        isUserInteractionEnabled = false
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
     }
 
     private func applyLabelBackground() {
@@ -1519,20 +1523,6 @@ private final class RemoteVideoTileView: UIControl {
         return "?"
     }
 
-    @objc private func tapped() {
-        guard let participantId else { return }
-        onTap?(participantId)
-    }
-}
-
-/// The participant strip is wall-to-wall UIControl tiles, and
-/// `UIScrollView.touchesShouldCancel(in:)` returns false for UIControls by
-/// default — so with `delaysContentTouches = false` a drag that starts on a
-/// tile is owned by the tile's tracking forever and the strip cannot scroll.
-/// Let the pan steal the touch: the tile gets `cancelTracking` (no
-/// touch-up-inside, so no accidental pin) and the scroll proceeds.
-private final class TileStripScrollView: UIScrollView {
-    override func touchesShouldCancel(in view: UIView) -> Bool { true }
 }
 
 /// Non-recognizing gesture recognizer attached to the overlay root purely to

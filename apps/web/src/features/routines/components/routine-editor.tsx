@@ -1,10 +1,12 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { Tabs } from '@kobalte/core/tabs';
-import ClockIcon from '@phosphor/clock.svg';
-import { cn, EntityComposer, Layer } from '@ui';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import { cn, EntityComposer, Layer, TabSelector } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import type { ScheduleDraft } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
+import { RoutineRunVisibility } from './routine-run-visibility';
 
 /** A project-style overview and full-width run list, inside the current pane. */
 export function RoutineEditor(props: {
@@ -18,11 +20,15 @@ export function RoutineEditor(props: {
   runActions?: JSX.Element;
   instructions: JSX.Element;
   executionPicker: JSX.Element;
+  apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
+  showHistory?: boolean;
   actions?: JSX.Element;
   feedback?: JSX.Element;
+  /** More properties beside the execution target and run visibility. */
+  properties?: JSX.Element;
 }) {
   return (
     <ViewBreadcrumbs.Root
@@ -55,11 +61,13 @@ export function RoutineEditor(props: {
               <ClockIcon class="size-3 shrink-0" />
               <span class="truncate">{props.draft.name}</span>
             </ViewBreadcrumbs.Button>
-            <div class="shrink-0">{props.actions}</div>
+            <Show when={isTouchDevice()}>
+              <div class="shrink-0">{props.actions}</div>
+            </Show>
           </div>
         )}
       </ViewBreadcrumbs.Item>
-      <Tabs
+      <TabSelector.Root
         value={props.tab}
         onChange={(value) => {
           if (value === 'settings' || value === 'history') props.onTab(value);
@@ -75,33 +83,36 @@ export function RoutineEditor(props: {
             class="min-w-0 @max-[600px]/routine:flex-1"
           />
           <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-            <Layer depth={0}>
-              <Tabs.List
-                aria-label="Routine details"
-                class="inline-flex shrink-0 items-center rounded-full border border-edge-muted bg-surface p-0.5"
-              >
+            <TabSelector class="w-fit">
+              <TabSelector.List aria-label="Routine details">
                 <For
-                  each={[
-                    { value: 'settings', label: 'Overview' },
-                    { value: 'history', label: 'Run History' },
-                  ]}
+                  each={
+                    props.showHistory === false
+                      ? [{ value: 'settings', label: 'Overview' }]
+                      : [
+                          { value: 'settings', label: 'Overview' },
+                          { value: 'history', label: 'Run History' },
+                        ]
+                  }
                 >
                   {(tab) => (
-                    <Layer depth={2}>
-                      <Tabs.Trigger
-                        value={tab.value}
-                        class="rounded-full px-3 py-1 text-xs font-medium text-ink-extra-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus data-selected:bg-surface data-selected:text-ink data-selected:ring data-selected:ring-inset data-selected:ring-edge-muted"
-                      >
-                        {tab.label}
-                      </Tabs.Trigger>
-                    </Layer>
+                    <TabSelector.Tab value={tab.value}>
+                      {tab.label}
+                    </TabSelector.Tab>
                   )}
                 </For>
-              </Tabs.List>
-            </Layer>
+              </TabSelector.List>
+            </TabSelector>
           </div>
+          <Show when={!isTouchDevice() && props.actions}>
+            <div class="ml-auto shrink-0">
+              <HeaderActionGroup label="Routine actions">
+                {props.actions}
+              </HeaderActionGroup>
+            </div>
+          </Show>
         </ViewShell.TopBar>
-        <Tabs.Content
+        <TabSelector.Panel
           value="settings"
           class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-12 outline-none touch:pt-6"
         >
@@ -133,6 +144,14 @@ export function RoutineEditor(props: {
             >
               <EntityComposer.Properties aria-label="Routine properties">
                 {props.executionPicker}
+                <RoutineRunVisibility
+                  value={props.draft.runVisibility ?? DEFAULT_RUN_VISIBILITY}
+                  onChange={(runVisibility) =>
+                    props.onChange((draft) => ({ ...draft, runVisibility }))
+                  }
+                />
+                {props.properties}
+                {props.apps}
               </EntityComposer.Properties>
             </fieldset>
             <Layer depth={1}>
@@ -187,14 +206,14 @@ export function RoutineEditor(props: {
             </fieldset>
             <div class="mt-4 grid gap-2">{props.feedback}</div>
           </div>
-        </Tabs.Content>
-        <Tabs.Content
+        </TabSelector.Panel>
+        <TabSelector.Panel
           value="history"
           class="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
         >
           {props.history}
-        </Tabs.Content>
-      </Tabs>
+        </TabSelector.Panel>
+      </TabSelector.Root>
     </ViewBreadcrumbs.Root>
   );
 }

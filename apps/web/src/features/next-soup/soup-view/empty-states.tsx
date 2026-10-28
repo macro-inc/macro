@@ -2,11 +2,12 @@ import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import {
   type CreatableName,
-  runCreateAction,
   useCreatableEnabled,
+  useCreateAction,
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
@@ -19,20 +20,11 @@ import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import EmptyStateRoutinesGraphic from '@design/empty-state-routines.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
-
-/** A single key, sized to sit inline in a sentence rather than on its own row. */
-function HotkeyCap(props: { children: JSXElement }) {
-  return (
-    <kbd class="rounded border border-edge-muted px-1 py-px font-mono text-xs">
-      {props.children}
-    </kbd>
-  );
-}
 
 type FallbackContent = {
   plural: string;
@@ -67,17 +59,6 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
     create: { label: 'New channel', blockName: 'channel' },
     documentationUrl: `${DOCS_BASE}/product/channels`,
   },
-  reminders: {
-    plural: 'reminders',
-    description: (
-      <>
-        Set a reminder on anything in Macro by selecting it and pressing{' '}
-        <HotkeyCap>h</HotkeyCap>, or write one about nothing in particular from
-        the Create menu.
-      </>
-    ),
-    create: { label: 'New reminder', blockName: 'reminder' },
-  },
   calls: {
     plural: 'calls',
     graphic: EmptyStateCallsGraphic,
@@ -100,13 +81,14 @@ export function EmptyState(props: {
   hasHiddenItems?: boolean;
   onClearFilters?: () => void;
 }) {
+  const runCreateAction = useCreateAction();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
   const isCreatableEnabled = useCreatableEnabled();
 
   const onConnectEmail = () => {
-    void startAddInbox();
+    fireAndForget(startAddInbox(), 'add-inbox');
   };
 
   return (
@@ -146,34 +128,6 @@ export function EmptyState(props: {
       {/* The Reminders tab is not an email surface, so it sits above the
           connect-email gate — its empty copy is the same with or without a
           linked inbox. */}
-      <Match
-        when={props.listView === 'home' && soup.activeTab() === 'reminders'}
-      >
-        <EmptyStatePanel
-          graphic={EmptyStateInboxTrayGraphic}
-          title="No scheduled reminders"
-          description={
-            <>
-              Reminders you schedule wait here until they fire into Signal. Set
-              one on anything in Macro by selecting it and pressing{' '}
-              <HotkeyCap>h</HotkeyCap>, or write one about nothing in
-              particular.
-            </>
-          }
-          // Gated like every other reminder affordance. The tab itself is
-          // already hidden when the flag is off, so this is belt and braces
-          // rather than the only thing standing in the way.
-          primaryAction={
-            isCreatableEnabled('reminder')
-              ? {
-                  label: 'New reminder',
-                  onClick: () => runCreateAction('reminder'),
-                }
-              : undefined
-          }
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
-        />
-      </Match>
 
       <Match when={props.listView === 'home' && !emailActive()}>
         <EmptyStatePanel
@@ -184,7 +138,7 @@ export function EmptyState(props: {
             label: 'Connect email',
             onClick: onConnectEmail,
           }}
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
+          documentationUrl={`${DOCS_BASE}/product/home`}
         />
       </Match>
 
@@ -236,7 +190,7 @@ export function EmptyState(props: {
               graphic={EmptyStateInboxTrayGraphic}
               title={title}
               description={description}
-              documentationUrl={`${DOCS_BASE}/product/inbox`}
+              documentationUrl={`${DOCS_BASE}/product/home`}
             />
           );
         })()}
@@ -329,7 +283,7 @@ export function EmptyState(props: {
             icon: PlusIcon,
             onClick: () => runCreateAction('project'),
           }}
-          documentationUrl={`${DOCS_BASE}/product/folders`}
+          documentationUrl={`${DOCS_BASE}/product/drive`}
         >
           <FolderDropZone />
         </EmptyStatePanel>

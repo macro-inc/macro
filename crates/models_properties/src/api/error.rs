@@ -50,6 +50,12 @@ pub enum PropertyValueValidationError {
     #[error("Date properties cannot be multi-select")]
     DateMultiSelect,
 
+    #[error("Date range values can only be used with DateRange properties")]
+    DateRangeWrongType,
+
+    #[error("DateRange properties cannot be multi-select")]
+    DateRangeMultiSelect,
+
     #[error("Number values can only be used with Number properties")]
     NumberWrongType,
 

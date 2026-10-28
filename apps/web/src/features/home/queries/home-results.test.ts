@@ -75,18 +75,31 @@ describe('home sort method per tab', () => {
     }
   });
 
-  it('keeps recency ordering on the other tabs', () => {
-    expect(
-      buildHomeQuery({ ...context, tab: 'reminders' }).params.sort_method
-    ).toBe('updated_at');
-  });
-
   it('keeps recency ordering everywhere while the notified sort is off', () => {
-    for (const tab of ['signal', 'noise', 'reminders'] as const) {
+    for (const tab of ['signal', 'noise'] as const) {
       expect(
         buildHomeQuery({ ...withoutNotifiedSort, tab }).params.sort_method
       ).toBe('updated_at');
     }
+  });
+});
+
+describe('home channel thread scope', () => {
+  const NIL = '00000000-0000-0000-0000-000000000000';
+
+  it("scopes Signal's channel threads to the viewer", () => {
+    const body = JSON.stringify(
+      buildHomeQuery({ ...context, tab: 'signal' }).body.cthf
+    );
+    expect(body).toContain('{"Participant":"macro|alice@example.com"}');
+  });
+
+  it('matches no channel threads before the viewer is known', () => {
+    const body = JSON.stringify(
+      buildHomeQuery({ ...context, userId: undefined, tab: 'signal' }).body.cthf
+    );
+    expect(body).not.toContain('"Participant"');
+    expect(body).toContain(`{"ThreadId":"${NIL}"}`);
   });
 });
 
@@ -105,23 +118,10 @@ describe('home date buckets', () => {
     expect(groups[0].label).toBe('Today');
   });
 
-  it('falls back to content recency without a stamp and on the other tabs', () => {
+  it('falls back to content recency without a stamp', () => {
     expect(
       homeGroupTimestamp(freshEmail, { tab: 'signal', capabilities })
     ).toBe('2026-09-02T16:00:00Z');
-    const reminders = { tab: 'reminders' as const, capabilities };
-    expect(homeGroupTimestamp(staleTaskFreshComment, reminders)).toBe(
-      '2026-08-31T19:00:00Z'
-    );
-    const groups = groupHomeEntitiesByTabDate(
-      [freshEmail, staleTaskFreshComment],
-      reminders,
-      now
-    );
-    expect(groups.map((group) => group.label)).toEqual([
-      'Today',
-      'Last 7 days',
-    ]);
   });
 
   it('still buckets a stamped row by its notification while the server sort is off', () => {

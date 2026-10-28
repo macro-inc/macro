@@ -54,6 +54,8 @@ export function createComposerModels(agent: Accessor<RosterAgent | undefined>) {
   return {
     models: () => data()?.models ?? [],
     currentModel: () => data()?.currentModel ?? undefined,
+    /** Discovery is in flight, so {@link models} is empty for now, not for good. */
+    pending: () => target() !== undefined && query.isPending,
     message: () => {
       if (!agent()?.runtime.connected)
         return 'Connect the runtime to load models.';

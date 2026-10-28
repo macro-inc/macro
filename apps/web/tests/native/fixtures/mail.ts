@@ -1,4 +1,5 @@
 import { mailProjectionCapsules } from '../../../src/lib/graphql-cache/worker/browser-test/mail-projection-capsules';
+import type { MailAccountFieldsFragment } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
 
 export const USER_ID = 'macro|offline@example.com';
 export const EMAIL = 'offline@example.com';
@@ -6,9 +7,24 @@ export const fixtureId = (n: number) =>
   `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const timestamp = '2025-01-04T00:00:00Z';
 
-export const accounts = [
-  { id: fixtureId(1000), emailAddress: EMAIL, photoUrl: null },
-];
+export function fixtureMailAccount(
+  id: string,
+  emailAddress: string,
+  isPrimary: boolean
+): MailAccountFieldsFragment {
+  return {
+    id,
+    macroId: USER_ID,
+    emailAddress,
+    photoUrl: null,
+    isPrimary,
+    needsReauth: false,
+    draftIsSignal: false,
+    settings: { signature: null, signatureOnRepliesForwards: false },
+  };
+}
+
+export const accounts = [fixtureMailAccount(fixtureId(1000), EMAIL, true)];
 
 /** Subset of the canonical Rust-encoded Mail fixtures. These are API records,
  * not cache writes or precomputed filter results. Keep the capsule facts intact. */

@@ -4,7 +4,11 @@
 
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
-import { render as renderBare, screen } from '@solidjs/testing-library';
+import {
+  fireEvent,
+  render as renderBare,
+  screen,
+} from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
 import { createSignal, type JSX, onMount } from 'solid-js';
@@ -13,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
   agentsEnabled: false,
+  codexEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
@@ -21,6 +26,7 @@ const editorMocks = vi.hoisted(() => ({
   onEnter: undefined as (() => boolean) | undefined,
   inlineMenuOpen: false,
   onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
+  ignoredActions: [] as string[],
 }));
 
 vi.mock(
@@ -99,6 +105,11 @@ vi.hoisted(() => {
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: vi.fn(() => false) }));
 
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+
 vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
   createComposerLayout: (
     _editor: unknown,
@@ -115,7 +126,7 @@ vi.mock('@core/util/upload', () => ({
 }));
 
 vi.mock('@core/codex/flag', () => ({
-  useCodexAgentsAccess: () => () => false,
+  useCodexAgentsAccess: () => () => editorMocks.codexEnabled,
 }));
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
@@ -156,34 +167,31 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
 
-vi.mock('@phosphor-icons/core/regular/paperclip.svg?component-solid', () => ({
+vi.mock('@icon/system/regular/paperclip.svg?component-solid', () => ({
   default: () => <span data-testid="paperclip-icon" />,
 }));
 
-vi.mock('@phosphor/text-aa.svg', () => ({
+vi.mock('@icon/system/regular/text-aa.svg', () => ({
   default: () => <span data-testid="format-icon" />,
 }));
 
-vi.mock('@phosphor/trash.svg', () => ({
+vi.mock('@icon/system/regular/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
-vi.mock('@phosphor/x.svg', () => ({
+vi.mock('@icon/system/regular/x.svg', () => ({
   default: () => <span data-testid="close-icon" />,
 }));
 
-vi.mock('@phosphor/arrow-up.svg', () => ({
+vi.mock('@icon/system/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="paper-plane-icon" />,
-  })
-);
+vi.mock('@icon/system/regular/paper-plane-right.svg?component-solid', () => ({
+  default: () => <span data-testid="paper-plane-icon" />,
+}));
 
-vi.mock('@phosphor/spinner-gap.svg', () => ({
+vi.mock('@icon/system/regular/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 
@@ -274,7 +282,10 @@ vi.mock(
           return builder;
         },
         withEmojis: () => builder,
-        withActions: () => builder,
+        withActions: (options?: { ignoreActionIds?: string[] }) => {
+          editorMocks.ignoredActions.push(...(options?.ignoreActionIds ?? []));
+          return builder;
+        },
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
@@ -354,6 +365,7 @@ vi.mock('@queries/channel/channel-participants', () => ({
 vi.mock('@core/context/user', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/context/user')>()),
   useUserId: () => () => 'macro|me@macro.test',
+  useIsAuthenticated: () => () => true,
 }));
 vi.mock('@queries/messages/mutations', () => ({
   useSendMessageMutation: () => ({ mutate: vi.fn() }),
@@ -364,7 +376,7 @@ vi.mock('@queries/messages/typing', () => ({
 
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
-import { cursorMentionUser } from '../../macroAi';
+import { codexMentionUser, cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
@@ -396,6 +408,7 @@ function render(ui: () => JSX.Element) {
 describe('Input slots', () => {
   beforeEach(() => {
     editorMocks.agentsEnabled = false;
+    editorMocks.codexEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
@@ -404,6 +417,8 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = false;
     editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
+    device.touch = false;
+    editorMocks.ignoredActions = [];
     vi.mocked(isMobile).mockReturnValue(false);
   });
 
@@ -462,30 +477,31 @@ describe('Input slots', () => {
     expect(editorMocks.onEscape?.()).toBe(false);
   });
 
-  it('starts dictation from the collapsed channel composer', async () => {
+  it('omits the microphone on touch devices, whose keyboards dictate', () => {
+    device.touch = true;
     vi.mocked(isMobile).mockReturnValue(true);
-    const user = userEvent.setup();
-    const { container } = render(() => (
+    const collapsed = render(() => (
       <ChannelInput input={baseInput} collapsible />
     ));
-    const collapsed = container.querySelector('[data-composer-collapsed]');
-    expect(collapsed).toBeTruthy();
-    const microphone = collapsed?.querySelector(
-      'button[aria-label="Start dictation"]'
-    );
-    expect(microphone).toBeTruthy();
-    await user.click(microphone!);
-    expect(container.querySelector('[data-composer-collapsed]')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Dictation' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Cancel dictation' }));
-    expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
+    expect(
+      collapsed.container.querySelector('[data-composer-collapsed]')
+    ).toBeTruthy();
+    expect(
+      collapsed.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
+
+    const expanded = render(() => <ChannelInput input={baseInput} />);
+    expect(
+      expanded.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
   });
 
-  it('offers Cursor within its rollout before account setup', () => {
+  it('offers Cursor and Codex within their rollouts before account setup', () => {
     editorMocks.cursorEnabled = true;
+    editorMocks.codexEnabled = true;
     render(() => <ChannelInput input={baseInput} />);
     expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
-      expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
+      expect.arrayContaining(['Cursor', 'Codex'])
     );
   });
 
@@ -538,17 +554,14 @@ describe('Input slots', () => {
     ]);
   });
 
-  it('hides Cursor outside its rollout, including supplied bot entries', () => {
+  it('hides Cursor and Codex outside their rollouts, including supplied bot entries', () => {
+    const builtIns = () => [cursorMentionUser(), codexMentionUser()];
     render(() => (
-      <ChannelInput
-        input={baseInput}
-        participants={() => [cursorMentionUser()]}
-        bots={() => [cursorMentionUser()]}
-      />
+      <ChannelInput input={baseInput} participants={builtIns} bots={builtIns} />
     ));
     const names = editorMocks.mentionUsers?.().map((user) => user.name);
     expect(names).not.toContain('Cursor');
-    expect(names).toEqual(expect.arrayContaining(['Claude', 'Codex']));
+    expect(names).not.toContain('Codex');
   });
 
   it('does not start typing when the editor hydrates an empty composer', async () => {
@@ -622,6 +635,40 @@ describe('Input slots', () => {
     expect(editorMocks.focus).not.toHaveBeenCalled();
   });
 
+  it('waits for touch release before sending a channel message', async () => {
+    vi.mocked(isMobile).mockReturnValue(true);
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'Send on release' }}
+        onSend={onSend}
+      />
+    ));
+    const button = screen.getByRole('button', { name: 'Send message' });
+    await user.pointer({ target: button, keys: '[TouchA>]' });
+    expect(onSend).not.toHaveBeenCalled();
+    await user.pointer({ keys: '[/TouchA]' });
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(onSend.mock.calls[0]?.[0]?.value).toBe('Send on release');
+  });
+
+  it('does not send a cancelled press and still accepts an assistive click', () => {
+    const onSend = vi.fn();
+    render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'Keep this draft' }}
+        onSend={onSend}
+      />
+    ));
+    const button = screen.getByRole('button', { name: 'Send message' });
+    fireEvent.pointerDown(button, { pointerType: 'touch' });
+    fireEvent.pointerCancel(button, { pointerType: 'touch' });
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(button, { detail: 0 });
+    expect(onSend).toHaveBeenCalledOnce();
+  });
+
   it('renders the default action composition and wires handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
@@ -651,10 +698,21 @@ describe('Input slots', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-    await user.click(screen.getByRole('button', { name: 'Attach files' }));
-    expect(screen.queryByRole('menu')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
+    // The menu is modal, so it opens last.
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(
+      expect.arrayContaining([
+        'Mention@',
+        'Attach files',
+        'New task',
+        'New document',
+      ])
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Attach files' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
@@ -662,6 +720,29 @@ describe('Input slots', () => {
     expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
+  });
+
+  it('offers only text, formatting and files when a host switches features off', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        features={{
+          mentions: false,
+          createItems: false,
+          gifs: false,
+          richBlocks: false,
+        }}
+      />
+    ));
+    expect(editorMocks.mentionUsers).toBeUndefined();
+    expect(editorMocks.ignoredActions).toEqual(
+      expect.arrayContaining(['task', 'document', 'gif', 'table', 'heading1'])
+    );
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(['Attach files']);
   });
 
   it('omits the reply action for channel mode', () => {
@@ -678,7 +759,7 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByTestId('custom-actions')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 

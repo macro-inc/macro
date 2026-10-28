@@ -626,7 +626,8 @@ export function TasksLifecycle(props: {
                         color: active() === i() ? 'var(--c1)' : 'var(--c2)',
                         'font-family': 'display',
                         'font-size': '18px',
-                        'font-weight': '315',
+                        'font-weight':
+                          'calc(315 + var(--cream-slab-weight-increase, 0))',
                         'letter-spacing': '-0.01em',
                         'line-height': 1.15,
                         transition: 'color 160ms ease',

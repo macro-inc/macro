@@ -54,13 +54,24 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
+async function fetchAgents(): Promise<AgentWithHarnessId[]> {
+  return await throwOnErr(() => storageServiceClient.getAgents());
+}
+
 export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
     enabled: enabled(),
-    queryFn: async (): Promise<AgentWithHarnessId[]> =>
-      await throwOnErr(() => storageServiceClient.getAgents()),
+    queryFn: fetchAgents,
   }));
+}
+
+/** The saved agents, from the cache when fresh, for imperative callers. */
+export async function fetchAgentsList(): Promise<AgentWithHarnessId[]> {
+  return await queryClient.fetchQuery({
+    queryKey: agentKeys.list.queryKey,
+    queryFn: fetchAgents,
+  });
 }
 
 export function invalidateAgents() {

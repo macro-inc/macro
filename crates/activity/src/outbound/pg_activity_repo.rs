@@ -1,7 +1,9 @@
 //! Postgres adapter for the `activity_events` table (MacroDB).
 
+mod team_feed;
 #[cfg(test)]
 mod test;
+mod timeline;
 
 mod entity_history;
 
@@ -237,6 +239,15 @@ impl ActivityReads for PgActivityRepo {
         })
     }
 
+    async fn teammate_feed(
+        &self,
+        viewer_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        team_feed::teammate_feed(&self.pool, viewer_id, cursor, limit, team_feed::TEAM_SCAN).await
+    }
+
     async fn entity_activity(
         &self,
         keys: &[(EntityType, String)],
@@ -450,7 +461,10 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::ScheduledAction
         | EntityType::Initiative
         | EntityType::Database
-        | EntityType::DatabaseRow => {}
+        | EntityType::CrmPipeline
+        | EntityType::DatabaseRow
+        | EntityType::Form
+        | EntityType::ExternalChat => {}
     }
 }
 
@@ -478,6 +492,7 @@ fn rankable_entity_types() -> Vec<String> {
         EntityType::Initiative,
         EntityType::Database,
         EntityType::DatabaseRow,
+        EntityType::Form,
     ]
     .into_iter()
     .map(|entity_type| entity_type.as_ref().to_owned())

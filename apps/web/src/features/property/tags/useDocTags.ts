@@ -84,8 +84,8 @@ function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   persistTagSelection: PersistTagSelection,
   tagSets: Accessor<TagSetResponse[]>,
-  // Optimistic overlay for sources a mutation cannot write through (query
-  // results, and soup rows whose property record does not exist yet).
+  // Pending selections cover sources outside the mutation's normalized cache
+  // and edits waiting for their turn in the per-entity mutation scope.
   // Undefined for local sources, which are set synchronously.
   inFlightOptionIdsForDefinition?: (
     definitionId: string
@@ -286,8 +286,8 @@ export function useDocTags(entityId: string, entityType: EntityType) {
   );
   const tagsQuery = useTagsQuery();
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
-  // Cover new assignments (and the REST query) until persistence reconciles
-  // the source. Existing GraphQL assignments also update in the normalized cache.
+  // Cover REST readers and serialized pending edits. GraphQL assignments,
+  // including first tags, also update directly in the normalized cache.
   const inFlightOptionIdsForDefinition =
     useInFlightEntityPropertyOptions(entityId);
 
@@ -303,11 +303,9 @@ export function useDocTags(entityId: string, entityType: EntityType) {
  * Doc-tags backed by an entity's already-loaded soup properties instead of a
  * per-entity fetch. List rows use this so tags render with no extra requests.
  *
- * Mutations patch the soup cache optimistically, but only where the entity has
- * a property record to patch: the first tag from a set has no assignment id
- * until the server answers. The in-flight overlay covers that gap (and any
- * transport whose cache this row does not read from), so a picked tag always
- * shows immediately.
+ * Mutations update the normalized entity, including new tag assignments. The
+ * in-flight overlay also covers serialized pending edits and any transport
+ * whose cache this row does not read from.
  */
 export function useSoupDocTags(
   entityId: string,

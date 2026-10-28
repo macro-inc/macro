@@ -3,7 +3,7 @@ import type {
   ExecutionResult,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
-import type { HistoryRecord } from '../core/history';
+import type { HistoryRecord, HistorySkip } from '../core/history';
 
 const resourceSchema = z.object({
   type: z.enum(['chat', 'agent']),
@@ -14,6 +14,25 @@ const resultSchema = z.object({
   resource: resourceSchema.nullish(),
   error: z.string().nullish(),
 });
+
+const conditionSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('not_met'), probability: z.number() }),
+  z.object({ status: z.literal('unavailable') }),
+]);
+
+/** A run its trigger's condition skipped; old and unknown results are runs. */
+export function getHistorySkip(record: {
+  result: unknown;
+}): HistorySkip | undefined {
+  const result = record.result;
+  if (typeof result !== 'object' || result === null || !('condition' in result))
+    return undefined;
+  const parsed = conditionSchema.safeParse(result.condition);
+  if (!parsed.success) return undefined;
+  return parsed.data.status === 'not_met'
+    ? { reason: 'not_met', probability: parsed.data.probability }
+    : { reason: 'unavailable' };
+}
 
 export function decodeExecutionResource(
   value: unknown
@@ -72,5 +91,6 @@ export function toHistoryRecord(record: {
     startedAt: record.start_time,
     endedAt: record.end_time,
     success: record.is_success,
+    skipped: getHistorySkip(record),
   };
 }

@@ -1,0 +1,160 @@
+name: Publish Android to Google Play
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Upload a bundle to internal testing, or promote a tested version to production
+        type: choice
+        default: upload-internal
+        options:
+          - upload-internal
+          - promote-production
+      release_tag:
+        description: Internal upload only — published GitHub release containing a verified AAB
+        required: false
+        type: string
+      version_code:
+        description: Production promotion only — exact version code already active in internal testing (full rollout)
+        required: false
+        type: string
+      status:
+        description: Internal upload only — draft for Console review, or completed for internal testers
+        type: choice
+        default: draft
+        options:
+          - draft
+          - completed
+      changes_not_sent_for_review:
+        description: Leave changes for manual submission in Play Console (only if Play requires it)
+        type: boolean
+        default: false
+
+# All edits for this package must be serialized, even for different releases.
+concurrency:
+  group: google-play-com-macro-workspace-mobile
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Upload to internal testing
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'upload-internal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Checkout publishing workflow
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Check Play configuration
+        env:
+          WIF_PROVIDER: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAY_ACCOUNT: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$WIF_PROVIDER" || -z "$PLAY_ACCOUNT" ]]; then
+            echo "Configure the Google Play repository variables; see docs/development/android.md" >&2
+            exit 1
+          fi
+      - name: Download verified release bundle
+        id: artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v20[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]{1,2})?$ ]]
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \
+            | jq -e '.isDraft == false and .isPrerelease == false'
+          filename="macro-$RELEASE_TAG-android-arm64.aab"
+          mapping="macro-$RELEASE_TAG-android-arm64-mapping.txt"
+          mkdir -p "$RUNNER_TEMP/play-release"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/play-release" \
+            --pattern "$filename" --pattern "$filename.sha256" \
+            --pattern "$mapping" --pattern "$mapping.sha256"
+          \cd "$RUNNER_TEMP/play-release"
+          # Compare only the expected files; don't interpret paths from a checksum file.
+          for artifact in "$filename" "$mapping"; do
+            expected=$(awk 'NR == 1 { print $1 }' "$artifact.sha256")
+            [[ "$expected" =~ ^[a-f0-9]{64}$ ]]
+            actual=$(sha256sum "$artifact" | cut -d ' ' -f 1)
+            [[ "$actual" == "$expected" ]]
+          done
+          echo "bundle=$RUNNER_TEMP/play-release/$filename" >> "$GITHUB_OUTPUT"
+          echo "mapping=$RUNNER_TEMP/play-release/$mapping" >> "$GITHUB_OUTPUT"
+      - name: Authenticate to Google Play
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+      - name: Upload to internal testing
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
+        with:
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+          packageName: com.macro.workspace.mobile
+          releaseFiles: ${{ steps.artifact.outputs.bundle }}
+          mappingFile: ${{ steps.artifact.outputs.mapping }}
+          releaseName: ${{ inputs.release_tag }}
+          tracks: internal
+          status: ${{ inputs.status }}
+          changesNotSentForReview: ${{ inputs.changes_not_sent_for_review }}
+      - name: Record upload
+        env:
+          RELEASE_STATUS: ${{ inputs.status }}
+        run: |
+          printf 'Uploaded `%s` to Google Play internal testing with status `%s`.\n' \
+            "$RELEASE_TAG" "$RELEASE_STATUS" >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    name: Promote tested version to production
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'promote-production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout publishing workflow
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Check promotion inputs
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+          WIF_PROVIDER: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAY_ACCOUNT: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION_CODE" =~ ^[1-9][0-9]{0,9}$ ]] || (( VERSION_CODE > 2100000000 )); then
+            echo "Enter the exact Android version code to promote (1–2100000000)" >&2
+            exit 1
+          fi
+          if [[ -z "$WIF_PROVIDER" || -z "$PLAY_ACCOUNT" ]]; then
+            echo "Configure the Google Play repository variables; see docs/development/android.md" >&2
+            exit 1
+          fi
+      - name: Authenticate to Google Play
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Promote existing version to production
+        env:
+          GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          CHANGES_NOT_SENT_FOR_REVIEW: ${{ inputs.changes_not_sent_for_review }}
+        run: node apps/web/scripts/android-play-promote.mjs

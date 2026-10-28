@@ -4,12 +4,12 @@ import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
 export const AGENTS_TOUR = defineTourTargets('agents', [
-  'newChat',
+  'modeSwitch',
   'rosterNav',
   'picker',
   'composer',
-  'agentsTab',
-  'runtimesTab',
+  'agentList',
+  'agentSetup',
 ]);
 
 const openRoster = {
@@ -22,29 +22,38 @@ export const agentsTour = defineViewTour({
   title: 'Agents',
   steps: [
     {
-      target: AGENTS_TOUR.picker,
-      entry: [AGENTS_TOUR.newChat, VIEW_SHELL_TOUR.sidebarToggle],
-      entryLabel: 'Start a new conversation to continue',
-      title: 'Choose your agent and model',
+      target: AGENTS_TOUR.modeSwitch,
+      entry: APP_TOUR.createMenu,
+      entryLabel: 'Choose Create → Agent to start a conversation',
+      title: 'Choose Auto, Chat, or Code',
       description:
-        'Open this picker to choose a chat or coding agent. Models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
+        'Auto sends each prompt to your usual chat agent, or to your usual coding agent when it needs code work. Chat starts an agent that works with your documents and apps. Code starts a coding agent on a repository. Filter the sidebar to find either kind.',
     },
     {
-      target: AGENTS_TOUR.agentsTab,
+      target: AGENTS_TOUR.picker,
+      // Auto has no picker; choosing Chat or Code shows it.
+      entry: [AGENTS_TOUR.modeSwitch, APP_TOUR.createMenu],
+      entryLabel: 'Choose Chat or Code to pick an agent',
+      title: 'Choose your agent and model',
+      description:
+        'Open this picker to choose an agent for the current mode. In Chat, Macro’s models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
+    },
+    {
+      target: AGENTS_TOUR.agentList,
       ...openRoster,
       title: 'Chat agents work with your context',
       description:
         'Chat agents use instructions and connected tools to research, write, and work with your documents and conversations. Your team and private agents live here.',
     },
     {
-      target: AGENTS_TOUR.runtimesTab,
+      target: AGENTS_TOUR.agentSetup,
       ...openRoster,
       title: 'Coding agents work on code',
       description:
-        'Coding agents run through a coding runtime, such as Cursor or a paired machine. Choose a coding agent when you need repository work rather than a regular chat.',
+        'Coding agents run in Cursor or on a machine you pair with macrod. Connect them here, then choose where each agent runs when you create it.',
     },
     {
-      target: AGENTS_TOUR.agentsTab,
+      target: AGENTS_TOUR.agentList,
       ...openRoster,
       title: 'Share agents with your team',
       description:

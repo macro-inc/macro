@@ -375,15 +375,6 @@ fn every_deferred_partition_must_be_proven_empty() {
     );
 
     let mut ast = excluded_deferred_partitions();
-    ast.reminder_filter = Some(Arc::new(Expr::val(
-        item_filters::ast::reminder::ReminderLiteral::Include,
-    )));
-    assert_eq!(
-        check_soup_flat_v1(&ast, request()),
-        Eligibility::Unsupported(UnsupportedReason::Partition("reminder"))
-    );
-
-    let mut ast = excluded_deferred_partitions();
     ast.agent_session_filter = Some(Arc::new(Expr::val(
         item_filters::ast::agent_session::AgentSessionLiteral::Include,
     )));
@@ -514,6 +505,14 @@ fn a_tables_rows_compile_to_the_database_row_partition() {
         )
     );
 
+    let mut all_rows = excluded_deferred_partitions();
+    all_rows.database_row_filter = Some(Arc::new(Expr::val(DatabaseRowLiteral::Include)));
+    assert_eq!(rows_partition(&all_rows), PredicateExpr::All);
+    assert_eq!(
+        check_soup_flat_v3(&all_rows, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
+    );
+
     let without_rows = excluded_deferred_partitions();
     assert_eq!(rows_partition(&without_rows), PredicateExpr::None);
 
@@ -527,4 +526,40 @@ fn a_tables_rows_compile_to_the_database_row_partition() {
         check_soup_flat_v3(&ast, request()),
         Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
     );
+}
+
+#[test]
+fn contact_queries_require_server_authorization_and_deduplication() {
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Include)));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"))
+    );
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Id(Uuid::nil()))));
+    assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
+}
+
+#[test]
+fn crm_associations_use_server_membership() {
+    use item_filters::ast::crm_association::CrmAssociation;
+    let record = CrmAssociation::Company(Uuid::from_u128(0xc0));
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_association = Some(record);
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Literal("crm_association"))
+    );
+
+    for literal in [
+        DocumentLiteral::CrmAssociated(record),
+        DocumentLiteral::NameContains("renewal".into()),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        assert_eq!(
+            check_soup_flat_v3(&ast, request()),
+            Eligibility::Unsupported(UnsupportedReason::Literal("document"))
+        );
+    }
 }

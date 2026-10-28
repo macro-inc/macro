@@ -1,7 +1,8 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { forceCloseDatabase } from 'fake-indexeddb';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   exactTimestamp,
   MessageStore,
@@ -26,6 +27,140 @@ async function lines(
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const store of stores.splice(0)) await store.dispose();
+});
+
+describe('scratch database recovery', () => {
+  let connections: IDBDatabase[];
+  beforeEach(() => {
+    connections = [];
+    const original = indexedDB.open.bind(indexedDB);
+    vi.spyOn(indexedDB, 'open').mockImplementation((...args) => {
+      const request = original(...args);
+      request.addEventListener('success', () =>
+        connections.push(request.result)
+      );
+      return request;
+    });
+  });
+
+  it.each(['closed', 'terminated'])(
+    'preserves staged history and byte limits after %s',
+    async (reason) => {
+      const first = { ts: '1.0', text: 'original' };
+      const second = { ts: '2.0', text: 'next' };
+      const bytes =
+        normalizeMessage('C100', first)!.byteLength +
+        normalizeMessage('C100', second)!.byteLength;
+      const store = await open(bytes);
+      await store.stage('C100', [first]);
+      if (reason === 'closed') connections[0].close();
+      else {
+        const closed = new Promise<void>((resolve) =>
+          connections[0].addEventListener('close', () => resolve())
+        );
+        forceCloseDatabase(
+          connections[0] as unknown as Parameters<typeof forceCloseDatabase>[0]
+        );
+        await closed;
+      }
+      await store.stage('C100', [first, second]);
+      expect((await lines(store)).map((line) => JSON.parse(line).text)).toEqual(
+        ['original', 'next']
+      );
+      expect(connections).toHaveLength(2);
+      await expect(store.stage('C100', [{ ts: '3.0' }])).rejects.toMatchObject({
+        code: 'selected_limit',
+      });
+      expect(await lines(store)).toHaveLength(2);
+    }
+  );
+
+  it('continues paginated reads after the connection closes between pages', async () => {
+    const store = await open();
+    await store.stage(
+      'C100',
+      Array.from({ length: 300 }, (_, n) => ({ ts: n + 1 + '.0' }))
+    );
+    const result: string[] = [];
+    for await (const message of store.ordered('C100')) {
+      result.push(message.line);
+      if (result.length === 128) connections[0].close();
+    }
+    expect(result).toHaveLength(300);
+    expect(new Set(result).size).toBe(300);
+    expect(connections).toHaveLength(2);
+  });
+
+  it.each([false, true])(
+    'fences a replaced session and leaves its cleanup to the new owner (closed=%s)',
+    async (closed) => {
+      const id = crypto.randomUUID();
+      const first = await MessageStore.open(id, 10000);
+      await first.stage('C100', [{ ts: '1.0' }]);
+      if (closed) connections[0].close();
+      const replacement = await MessageStore.open(id, 10000);
+      stores.push(replacement);
+      await replacement.stage('C100', [{ ts: '2.0' }]);
+      await expect(first.stage('C100', [{ ts: '3.0' }])).rejects.toMatchObject({
+        code: 'storage_unavailable',
+      });
+      await first.dispose();
+      expect(
+        (await lines(replacement)).map((line) => JSON.parse(line).ts)
+      ).toEqual(['2.000000']);
+    }
+  );
+
+  it('does not recreate lost history or reopen after disposal', async () => {
+    const store = await open();
+    await store.stage('C100', [{ ts: '1.0' }]);
+    const native = connections[0];
+    native.close();
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(native.name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+    await expect(lines(store)).rejects.toMatchObject({
+      code: 'storage_unavailable',
+    });
+    await store.dispose();
+    await expect(store.stage('C100', [{ ts: '2.0' }])).rejects.toMatchObject({
+      code: 'storage_unavailable',
+    });
+    expect(
+      (await indexedDB.databases()).some((db) => db.name === native.name)
+    ).toBe(false);
+  });
+
+  it('does not replay a batch that fails after its transaction starts', async () => {
+    const store = await open();
+    await store.stage('C100', [{ ts: '1.0' }]);
+    const put = vi
+      .spyOn(IDBObjectStore.prototype, 'put')
+      .mockImplementationOnce(() => {
+        throw new DOMException('Interrupted request', 'InvalidStateError');
+      });
+    await expect(store.stage('C100', [{ ts: '2.0' }])).rejects.toMatchObject({
+      code: 'storage_unavailable',
+    });
+    expect(put).toHaveBeenCalledOnce();
+    expect(await lines(store)).toHaveLength(1);
+    expect(connections).toHaveLength(1);
+  });
+
+  it('cancels a batch while its connection is reopening', async () => {
+    const store = await open();
+    const abort = new AbortController();
+    vi.spyOn(connections[0], 'transaction').mockImplementationOnce(() => {
+      abort.abort();
+      throw new DOMException('Closing', 'InvalidStateError');
+    });
+    await expect(
+      store.stage('C100', [{ ts: '1.0' }], abort.signal)
+    ).rejects.toMatchObject({ code: 'cancelled' });
+    expect(await lines(store)).toEqual([]);
+  });
 });
 
 describe('exact normalization and disk-backed dedupe', () => {

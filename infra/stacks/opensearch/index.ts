@@ -5,7 +5,7 @@ import { get_coparse_api_vpc } from '../../packages/vpc';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'opensearch',
 };
 

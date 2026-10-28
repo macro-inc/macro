@@ -1,0 +1,40 @@
+export default {
+  title: 'Run agents on this computer',
+  description:
+    'Macro runs the coding agents you already have, like Claude Code and Codex, right here with your own subscriptions and files.',
+  scanning: 'Looking for agents on this computer…',
+  found: 'Found {{agent}} on this computer.',
+  noAgents:
+    'No supported agents were found. Install Claude Code, Codex, OpenCode, or OpenClaw, then scan again.',
+  scanAgain: 'Scan again',
+  setUp: 'Set up',
+  setUpWith: 'Set up {{agent}}',
+  options: 'Options',
+  agentLabel: 'Agent',
+  workspaceLabel: 'Workspace folder',
+  workspaceHint: "Where sessions run. Created if it doesn't exist.",
+  fullAccess: 'Full access',
+  fullAccessHint:
+    'Let agents run commands and edit files without asking each time.',
+  connectorHint: 'A small connector is downloaded on first start.',
+  stepDetect: 'Find an agent',
+  stepDetectDone: 'Found {{agent}}',
+  stepConnect: 'Connect this computer',
+  stepConnectStarting: 'Starting the local runtime…',
+  stepConnectInstalling: 'Installing the {{agent}} connector…',
+  stepConnectPairing: 'Linking this computer to your account…',
+  stepAgent: 'Create your agent',
+  stepAgentDone: '@{{handle}} is ready',
+  tryAgain: 'Try again',
+  readyTitle: '@{{handle}} is ready',
+  readyDescription:
+    'Mention it in any channel or start a session. It runs on this computer while Macro is open.',
+  readyWorkspace: 'Sessions run in {{workspace}}.',
+  startSession: 'Start a session',
+  done: 'Done',
+  close: 'Close',
+  later: 'Not now',
+  promptTitle: 'Run agents on this computer',
+  promptBody:
+    'Use Claude Code, Codex, and other agents you have installed from Macro, in one click.',
+};

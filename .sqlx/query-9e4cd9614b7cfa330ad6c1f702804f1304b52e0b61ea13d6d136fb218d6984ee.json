@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH doomed AS (\n                SELECT link_id, seq\n                FROM calendar_change_log\n                WHERE created_at < $1\n                ORDER BY created_at, link_id, seq\n                LIMIT $2\n            )\n            DELETE FROM calendar_change_log log\n            USING doomed\n            WHERE log.link_id = doomed.link_id\n              AND log.seq = doomed.seq\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9e4cd9614b7cfa330ad6c1f702804f1304b52e0b61ea13d6d136fb218d6984ee"
+}

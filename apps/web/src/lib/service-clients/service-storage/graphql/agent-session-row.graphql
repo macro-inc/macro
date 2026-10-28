@@ -1,0 +1,16 @@
+# One agent session's Soup row, read from the primary after the session reports
+# a committed change (a turn starting or ending, a rename, an archive). The
+# normalized record is shared, so every Soup list holding the session shows the
+# new state without refetching the lists. No frecencyScore: a single-session
+# read carries none, and the list's score must survive.
+query AgentSessionRow($sessionId: ID!) {
+  user {
+    id
+    agentSession(sessionId: $sessionId) {
+      __typename
+      cacheProjection @cacheOnly
+      ...SoupEntityIdentityFields
+      ...SoupAgentSessionFields
+    }
+  }
+}

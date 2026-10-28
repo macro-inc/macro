@@ -1,5 +1,8 @@
 import path from 'node:path';
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
+import { verifyCrmMotion } from './verifyCrmMotion';
+import { verifyDemo } from './verifyDemo';
+import { verifyProductPages } from './verifyProductPages';
 
 /** Verify the prerendered homepage keeps its first paint while becoming interactive. */
 export async function verifyHomepage(directory: string): Promise<void> {
@@ -8,12 +11,13 @@ export async function verifyHomepage(directory: string): Promise<void> {
     port: 0,
     async fetch(request) {
       const pathname = decodeURIComponent(new URL(request.url).pathname);
-      const filename = path.resolve(
+      let filename = path.resolve(
         directory,
         `.${pathname === '/' ? '/index.html' : pathname}`
       );
       if (!filename.startsWith(`${directory}/`))
         return new Response(null, { status: 404 });
+      if (!path.extname(filename)) filename = path.join(filename, 'index.html');
       const file = Bun.file(filename);
       return (await file.exists())
         ? new Response(file)
@@ -24,14 +28,18 @@ export async function verifyHomepage(directory: string): Promise<void> {
   try {
     browser = await chromium.launch();
     const origin = `http://127.0.0.1:${server.port}`;
-    for (const viewport of [
-      { width: 1440, height: 1000 },
-      { width: 390, height: 844 },
-    ]) {
-      const label = `${viewport.width}×${viewport.height}`;
+    await verifyDemo(browser, origin);
+    // Light mode renders the cream palette (src/features/setup/sitePalette.ts).
+    for (const [viewport, colorScheme] of [
+      [{ width: 1440, height: 1000 }, 'dark'],
+      [{ width: 390, height: 844 }, 'light'],
+    ] as const) {
+      const label = `${viewport.width}×${viewport.height} ${colorScheme}`;
       const page = await browser.newPage({
         viewport,
+        colorScheme,
         isMobile: viewport.width < 768,
+        hasTouch: viewport.width < 768,
         reducedMotion: 'reduce',
       });
       let releaseScripts!: () => void;
@@ -71,6 +79,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
+        // The SSR fallback is desktop, but CSS must hide it on phones before
+        // hydration replaces it with the mobile story. Otherwise it flashes in.
+        const desktopDemo = page.locator('.homepage-embedded-demo');
+        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
+        else await expect(desktopDemo).toBeVisible();
+
         releaseScripts();
         await page.waitForLoadState('load');
         if (errors.length)
@@ -84,6 +98,24 @@ export async function verifyHomepage(directory: string): Promise<void> {
             timeout: 10000,
           }
         );
+        if (viewport.width < 800) {
+          await expect(desktopDemo).toHaveCount(0);
+          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
+          const featureGap = await page
+            .locator('#coding-agents .homepage-feature-title')
+            .evaluate((heading) => {
+              const links = document.querySelector(
+                '#documents .homepage-feature-more-group'
+              );
+              if (!links) throw new Error('Missing document feature links');
+              return (
+                heading.getBoundingClientRect().top -
+                links.getBoundingClientRect().bottom
+              );
+            });
+          expect(featureGap).toBeGreaterThanOrEqual(32);
+          expect(featureGap).toBeLessThanOrEqual(56);
+        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>
@@ -111,31 +143,123 @@ export async function verifyHomepage(directory: string): Promise<void> {
           );
         await heading.dispose();
 
-        await page
-          .getByRole('button', { name: 'Open navigation', exact: true })
-          .click();
+        if (viewport.width >= 768)
+          await page
+            .getByRole('link', { name: 'Macro home', exact: true })
+            .hover();
+        else
+          await page
+            .getByRole('button', { name: 'Open navigation', exact: true })
+            .tap();
         await page
           .getByRole('navigation', { name: 'Main navigation' })
           .waitFor({ state: 'visible' });
-        await page
-          .getByRole('button', { name: 'Close navigation', exact: true })
-          .click();
+        if (viewport.width >= 768) await page.keyboard.press('Escape');
+        else
+          await page
+            .getByRole('button', { name: 'Close navigation', exact: true })
+            .tap();
+        if (viewport.width >= 800) {
+          await page.locator('#interactive-demo').scrollIntoViewIfNeeded();
+          await page
+            .getByRole('button', {
+              name: /^Interact with Macro sample workspace/,
+            })
+            .click();
+          const workspace = page.frameLocator(
+            'iframe[title="Embedded Macro sample workspace"]'
+          );
+          // Prerendered buttons can paint before they have handlers. Also wait
+          // for iframe load, whose carousel listener selects the initial view.
+          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
+            0
+          );
+          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
+          const chat = workspace
+            .getByRole('navigation', { name: 'Workspace navigation' })
+            .getByRole('button', { name: 'Chat', exact: true });
+          await chat.click();
+          await expect(chat).toHaveAttribute('aria-current', 'page');
+          await expect(
+            workspace.getByRole('complementary', { name: 'Chat navigation' })
+          ).toBeVisible();
+          await page
+            .getByRole('button', { name: 'Show Docs highlight', exact: true })
+            .click();
+          await expect(
+            workspace
+              .getByRole('navigation', { name: 'Workspace navigation' })
+              .getByRole('button', { name: 'Drive', exact: true })
+          ).toHaveAttribute('aria-current', 'page');
+        }
         await page.locator('#email').scrollIntoViewIfNeeded();
         await page
           .locator('[data-email-demo-body]')
           .waitFor({ state: 'visible' });
+        const entry = page.getByRole('button', {
+          name: /^Interact with Email and chat/,
+        });
+        if (viewport.width < 768) await entry.tap();
+        else await entry.click();
+        await expect(
+          page.getByRole('textbox', { name: 'Email body', exact: true })
+        ).toBeEditable();
+        if (colorScheme === 'light') {
+          await page.locator('#documents').scrollIntoViewIfNeeded();
+          await page.locator('#documents .mds-chip-person').first().waitFor();
+          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
+          await page
+            .locator('#coding-agents .homepage-person-mention')
+            .waitFor();
+          for (const selector of [
+            '#email .demo-inline-mention.mention-person',
+            '#documents .mds-chip-person',
+            '#coding-agents .homepage-person-mention',
+          ]) {
+            const tint = await page
+              .locator(selector)
+              .first()
+              .evaluate((node) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 1;
+                const context = canvas.getContext('2d');
+                if (!context) throw new Error('Missing color test context');
+                context.fillStyle = '#fff';
+                context.fillRect(0, 0, 1, 1);
+                context.fillStyle = getComputedStyle(node).backgroundColor;
+                context.fillRect(0, 0, 1, 1);
+                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
+                return blue - red;
+              });
+            // The old neutral accent produced grey chips in the cream palette.
+            expect(
+              tint,
+              `${selector} needs a visible blue tint`
+            ).toBeGreaterThan(10);
+          }
+        }
+        await page.locator('#documents').scrollIntoViewIfNeeded();
+        const comment = page.getByRole('img', {
+          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
+        });
+        await expect(comment).toBeVisible();
+        await expect(
+          page.locator('#documents .mds-line.h2 .mds-mark')
+        ).toHaveCount(0);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, and email demo verified`
+          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, sample workspace, and email demo verified`
         );
       } finally {
         releaseScripts();
         await page.close();
       }
     }
+    await verifyCrmMotion(browser, origin);
+    await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
     server.stop(true);

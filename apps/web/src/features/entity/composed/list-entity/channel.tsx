@@ -5,7 +5,7 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
-import PhoneIcon from '@phosphor/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
@@ -31,7 +31,7 @@ export function ChannelJoinButton(props: {
   return (
     <Button
       type="button"
-      variant="accent"
+      variant="primary"
       size="sm"
       class={props.class ?? 'shrink-0'}
       disabled={joinMutation.isPending}
@@ -77,6 +77,7 @@ function ChannelMessage(props: {
           fallback={<span class="italic">Attached Items</span>}
         >
           <StaticMarkdown
+            inert
             theme={singleLineMarkdownTheme}
             markdown={props.message.content}
             singleLine
@@ -161,6 +162,7 @@ export function ChannelLatestMessageNarrowBody(props: {
           <DisplayName id={props.message.senderId} format="firstName" />:{' '}
         </span>
         <StaticMarkdown
+          inert
           theme={twoLineClampMarkdownTheme}
           markdown={props.message.content.trim()}
           singleLine

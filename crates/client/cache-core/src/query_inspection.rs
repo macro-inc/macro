@@ -4,7 +4,7 @@
 //! without exposing normalized entity or field keys to host callers.
 
 use crate::document::{ArgValue, FieldNode, Operation, OperationKind, Selection, resolve_args_key};
-use crate::meta::{self, FieldKind};
+use crate::meta::FieldKind;
 use crate::query_path::{
     possible_selected_fields, selected_field, selected_storage_key, selected_type,
 };
@@ -110,6 +110,7 @@ pub(crate) enum OwnerResolution<'records, 'selection> {
 
 /// Validates the query-rooted path and variable recoverability constraints.
 pub(crate) fn prepare(
+    schema: &crate::meta::Schema,
     operation: &Operation,
     path: &[String],
 ) -> Result<PreparedInspection, QueryInspectionError> {
@@ -121,11 +122,11 @@ pub(crate) fn prepare(
     }
 
     let mut selections = operation.selection_set.as_slice();
-    let mut type_name = meta::QUERY_ROOT_TYPE;
+    let mut type_name = schema.query_root();
     let mut final_variables = BTreeSet::new();
     for (index, response_key) in path.iter().enumerate() {
         let mut fields = Vec::new();
-        possible_selected_fields(selections, type_name, response_key, &mut fields);
+        possible_selected_fields(schema, selections, type_name, response_key, &mut fields);
         let field = match fields.as_slice() {
             [] => {
                 return Err(QueryInspectionError::UnselectedField {
@@ -150,7 +151,7 @@ pub(crate) fn prepare(
             return Err(QueryInspectionError::VariablePrefix(response_key.clone()));
         }
 
-        let Some(metadata) = meta::field_meta(type_name, &field.name) else {
+        let Some(metadata) = schema.field_meta(type_name, &field.name) else {
             return Err(QueryInspectionError::UnselectedField {
                 type_name: type_name.to_string(),
                 field: response_key.clone(),
@@ -183,20 +184,23 @@ pub(crate) fn prepare(
 
 /// Resolves the record/object that owns the final selected field.
 pub(crate) fn resolve_owner<'records, 'selection>(
+    schema: &crate::meta::Schema,
     records: &'records HashMap<EntityKey<'static>, Record>,
     operation: &'selection Operation,
     path: &[String],
 ) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
     resolve_record_owner(
+        schema,
         records,
         EntityKey::root(),
-        meta::QUERY_ROOT_TYPE,
+        schema.query_root(),
         &operation.selection_set,
         path,
     )
 }
 
 fn resolve_record_owner<'records, 'selection>(
+    schema: &crate::meta::Schema,
     records: &'records HashMap<EntityKey<'static>, Record>,
     key: EntityKey<'records>,
     declared_type: &str,
@@ -207,10 +211,11 @@ fn resolve_record_owner<'records, 'selection>(
         return Ok(OwnerResolution::NeedRecord(key));
     };
     let concrete = record.typename().unwrap_or(declared_type);
-    resolve_fields_owner(records, &record.fields, concrete, selections, path)
+    resolve_fields_owner(schema, records, &record.fields, concrete, selections, path)
 }
 
 fn resolve_fields_owner<'records, 'selection>(
+    schema: &crate::meta::Schema,
     records: &'records HashMap<EntityKey<'static>, Record>,
     fields: &'records BTreeMap<String, CacheValue>,
     concrete: &str,
@@ -218,7 +223,7 @@ fn resolve_fields_owner<'records, 'selection>(
     path: &[String],
 ) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
     let response_key = &path[0];
-    let Some(field) = selected_field(selections, concrete, response_key) else {
+    let Some(field) = selected_field(schema, selections, concrete, response_key) else {
         return Ok(OwnerResolution::Absent);
     };
     if path.len() == 1 {
@@ -230,13 +235,15 @@ fn resolve_fields_owner<'records, 'selection>(
     let Some(value) = fields.get(&storage_key) else {
         return Ok(OwnerResolution::Absent);
     };
-    let next_type =
-        selected_type(concrete, field).ok_or_else(|| QueryInspectionError::UnselectedField {
+    let next_type = selected_type(schema, concrete, field).ok_or_else(|| {
+        QueryInspectionError::UnselectedField {
             type_name: concrete.to_string(),
             field: response_key.clone(),
-        })?;
+        }
+    })?;
     match value {
         CacheValue::Ref(key) => resolve_record_owner(
+            schema,
             records,
             key.borrowed(),
             next_type,
@@ -251,7 +258,14 @@ fn resolve_fields_owner<'records, 'selection>(
                     _ => None,
                 })
                 .unwrap_or(next_type);
-            resolve_fields_owner(records, object, concrete, &field.selection_set, &path[1..])
+            resolve_fields_owner(
+                schema,
+                records,
+                object,
+                concrete,
+                &field.selection_set,
+                &path[1..],
+            )
         }
         CacheValue::Null => Ok(OwnerResolution::Absent),
         _ => Err(QueryInspectionError::WrongShape),

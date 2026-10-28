@@ -12,6 +12,7 @@ pub mod channel_mention;
 pub mod citations;
 pub mod coding_agents;
 pub mod connected_toolsets;
+pub mod crm_pipelines;
 pub mod databases;
 pub mod deferred_tools;
 pub mod do_not;
@@ -20,6 +21,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod pull_requests;
 pub mod skills;
 pub mod tone;
 pub mod tool_usage;
@@ -37,6 +39,14 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT);
 
+/// [`BASE_PROMPT`] without its tone section, for agent sessions, whose
+/// preamble ([`agent_session`]) sets their own tone.
+static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
+    .compose(&citations::PROMPT)
+    .compose(&mentions::PROMPT)
+    .compose(&do_not::PROMPT)
+    .compose(&about_macro::PROMPT);
+
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
 /// the tool use instructions, skill-following rules, document-content linking
@@ -46,6 +56,7 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -57,19 +68,34 @@ pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT)
+    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
 
-/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] with the user
-/// tool rules restated for a host that reviews those calls in the turn - a
-/// review card the user answers while the agent waits, not a composer left
-/// pending after it.
-pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
+/// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
+/// reviews those calls in the turn - a review card the user answers while the
+/// agent waits, not a composer left pending after it.
+pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT)
+    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
+    .compose(&skills::PROMPT)
+    .compose(&document_content_links::PROMPT)
+    .compose(&email::PROMPT);
+
+/// Agent-session instructions for nonblocking saved reviews in code mode.
+pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
+    .compose(&tool_usage::PROMPT)
+    .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT)
+    .compose(&user_tools::BOOKING_PROMPT)
+    .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -81,7 +107,7 @@ pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&datab
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
-/// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
+/// Citation, do-not, Macro-terms, pull-request, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they
 /// depend on the runtime app base URL — see [`mcp_instructions`].
@@ -98,7 +124,9 @@ pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
+    .compose(&pull_requests::PROMPT)
     .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT)
     .compose(&document_content_links::PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server
@@ -133,6 +161,7 @@ mod tests {
         // worked example for a document.
         assert!(instructions.contains("https://macro.com/app/<type>/<id>"));
         assert!(instructions.contains("[Name](https://macro.com/app/md/<id>)"));
+        assert!(instructions.contains("[Name](https://macro.com/app/routines/<id>)"));
     }
 
     #[test]
@@ -235,6 +264,15 @@ mod tests {
     }
 
     #[test]
+    fn session_tool_use_prompt_treats_a_private_conversation_like_the_session_view() {
+        // A DM with the agent is read live: its questions and review cards
+        // appear there, so the thread rule does not apply to it.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(session.contains("private conversation with the user is the exception"));
+        assert!(session.contains("like one typed in the agent session view"));
+    }
+
+    #[test]
     fn session_tool_use_prompt_keeps_the_thread_mechanics_away_from_the_user() {
         // The thread rule explains review cards and the session view so the
         // model knows why it writes the draft out. None of that is for the
@@ -285,12 +323,37 @@ mod tests {
     }
 
     #[test]
+    fn mentions_and_document_content_links_share_the_github_pr_mention_tag() {
+        // GitHub PRs are mentioned by URL in-app and over MCP alike; the two
+        // sections must hand the model the same tag shape.
+        const TAG: &str = r#"<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>"#;
+        assert!(mentions::PROMPT.instructions.contains(TAG));
+        assert!(document_content_links::PROMPT.instructions.contains(TAG));
+        assert!(mcp_instructions("https://macro.com").contains(TAG));
+    }
+
+    #[test]
+    fn mentions_and_document_content_links_share_the_booking_link_mention_tag() {
+        const TAG: &str = r#"<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>"#;
+        assert!(mentions::PROMPT.instructions.contains(TAG));
+        assert!(document_content_links::PROMPT.instructions.contains(TAG));
+        assert!(mcp_instructions("https://macro.com").contains(TAG));
+    }
+
+    #[test]
     fn agent_session_preamble_tells_the_model_to_emit_mention_tags() {
         let preamble = agent_session::PROMPT.to_string();
         assert!(preamble.contains("XML mention tag"));
         assert!(preamble.contains("clickable chips"));
         assert!(preamble.contains("agent session"));
         assert!(preamble.contains("date/time"));
+    }
+
+    #[test]
+    fn mentions_prompt_says_a_shared_calendar_event_previews_for_channel_members() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("read-only preview"));
+        assert!(instructions.contains("Private and confidential events are never shared"));
     }
 
     #[test]
@@ -302,6 +365,17 @@ mod tests {
         assert!(instructions.contains("\"expanded\":true"));
         assert!(instructions.contains("\"blockName\":\"skill\""));
         assert!(instructions.contains("\"blockName\":\"initiative\""));
+        assert!(instructions.contains("\"blockName\":\"pipeline\""));
+        assert!(instructions.contains("\"blockName\":\"routine\""));
+    }
+
+    #[test]
+    fn mcp_and_coding_agents_open_ready_pull_requests_with_ci_passing() {
+        assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
+
+        let coding = coding_agents::PROMPT.to_string();
+        assert!(coding.contains("ready for review, not a draft"));
+        assert!(coding.contains("CI passing"));
     }
 
     #[test]

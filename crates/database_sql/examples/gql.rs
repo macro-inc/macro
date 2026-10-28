@@ -58,6 +58,7 @@ fragment SoupPropertyFields on GraphqlProperty {
     ... on GraphqlNumberPropertyValue { numberValue: value }
     ... on GraphqlStringPropertyValue { stringValue: value }
     ... on GraphqlDatePropertyValue { dateValue: value }
+    ... on GraphqlDateRangePropertyValue { rangeStart: start rangeEnd: end }
     ... on GraphqlSelectOptionPropertyValue { optionIds }
     ... on GraphqlEntityReferencePropertyValue { references { entityId entityType } }
     ... on GraphqlLinkPropertyValue { urls }
@@ -211,6 +212,7 @@ impl Api {
                 relation: false,
             },
             options: Vec::new(),
+            formula: None,
         }];
         for definition in definitions
             .into_iter()
@@ -251,6 +253,7 @@ impl Api {
                     relation: false,
                 },
                 options,
+                formula: None,
             });
         }
         let schema = Schema {
@@ -343,6 +346,17 @@ fn row_from_item(item: &Json) -> Row {
                 .as_str()
                 .and_then(|date| DateTime::parse_from_rfc3339(date).ok())
                 .map(|d| Cell::Date(d.to_utc())),
+            "GraphqlDateRangePropertyValue" => {
+                let date = |field: &str| {
+                    value[field]
+                        .as_str()
+                        .and_then(|date| DateTime::parse_from_rfc3339(date).ok())
+                        .map(|date| date.to_utc())
+                };
+                date("rangeStart")
+                    .zip(date("rangeEnd"))
+                    .map(|(start, end)| Cell::DateRange(models_databases::DateRange { start, end }))
+            }
             "GraphqlSelectOptionPropertyValue" => Some(Cell::Options(
                 value["optionIds"]
                     .as_array()
@@ -512,6 +526,9 @@ impl Api {
             CellValue::Number(number) => json!({ "number": number }),
             CellValue::Boolean(checked) => json!({ "boolean": checked }),
             CellValue::Date(date) => json!({ "date": date.to_rfc3339() }),
+            CellValue::DateRange(range) => json!({
+                "dateRange": { "start": range.start.to_rfc3339(), "end": range.end.to_rfc3339() }
+            }),
             CellValue::Options(options) => {
                 let ids = self.option_ids(column, options)?;
                 if multi {

@@ -23,12 +23,19 @@ enum NavigationOutput<'a> {
     /// the dev server, ...) — the webview is allowed to load it directly.
     /// This is what permits the SPA's own page loads.
     Internal,
+    /// A third-party document the SPA embeds in an iframe. WebKit asks the
+    /// navigation handler about subframe loads too, so it must be allowed to
+    /// load in place; as a new window it is still external.
+    Embedded,
     /// A link to content inside the Macro app whose literal [Url] points at
     /// the remote website (e.g. `https://macro.com/app/...`). The webview
     /// must not load it — that would replace the running SPA with the live
     /// site — so the navigation is cancelled and re-emitted as a `navigate`
     /// event for the SPA router to handle in-place.
     AppLink(MacroScheme),
+    /// Browser-only URLs and local files outside the allowed cache directory
+    /// must not be handed to the operating system's URL handler.
+    Blocked,
 }
 
 /// Payload of the `navigate` event consumed by the frontend router bridge.
@@ -48,6 +55,7 @@ pub enum Platform {
 pub struct MacroNavigationPlugin {
     internal_domains: Arc<[Url]>,
     app_link_hosts: &'static [&'static str],
+    embedded_documents: Arc<[Url]>,
     allowed_file_prefix: Option<PathBuf>,
 }
 
@@ -73,6 +81,7 @@ impl MacroNavigationPlugin {
                 .map(|s| s.parse())
                 .collect::<Result<Arc<_>, _>>()?,
             app_link_hosts: &[],
+            embedded_documents: Arc::new([]),
             allowed_file_prefix: None,
         })
     }
@@ -82,6 +91,30 @@ impl MacroNavigationPlugin {
     pub fn with_app_link_hosts(mut self, hosts: &'static [&'static str]) -> Self {
         self.app_link_hosts = hosts;
         self
+    }
+
+    /// Third-party pages the SPA loads in an iframe, matched by origin and
+    /// path (any query). On macOS the navigation handler cannot tell an
+    /// iframe load from a top-level one, and cancelling the iframe leaves an
+    /// empty frame over the app.
+    pub fn with_embedded_documents(
+        mut self,
+        documents: &'static [&'static str],
+    ) -> Result<Self, url::ParseError> {
+        self.embedded_documents = documents
+            .iter()
+            .map(|s| s.parse())
+            .collect::<Result<Arc<_>, _>>()?;
+        Ok(self)
+    }
+
+    fn is_embedded_document(&self, url: &Url) -> bool {
+        self.embedded_documents.iter().any(|document| {
+            document.scheme() == url.scheme()
+                && document.host_str() == url.host_str()
+                && document.port_or_known_default() == url.port_or_known_default()
+                && document.path() == url.path()
+        })
     }
 
     pub fn with_allowed_file_prefix(mut self, prefix: PathBuf) -> Self {
@@ -96,14 +129,28 @@ impl MacroNavigationPlugin {
         if let Some(scheme) = self.as_app_link(url) {
             return NavigationOutput::AppLink(scheme);
         }
+        if self.is_embedded_document(url) {
+            return NavigationOutput::Embedded;
+        }
         match self.as_internal_url(url) {
             Ok(()) => NavigationOutput::Internal,
+            Err(_)
+                if matches!(
+                    url.scheme(),
+                    "about" | "blob" | "data" | "javascript" | "file"
+                ) =>
+            {
+                NavigationOutput::Blocked
+            }
             Err(external) => NavigationOutput::External(external),
         }
     }
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn as_app_link(&self, url: &Url) -> Option<MacroScheme> {
+        if url.scheme() == "macro" {
+            return MacroScheme::new(url.clone()).ok();
+        }
         if !is_app_link(self.app_link_hosts, url) {
             return None;
         }
@@ -136,6 +183,78 @@ impl MacroNavigationPlugin {
             Ok(())
         } else {
             Err(ExternalUrl(Cow::Borrowed(url)))
+        }
+    }
+
+    fn new_window_destination<'a>(&self, url: &'a Url) -> NavigationOutput<'a> {
+        match self.get_destination(url) {
+            // Standalone documents on an allowed webview origin are not SPA
+            // routes. Keep local-file policy and all other destinations intact.
+            NavigationOutput::Internal
+                if matches!(url.scheme(), "http" | "https" | "tauri")
+                    && url.path().ends_with(".html") =>
+            {
+                NavigationOutput::Internal
+            }
+            // A relative/same-origin app link should use the SPA router, not
+            // create a second webview or reload the existing app.
+            NavigationOutput::Internal => MacroScheme::from_url(url)
+                .map(NavigationOutput::AppLink)
+                .unwrap_or(NavigationOutput::Blocked),
+            NavigationOutput::Embedded => {
+                NavigationOutput::External(ExternalUrl(Cow::Borrowed(url)))
+            }
+            destination => destination,
+        }
+    }
+
+    /// Route desktop anchors and `window.open` requests at the webview boundary.
+    /// App links stay in the SPA and external URLs go to the system handler;
+    /// trusted standalone HTML documents may open a popup webview.
+    /// Mobile keeps the opener plugin's JS fallback.
+    pub fn on_new_window<R: Runtime>(
+        &self,
+        app: &tauri::AppHandle<R>,
+        url: &Url,
+    ) -> tauri::webview::NewWindowResponse<R> {
+        if self.dispatch(app, self.new_window_destination(url)) {
+            tauri::webview::NewWindowResponse::Allow
+        } else {
+            tauri::webview::NewWindowResponse::Deny
+        }
+    }
+
+    /// Return true only when the current webview may load the URL itself.
+    fn dispatch<R: Runtime>(
+        &self,
+        app: &tauri::AppHandle<R>,
+        destination: NavigationOutput<'_>,
+    ) -> bool {
+        match destination {
+            NavigationOutput::External(external_url) => {
+                // Opening a URL can block (and Android disallows it on the UI thread).
+                let app = app.clone();
+                let url = external_url.0.into_owned();
+                std::thread::spawn(move || {
+                    app.opener()
+                        .open_url(transform_external_url(url).as_str(), None::<&str>)
+                        .log_and_consume();
+                });
+                false
+            }
+            NavigationOutput::AppLink(scheme) => {
+                app.emit(
+                    "navigate",
+                    NavigatePayload {
+                        path: scheme.path(),
+                        query: scheme.query().unwrap_or_default(),
+                    },
+                )
+                .log_and_consume();
+                false
+            }
+            NavigationOutput::Internal | NavigationOutput::Embedded => true,
+            NavigationOutput::Blocked => false,
         }
     }
 }
@@ -209,38 +328,6 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
     }
 
     fn on_navigation(&mut self, webview: &tauri::Webview<R>, url: &tauri::Url) -> bool {
-        let dest = self.get_destination(url);
-
-        match dest {
-            NavigationOutput::External(external_url) => {
-                // we are navigating somewhere external to the app
-                // open in system default browser
-                // spawn a detached thread to avoid blocking,
-                // on android this panics if called on the main thread
-                let app_handle = webview.app_handle().clone();
-                let url = external_url.0.into_owned();
-                std::thread::spawn(move || {
-                    app_handle
-                        .opener()
-                        .open_url(transform_external_url(url).as_str(), None::<&str>)
-                        .log_and_consume();
-                });
-                false
-            }
-            NavigationOutput::Internal => true,
-            NavigationOutput::AppLink(scheme) => {
-                webview
-                    .app_handle()
-                    .emit(
-                        "navigate",
-                        NavigatePayload {
-                            path: scheme.path(),
-                            query: scheme.query().unwrap_or_default(),
-                        },
-                    )
-                    .log_and_consume();
-                false
-            }
-        }
+        self.dispatch(webview.app_handle(), self.get_destination(url))
     }
 }

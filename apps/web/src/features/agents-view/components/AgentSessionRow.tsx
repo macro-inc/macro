@@ -17,6 +17,8 @@ export function AgentSessionRow(props: {
   timestamp: string;
   unread?: boolean;
   active?: boolean;
+  /** When true, hides the leading icon slot to save horizontal space. */
+  hideLeading?: boolean;
   children?: JSX.Element;
   onOpen?: (event: MouseEvent) => void;
 }) {
@@ -28,7 +30,8 @@ export function AgentSessionRow(props: {
       class={cn(
         'relative text-ink',
         metadata.toArray().length > 0 &&
-          'h-auto min-h-12 items-start py-1.5 touch:h-auto'
+          'h-auto min-h-12 items-start py-1.5 touch:h-auto',
+        props.hideLeading && 'pl-3'
       )}
       data-agent-session-row={props.id}
       data-kind={props.kind}
@@ -47,9 +50,11 @@ export function AgentSessionRow(props: {
         aria-current={props.active ? 'page' : undefined}
         {...pressHandlers((event) => props.onOpen?.(event))}
       />
-      <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
-        {props.leading}
-      </ViewSidebar.Icon>
+      <Show when={!props.hideLeading}>
+        <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
+          {props.leading}
+        </ViewSidebar.Icon>
+      </Show>
       <span class="pointer-events-none relative min-w-0 flex-1">
         <span class="flex min-w-0 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{props.title}</span>

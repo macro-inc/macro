@@ -77,6 +77,13 @@ function readRetainedIdentities(doc: LoroDoc): Map<string, RetainedIdentity> {
 
 /** Registry defaults never write state, so opening a legacy sheet is read-only. */
 export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
+  return readOrderedSheets(doc).map(({ id, name }) => ({ id, name }));
+}
+
+/** Visible sheets with the order value each one sorts by. */
+export function readOrderedSheets(
+  doc: LoroDoc
+): (SpreadsheetSheet & { order: number })[] {
   const names = doc.getMap('spreadsheetSheetNames').toJSON();
   const order = doc.getMap('spreadsheetSheetOrder').toJSON();
   const deleted = doc.getMap('spreadsheetDeletedSheets').toJSON();
@@ -125,7 +132,7 @@ export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
   const visible = live.length ? live : candidates.slice(0, 1);
   const reserved = new Set(visible.map((sheet) => sheet.name.toLowerCase()));
   const assigned = new Set<string>();
-  return visible.map(({ id, name }) => {
+  return visible.map(({ id, name, order: sheetOrder }) => {
     let unique = name;
     let suffix = 2;
     if (assigned.has(unique.toLowerCase())) {
@@ -138,7 +145,7 @@ export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
       );
     }
     assigned.add(unique.toLowerCase());
-    return { id, name: unique };
+    return { id, name: unique, order: sheetOrder };
   });
 }
 

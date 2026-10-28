@@ -5,12 +5,11 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeFavoriteAction,
-  makeMarkDoneAction,
   makeMuteAction,
-  markReminderTargetDone,
 } from '@app/features/next-soup/actions';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
@@ -19,33 +18,35 @@ import {
   type BlockName,
   useBlockAliasedName,
 } from '@core/block';
+import { canDuplicateItemType } from '@core/component/FileList/itemOperations';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { enableProjects, enableReminders } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
-import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useGetPermissions } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, type EntityData } from '@entity';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import BellSimple from '@phosphor/bell-simple.svg';
-import BellSlash from '@phosphor/bell-slash.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Link from '@phosphor/link.svg';
-import Rename from '@phosphor/pencil-line.svg';
-import Stack from '@phosphor/stack.svg';
-import Star from '@phosphor/star.svg';
-import Tag from '@phosphor/tag.svg';
-import Trash from '@phosphor/trash-simple.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import BellSimple from '@icon/system/regular/bell-simple.svg';
+import BellSlash from '@icon/system/regular/bell-slash.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Link from '@icon/system/regular/link.svg';
+import Rename from '@icon/system/regular/pencil-line.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import Star from '@icon/system/regular/star.svg';
+import Tag from '@icon/system/regular/tag.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import type { ItemType } from '@service-storage/itemType';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -183,9 +184,9 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         size="icon-sm"
         variant="ghost"
       >
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-64">
+      <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]">
         <For each={sections()}>
           {(section) => (
             <Dropdown.Group>
@@ -259,7 +260,7 @@ function MobileRender(
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="File actions">
+        <MobileDrawer.Content aria-label={t('splitMenu.fileActions')}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
             <Show when={props.views}>
@@ -299,7 +300,9 @@ function MobileRender(
                   {/* With a views group leading the drawer, title the action
                       sections to set the two apart. */}
                   <Show when={sections().length > 0}>
-                    <MobileDrawer.Label>Actions</MobileDrawer.Label>
+                    <MobileDrawer.Label>
+                      {t('entityActions.actions')}
+                    </MobileDrawer.Label>
                   </Show>
                 </>
               )}
@@ -359,21 +362,12 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
-  const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
-  const markDone = makeMarkDoneAction({
-    userId: () => userId(),
-    notificationSource: () => notificationSource,
-  });
-  // Same follow-up as the block's command menu and every soup list: the
-  // reminder brings the entity back, so it is marked done now. No soup list is
-  // behind this menu, so nothing advances.
   const createReminderAction = makeCreateReminderAction({
     onEmailSaved: props.onEmailReminderSaved,
-    onCreated: markReminderTargetDone(markDone),
   });
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
@@ -404,10 +398,12 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     const entity = menuEntity();
     if (!entity || !favoriteAction.canExecute(entity)) return undefined;
     return {
-      label: favoriteAction.isFavorited(entity) ? 'Unfavorite' : 'Favorite',
+      label: favoriteAction.isFavorited(entity)
+        ? t('entityActions.unfavorite')
+        : t('entityActions.favorite'),
       icon: Star,
       action: () => {
-        void favoriteAction.execute([entity]);
+        fireAndForget(favoriteAction.execute([entity]), 'entity-actions');
       },
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.favorite);
@@ -421,13 +417,29 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     if (!entity || !muteAction.canExecute(entity)) return undefined;
     const muted = muteAction.isMuted(entity);
     return {
-      label: muted ? 'Unmute notifications' : 'Mute notifications',
+      label: muted
+        ? t('entityActions.unmuteNotifications')
+        : t('entityActions.muteNotifications'),
       icon: muted ? BellSimple : BellSlash,
       action: () => {
-        void muteAction.execute([entity]);
+        fireAndForget(muteAction.execute([entity]), 'entity-actions');
       },
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
+      },
+      group: 'macro' as const,
+    };
+  };
+
+  const snoozeOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !muteAction.canExecute(entity)) return undefined;
+    return {
+      label: t('entityActions.snoozeNotifications'),
+      icon: Clock,
+      action: () => {
+        setOpen(false);
+        muteAction.snooze([entity]);
       },
       group: 'macro' as const,
     };
@@ -439,16 +451,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   // other reminder surfaces re-evaluate per interaction and don't need this.
   const remindersFlag = useFeatureFlag(enableReminders);
 
-  // Injected here rather than per-block so every block rendering this menu gets
-  // it, the way Favorite does. Entity types the reminders API cannot mint an
-  // access receipt for (channel messages/threads) return undefined and are
-  // filtered out.
+  // Offer the shared snooze command for email conversations.
   const reminderOp = (): SplitFileMenuAction | undefined => {
     if (!remindersFlag().enabled) return undefined;
     const entity = menuEntity();
     if (!entity || !createReminderAction.canExecute(entity)) return undefined;
     return {
-      label: 'Remind me',
+      label: t('entityActions.remindMe'),
       icon: BellSimple,
       action: () => {
         setOpen(false);
@@ -466,7 +475,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     const entity = menuEntity();
     if (!entity || !addTagAction.canExecute(entity)) return undefined;
     return {
-      label: 'Add tag',
+      label: t('entityActions.addTag'),
       icon: Tag,
       action: () => {
         setOpen(false);
@@ -484,18 +493,17 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     // Some entities have no shareable link (a reminder resolves to no block, so
     // its URL is dead); skip the item rather than copy one that won't open.
     if (entity && !copyLinkAction.canExecute(entity)) return undefined;
-    // Foreign PRs link out via their entity URL (GitHub); the block-derived
-    // fallback would mint an internal /pr URL that doesn't resolve, so omit
-    // the item when the entity is unavailable.
-    if (!entity && blockName === 'pr') return undefined;
     return {
-      label: 'Copy Link',
+      label: t('entityActions.copyLink'),
       icon: Link,
       action: () => {
         if (entity) {
-          void copyLinkAction.execute([entity]);
+          fireAndForget(copyLinkAction.execute([entity]), 'entity-actions');
         } else {
-          void copyLinkAction.executeByBlock(props.id, props.entityKind);
+          fireAndForget(
+            copyLinkAction.executeByBlock(props.id, props.entityKind),
+            'entity-actions'
+          );
         }
       },
       get hotkeyToken() {
@@ -506,10 +514,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   };
 
   const copyEntityIdOp = (): SplitFileMenuAction => ({
-    label: 'Copy ID',
+    label: t('entityActions.copyId'),
     icon: Copy,
     action: () => {
-      void copyEntityIdAction.executeById(props.id);
+      fireAndForget(copyEntityIdAction.executeById(props.id), 'entity-actions');
     },
     get hotkeyToken() {
       return activeHotkeyToken(TOKENS.entity.action.copyEntityId);
@@ -534,7 +542,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('delete', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                label: 'Delete',
+                label: t('entityActions.delete'),
                 action: () => {
                   const entity = menuEntity();
                   if (!entity) return;
@@ -543,14 +551,15 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                     view: 'delete',
                     entities: [entity],
                     onFinish: () => {
-                      toast.success('Deleted');
+                      toast.success(t('entityActions.toastDeleted'));
                       if (props.onDelete) {
                         props.onDelete();
                       } else {
                         returnSplitToRecentListView(ctx.handle);
                       }
                     },
-                    onError: () => toast.failure('Failed to delete'),
+                    onError: () =>
+                      toast.failure(t('entityActions.toastDeleteFailed')),
                   });
                 },
                 icon: Trash,
@@ -560,7 +569,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('rename', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                label: 'Rename',
+                label: t('entityActions.rename'),
                 action: () => {
                   const entity = menuEntity();
                   if (!entity) return;
@@ -568,8 +577,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   openBulkEditModal({
                     view: 'rename',
                     entities: [entity],
-                    onFinish: () => toast.success('Renamed'),
-                    onError: () => toast.failure('Failed to rename'),
+                    onFinish: () =>
+                      toast.success(t('entityActions.toastRenamed')),
+                    onError: () =>
+                      toast.failure(t('entityActions.toastRenameFailed')),
                   });
                 },
                 icon: Rename,
@@ -580,15 +591,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               };
             })
             .with('copy', () => {
+              if (!canDuplicateItemType(props.itemType)) return null;
               return {
-                label: 'Duplicate',
+                label: t('entityActions.duplicate'),
                 action: async () => {
-                  if (props.itemType === 'project') {
-                    console.warn(
-                      'Attempting to copy project!. This should not happen'
-                    );
-                    return;
-                  }
                   const res = await itemOperations.copyItem({
                     itemType: props.itemType,
                     id: props.id,
@@ -614,7 +620,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('moveToProject', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                label: 'Move to Folder',
+                label: t('entityActions.moveToFolder'),
                 action: () => {
                   const entity = buildEntityData({
                     id: props.id,
@@ -626,8 +632,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   openBulkEditModal({
                     view: 'moveToProject',
                     entities: [entity],
-                    onFinish: () => toast.success('Moved to folder'),
-                    onError: () => toast.failure('Failed to move to folder'),
+                    onFinish: () =>
+                      toast.success(t('entityActions.toastMovedToFolder')),
+                    onError: () =>
+                      toast.failure(t('entityActions.toastMoveToFolderFailed')),
                   });
                 },
                 icon: ArrowRight,
@@ -645,6 +653,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       .filter((op) => !!op);
     return [
       favoriteOp(),
+      snoozeOp(),
       muteOp(),
       reminderOp(),
       addTagOp(),
@@ -654,7 +663,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         props.permissions === Permissions.CAN_EDIT)
         ? [
             {
-              label: 'Add to project…',
+              label: t('entityActions.addToProject'),
               icon: Stack,
               group: 'file' as const,
               action: () => {
@@ -671,7 +680,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   });
 
   const filteredTools = createMemo(() =>
-    (props.tools ?? []).filter((t) => !t.condition || t.condition())
+    (props.tools ?? []).filter((tool) => !tool.condition || tool.condition())
   );
 
   const tools = createMemo<SplitFileMenuAction[]>(() =>

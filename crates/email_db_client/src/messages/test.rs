@@ -1,3 +1,4 @@
+use crate::messages::delete::MessageDeletion;
 use crate::messages::get::{draft_exists_with_id, filter_existing_provider_message_ids};
 use crate::messages::scheduled::get::get_scheduled_db_messages_by_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -358,13 +359,45 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     .expect("fixture message present");
 
     let mut tx = pool.begin().await?;
-    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
+    let deletion = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
     tx.commit().await?;
 
     // The thread survives (a second message remains) and the flag flips off
     // because its attachments cascaded away with the message.
-    assert!(deleted_thread.is_none());
+    assert_eq!(
+        deletion,
+        MessageDeletion::Deleted {
+            deleted_thread: None
+        }
+    );
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn delete_message_reports_already_deleted_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let ics_message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+    let fusionauth_user_id = "00000000-0000-0000-0000-000000000b01";
+
+    let message = crate::messages::get_simple_messages::get_simple_message(
+        &pool,
+        &ics_message_id,
+        fusionauth_user_id,
+    )
+    .await?
+    .expect("fixture message present");
+
+    let mut conn = pool.acquire().await?;
+    let first = crate::messages::delete::delete_message_with_tx(&mut conn, &message).await?;
+    let second = crate::messages::delete::delete_message_with_tx(&mut conn, &message).await?;
+
+    assert!(matches!(first, MessageDeletion::Deleted { .. }));
+    assert_eq!(second, MessageDeletion::AlreadyDeleted);
     Ok(())
 }
 
@@ -515,5 +548,40 @@ async fn filter_existing_provider_message_ids_partitions_known_and_missing(
     let cross_link = filter_existing_provider_message_ids(&pool, other_link_id, &requested).await?;
     assert!(cross_link.is_empty());
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("draft_exists_with_id"))
+)]
+async fn parsed_reads_preserve_restored_draft_generation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::get_parsed::{
+        get_paginated_parsed_messages_by_thread_id, get_parsed_message_by_id,
+        get_parsed_messages_by_id_batch,
+    };
+    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
+    sqlx::query!(
+        "UPDATE email_messages SET draft_generation = 2 WHERE id = $1",
+        draft_id
+    )
+    .execute(&pool)
+    .await?;
+    let single = get_parsed_message_by_id(&pool, &draft_id).await?.unwrap();
+    assert_eq!(single.draft_generation, 2);
+    assert_eq!(serde_json::to_value(&single)?["draft_generation"], 2);
+    let batch = get_parsed_messages_by_id_batch(&pool, &[draft_id]).await?;
+    assert_eq!(batch[0].draft_generation, 2);
+    let page =
+        get_paginated_parsed_messages_by_thread_id(&pool, single.thread_db_id, 0, 100).await?;
+    assert_eq!(
+        page.iter()
+            .find(|message| message.db_id == draft_id)
+            .unwrap()
+            .draft_generation,
+        2
+    );
     Ok(())
 }

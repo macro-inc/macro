@@ -187,6 +187,49 @@ describe('useSoupNavigationHotkeys', () => {
     }
   });
 
+  it('collapses task groups with H without consuming H on emails', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('a1');
+      const row = soup.focus.row()!;
+      const toggle = vi.spyOn(row.group!, 'toggle');
+      soup.setRows(
+        soup.rows().map((r) => ({
+          ...r,
+          original:
+            r.id === 'a1'
+              ? ({ ...r.original, type: 'email' } as EntityData)
+              : r.original,
+        }))
+      );
+      expect(
+        handlerFor('arrowleft')(new KeyboardEvent('keydown', { key: 'h' }))
+      ).toBe(false);
+      expect(toggle).not.toHaveBeenCalled();
+      soup.setRows(
+        soup.rows().map((r) => ({
+          ...r,
+          original:
+            r.id === 'a1'
+              ? ({
+                  ...r.original,
+                  type: 'document',
+                  fileType: 'md',
+                  subType: { type: 'task', is_completed: false },
+                } as EntityData)
+              : r.original,
+        }))
+      );
+      expect(
+        handlerFor('arrowleft')(new KeyboardEvent('keydown', { key: 'h' }))
+      ).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      expect(soup.focus.id()).toBe('header:a');
+    } finally {
+      dispose();
+    }
+  });
+
   it('consumes H on expanded and collapsed headers', () => {
     const { soup, dispose } = setupHotkeys();
     try {
@@ -292,6 +335,39 @@ describe('useSoupNavigationHotkeys', () => {
     expect(soup.focus.id()).toBe('a2');
 
     dispose();
+  });
+
+  it('keeps detail navigation without reading the unmounted list virtualizer', () => {
+    const virtualizer = vi.fn(() => undefined);
+    const { soup, dispose, disposeView } = createRoot((dispose) => {
+      const slots = createOwnedSlots();
+      vi.mocked(withSplitPanelOwner).mockImplementation(slots.replace);
+      const soup = createSoupState();
+      setGroupedRows(soup);
+      const disposeView = createRoot((disposeView) => {
+        useSoupNavigationHotkeys({
+          scopeId: 'test-scope',
+          soup,
+          splitHandle: createSplitHandleStub(),
+          virtualizerHandle: virtualizer,
+        });
+        return disposeView;
+      });
+      return { soup, dispose, disposeView };
+    });
+    try {
+      handlerFor('j')();
+      expect(virtualizer).toHaveBeenCalled();
+      disposeView();
+      virtualizer.mockClear();
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('a2');
+      handlerFor('k')();
+      expect(soup.focus.id()).toBe('a1');
+      expect(virtualizer).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it('arrow keys share the header-skipping navigation', () => {

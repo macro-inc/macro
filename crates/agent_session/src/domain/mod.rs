@@ -1,6 +1,9 @@
+pub mod action_history;
+pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
 pub mod coding_agents;
+pub mod coding_preferences;
 pub mod connection;
 /// Authorization of user and runtime session controls.
 pub mod control;
@@ -13,10 +16,14 @@ pub mod name_generation;
 pub mod ports;
 pub mod pull_request;
 pub mod pull_request_links;
+pub mod read;
+pub mod retitle;
 mod sandbox_size;
 pub mod search;
 pub mod service;
 pub mod session;
+/// The task a session works on, and linking its pull request to it.
+pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
 
@@ -35,3 +42,15 @@ pub mod working_branch;
 
 /// Recovery of sessions abandoned by crashed replicas.
 pub mod recovery;
+
+/// Warm session promotion and expiry.
+pub mod warm;
+
+/// Visibility policy for standalone session lists.
+pub mod list_visibility;
+
+/// User-scoped AI session actions.
+pub mod tool_actions;
+
+/// Durable system notifications.
+pub mod notifications;

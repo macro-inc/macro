@@ -3152,7 +3152,7 @@ function ComparisonSection() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '44px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,
@@ -3331,7 +3331,7 @@ function GithubFinalCta() {
           style={{
             'font-family': 'display',
             'font-size': mobile() ? '38px' : '48px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.08,
             margin: '0',
@@ -3471,7 +3471,8 @@ export const RouteGithub: Component = () => {
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? 'clamp(44px, 12vw, 60px)' : '52.36px',
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'letter-spacing': '-0.012em',
                 'line-height': 1.12,
                 margin: '0',

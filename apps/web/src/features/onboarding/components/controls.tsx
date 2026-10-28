@@ -1,4 +1,4 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { onCleanup, onMount } from 'solid-js';
 
 export function FormInput(props: {
@@ -41,16 +41,6 @@ export function FormInput(props: {
       autocomplete={props.id}
       onInput={(e) => props.onInput(e.currentTarget.value)}
       class="obf-input w-full px-4 py-3 rounded-2xl border border-edge bg-input text-sm text-ink placeholder:text-ink-placeholder focus:border-ink/40 focus:outline-none transition-colors"
-    />
-  );
-}
-
-/** A quiet inset frame, free of gradients. */
-export function NoiseBackground() {
-  return (
-    <div
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-4 rounded-[32px] border border-ink/[0.04] sm:inset-6"
     />
   );
 }

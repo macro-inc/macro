@@ -5,7 +5,10 @@ import {
 } from '@app/features/chat/ChatWithAgentButton';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
-import { makeMoveToProjectAction } from '@app/features/next-soup/actions';
+import {
+  emailSenderBucket,
+  makeMoveToProjectAction,
+} from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import {
   openEntityInSplitFromUnifiedList,
@@ -21,20 +24,24 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import ProhibitIcon from '@phosphor/prohibit.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
-import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
+import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import ProhibitIcon from '@icon/system/regular/prohibit.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 
@@ -63,7 +70,9 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   });
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
-  const moveToProjectAction = makeMoveToProjectAction();
+  const moveToProjectAction = makeMoveToProjectAction({
+    userId: useUserId(),
+  });
 
   const isInvite = () => {
     const row = soup?.items.get(props.id);
@@ -95,10 +104,21 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     });
   };
 
+  // The thread's own Signal or Noise placement, when the list row that opened
+  // it said; unknown offers both sender moves, as in Search.
+  const senderBucket = () => emailSenderBucket(emailEntity());
+
+  // A thread belongs to the mailbox it came to, so being its owner is being
+  // one of the user's inboxes; the row's ownerId isn't known before it loads.
+  const canMoveToFolder = () => {
+    const entity = emailEntity();
+    return !!entity && moveToProjectAction.canMoveType(entity) && isOwnThread();
+  };
+
   const moveToFolder = () => {
     const entity = emailEntity();
-    if (!entity || !moveToProjectAction.canExecute(entity)) return;
-    void moveToProjectAction.execute([entity]);
+    if (!entity || !canMoveToFolder()) return;
+    fireAndForget(moveToProjectAction.execute([entity]), 'email-thread-tools');
   };
 
   // A send-only thread is permanently done, so neither half of the toggle
@@ -111,7 +131,10 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       return;
     }
     if (props.listNavigation) {
-      props.listNavigation.markDone(emailCtx.archiveThread);
+      fireAndForget(
+        props.listNavigation.markDone(emailCtx.archiveThread),
+        'email-thread-tools'
+      );
       return;
     }
     // Prefer the active Mark done command so it drives soup navigation and
@@ -150,7 +173,10 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     } else if (soup && nextRow) {
       soup.selection.clear();
       soup.focus.set(nextRow.id);
-      openEntityInSplitFromUnifiedList(nextRow.original, {});
+      fireAndForget(
+        openEntityInSplitFromUnifiedList(nextRow.original, {}),
+        'email-thread-tools'
+      );
     }
 
     const toastId = toast.success('Moved to Trash', {
@@ -189,14 +215,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
 
   const emailActions: BlockTool[] = [
     {
-      label: 'Mark done',
+      label: 'Mark Done',
       icon: CheckIcon,
       action: toggleMarkDone,
       condition: () => isOwnThread() && !isDone(),
       hotkeyToken: TOKENS.entity.action.markDone,
     },
     {
-      label: 'Mark as not done',
+      label: 'Mark Not Done',
       icon: CheckBoldIcon,
       action: toggleMarkDone,
       condition: () =>
@@ -204,14 +230,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.entity.action.markNotDone,
     },
     {
-      label: 'Mark unread',
+      label: 'Mark Unread',
       icon: EnvelopeSimpleOpenIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && !emailCtx.isThreadMarkedUnread(),
       hotkeyToken: TOKENS.entity.action.markUnread,
     },
     {
-      label: 'Mark read',
+      label: 'Mark Read',
       icon: EnvelopeSimpleIcon,
       action: toggleMarkUnread,
       condition: () => isOwnThread() && emailCtx.isThreadMarkedUnread(),
@@ -223,7 +249,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       action: () => {
         const threadId = emailCtx.thread()?.db_id;
         if (!threadId) return;
-        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+        fireAndForget(
+          openChatWithAgent({
+            type: 'email',
+            id: threadId,
+            name: props.title,
+          }),
+          'email-thread-tools'
+        );
       },
       condition: () => !!emailCtx.thread()?.db_id,
     },
@@ -241,7 +274,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       action: moveToFolder,
       condition: () => {
         const entity = emailEntity();
-        return !!entity && moveToProjectAction.canExecute(entity);
+        return !!entity && canMoveToFolder();
       },
     },
     {
@@ -250,13 +283,21 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
+      hotkeyToken: TOKENS.email.trash,
+    },
+    {
+      group: 'sender',
+      label: 'Sender → Signal',
+      icon: SignalIcon,
+      action: () => emailCtx.markSenderSignal(),
+      condition: () => isOwnThread() && senderBucket() !== 'signal',
     },
     {
       group: 'sender',
       label: 'Sender → Noise',
       icon: NoiseIcon,
       action: () => emailCtx.markSenderNoise(),
-      condition: isOwnThread,
+      condition: () => isOwnThread() && senderBucket() !== 'noise',
     },
     {
       group: 'sender',
@@ -274,13 +315,21 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       action: () => {
         const threadId = emailCtx.thread()?.db_id;
         if (!threadId) return;
-        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+        fireAndForget(
+          openChatWithAgent({
+            type: 'email',
+            id: threadId,
+            name: props.title,
+          }),
+          'email-thread-tools'
+        );
       },
       condition: () => !!emailCtx.thread()?.db_id,
-      buttonComponent: () => {
+      buttonComponent: (control) => {
         const id = emailCtx.thread()?.db_id;
         return id ? (
           <ChatWithAgentButton
+            grouped={control.grouped}
             entity={{ type: 'email', id, name: props.title }}
           />
         ) : null;
@@ -290,6 +339,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   ];
 
   return {
+    openShare,
     isInvite,
     emailEntity,
     permissions: () => getPermissions(emailCtx.thread()?.access_level),
@@ -300,6 +350,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         const entity = emailEntity();
         return entity && isOwnThread() ? (
           <EmailReminderStatus
+            grouped={!isTouchDevice()}
             entity={entity}
             onSaved={async () => {
               const navigation = props.listNavigation;

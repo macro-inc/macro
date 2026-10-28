@@ -8,7 +8,7 @@ import type {
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { ActivityTimelineRow } from '@app/features/activity/views/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
+import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal, For } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -31,6 +31,7 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
     .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 
@@ -73,11 +74,12 @@ function activityAction(action: Activity['action']): ActivityAction {
     .with({ type: 'callStarted' }, () => ({
       kind: 'call-started' as const,
     }))
+    .with({ type: 'responded' }, () => ({ kind: 'responded' as const }))
     .with({ type: 'unknown' }, ({ tag }) => ({
       kind: 'unknown' as const,
       tag,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'unknown' as const, tag: action.type }));
 }
 
 function activityEvent(activity: Activity, index: number): ActivityEvent {

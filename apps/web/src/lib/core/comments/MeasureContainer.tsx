@@ -14,7 +14,6 @@ type MeasureContainerProps = {
   alignmentOffset: number;
   top: number;
   ref?: Ref<HTMLDivElement>;
-  maxHeight?: number;
   threadId: ThreadId;
   isActive: boolean;
   forceWidth?: number;
@@ -69,7 +68,6 @@ export const MeasureContainer = (props: ParentProps<MeasureContainerProps>) => {
           ? { left: `${props.alignmentOffset}px` }
           : { right: `${props.alignmentOffset}px` }),
         top: `${props.top}px`,
-        'max-height': props.maxHeight ? `${props.maxHeight}px` : undefined,
         'min-width': props.forceWidth ? `${props.forceWidth}px` : undefined,
         'z-index': props.isActive
           ? 'calc(var(--z-index-placeable) + 1)'

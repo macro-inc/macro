@@ -44,6 +44,89 @@ fn test_tracer_provider() -> (InMemorySpanExporter, SdkTracerProvider) {
     (exporter, provider)
 }
 
+#[tokio::test]
+async fn force_flush_exports_short_invocations_and_preserves_warm_provider() {
+    use opentelemetry::trace::Tracer as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter.clone())
+        .build();
+    let tracer = provider.tracer("retention-test");
+    let entrypoint = InitializedEntrypoint {
+        tracer_provider: Some(provider),
+        logger_provider: None,
+    };
+
+    tracer.in_span("first-invocation", |_| {});
+    entrypoint
+        .force_flush()
+        .await
+        .expect("first flush succeeds");
+    let spans = exporter.get_finished_spans().expect("exported spans");
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0].name, "first-invocation");
+
+    tracer.in_span("warm-invocation", |_| {});
+    entrypoint.force_flush().await.expect("warm flush succeeds");
+    let spans = exporter.get_finished_spans().expect("exported spans");
+    assert_eq!(spans.len(), 2);
+    assert_eq!(spans[1].name, "warm-invocation");
+    entrypoint.shutdown();
+}
+
+#[tokio::test]
+async fn force_flush_reports_export_failure_instead_of_success() {
+    use opentelemetry::trace::Tracer as _;
+    use opentelemetry_sdk::{
+        error::{OTelSdkError, OTelSdkResult},
+        trace::{BatchConfigBuilder, BatchSpanProcessor, SpanData, SpanExporter},
+    };
+
+    #[derive(Debug)]
+    struct FailingExporter;
+    impl SpanExporter for FailingExporter {
+        async fn export(&self, _batch: Vec<SpanData>) -> OTelSdkResult {
+            Err(OTelSdkError::InternalFailure(
+                "test export failure".to_owned(),
+            ))
+        }
+    }
+    let processor = BatchSpanProcessor::builder(FailingExporter)
+        .with_batch_config(
+            BatchConfigBuilder::default()
+                .with_scheduled_delay(std::time::Duration::from_secs(3600))
+                .build(),
+        )
+        .build();
+    let provider = SdkTracerProvider::builder()
+        .with_span_processor(processor)
+        .build();
+    provider
+        .tracer("test")
+        .in_span("completed-invocation", |_| {});
+    let entrypoint = InitializedEntrypoint {
+        tracer_provider: Some(provider),
+        logger_provider: None,
+    };
+    assert!(matches!(
+        entrypoint.force_flush().await,
+        Err(TelemetryFlushError::Traces(_))
+    ));
+    entrypoint.shutdown();
+}
+
+#[tokio::test]
+async fn force_flush_without_exporters_is_a_noop() {
+    InitializedEntrypoint {
+        tracer_provider: None,
+        logger_provider: None,
+    }
+    .force_flush()
+    .await
+    .expect("no exporter needs flushing");
+}
+
 #[test]
 fn rootcause_tracing_subscriber_captures_span_chain() {
     static INSTALL_ROOTCAUSE_HOOKS: Once = Once::new();

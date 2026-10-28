@@ -8,8 +8,8 @@
  * plus the facts the block chrome needs to explain the wait.
  */
 
-import { type Accessor, createMemo } from 'solid-js';
-import { pendingSession } from './pending-session';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { forgetPendingSession, pendingSession } from './pending-session';
 
 export type ResolvedSessionId = {
   /** The session id; absent while its create is still in flight. */
@@ -23,13 +23,22 @@ export type ResolvedSessionId = {
    *  the create is still on the wire. */
   pendingPrompt: Accessor<string | undefined>;
   initialInput: Accessor<string | undefined>;
+  /** Called only after the destination owns its AgentSession reference. */
+  acquired: () => void;
 };
 
 export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
   // The create in flight for this id, or undefined for an id that is simply
   // a session to load. Read once per id: a create that settles is forgotten
   // by the surface that opened it, and by then `sessionId` is the id itself.
-  const entry = createMemo(() => pendingSession(blockId()));
+  const entry = createMemo(() => {
+    const id = blockId();
+    const session = pendingSession(id);
+    onCleanup(() => {
+      if (session?.sessionId() || session?.failed()) forgetPendingSession(id);
+    });
+    return session;
+  });
 
   const sessionId = () => {
     const session = entry();
@@ -47,5 +56,6 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
     error: () => entry()?.error(),
     pendingPrompt: () => entry()?.prompt,
     initialInput: () => entry()?.initialInput,
+    acquired: () => forgetPendingSession(blockId()),
   };
 }

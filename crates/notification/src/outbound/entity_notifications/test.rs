@@ -322,3 +322,260 @@ async fn top_level_filter_finds_older_mentions_before_limiting(pool: PgPool) {
             .any(|row| row.notification_id == reply && row.state == NotificationState::Unseen)
     );
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Reply {
+    message_id: String,
+    thread_id: String,
+}
+impl Notification for Reply {
+    const TYPE_NAME: &'static str = "channel_message_reply";
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_feed_scope_excludes_thread_roots_before_the_limit(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let witness = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Message {
+            message_id: "unthreaded".into(),
+        },
+    )
+    .await;
+    for root in ["replied", "thread-mentioned"] {
+        insert(
+            &pool,
+            &viewer,
+            channel.clone(),
+            None,
+            Message {
+                message_id: root.into(),
+            },
+        )
+        .await;
+    }
+    let seen_reply = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Reply {
+            message_id: "reply".into(),
+            thread_id: "replied".into(),
+        },
+    )
+    .await;
+    let seen_mention = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "mention-without-send".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    let legacy_mention = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        LegacyMention {
+            message_id: "legacy-reply".into(),
+            thread_id: "thread-mentioned".into(),
+        },
+    )
+    .await;
+    pool.mark_notifications_seen(&viewer, &[seen_reply, seen_mention, legacy_mention])
+        .await
+        .unwrap();
+    insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Reaction {
+            message_id: "unthreaded".into(),
+        },
+    )
+    .await;
+    insert(&pool, &viewer, channel.clone(), None, Call).await;
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        channel_feed_only: true,
+        limit: Some(1),
+        ..Default::default()
+    };
+    let read = || {
+        get_filtered_entity_notifications(
+            &pool,
+            viewer.clone(),
+            vec![channel.clone()],
+            query.clone(),
+        )
+    };
+    let rows = read().await.unwrap();
+    assert_eq!(rows[&channel].len(), 1);
+    assert_eq!(rows[&channel][0].notification_id, witness);
+    pool.mark_notifications_seen(&viewer, &[witness])
+        .await
+        .unwrap();
+    assert!(
+        read().await.unwrap()[&channel].is_empty(),
+        "unseen roots already assigned to threads cannot badge the channel feed"
+    );
+
+    // Completing the thread's last active reason releases its root to the feed.
+    pool.mark_notifications_done(&viewer, &[seen_reply], true)
+        .await
+        .unwrap();
+    assert_eq!(
+        read().await.unwrap()[&channel][0].notification_metadata["messageId"],
+        "replied"
+    );
+    let full =
+        get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], Default::default())
+            .await
+            .unwrap();
+    assert_eq!(
+        full[&channel].len(),
+        7,
+        "the unfiltered edge still contains all active history"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_feed_scoping_is_viewer_and_channel_local_and_ignores_deleted_reasons(
+    pool: PgPool,
+) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
+    let other = MacroUserIdStr::try_from_email("other@test.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let another = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let witness = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Message {
+            message_id: "root".into(),
+        },
+    )
+    .await;
+    let reply = Reply {
+        message_id: "reply".into(),
+        thread_id: "root".into(),
+    };
+    insert(&pool, &other, channel.clone(), None, reply.clone()).await;
+    insert(&pool, &viewer, another.clone(), None, reply.clone()).await;
+    let deleted = insert(&pool, &viewer, channel.clone(), None, reply).await;
+    pool.delete_user_notification(viewer.clone(), deleted)
+        .await
+        .unwrap();
+    let rows = get_filtered_entity_notifications(
+        &pool,
+        viewer,
+        vec![channel.clone(), another.clone()],
+        EntityNotificationQuery {
+            states: vec![NotificationState::Unseen],
+            channel_feed_only: true,
+            limit: Some(1),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(rows[&channel][0].notification_id, witness);
+    assert!(
+        rows[&another].is_empty(),
+        "a reply alone is not channel-feed activity"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_feed_preserves_mention_duplicates_and_does_not_scope_thread_edges(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let thread = EntityType::ChannelMessage.with_entity_string("root".to_owned());
+    let root = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Message {
+            message_id: "root".into(),
+        },
+    )
+    .await;
+    let reply = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        Some(thread.clone()),
+        Reply {
+            message_id: "reply".into(),
+            thread_id: "root".into(),
+        },
+    )
+    .await;
+    let root_mention = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "root".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    let reply_mention = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        Some(thread.clone()),
+        Mention {
+            message_id: "reply".into(),
+            thread_id: Some("root".into()),
+        },
+    )
+    .await;
+    pool.mark_notifications_seen(&viewer, &[root_mention, reply_mention])
+        .await
+        .unwrap();
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        channel_feed_only: true,
+        limit: Some(1),
+        ..Default::default()
+    };
+    let rows = get_filtered_entity_notifications(
+        &pool,
+        viewer.clone(),
+        vec![channel.clone(), thread.clone()],
+        query.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        rows[&channel][0].notification_id, reply,
+        "Home assigns the mention rather than its duplicate reply to the thread"
+    );
+    assert_eq!(
+        rows[&thread][0].notification_id, reply,
+        "non-channel edges keep their existing scope"
+    );
+    pool.mark_notifications_seen(&viewer, &[reply])
+        .await
+        .unwrap();
+    let rows = get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], query)
+        .await
+        .unwrap();
+    assert_eq!(rows[&channel][0].notification_id, root);
+}

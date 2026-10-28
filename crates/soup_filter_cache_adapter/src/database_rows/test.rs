@@ -18,11 +18,25 @@ const DEAL_3: &str = "70000000-0000-0000-0000-000000000003";
 const CONTACT: &str = "70000000-0000-0000-0000-000000000004";
 
 async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, data: &Value) {
-    let core = crate::authoritative_projection_mutations(QUERY, None, data).unwrap();
-    let projections =
-        augment_authoritative(engine.storage(), QUERY, None, &Map::new(), data, true, core)
-            .await
-            .unwrap();
+    let core = crate::authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        QUERY,
+        None,
+        data,
+    )
+    .unwrap();
+    let projections = augment_authoritative(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        QUERY,
+        None,
+        &Map::new(),
+        data,
+        true,
+        core,
+    )
+    .await
+    .unwrap();
     engine
         .write_query_with_registration_and_projections(
             None,

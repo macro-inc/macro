@@ -8,6 +8,32 @@ import {
 import type { EntityActionListState } from '../../next-soup/actions/entity-action-context';
 import type { SoupState } from '../../next-soup/create-soup-state';
 import type { QueryStore } from '../../next-soup/filters/filter-store/query-store';
+import type { CrmRecordRef, CrmRecordSection } from '../core/record';
+
+/** A new `seek` asks to show the same message again. */
+export type CrmCommentTarget = { commentId: string; seek: string };
+
+/** Records opened inside the workspace; the route holds them. */
+export type CrmRecordNavigation = {
+  /** Records opened from the list, oldest first; empty on the list. */
+  records: Accessor<readonly CrmRecordRef[]>;
+  /** The shown record's tab; none is its Overview. */
+  section: Accessor<CrmRecordSection | undefined>;
+  /** A Discussion message of the shown record to scroll to. */
+  commentTarget: Accessor<CrmCommentTarget | undefined>;
+  /** Shows the last record of `trail` at its Overview. */
+  open(trail: readonly CrmRecordRef[]): void;
+  setSection(section: CrmRecordSection): void;
+  /** Returns to the list the records were opened from. */
+  close(): void;
+};
+
+/** The Customers location: a list tab, and the records opened from it. */
+export type CrmRoute = CrmRecordNavigation & {
+  tab: Accessor<string>;
+  /** Shows the list of `tab`, closing any open record. */
+  setTab(tab: string, options?: { replace?: boolean }): void;
+};
 
 /** Collection capabilities consumed by CRM views, supplied by the host adapter. */
 export type CrmWorkspace = {
@@ -17,8 +43,14 @@ export type CrmWorkspace = {
     focus(): void;
     captureEntryState(): void;
     openCompany(entity: EntityData, newSplit: boolean): void;
-    openSettings(): void;
+    /** CRM settings, shown in the workspace over its list or record. */
+    settings: {
+      isOpen: Accessor<boolean>;
+      open(): void;
+      close(): void;
+    };
     openTeamSettings(): void;
+    record: CrmRecordNavigation;
   };
 
   soup: EntityActionListState & {
@@ -38,7 +70,7 @@ export type CrmWorkspace = {
     hasNextPage: Accessor<boolean>;
     fetchNextPage(): Promise<void>;
   };
-  queryFilters: Pick<QueryStore, 'state' | 'replace'>;
+  queryFilters: Pick<QueryStore, 'state' | 'set' | 'replace'>;
   searchText: Accessor<string>;
   setSearchText(value: string): void;
   activeTab: Accessor<string | undefined>;
@@ -47,8 +79,6 @@ export type CrmWorkspace = {
   setStageFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
   setOwnerFilter: Setter<string[]>;
-  viewMode: Accessor<'list' | 'board'>;
-  setViewMode: Setter<'list' | 'board'>;
 };
 const Context = createContext<CrmWorkspace>();
 export const CrmWorkspaceProvider = Context.Provider;

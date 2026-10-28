@@ -1,3 +1,4 @@
+import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import type { EntryPersistenceHandle } from '@components/app/split-layout/entry-persistence';
 import { describe, expect, it, vi } from 'vitest';
 import { createEmailViewPersistence } from './persistence';
@@ -24,6 +25,30 @@ const current = (): EmailViewState => ({
 });
 
 describe('createEmailViewPersistence', () => {
+  it('restores the alias together with its owning inbox', () => {
+    const aliasFilter = {
+      inboxId: 'inbox',
+      emailAddress: 'resident@example.com',
+    };
+    const handle: EntryPersistenceHandle = {
+      currentEntryState: () => ({
+        'email.view': { version: 1, tab: 'all', aliasFilter },
+        [INBOX_FILTER_ENTRY_KEY]: ['inbox'],
+      }),
+      registerEntryStateCaptor: () => () => {},
+    };
+    const { storages } = createEmailViewPersistence({
+      handle,
+      userId: () => undefined,
+      restoreLocalState: false,
+      restorePreferences: false,
+    });
+    const list = Array.isArray(storages) ? storages : [storages];
+    let state = current();
+    for (const storage of list) state = storage.restore(state) ?? state;
+    expect(state.aliasFilter).toEqual(aliasFilter);
+    expect(state.inboxIds).toEqual(['inbox']);
+  });
   it('restores a stored archived tab', () => {
     const handle: EntryPersistenceHandle = {
       currentEntryState: () => ({

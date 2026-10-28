@@ -137,6 +137,7 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
 }));
 vi.mock('./AgentComposer', () => ({ AgentComposer: () => null }));
 vi.mock('./AgentPullRequestChip', () => ({ AgentPullRequestChip: () => null }));
+vi.mock('./AgentTaskChip', () => ({ AgentTaskChip: () => null }));
 vi.mock('./AgentSplitHeader', () => ({
   AgentSplitHeader: () => null,
   agentSessionTitle: () => 'Agent session',

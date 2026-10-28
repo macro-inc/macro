@@ -5,7 +5,7 @@ use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, ToolResult, ToolSet as AiToolSet,
     ToolSetError,
 };
-use rig_agent::tool::{DynamicTool, ToolExecutionError, ToolOutput};
+use rig_agent::tool::{DynamicTool, ToolExecutionError};
 use std::sync::{Arc, RwLock};
 use tracing::Instrument as _;
 
@@ -71,6 +71,23 @@ pub(crate) fn take_description(
         .flatten()
         .find(|description| !description.trim().is_empty())
         .unwrap_or_else(|| name.to_owned())
+}
+
+/// A tool's definition as providers receive it, from its schema.
+pub(crate) fn provider_definition(
+    name: String,
+    description: String,
+    schema: &schemars::Schema,
+) -> rig_core::completion::ToolDefinition {
+    let mut parameters =
+        serde_json::to_value(schema).unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    normalize_request_schema(&mut parameters);
+    let description = take_description(&name, description, &mut parameters);
+    rig_core::completion::ToolDefinition {
+        name,
+        description,
+        parameters,
+    }
 }
 
 type Deserializer<Context> = Arc<
@@ -157,7 +174,7 @@ impl ToolsetToolAdapter {
                                 telemetry.finish(&result);
                             }
                             match result {
-                                Ok(Ok(value)) => Ok(ToolOutput::json(value)),
+                                Ok(Ok(value)) => crate::tool_media::model_output(value),
                                 Ok(Err(e)) => {
                                     tracing::error!(error = ?e.internal_error, "toolset tool error");
                                     Err(ToolExecutionError::other(e.description))
@@ -205,12 +222,11 @@ impl DynToolSetAdapter {
                      description,
                      schema,
                  }| {
-                    let schema_json = serde_json::to_value(&schema)
-                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                    let definition = provider_definition(name, description, &schema);
                     Self::build(
-                        name,
-                        description,
-                        schema_json,
+                        definition.name,
+                        definition.description,
+                        definition.parameters,
                         toolset.clone(),
                         context.clone(),
                         request_context.clone(),
@@ -237,12 +253,11 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        let schema_json = serde_json::to_value(&schema)
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        let definition = provider_definition(name, description, &schema);
         Self::build(
-            name,
-            description,
-            schema_json,
+            definition.name,
+            definition.description,
+            definition.parameters,
             toolset,
             context,
             request_context,
@@ -252,7 +267,7 @@ impl DynToolSetAdapter {
     fn build<Context>(
         name: String,
         description: String,
-        mut schema: serde_json::Value,
+        schema: serde_json::Value,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
         request_context: Arc<RwLock<RequestContext>>,
@@ -260,8 +275,6 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        normalize_request_schema(&mut schema);
-        let description = take_description(&name, description, &mut schema);
         let tool_name = name.clone();
         DynamicTool::new(
             name,
@@ -279,7 +292,7 @@ impl DynToolSetAdapter {
                         .expect("request_context lock poisoned")
                         .clone();
                     match toolset.try_tool_call(ctx, req_ctx, &tool_name, &args).await {
-                        Ok(Ok(value)) => Ok(ToolOutput::json(value)),
+                        Ok(Ok(value)) => crate::tool_media::model_output(value),
                         Ok(Err(e)) => {
                             tracing::error!(error = ?e.internal_error, "tool error");
                             Err(ToolExecutionError::other(e.description))

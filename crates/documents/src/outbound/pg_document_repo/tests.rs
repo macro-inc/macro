@@ -16,7 +16,7 @@ use sqlx::{Pool, Postgres, Row};
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
-    InitialLinkShare, NewDocument,
+    InitialLinkShare, NewDocument, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -607,6 +607,7 @@ fn create_document_args(
             team_id,
             share_with_team: false,
             created_at: None,
+            updated_at: None,
             sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
             skip_history: false,
             initial_link_share: InitialLinkShare::EntityDefault,
@@ -974,6 +975,122 @@ async fn test_soft_delete_document(pool: Pool<Postgres>) {
 
     let entity = fetch_entity_row(&pool, document_id).await;
     assert!(entity.deleted_at.is_some());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn create_document_keeps_the_dates_it_is_given(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    args.document.created_at = Some(
+        chrono::DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+    );
+    args.document.updated_at = Some(
+        chrono::DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+    );
+    let created = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+
+    let row = sqlx::query!(
+        r#"SELECT "createdAt"::text AS "created_at!", "updatedAt"::text AS "updated_at!" FROM "Document" WHERE id = $1"#,
+        created.document_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (row.created_at.as_str(), row.updated_at.as_str()),
+        ("2021-03-01 00:00:00", "2024-02-01 00:00:00")
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn extend_project_dates_widens_the_project_and_those_above_it(pool: Pool<Postgres>) {
+    // child_project sits in test_project_name.
+    sqlx::query!(
+        r#"
+        UPDATE "Project"
+        SET "createdAt" = '2026-01-01 00:00:00', "updatedAt" = '2026-02-01 00:00:00'
+        WHERE id IN ('d0000000-0000-0000-0000-100000000001', 'd0000000-0000-0000-0000-100000000002')
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = test_repo(pool.clone());
+
+    // Inside the projects' span: nothing moves.
+    repo.extend_project_dates(
+        "d0000000-0000-0000-0000-100000000002",
+        chrono::DateTime::parse_from_rfc3339("2026-01-10T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+        chrono::DateTime::parse_from_rfc3339("2026-01-20T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+    )
+    .await
+    .unwrap();
+    // Wider: creation moves back and last edit forward, up the tree.
+    repo.extend_project_dates(
+        "d0000000-0000-0000-0000-100000000002",
+        chrono::DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+        chrono::DateTime::parse_from_rfc3339("2026-03-01T00:00:00Z")
+            .unwrap()
+            .to_utc(),
+    )
+    .await
+    .unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, "createdAt"::text AS "created_at!", "updatedAt"::text AS "updated_at!"
+        FROM "Project"
+        WHERE id IN ('d0000000-0000-0000-0000-100000000001', 'd0000000-0000-0000-0000-100000000002')
+        ORDER BY id
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let rows: Vec<(&str, &str, &str)> = rows
+        .iter()
+        .map(|row| {
+            (
+                row.id.as_str(),
+                row.created_at.as_str(),
+                row.updated_at.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "d0000000-0000-0000-0000-100000000001",
+                "2021-03-01 00:00:00",
+                "2026-03-01 00:00:00"
+            ),
+            (
+                "d0000000-0000-0000-0000-100000000002",
+                "2021-03-01 00:00:00",
+                "2026-03-01 00:00:00"
+            ),
+        ]
+    );
 }
 
 #[sqlx::test(
@@ -1869,6 +1986,31 @@ async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_get_team_task_number_names_the_team_slug(pool: Pool<Postgres>) {
+    sqlx::query!("UPDATE team SET slug = 'ENG' WHERE id = $1", TEST_TEAM_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool);
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+
+    assert_eq!(
+        repo.get_team_task_number(&task.document_id).await.unwrap(),
+        Some(TeamTaskNumber {
+            team_slug: "ENG".to_string(),
+            task_num: 1,
+        })
+    );
+    assert_eq!(
+        repo.get_team_task_number(TEST_DOCUMENT_ID).await.unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_get_document_id_by_team_task_number(pool: Pool<Postgres>) {
     insert_second_team(&pool).await;
     let repo = test_repo(pool);
@@ -2510,6 +2652,7 @@ fn import_email_document_args(
             team_id: None,
             share_with_team: false,
             created_at: None,
+            updated_at: None,
             sub_type: None,
             skip_history: true,
             initial_link_share: InitialLinkShare::EntityDefault,
@@ -3312,5 +3455,57 @@ async fn failed_sponsor_grant_leaves_no_bot_owned_rows(pool: Pool<Postgres>) {
             entities: 2,
             grants: 2,
         }
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_github_pull_request_task_links_returns_requested_keys_oldest_first(
+    pool: Pool<Postgres>,
+) {
+    let repo = test_repo(pool.clone());
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let other_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let task_short_id = short_id_for_document_id(&task.document_id);
+    let other_task_short_id = short_id_for_document_id(&other_task.document_id);
+    let created_at = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/1",
+        &other_task_short_id,
+        created_at + chrono::Duration::seconds(2),
+    )
+    .await;
+    insert_github_pr_task(&pool, "macro/macro/pull/1", &task_short_id, created_at).await;
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/2",
+        &task_short_id,
+        created_at + chrono::Duration::seconds(1),
+    )
+    .await;
+    insert_github_pr_task(&pool, "macro/macro/pull/3", &task_short_id, created_at).await;
+
+    let links = repo
+        .get_github_pull_request_task_links(&[
+            "macro/macro/pull/1".to_string(),
+            "macro/macro/pull/2".to_string(),
+            "macro/macro/pull/9".to_string(),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        links,
+        vec![
+            ("macro/macro/pull/1".to_string(), task_short_id.clone()),
+            ("macro/macro/pull/2".to_string(), task_short_id),
+            ("macro/macro/pull/1".to_string(), other_task_short_id),
+        ]
     );
 }

@@ -638,3 +638,20 @@ mod merge_consecutive_parts_tests {
         assert!(merge_consecutive_parts(vec![]).is_empty());
     }
 }
+
+#[test]
+fn normalized_uploaded_image_has_the_mime_type_required_by_gemini() {
+    let image = ImageData::try_from_bytes(ONE_BY_ONE_PNG.to_vec()).unwrap();
+    let message = user_msg_with_attachment("describe", vec![AttachmentPart::Image(image)]);
+    let rig_message = to_rig_messages(&[message]).remove(0);
+    let content =
+        rig_core::providers::gemini::completion::gemini_api_types::Content::try_from(rig_message)
+            .expect("normalized uploads must convert for Gemini");
+    let wire = serde_json::to_value(content).unwrap();
+    assert_eq!(wire["parts"][1]["inlineData"]["mimeType"], "image/webp");
+    assert!(
+        wire["parts"][1]["inlineData"]["data"]
+            .as_str()
+            .is_some_and(|data| !data.is_empty())
+    );
+}

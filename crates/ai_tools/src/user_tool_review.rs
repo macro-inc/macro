@@ -160,13 +160,43 @@ pub fn user_tool_finisher<Context>(
 where
     Context: Clone + Send + Sync + 'static,
 {
+    let authorize: UserToolAuthorizer = Arc::new(move |_, _| {
+        let user = user.clone();
+        Box::pin(async move { Ok(user) })
+    });
+    authorized_user_tool_finisher(tools, context, reviewer, cancel, authorize)
+}
+
+/// Resolve and authorize the actual reviewed arguments immediately before execution.
+pub type UserToolAuthorizer = Arc<
+    dyn Fn(
+            String,
+            Value,
+        )
+            -> Pin<Box<dyn Future<Output = Result<MacroUserIdStr<'static>, ReviewError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Review a draft first, then authorize its final arguments and selected account.
+/// The approval therefore covers the edited action, not the model's earlier draft.
+pub fn authorized_user_tool_finisher<Context>(
+    tools: Arc<AsyncToolCollection<Context>>,
+    context: Context,
+    reviewer: Arc<dyn UserToolReviewer>,
+    cancel: CancellationToken,
+    authorize: UserToolAuthorizer,
+) -> UserToolFinisher
+where
+    Context: Clone + Send + Sync + 'static,
+{
     Arc::new(move |call: PendingUserTool| {
         let tools = Arc::clone(&tools);
         let context = context.clone();
-        let user = user.clone();
+        let authorize = Arc::clone(&authorize);
         let reviewer = Arc::clone(&reviewer);
         let cancel = cancel.clone();
-        Box::pin(async move { finish(&tools, context, user, &*reviewer, cancel, call).await })
+        Box::pin(async move { finish(&tools, context, &authorize, &*reviewer, cancel, call).await })
             as Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
     })
 }
@@ -174,7 +204,7 @@ where
 async fn finish<Context>(
     tools: &AsyncToolCollection<Context>,
     context: Context,
-    user: MacroUserIdStr<'static>,
+    authorize: &UserToolAuthorizer,
     reviewer: &dyn UserToolReviewer,
     cancel: CancellationToken,
     call: PendingUserTool,
@@ -217,6 +247,15 @@ where
             "the reviewed arguments are not valid for {}; nothing was done",
             call.tool_name
         )));
+    }
+    let user = match authorize(call.tool_name.clone(), args.clone()).await {
+        Ok(user) => user,
+        Err(error) => return Some(FinishedUserTool::Error(error.to_string())),
+    };
+    if cancel.is_cancelled() {
+        return Some(FinishedUserTool::Error(
+            "The turn was cancelled; nothing was done.".into(),
+        ));
     }
     let mut request_context = RequestContext::new(user);
     request_context.cancel = cancel;

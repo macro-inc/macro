@@ -1,8 +1,9 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, InputGroup, Surface, TextField } from '@ui';
 import { Show } from 'solid-js';
 
 export function AutoReloadDialog(props: {
+  sharedWithTeam?: boolean;
   enabled: boolean;
   minimum: string;
   target: string;
@@ -47,6 +48,11 @@ export function AutoReloadDialog(props: {
             Set balance thresholds and a monthly spending limit for automatic
             credit purchases.
           </Dialog.Description>
+          <Show when={props.sharedWithTeam}>
+            <p class="text-sm text-ink-muted">
+              Auto-reload adds credits to your team’s shared balance.
+            </p>
+          </Show>
           <TextField value={props.minimum} onChange={props.onMinimum}>
             <TextField.Label>Minimum balance</TextField.Label>
             <TextField.Description>
@@ -99,8 +105,7 @@ export function AutoReloadDialog(props: {
             </p>
             <Button
               class="self-start"
-              variant="outline"
-              depth={3}
+              variant="secondary"
               size="sm"
               disabled={
                 !props.canManagePaymentMethods || props.paymentMethodsPending
@@ -136,14 +141,13 @@ export function AutoReloadDialog(props: {
             <Show
               when={props.enabled}
               fallback={
-                <Button variant="ghost" depth={3} onClick={props.onClose}>
+                <Button variant="ghost" onClick={props.onClose}>
                   Cancel
                 </Button>
               }
             >
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={props.disabled || props.pending}
                 onClick={props.onTurnOff}
               >
@@ -151,8 +155,7 @@ export function AutoReloadDialog(props: {
               </Button>
             </Show>
             <Button
-              variant="accent"
-              depth={3}
+              variant="primary"
               disabled={props.disabled || props.pending || props.invalid}
               onClick={props.onSave}
             >
@@ -165,11 +168,11 @@ export function AutoReloadDialog(props: {
           </div>
         </div>
         <Button
+          aria-label="Close Auto-Reload"
+          tooltip="Close Auto-Reload"
           class="absolute right-4 top-4"
           size="icon-sm"
           variant="ghost"
-          depth={3}
-          label="Close Auto-Reload"
           onClick={props.onClose}
         >
           <XIcon class="size-4" />

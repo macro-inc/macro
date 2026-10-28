@@ -126,6 +126,14 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_agent(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -411,16 +419,23 @@ impl EntityAccessService for TestAccessService {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         if jwt == INVALID_BEARER_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        Ok(ValidatedIdentity {
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }

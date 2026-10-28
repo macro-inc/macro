@@ -41,8 +41,6 @@ pub enum ModelHarnessDto {
     InMemory,
     /// The caller's Cursor account.
     Cursor,
-    /// The caller's allowlisted Claude subscription demo.
-    ClaudeCloud,
     /// A paired macrod runtime.
     Macrod,
 }
@@ -54,7 +52,6 @@ impl TryFrom<LoadAgentModelsRequest> for LoadAgentModels {
         let harness = match value.harness {
             ModelHarnessDto::InMemory => ModelHarness::InMemory,
             ModelHarnessDto::Cursor => ModelHarness::Cursor,
-            ModelHarnessDto::ClaudeCloud => ModelHarness::ClaudeCloud,
             ModelHarnessDto::Macrod => ModelHarness::Macrod,
         };
         Ok(Self {
@@ -74,6 +71,9 @@ pub struct AgentModelDto {
     pub name: String,
     /// Optional provider description.
     pub description: Option<String>,
+    /// Image input support, absent when the runtime does not advertise it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_images: Option<bool>,
     /// Optional group heading supplied by the provider.
     pub group: Option<String>,
 }
@@ -116,6 +116,7 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     name: model.name,
                     description: model.description,
                     group: model.group,
+                    supports_images: model.supports_images,
                 })
                 .collect(),
         }
@@ -184,7 +185,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime is disconnected"),
+        (status = 409, description = "Macrod runtime or Cursor account is not connected"),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )

@@ -47,7 +47,10 @@ export function PrMention(props: {
       onBlur={(event) => props.onHover?.(false, event)}
       onClick={open}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') open(event);
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          open(event);
+        }
       }}
     >
       <span class="review-pr-mention-icon">

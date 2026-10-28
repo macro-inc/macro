@@ -8,12 +8,16 @@ import type {
   MessageCursor,
   MessageListItem,
   MessageParent,
+  MessageTimelineEntry,
+  TimelineActivity,
 } from '@service-storage/messages';
-import { QueryClient } from '@tanstack/solid-query';
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/solid-query';
+import { createRoot } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  list: vi.fn(),
+  timeline: vi.fn(),
   track: vi.fn(),
 }));
 
@@ -26,7 +30,7 @@ vi.mock('../../client', () => ({
 }));
 
 vi.mock('@service-storage/messages', () => ({
-  entityMessagesClient: { list: mocks.list },
+  entityMessagesClient: { timeline: mocks.timeline },
 }));
 
 vi.mock('@app/lib/analytics', () => ({
@@ -42,12 +46,23 @@ vi.mock('../subscription', () => ({
 import { channelKeys } from '../../channel/keys';
 import { normalizeChannelMessageSender } from '../message-sender';
 import {
+  buildMessageIndex,
+  createMessageIndex,
+  findTopLevelMessageSnapshotInMessageTimeline,
   getMessageTimelineQueryKey,
+  insertActivitiesIntoMessageTimeline,
   isMissingMessageError,
   type MessageTimelineData,
   mergeCatchUpPage,
   messageTimelineQueryOptions,
+  removeTopLevelMessageFromMessageTimeline,
+  restoreTopLevelMessageInMessageTimeline,
 } from '../timeline';
+import {
+  reconcileTimelineEntries,
+  timelineEntryKey,
+  timelineMessages,
+} from '../timeline-entries';
 
 const parent: MessageParent = { type: 'channel', id: 'channel-1' };
 const document: MessageParent = { type: 'document', id: 'document-1' };
@@ -87,6 +102,11 @@ function createMessage(
   });
 }
 
+const entries = (items: MessageListItem[]): MessageTimelineEntry[] =>
+  items.map((message) => ({ type: 'message', message }));
+const ids = (page: { entries: MessageTimelineEntry[] }) =>
+  timelineMessages(page).map((item) => item.id);
+
 const cursor = (id: string, createdAt: string): MessageCursor => ({
   id,
   created_at: createdAt,
@@ -107,21 +127,24 @@ function seedLatestCache(
   const data: MessageTimelineData = {
     pages: [
       {
-        items,
+        entries: entries(items),
         next_cursor: extras?.nextCursor ?? cachedNext,
         previous_cursor: extras?.previousCursor ?? null,
       },
     ],
     pageParams: [extras?.pageParam ?? null],
   };
-  testQueryClient.setQueryData(getMessageTimelineQueryKey(parent, null), data);
+  testQueryClient.setQueryData(
+    getMessageTimelineQueryKey(items[0]?.parent ?? parent, null),
+    data
+  );
 }
 
 function fullPage(
   items: MessageListItem[] = [createMessage('full-1', '2026-09-10T14:00:00Z')]
 ) {
   return {
-    items,
+    entries: entries(items),
     next_cursor: null,
     previous_cursor: null,
   };
@@ -141,7 +164,7 @@ function resultError(code: string) {
 
 beforeEach(() => {
   testQueryClient = new QueryClient();
-  mocks.list.mockReset();
+  mocks.timeline.mockReset();
   mocks.track.mockReset();
 });
 
@@ -153,7 +176,7 @@ describe('messageTimelineQueryOptions', () => {
   it.each(['NOT_FOUND', 'GONE'] as const)(
     'throws missing load-around messages without retrying them for %s',
     async (code) => {
-      mocks.list.mockRejectedValueOnce(resultError(code));
+      mocks.timeline.mockRejectedValueOnce(resultError(code));
 
       const options = messageTimelineQueryOptions(parent, 'message-missing');
 
@@ -171,8 +194,8 @@ describe('messageTimelineQueryOptions', () => {
       expect(error).toBeInstanceOf(ThrownResultError);
       expect(isMissingMessageError(error)).toBe(true);
       expect(options.retry(0, error)).toBe(false);
-      expect(mocks.list).toHaveBeenCalledTimes(1);
-      expect(mocks.list).toHaveBeenCalledWith(parent, {
+      expect(mocks.timeline).toHaveBeenCalledTimes(1);
+      expect(mocks.timeline).toHaveBeenCalledWith(parent, {
         ...fullSelection,
         around: 'message-missing',
       });
@@ -188,15 +211,15 @@ describe('messageTimelineQueryOptions', () => {
 
   it('first load without cache uses the full timeline', async () => {
     const page = fullPage();
-    mocks.list.mockResolvedValueOnce(page);
+    mocks.timeline.mockResolvedValueOnce(page);
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
-    expect(result.items.map((item) => item.id)).toEqual(['full-1']);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
+    expect(ids(result)).toEqual(['full-1']);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -205,13 +228,13 @@ describe('messageTimelineQueryOptions', () => {
   });
 
   it('document timelines include whole-thread tombstones and report nothing', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
     await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(document, {
+    expect(mocks.timeline).toHaveBeenCalledWith(document, {
       ...fullSelection,
       include_deleted_threads: true,
     });
@@ -230,7 +253,7 @@ describe('messageTimelineQueryOptions', () => {
       getMessageTimelineQueryKey(project, null),
       { pages: [fullPage([deleted, old])], pageParams: [null] }
     );
-    mocks.list.mockResolvedValueOnce(
+    mocks.timeline.mockResolvedValueOnce(
       fullPage([{ ...old, content: 'Edited while disconnected' }])
     );
 
@@ -238,101 +261,138 @@ describe('messageTimelineQueryOptions', () => {
       pageParam: null,
     });
 
-    expect(result.items.map((item) => item.content)).toEqual([
+    expect(timelineMessages(result).map((item) => item.content)).toEqual([
       'Edited while disconnected',
     ]);
-    expect(mocks.list).toHaveBeenCalledWith(project, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledWith(project, fullSelection);
     expect(mocks.track).not.toHaveBeenCalled();
   });
 
-  it('cache at latest fetches only roots newer than the newest cached root', async () => {
-    const older = createMessage('msg-older', '2026-09-10T13:19:00.123456Z');
-    const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z');
-    seedLatestCache([older, newer]);
-    const deltaItem = createMessage('msg-delta', '2026-09-10T13:20:00.000000Z');
-    mocks.list.mockResolvedValueOnce({
-      items: [deltaItem],
-      next_cursor: cursor('msg-delta', '2026-09-10T13:20:00.000000Z'),
-      previous_cursor: null,
+  it('recovers missed replies, reactions, edits, and deletions on cached channel roots', async () => {
+    const root = createMessage('root', '2026-09-10T13:19:00Z');
+    const deleted = createMessage('deleted', '2026-09-10T13:18:00Z');
+    const reply = createMessage('reply', '2026-09-10T13:20:00Z', {
+      thread_id: root.id,
+      content: 'Posted while disconnected',
     });
+    const refreshed = {
+      ...root,
+      content: 'Edited while disconnected',
+      reactions: [{ emoji: '❤️', users: ['user-2'] }],
+      thread: {
+        reply_count: 1,
+        preview: [reply],
+        latest_reply_at: reply.created_at,
+      },
+    };
+    seedLatestCache([root, deleted]);
+    // A created-at delta is empty: only an existing root changed.
+    mocks.timeline.mockImplementation(async (_parent, selection) =>
+      fullPage(selection.cursor ? [] : [refreshed])
+    );
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(timelineMessages(result)).toEqual([refreshed]);
+    expect(mocks.timeline).toHaveBeenCalledOnce();
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
+  });
+
+  it('document catch-up still fetches only roots newer than the newest cached root', async () => {
+    const older = createMessage('msg-older', '2026-09-10T13:19:00.123456Z', {
+      parent: document,
+    });
+    const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z', {
+      parent: document,
+    });
+    seedLatestCache([older, newer]);
+    const deltaItem = createMessage(
+      'msg-delta',
+      '2026-09-10T13:20:00.000000Z',
+      {
+        parent: document,
+      }
+    );
+    mocks.timeline.mockResolvedValueOnce({
+      entries: entries([deltaItem]),
+      next_cursor: cursor('msg-delta', '2026-09-10T13:20:00.000000Z'),
+      previous_cursor: null,
+    });
+
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
+      pageParam: null,
+    });
+
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(document, {
       cursor: { created_at: '2026-09-10T13:19:00.123457Z', id: 'msg-newer' },
       direction: 'newer',
       limit: 50,
-      include_deleted_threads: false,
+      include_deleted_threads: true,
     });
-    expect(result.items.map((item) => item.id)).toEqual([
-      'msg-delta',
-      'msg-newer',
-      'msg-older',
-    ]);
+    expect(ids(result)).toEqual(['msg-delta', 'msg-newer', 'msg-older']);
     expect(result.next_cursor).toEqual(cachedNext);
     expect(result.previous_cursor).toBeNull();
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'catch_up',
-      reason: 'watermark',
-      after: '2026-09-10T13:19:00.123457Z',
-    });
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
-  it('breaks created_at ties with the larger root id', async () => {
+  it('document catch-up breaks created_at ties with the larger root id', async () => {
     const time = '2026-09-10T13:19:00.000000Z';
     seedLatestCache([
-      createMessage('msg-a', time),
-      createMessage('msg-b', time),
+      createMessage('msg-a', time, { parent: document }),
+      createMessage('msg-b', time, { parent: document }),
     ]);
-    mocks.list.mockResolvedValueOnce({
-      items: [],
+    mocks.timeline.mockResolvedValueOnce({
+      entries: [],
       next_cursor: null,
       previous_cursor: null,
     });
 
-    await messageTimelineQueryOptions(parent, null).queryFn({
+    await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(
-      parent,
+    expect(mocks.timeline).toHaveBeenCalledWith(
+      document,
       expect.objectContaining({ cursor: { created_at: time, id: 'msg-b' } })
     );
   });
 
-  it('delta overflow falls back to the full timeline', async () => {
-    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    mocks.list.mockResolvedValueOnce({
-      items: Array.from({ length: 50 }, (_, i) =>
-        createMessage(`delta-${i}`, '2026-09-10T13:20:00Z')
+  it('document delta overflow falls back to the full timeline', async () => {
+    seedLatestCache([
+      createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+        parent: document,
+      }),
+    ]);
+    mocks.timeline.mockResolvedValueOnce({
+      entries: entries(
+        Array.from({ length: 50 }, (_, i) =>
+          createMessage(`delta-${i}`, '2026-09-10T13:20:00Z')
+        )
       ),
       next_cursor: cursor('delta-49', '2026-09-10T13:20:00Z'),
       previous_cursor: cursor('delta-0', '2026-09-10T13:20:00Z'),
     });
     const page = fullPage();
-    mocks.list.mockResolvedValueOnce(page);
+    mocks.timeline.mockResolvedValueOnce(page);
 
-    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenLastCalledWith(parent, fullSelection);
-    expect(result.items.map((item) => item.id)).toEqual(['full-1']);
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'full',
-      reason: 'delta_overflow',
-      after: '2026-09-10T13:19:00.123456Z',
+    expect(mocks.timeline).toHaveBeenLastCalledWith(document, {
+      ...fullSelection,
+      include_deleted_threads: true,
     });
+    expect(ids(result)).toEqual(['full-1']);
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
   it('cache away from latest uses the full timeline', async () => {
     const page = fullPage();
-    mocks.list.mockResolvedValue(page);
+    mocks.timeline.mockResolvedValue(page);
 
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')], {
       pageParam: {
@@ -343,7 +403,7 @@ describe('messageTimelineQueryOptions', () => {
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -351,15 +411,15 @@ describe('messageTimelineQueryOptions', () => {
     });
 
     mocks.track.mockClear();
-    mocks.list.mockClear();
+    mocks.timeline.mockClear();
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')], {
       previousCursor: cursor('newer', '2026-09-10T13:30:00Z'),
     });
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -369,14 +429,14 @@ describe('messageTimelineQueryOptions', () => {
 
   it('load-around stays on the full timeline', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')]);
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
     await messageTimelineQueryOptions(parent, 'message-42').queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       ...fullSelection,
       around: 'message-42',
     });
@@ -387,37 +447,36 @@ describe('messageTimelineQueryOptions', () => {
     });
   });
 
-  it('catch-up failure falls back except on auth errors', async () => {
-    seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    mocks.list.mockRejectedValueOnce(resultError('INTERNAL'));
-    mocks.list.mockResolvedValueOnce(fullPage());
+  it('document catch-up failure falls back except on auth errors', async () => {
+    seedLatestCache([
+      createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+        parent: document,
+      }),
+    ]);
+    mocks.timeline.mockRejectedValueOnce(resultError('INTERNAL'));
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
-    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+    const result = await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(result.items.map((item) => item.id)).toEqual(['full-1']);
-    expect(mocks.list).toHaveBeenCalledTimes(2);
-    expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
-      channelId: 'channel-1',
-      path: 'full',
-      reason: 'catch_up_error',
-      after: '2026-09-10T13:19:00.123456Z',
-    });
+    expect(ids(result)).toEqual(['full-1']);
+    expect(mocks.timeline).toHaveBeenCalledTimes(2);
+    expect(mocks.track).not.toHaveBeenCalled();
 
-    mocks.list.mockClear();
+    mocks.timeline.mockClear();
     mocks.track.mockClear();
-    mocks.list.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
+    mocks.timeline.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
 
     await expect(
-      messageTimelineQueryOptions(parent, null).queryFn({
+      messageTimelineQueryOptions(document, null).queryFn({
         pageParam: null,
       })
     ).rejects.toBeInstanceOf(ThrownResultError);
-    expect(mocks.list).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
   });
 
-  it('list ahead sets the reason', async () => {
+  it('revalidates channels even when their list advertises a newer root', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
     testQueryClient.setQueryData(channelKeys.listChannels.queryKey, [
       {
@@ -432,8 +491,8 @@ describe('messageTimelineQueryOptions', () => {
         },
       },
     ] as unknown as ApiChannelWithLatest[]);
-    mocks.list.mockResolvedValueOnce({
-      items: [createMessage('msg-delta', '2026-09-10T13:20:00Z')],
+    mocks.timeline.mockResolvedValueOnce({
+      entries: entries([createMessage('msg-delta', '2026-09-10T13:20:00Z')]),
       next_cursor: null,
       previous_cursor: null,
     });
@@ -444,34 +503,39 @@ describe('messageTimelineQueryOptions', () => {
 
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
-      path: 'catch_up',
-      reason: 'list_ahead',
-      after: '2026-09-10T13:19:00.123456Z',
+      path: 'full',
+      reason: 'revalidate',
     });
   });
 
-  it('catch-up merge uses the live first page, not the pre-request snapshot', async () => {
-    const cached = createMessage('msg-1', '2026-09-10T13:19:00.123456Z');
+  it('document catch-up retains a root posted while its request was in flight', async () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00.123456Z', {
+      parent: document,
+    });
     seedLatestCache([cached]);
     let releaseCatchUp!: () => void;
     const holdCatchUp = new Promise<void>((resolve) => {
       releaseCatchUp = resolve;
     });
-    mocks.list.mockImplementationOnce(async () => {
+    mocks.timeline.mockImplementationOnce(async () => {
       await holdCatchUp;
       return {
-        items: [createMessage('msg-delta', '2026-09-10T13:20:00.000000Z')],
+        entries: entries([
+          createMessage('msg-delta', '2026-09-10T13:20:00.000000Z'),
+          cached,
+        ]),
         next_cursor: null,
         previous_cursor: null,
       };
     });
 
-    const pending = messageTimelineQueryOptions(parent, null).queryFn({
+    const pending = messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
     await Promise.resolve();
     seedLatestCache([
       createMessage('msg-live', '2026-09-10T13:21:00.000000Z', {
+        parent: document,
         content: 'from websocket',
       }),
       cached,
@@ -479,23 +543,90 @@ describe('messageTimelineQueryOptions', () => {
     releaseCatchUp();
 
     const result = await pending;
-    expect(result.items.map((item) => item.id)).toEqual([
-      'msg-live',
-      'msg-delta',
-      'msg-1',
-    ]);
-    expect(result.items[0]?.content).toBe('from websocket');
+    expect(ids(result)).toEqual(['msg-live', 'msg-delta', 'msg-1']);
+    expect(timelineMessages(result)[0]?.content).toBe('from websocket');
   });
 
+  it('revalidates every loaded channel page using the refreshed pagination cursor', async () => {
+    const newest = createMessage('newest', '2026-09-10T14:00:00Z');
+    const oldest = createMessage('oldest', '2026-09-10T12:00:00Z');
+    const deleted = createMessage('deleted', '2026-09-10T11:00:00Z');
+    const next = cursor(newest.id, newest.created_at);
+    const options = messageTimelineQueryOptions(parent, null);
+    testQueryClient.setQueryData<MessageTimelineData>(options.queryKey, {
+      pages: [
+        { ...fullPage([newest]), next_cursor: next },
+        fullPage([oldest, deleted]),
+      ],
+      pageParams: [null, { next_cursor: next, previous_cursor: null }],
+    });
+    const observer = new InfiniteQueryObserver(testQueryClient, options);
+    const refreshedNext = cursor('page-boundary', '2026-09-10T13:00:00Z');
+    mocks.timeline
+      .mockResolvedValueOnce({
+        ...fullPage([newest]),
+        next_cursor: refreshedNext,
+      })
+      .mockResolvedValueOnce(
+        fullPage([{ ...oldest, content: 'Edited while disconnected' }])
+      );
+
+    await testQueryClient.invalidateQueries({
+      queryKey: options.queryKey,
+      refetchType: 'all',
+    });
+
+    expect(mocks.timeline).toHaveBeenCalledTimes(2);
+    expect(mocks.timeline).toHaveBeenNthCalledWith(1, parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenNthCalledWith(2, parent, {
+      ...fullSelection,
+      limit: 100,
+      cursor: refreshedNext,
+    });
+    const data = testQueryClient.getQueryData<MessageTimelineData>(
+      options.queryKey
+    );
+    expect(
+      data?.pages.flatMap(timelineMessages).map((item) => item.content)
+    ).toEqual([newest.content, 'Edited while disconnected']);
+    observer.destroy();
+  });
+
+  it.each(['INTERNAL', 'UNAUTHORIZED', 'FORBIDDEN'])(
+    'keeps cached channel messages after a failed revalidation: %s',
+    async (code) => {
+      const root = createMessage('root', '2026-09-10T13:19:00Z');
+      seedLatestCache([root]);
+      const options = messageTimelineQueryOptions(parent, null);
+      const observer = new InfiniteQueryObserver(testQueryClient, {
+        ...options,
+        retryDelay: 0,
+      });
+      mocks.timeline.mockRejectedValue(resultError(code));
+
+      await testQueryClient.refetchQueries({ queryKey: options.queryKey });
+
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(options.queryKey)
+          ?.pages[0].entries
+      ).toEqual(entries([root]));
+      expect(
+        testQueryClient.getQueryState(options.queryKey)?.error
+      ).toBeInstanceOf(ThrownResultError);
+      expect(mocks.timeline).toHaveBeenCalledTimes(code === 'INTERNAL' ? 2 : 1);
+      observer.destroy();
+    }
+  );
+
   it('later pages keep using the full timeline without an event', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
     const older = cursor('page-2', '2026-09-10T12:00:00Z');
 
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: { next_cursor: older, previous_cursor: null },
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       limit: 100,
       cursor: older,
       direction: 'older',
@@ -506,14 +637,14 @@ describe('messageTimelineQueryOptions', () => {
   });
 
   it('newer pages page forward from the previous cursor', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
     const newer = cursor('page-0', '2026-09-10T15:00:00Z');
 
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: { next_cursor: null, previous_cursor: newer },
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       limit: 100,
       cursor: newer,
       direction: 'newer',
@@ -532,19 +663,19 @@ describe('mergeCatchUpPage', () => {
     const deltaNew = createMessage('msg-2', '2026-09-10T13:20:00Z');
     const merged = mergeCatchUpPage(
       {
-        items: [deltaNew, deltaDup],
+        entries: entries([deltaNew, deltaDup]),
         next_cursor: cursor('ignore-me', '2026-09-10T13:19:00Z'),
         previous_cursor: cursor('also-ignore', '2026-09-10T13:20:00Z'),
       },
       {
-        items: [cached],
+        entries: entries([cached]),
         next_cursor: cachedNext,
         previous_cursor: cursor('cached-prev', '2026-09-10T13:30:00Z'),
       }
     );
 
-    expect(merged.items.map((item) => item.id)).toEqual(['msg-2', 'msg-1']);
-    expect(merged.items[1]?.content).toBe('from delta');
+    expect(ids(merged)).toEqual(['msg-2', 'msg-1']);
+    expect(timelineMessages(merged)[1]?.content).toBe('from delta');
     expect(merged.next_cursor).toEqual(cachedNext);
     expect(merged.previous_cursor).toBeNull();
   });
@@ -555,21 +686,173 @@ describe('mergeCatchUpPage', () => {
     const delta = createMessage('msg-delta', '2026-09-10T13:20:00Z');
     const merged = mergeCatchUpPage(
       {
-        items: [delta],
+        entries: entries([delta]),
         next_cursor: null,
         previous_cursor: null,
       },
       {
-        items: [live, cached],
+        entries: entries([live, cached]),
         next_cursor: cachedNext,
         previous_cursor: null,
       }
     );
 
-    expect(merged.items.map((item) => item.id)).toEqual([
-      'msg-live',
-      'msg-delta',
-      'msg-1',
+    expect(ids(merged)).toEqual(['msg-live', 'msg-delta', 'msg-1']);
+  });
+});
+
+describe('channel activity entries', () => {
+  const activity = (id: string, occurredAt: string): TimelineActivity => ({
+    id,
+    actor_id: 'user-1',
+    action: 'renamed',
+    occurred_at: occurredAt,
+    payload: { to: 'Planning' },
+  });
+  const keys = (page: { entries: MessageTimelineEntry[] }) =>
+    page.entries.map(timelineEntryKey);
+
+  function mixedPage(): MessageTimelineData {
+    return {
+      pages: [
+        {
+          entries: [
+            {
+              type: 'activity',
+              activity: activity('shared-id', '2026-09-10T15:00:00Z'),
+            },
+            {
+              type: 'message',
+              message: createMessage('shared-id', '2026-09-10T14:00:00Z'),
+            },
+            {
+              type: 'activity',
+              activity: activity('older', '2026-09-10T13:00:00Z'),
+            },
+          ],
+          next_cursor: cachedNext,
+          previous_cursor: null,
+        },
+      ],
+      pageParams: [null],
+    };
+  }
+
+  it('channel revalidation includes activity and refreshed roots', async () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00Z');
+    seedLatestCache([cached]);
+    mocks.timeline.mockResolvedValueOnce({
+      entries: [
+        { type: 'activity', activity: activity('a', '2026-09-10T13:20:00Z') },
+        { type: 'message', message: cached },
+      ],
+      next_cursor: null,
+      previous_cursor: null,
+    });
+
+    const result = await messageTimelineQueryOptions(parent, null).queryFn({
+      pageParam: null,
+    });
+
+    expect(keys(result)).toEqual(['activity:a', 'msg-1']);
+  });
+
+  it('indexes rows oldest first and keeps activity out of message keys', () => {
+    createRoot((dispose) => {
+      const data = mixedPage();
+      const index = createMessageIndex(() => data);
+      expect(index.entryKeys).toEqual([
+        'activity:older',
+        'shared-id',
+        'activity:shared-id',
+      ]);
+      expect(index.keys).toEqual(['shared-id']);
+      expect(index.byId.get('shared-id')?.content).toBe('Message shared-id');
+      expect(index.activityByKey.get('activity:older')?.id).toBe('older');
+      dispose();
+    });
+  });
+
+  it('re-indexing reordered rows never writes into cached entries', () => {
+    const [m, n, b] = entries([
+      createMessage('m', '2026-09-10T15:00:00Z'),
+      createMessage('n', '2026-09-10T14:00:00Z'),
+      createMessage('b', '2026-09-10T16:00:00Z'),
     ]);
+    const page = (pageEntries: MessageTimelineEntry[]) => [
+      { entries: pageEntries, next_cursor: null, previous_cursor: null },
+    ];
+    // The same store update createMessageIndex applies on every cache change.
+    const [index, setIndex] = createStore(buildMessageIndex(page([m, n])));
+    expect(index.entryKeys).toEqual(['n', 'm']);
+    // Cache updaters copy the entries array but keep its entry objects. Here a
+    // page left out of order gains a row, so surviving entries shift while
+    // another is inserted.
+    setIndex(reconcile(buildMessageIndex(page([b, n, m]))));
+    expect(index.entryKeys).toEqual(['m', 'n', 'b']);
+    expect([m, n, b].map(timelineEntryKey)).toEqual(['m', 'n', 'b']);
+    expect(index.byId.get('n')?.content).toBe('Message n');
+  });
+
+  it('keeps an entry type from a newer server instead of throwing', () => {
+    const message: MessageTimelineEntry = {
+      type: 'message',
+      message: createMessage('m', '2026-09-10T15:00:00Z'),
+    };
+    const fromNewerServer = JSON.parse('{"type":"poll","poll":{"id":"p"}}');
+
+    expect(timelineEntryKey(fromNewerServer)).toBe(
+      '{"type":"poll","poll":{"id":"p"}}'
+    );
+    const merged = reconcileTimelineEntries([message], [fromNewerServer]);
+    expect(merged).toHaveLength(2);
+    expect(merged).toContain(fromNewerServer);
+  });
+
+  it('keeps activity in place through message removal and rollback', () => {
+    const data = mixedPage();
+    testQueryClient.setQueryData(getMessageTimelineQueryKey(parent), data);
+    const snapshot = findTopLevelMessageSnapshotInMessageTimeline(
+      parent,
+      'shared-id'
+    )!;
+    const removed = removeTopLevelMessageFromMessageTimeline(data, 'shared-id');
+    expect(keys(removed!.pages[0])).toEqual([
+      'activity:shared-id',
+      'activity:older',
+    ]);
+    expect(restoreTopLevelMessageInMessageTimeline(removed, snapshot)).toEqual(
+      data
+    );
+  });
+
+  it('inserts live activity by position within the loaded span only', () => {
+    const data: MessageTimelineData = {
+      pages: [
+        {
+          entries: entries([createMessage('newest', '2026-09-10T16:00:00Z')]),
+          next_cursor: cursor('newest', '2026-09-10T16:00:00Z'),
+          previous_cursor: null,
+        },
+        mixedPage().pages[0],
+      ],
+      pageParams: [null, null],
+    };
+
+    const inserted = insertActivitiesIntoMessageTimeline(data, [
+      activity('between', '2026-09-10T14:30:00Z'),
+      // Older than every loaded page: it arrives with its own page later.
+      activity('unloaded', '2026-09-10T11:00:00Z'),
+    ]);
+
+    expect(inserted!.pages.map(keys)).toEqual([
+      ['newest'],
+      ['activity:shared-id', 'activity:between', 'shared-id', 'activity:older'],
+    ]);
+    expect(
+      insertActivitiesIntoMessageTimeline(inserted, [
+        activity('between', '2026-09-10T14:30:00Z'),
+      ])
+    ).toEqual(inserted);
   });
 });

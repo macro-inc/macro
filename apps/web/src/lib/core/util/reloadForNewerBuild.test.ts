@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { custom: vi.fn() },
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 
 import {
   holdAutomaticReload,
+  pendingWebUpdate,
+  promptReloadForFailedLoad,
   type ReloadPage,
   reloadForNewerBuild,
   resetReloadForNewerBuildForTests,
@@ -134,5 +137,19 @@ describe('reloadForNewerBuild', () => {
     expect(first.prompts).toHaveLength(1);
     expect(second.prompts).toHaveLength(0);
     expect(second.page.reload).not.toHaveBeenCalled();
+  });
+});
+
+describe('promptReloadForFailedLoad', () => {
+  beforeEach(() => {
+    resetReloadForNewerBuildForTests();
+  });
+
+  it('offers the newer build and counts each failed load', () => {
+    promptReloadForFailedLoad();
+    promptReloadForFailedLoad();
+
+    expect(pendingWebUpdate()?.failedLoads).toBe(2);
+    expect(pendingWebUpdate()?.reload).toBeTypeOf('function');
   });
 });

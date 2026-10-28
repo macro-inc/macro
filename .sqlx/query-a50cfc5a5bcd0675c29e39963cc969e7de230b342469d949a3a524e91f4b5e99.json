@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH history AS MATERIALIZED (\n    SELECT user_id, changed_at, previous_plan, new_plan,\n           previous_included_cost_cents, new_included_cost_cents\n    FROM ai_billing_plan_change\n    WHERE user_id = ANY($1) AND period_start = $2 AND changed_at < $3\n), boundaries AS (\n    SELECT requested.user_id, $2::timestamptz AS start\n    FROM UNNEST($1::text[]) AS requested(user_id)\n    UNION\n    SELECT user_id, changed_at FROM history\n), intervals AS (\n    SELECT user_id, start,\n           LEAD(start, 1, $3) OVER (PARTITION BY user_id ORDER BY start) AS end\n    FROM boundaries\n), usage_segments AS (\n    SELECT interval.user_id, interval.start,\n           COALESCE(SUM(COALESCE(\n               usage.total::float8,\n               usage.input_tokens::float8 / 1000000.0 * $4\n                   + usage.output_tokens::float8 / 1000000.0 * $5\n                   + usage.cache_read_input_tokens::float8 / 1000000.0 * $6\n                   + usage.cache_write_input_tokens::float8 / 1000000.0 * $7\n           )), 0)::float8 AS usd,\n           EXISTS (\n               SELECT 1 FROM ai_billing_usage_period AS policy\n               WHERE policy.user_id = interval.user_id AND policy.period_start = $2\n                 AND policy.policy = 'public_allowance_v1'\n           ) AS public_funding\n    FROM intervals AS interval\n    LEFT JOIN ai_usage AS usage\n        ON usage.user_id = interval.user_id\n       AND usage.created_at >= interval.start AND usage.created_at < interval.end\n       AND usage.count_usage = TRUE\n    GROUP BY interval.user_id, interval.start\n)\nSELECT TRUE AS \"is_plan_change!\", user_id AS \"user_id!\", changed_at AS \"start!\",\n       previous_plan AS \"previous_plan?\", new_plan AS \"new_plan?\",\n       previous_included_cost_cents, new_included_cost_cents,\n       NULL::float8 AS \"usd?\", NULL::boolean AS \"public_funding?\"\nFROM history\nUNION ALL\nSELECT FALSE, user_id, start, NULL::text, NULL::text,\n       NULL::bigint, NULL::bigint, usd, public_funding\nFROM usage_segments\nORDER BY \"user_id!\", \"start!\", \"is_plan_change!\" DESC, \"previous_plan?\", \"new_plan?\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_plan_change!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "start!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "previous_plan?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "new_plan?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "previous_included_cost_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "new_included_cost_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "usd?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 8,
+        "name": "public_funding?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a50cfc5a5bcd0675c29e39963cc969e7de230b342469d949a3a524e91f4b5e99"
+}

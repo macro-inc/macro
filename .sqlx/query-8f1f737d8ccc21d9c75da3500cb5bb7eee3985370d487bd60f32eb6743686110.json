@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+interval '5 minutes',attempts=0,last_error=NULL WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f1f737d8ccc21d9c75da3500cb5bb7eee3985370d487bd60f32eb6743686110"
+}

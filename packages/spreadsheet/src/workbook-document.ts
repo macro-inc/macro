@@ -9,6 +9,20 @@ import {
   validImageUrl,
 } from './sheet-drawings';
 import { formulaReferencesSheet } from './sheet-references';
+import type { DataValidation } from './sheet-rules';
+import type { TableColumnType } from './sheet-tables';
+import { checkTableName, nextTableName } from './sheet-tables';
+import {
+  referencedTableNames,
+  renameTableReferences,
+} from './structured-references';
+import { createTypedTable } from './table-columns';
+import { workbookNames } from './table-edits';
+import {
+  readSheetMetadata,
+  readSpreadsheetTables,
+  writeSheetMetadata,
+} from './table-storage';
 import {
   parseWorkbookMetadata,
   renameSheetReferences,
@@ -35,9 +49,11 @@ import {
   spreadsheetSheetKey,
   validateSpreadsheetCellEdits,
   writeFreshSpreadsheetCells,
+  writeSpreadsheetCells,
 } from './spreadsheet-document';
 
 import {
+  readOrderedSheets,
   readSpreadsheetSheets,
   retainSpreadsheetSheets,
   reviveSpreadsheetFallback,
@@ -73,11 +89,14 @@ export function readSpreadsheetWorkbook(
   doc: LoroDoc
 ): SpreadsheetWorkbookSheet[] {
   const readEntries = createSpreadsheetEntryReader(doc);
-  return readSpreadsheetSheets(doc).map((sheet) => ({
+  const sheets = readSpreadsheetSheets(doc);
+  const tables = readSpreadsheetTables(
+    doc,
+    sheets.map((sheet) => sheet.id)
+  );
+  return sheets.map((sheet) => ({
     ...sheet,
-    metadata: parseWorkbookMetadata(
-      doc.getMap('spreadsheetSheetMetadata').get(sheet.id)
-    ),
+    metadata: readSheetMetadata(doc, sheet.id, tables.get(sheet.id)),
     cells: readSpreadsheetCells(doc, sheet.id, readEntries),
     layout: readSpreadsheetLayout(doc, sheet.id, readEntries),
   }));
@@ -136,6 +155,16 @@ function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
       throw new Error(
         `“${sheet.name}” is referenced by an Excel name definition.`
       );
+    if (
+      current.metadata?.validations?.some((rule) =>
+        rule.formulas?.some((formula) =>
+          formulaReferencesSheet(`=${formula}`, sheet.name)
+        )
+      )
+    )
+      throw new Error(
+        `“${sheet.name}” is referenced by a data validation rule, such as a dropdown's list. Update the rule before renaming or deleting it.`
+      );
     for (const cell of Object.values(current.cells)) {
       if (
         cell.format !== 'text' &&
@@ -144,6 +173,28 @@ function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
         throw new Error(
           `“${sheet.name}” is referenced by a formula. Update its sheet references before renaming or deleting it.`
         );
+    }
+  }
+}
+
+/** Formulas on other sheets that use a sheet's tables would lose them. */
+function assertTablesUnreferenced(doc: LoroDoc, sheetId: string) {
+  const workbook = readSpreadsheetWorkbook(doc);
+  const tables = new Map(
+    (workbook.find((item) => item.id === sheetId)?.metadata?.tables ?? []).map(
+      (table) => [table.name.toLowerCase(), table.name]
+    )
+  );
+  if (!tables.size) return;
+  for (const current of workbook) {
+    if (current.id === sheetId) continue;
+    for (const cell of Object.values(current.cells)) {
+      if (cell.format === 'text' || !cell.value.startsWith('=')) continue;
+      for (const name of referencedTableNames(cell.value, tables.values()))
+        if (tables.has(name))
+          throw new Error(
+            `Formulas on “${current.name}” use the table “${tables.get(name)}” on this sheet. Update them before deleting it.`
+          );
     }
   }
 }
@@ -171,6 +222,47 @@ export function renameSpreadsheetSheet(
   }
   retainSpreadsheetSheets(doc, sheetId);
   doc.commit({ origin: 'spreadsheet-sheet-rename' });
+}
+
+/**
+ * Move a sheet to `index` among the visible sheets. Only the moved sheet's
+ * order changes, to a value between its new neighbors, so concurrent moves of
+ * different sheets compose; neighbors without a gap are renumbered.
+ */
+export function moveSpreadsheetSheet(
+  doc: LoroDoc,
+  sheetId: string,
+  index: number
+) {
+  const sheets = readOrderedSheets(doc);
+  const from = sheets.findIndex((sheet) => sheet.id === sheetId);
+  if (from < 0) throw new Error('This sheet no longer exists.');
+  const to = Math.max(0, Math.min(sheets.length - 1, Math.trunc(index)));
+  if (to === from) return;
+  const others = sheets.filter((sheet) => sheet.id !== sheetId);
+  const before = others[to - 1]?.order;
+  const after = others[to]?.order;
+  const order =
+    before === undefined
+      ? after! - 1
+      : after === undefined
+        ? before + 1
+        : before + (after - before) / 2;
+  reviveSpreadsheetFallback(doc, sheetId);
+  const orders = doc.getMap('spreadsheetSheetOrder');
+  if (
+    Number.isFinite(order) &&
+    (before === undefined || order > before) &&
+    (after === undefined || order < after)
+  )
+    orders.set(sheetId, order);
+  else {
+    others.splice(to, 0, sheets[from]);
+    for (const [position, sheet] of others.entries())
+      if (orders.get(sheet.id) !== position) orders.set(sheet.id, position);
+  }
+  retainSpreadsheetSheets(doc, sheetId);
+  doc.commit({ origin: 'spreadsheet-sheet-move' });
 }
 
 /**
@@ -209,6 +301,7 @@ export function deleteSpreadsheetSheet(
   if (sheets.length <= 1)
     throw new Error('A workbook must have at least one sheet.');
   assertUnreferenced(doc, sheet);
+  assertTablesUnreferenced(doc, sheetId);
   const metadata = doc.getMap('spreadsheetSheetMetadata');
   const readsSheet = (reference: string) =>
     formulaReferencesSheet(`=${reference.replace(/^\[0\]!/, '')}`, sheet.name);
@@ -301,6 +394,60 @@ export function deleteSpreadsheetSheet(
   doc.commit({ origin: 'spreadsheet-sheet-delete' });
 }
 
+/**
+ * Convert a range of a sheet to a table, named `name` or the next free
+ * `TableN`. Writes its header names and total row without committing.
+ */
+export function createSpreadsheetTable(
+  doc: LoroDoc,
+  sheetId: string,
+  options: {
+    range: string;
+    name?: string;
+    totalsRow?: boolean;
+    columnTypes?: Record<string, TableColumnType>;
+  }
+): string {
+  const workbook = readSpreadsheetWorkbook(doc);
+  const sheet = workbook.find((item) => item.id === sheetId);
+  if (!sheet) throw new Error('This sheet no longer exists.');
+  const taken = workbookNames(workbook);
+  const name =
+    options.name === undefined
+      ? nextTableName(taken)
+      : checkTableName(options.name, taken);
+  const change = createTypedTable({
+    metadata: sheet.metadata,
+    cells: sheet.cells,
+    range: options.range,
+    name,
+    totalsRow: options.totalsRow,
+    rowCount: sheet.layout.rowCount,
+    columnTypes: options.columnTypes,
+  });
+  writeSpreadsheetCells(doc, change.edits, sheetId, false);
+  writeSheetMetadata(doc, sheetId, change.metadata);
+  return name;
+}
+
+/** Replace a sheet's data validation rules, keeping its other metadata. */
+export function setSpreadsheetValidations(
+  doc: LoroDoc,
+  sheetId: string,
+  validations: DataValidation[]
+) {
+  existingSheet(doc, sheetId);
+  const metadata = doc.getMap('spreadsheetSheetMetadata');
+  const { validations: _previous, ...rest } =
+    parseWorkbookMetadata(metadata.get(sheetId)) ?? {};
+  const encoded = JSON.stringify(
+    validations.length ? { ...rest, validations } : rest
+  );
+  if (!parseWorkbookMetadata(encoded))
+    throw new Error('Invalid data validation rules.');
+  metadata.set(sheetId, encoded);
+}
+
 function validateSheetInputs(
   doc: LoroDoc,
   inputs: SpreadsheetSheetInput[],
@@ -325,6 +472,14 @@ function validateSheetInputs(
         .map((entry) => entry.name.toLowerCase())
     )
   );
+  const tableNames = new Set(
+    [
+      ...readSpreadsheetTables(
+        doc,
+        existing.map((sheet) => sheet.id)
+      ).values(),
+    ].flatMap((tables) => tables.map((table) => table.name.toLowerCase()))
+  );
   for (const sheet of inputs) {
     if (
       sheet.metadata &&
@@ -335,9 +490,17 @@ function validateSheetInputs(
     for (const entry of sheet.metadata?.definedNames ?? []) {
       const definitions = entry.local ? localNames : globalNames;
       const key = entry.name.toLowerCase();
-      if (definitions.has(key))
+      if (definitions.has(key) || tableNames.has(key))
         throw new Error(`Duplicate Excel name: ${entry.name}`);
       definitions.add(key);
+    }
+    for (const table of sheet.metadata?.tables ?? []) {
+      const key = table.name.toLowerCase();
+      if (tableNames.has(key) || globalNames.has(key))
+        throw new Error(
+          `The workbook already has a table or name called “${table.name}”. Rename it in the file before importing.`
+        );
+      tableNames.add(key);
     }
     const name = validateSpreadsheetSheetName(sheet.name);
     if (name !== sheet.name)
@@ -484,10 +647,7 @@ export function registerSpreadsheetImport(
     for (const sheet of oldSheets) tombstoneSpreadsheetSheet(doc, sheet.id);
   }
   plan.sheets.forEach(({ id, input: sheet }, index) => {
-    if (sheet.metadata)
-      doc
-        .getMap('spreadsheetSheetMetadata')
-        .set(id, JSON.stringify(sheet.metadata));
+    if (sheet.metadata) writeSheetMetadata(doc, id, sheet.metadata);
     doc.getMap('spreadsheetSheetNames').set(id, sheet.name);
     doc.getMap('spreadsheetSheetOrder').set(id, order + index + 1);
     if (sheet.rowCount > SPREADSHEET_ROWS) {
@@ -608,18 +768,32 @@ export function duplicateSpreadsheetSheet(
   sheetId: string
 ): string {
   const sheet = existingSheet(doc, sheetId);
-  const metadata = parseWorkbookMetadata(
-    doc.getMap('spreadsheetSheetMetadata').get(sheetId)
-  );
+  const metadata = readSpreadsheetWorkbook(doc).find(
+    (item) => item.id === sheetId
+  )?.metadata;
   if (metadata?.definedNames)
     metadata.definedNames = metadata.definedNames.filter(
       (entry) => entry.local
     );
+  const cells = readSpreadsheetCells(doc, sheetId);
+  // Table names are unique in a workbook: the copy's tables get new names,
+  // and the copy's formulas use them.
+  if (metadata?.tables) {
+    const taken = workbookNames(readSpreadsheetWorkbook(doc));
+    metadata.tables = metadata.tables.map(({ id: _id, ...table }) => {
+      const name = nextTableName(taken);
+      taken.push(name);
+      for (const cell of Object.values(cells))
+        if (cell.format !== 'text' && cell.value.startsWith('='))
+          cell.value = renameTableReferences(cell.value, table.name, name);
+      return { ...table, name };
+    });
+  }
   return importSpreadsheetSheets(doc, [
     {
       name: availableSheetName(doc, sheet.name),
       metadata,
-      cells: readSpreadsheetCells(doc, sheetId),
+      cells,
       ...readSpreadsheetLayout(doc, sheetId),
     },
   ])[0];

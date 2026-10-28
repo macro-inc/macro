@@ -9,6 +9,8 @@ import type {
   CardPosition,
   Catalog,
   DatabaseView,
+  Formula,
+  FormulaReading,
   Outcome,
   Page,
   Schema,
@@ -47,6 +49,18 @@ interface DatabaseSqlWasmModule {
   ) => Board;
   /** A position key between two others; `null` leaves that side open. Throws an `Error`. */
   keyBetween: (before: string | null, after: string | null) => string;
+  /**
+   * What `text` reads as, typed as the formula of a derived column of `table`;
+   * `own` is that column once it exists. Throws an `EngineError`.
+   */
+  readFormula: (
+    catalog: Catalog,
+    table: string,
+    own: string | undefined,
+    text: string
+  ) => FormulaReading;
+  /** A formula as users write it, with the table's current column names. Throws an `EngineError`. */
+  renderFormula: (catalog: Catalog, table: string, formula: Formula) => string;
 }
 
 let modulePromise: Promise<DatabaseSqlWasmModule> | undefined;

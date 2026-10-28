@@ -9,6 +9,7 @@ fn completion(feature: AiFeature, model: &str, input: u64, output: u64) -> Compl
         feature,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input,
@@ -46,6 +47,16 @@ async fn seeded_pricing_is_available(pool: PgPool) {
             cache_write: Some(6.25),
         })
     );
+    let price = repo.get_pricing("claude-opus-5-5").await.unwrap();
+    assert_eq!(
+        price,
+        Some(ModelPricing::Tokens {
+            input: 4.0,
+            output: 20.0,
+            cache_read: Some(0.2),
+            cache_write: Some(5.0),
+        })
+    );
     assert_eq!(
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })
@@ -76,6 +87,52 @@ async fn seeded_pricing_is_available(pool: PgPool) {
     .unwrap();
     assert!((cost.total - 0.03873).abs() < 0.000001);
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
+}
+
+/// Usage on an agent's own key references that key, and forgetting the key
+/// keeps the usage while dropping the reference.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn usage_references_the_agent_key_that_paid_for_it(pool: PgPool) {
+    let key_id = sqlx::query_scalar!(
+        r#"
+        WITH owner_identity AS (
+            INSERT INTO macro_user (id, username, email, stripe_customer_id)
+            VALUES (gen_random_uuid(), 'owner@example.com', 'owner@example.com', 'stripe_owner')
+            RETURNING id
+        ), owner_profile AS (
+            INSERT INTO "User" ("id", "email", "macro_user_id")
+            SELECT 'macro|owner@example.com', 'owner@example.com', id FROM owner_identity
+            RETURNING "id"
+        ), agent AS (
+            INSERT INTO bots (id, kind, name, handle, has_agent, owner_user_id)
+            SELECT gen_random_uuid(), 'owned', 'Agent', 'agent', true, "id" FROM owner_profile
+            RETURNING id
+        )
+        INSERT INTO agent_api_keys (
+            bot_id, provider, key_ciphertext, encryption_version, kms_key_id, key_prefix
+        )
+        SELECT id, 'anthropic', '\x01'::bytea, 1, 'kms-key', 'sk-ant-' FROM agent
+        RETURNING bot_id
+        "#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let repo = PgUsageRepo::new(pool.clone());
+    let mut row = completion(AiFeature::AgentSession, "claude-opus-5", 10, 20);
+    row.agent_api_key_id = Some(key_id);
+    repo.insert_usage(&row, false).await.unwrap();
+
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows[0].agent_api_key_id, Some(key_id));
+
+    sqlx::query!("DELETE FROM agent_api_keys WHERE bot_id = $1", key_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].agent_api_key_id, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -109,6 +166,71 @@ async fn insert_and_query_roundtrips(pool: PgPool) {
     let priced = &chat_only[0];
     assert_eq!(priced.feature, AiFeature::Chat);
     assert!((priced.cost.price.as_ref().unwrap().total - 30.0).abs() < 1e-3);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn gemini_3_8_flash_is_priced_like_deepseek_v4p1_flash(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+
+    assert_eq!(
+        repo.get_pricing("google/gemini-3.8-flash").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 0.3,
+            output: 1.2,
+            cache_read: Some(0.03),
+            cache_write: None,
+        })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_pricing_recomputes_existing_rows_at_the_discounted_rate(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool.clone());
+    repo.set_pricing(
+        "discounted-model",
+        ModelPricing::Tokens {
+            input: 2.0,
+            output: 8.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO ai_pricing_discount (model, input_discount_percent, output_discount_percent) VALUES ('discounted-model', 25, 50)"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.insert_usage(
+        &completion(
+            AiFeature::Automation,
+            "discounted-model",
+            1_000_000,
+            1_000_000,
+        ),
+        true,
+    )
+    .await
+    .unwrap();
+
+    repo.set_pricing(
+        "discounted-model",
+        ModelPricing::Tokens {
+            input: 4.0,
+            output: 8.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    let price = after[0].cost.price.as_ref().unwrap();
+    // 1M input * $4/1M * 75% + 1M output * $8/1M * 50% = $3 + $4
+    assert!((price.total - 7.0).abs() < 1e-3);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -387,6 +509,7 @@ async fn cached_token_usage_roundtrips_with_its_cache_rates(pool: PgPool) {
         feature: AiFeature::AgentSession,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
         cost: Usage {
             amount,
             model: "claude-opus-5".to_string(),
@@ -431,6 +554,7 @@ async fn repricing_bills_cache_tokens_and_unprices_them_without_a_cache_rate(poo
             feature: AiFeature::AgentSession,
             user: SYSTEM_USER_ID.clone(),
             entity: None,
+            agent_api_key_id: None,
             cost: Usage {
                 amount: UsageAmount::Tokens {
                     input: 1_000_000,
@@ -488,4 +612,30 @@ async fn repricing_bills_cache_tokens_and_unprices_them_without_a_cache_rate(poo
         rows[0].cost.price.is_none(),
         "cache writes without a write rate must stay unpriced"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn accelerated_and_long_context_prices_remain_distinct(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    for (model, input, output, cache_read, cache_write) in [
+        ("gpt-6.1-sol", 2.0, 10.0, 0.1, 2.5),
+        ("gpt-6.1-sol:long", 4.0, 15.0, 0.2, 5.0),
+        ("gpt-6.1-sol:ultrafast", 12.0, 60.0, 0.6, 15.0),
+        ("gpt-6.1-sol:ultrafast:long", 24.0, 90.0, 1.2, 30.0),
+        ("gpt-6-astra:long", 20.0, 75.0, 2.0, 25.0),
+        ("gpt-6-astra:ultrafast", 60.0, 300.0, 6.0, 75.0),
+        ("gpt-6-astra:ultrafast:long", 120.0, 450.0, 12.0, 150.0),
+        ("claude-opus-5-5:fast", 8.0, 40.0, 0.4, 10.0),
+    ] {
+        assert_eq!(
+            repo.get_pricing(model).await.unwrap(),
+            Some(ModelPricing::Tokens {
+                input,
+                output,
+                cache_read: Some(cache_read),
+                cache_write: Some(cache_write),
+            }),
+            "{model}"
+        );
+    }
 }

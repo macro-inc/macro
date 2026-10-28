@@ -11,6 +11,13 @@ pub struct EmailThreadMetadata {
     pub link_id: uuid::Uuid,
     /// Timestamp of the latest inbound message, when one exists.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
+    /// Timestamp of the latest outbound message, when one exists: the SENT view's sort key.
+    pub latest_outbound_message_ts: Option<DateTime<Utc>>,
+    /// Timestamp of the latest message that is not spam, when one exists: the sort key
+    /// of every mail view except INBOX and SENT.
+    pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
+    /// Most recent explicit return from an email reminder, independent of message recency.
+    pub reminder_returned_at: Option<DateTime<Utc>>,
 }
 
 /// A thread record without messages.

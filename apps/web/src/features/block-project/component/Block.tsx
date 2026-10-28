@@ -18,12 +18,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
 import { useProjectScopedPanel } from './project-scoped-panel';
@@ -62,7 +65,9 @@ const Block: Component = () => {
       const successfulUploads = uploads.filter((result) => !result.pending);
       for (const upload of successfulUploads) {
         if (upload.type === 'document') {
-          refetchSoupEntity(upload.documentId, 'document');
+          refetchSoupEntity(upload.documentId, 'document').catch((error) =>
+            Telemetry.error(error, { surface: 'project-upload' })
+          );
         }
       }
       if (successfulUploads.length > 0) {
@@ -78,7 +83,9 @@ const Block: Component = () => {
         const resolved = await Promise.all(pendingFolderUploads);
         for (const projectId of resolved) {
           if (projectId) {
-            refetchSoupEntity(projectId, 'project');
+            refetchSoupEntity(projectId, 'project').catch((error) =>
+              Telemetry.error(error, { surface: 'project-upload' })
+            );
           }
         }
         refetchResources();
@@ -108,7 +115,14 @@ const Block: Component = () => {
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),
           onDrop: (fileEntries, folderEntries) => {
-            handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
+            fireAndForget(
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                handleFileUpload
+              ),
+              'project-upload'
+            );
           },
           disabled: isSpecialProject,
         }}
@@ -136,6 +150,13 @@ const Block: Component = () => {
   );
 };
 
+// Lands in cached soup query `meta`, so it is built over the plain id rather
+// than the component's props (see "Query callback lifetimes" in AGENTS.md).
+function projectMembershipFilter(projectId: string) {
+  return (item: SoupApiItem) =>
+    soupItemMatchesProjectMembership(item, projectId);
+}
+
 type ProjectEntityListProps = {
   scopeId: string;
   projectId: string;
@@ -159,7 +180,7 @@ const ProjectEntityListContent = (props: ProjectEntityListProps) => {
         itemMembershipFilter={
           getIsSpecialProject(props.projectId)
             ? undefined
-            : (item) => soupItemMatchesProjectMembership(item, props.projectId)
+            : projectMembershipFilter(props.projectId)
         }
         initialQuery={defineQueryFilters({
           include: {
@@ -176,7 +197,11 @@ const ProjectEntityListContent = (props: ProjectEntityListProps) => {
           emailView: 'all',
         })}
       >
-        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
+        <SoupViewList
+          customScrollbarHidden={true}
+          scopeId={props.scopeId}
+          uploadProjectId={props.projectId}
+        />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );

@@ -6,7 +6,7 @@ import {
 import type { WorkbookFileData } from './workbook-file-types';
 
 export function isUploadedWorkbook(fileType: string | null | undefined) {
-  return /^(xlsx|csv)$/i.test(fileType ?? '');
+  return /^(xlsx|xlsm|csv)$/i.test(fileType ?? '');
 }
 
 /** CSV carries values, not executable formulas or cell types. Keep identifiers

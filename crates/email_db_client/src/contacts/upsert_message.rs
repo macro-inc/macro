@@ -200,6 +200,11 @@ async fn update_missing_contact_names(
     pool: &PgPool,
     updates: &[(Uuid, String)],
 ) -> anyhow::Result<()> {
+    // Rows are locked in array order; concurrent messages naming the same contacts must lock
+    // them in the same order or they deadlock.
+    let mut updates: Vec<&(Uuid, String)> = updates.iter().collect();
+    updates.sort_unstable_by_key(|(id, _)| *id);
+
     let ids: Vec<Uuid> = updates.iter().map(|(id, _)| *id).collect();
     let names: Vec<String> = updates.iter().map(|(_, name)| name.clone()).collect();
 
@@ -225,6 +230,12 @@ async fn insert_new_contacts(
     pool: &PgPool,
     contacts: &[ContactPhotoless],
 ) -> anyhow::Result<Vec<address::FetchedAddressId>> {
+    // Rows claim their (link_id, email_address) keys in array order; concurrent messages that
+    // share new addresses must claim them in the same order or they deadlock.
+    let mut contacts: Vec<&ContactPhotoless> = contacts.iter().collect();
+    contacts
+        .sort_unstable_by(|a, b| (a.link_id, &a.email_address).cmp(&(b.link_id, &b.email_address)));
+
     let mut ids: Vec<Uuid> = Vec::with_capacity(contacts.len());
     let mut link_ids: Vec<Uuid> = Vec::with_capacity(contacts.len());
     let mut emails: Vec<String> = Vec::with_capacity(contacts.len());
@@ -267,44 +278,36 @@ pub async fn upsert_message_recipients(
     }
 
     let n = upserted_recipients.recipients.len();
-    let mut message_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
     let mut contact_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
     let mut names_to_insert: Vec<Option<String>> = Vec::with_capacity(n);
     let mut recipient_types_to_insert: Vec<address::EmailRecipientType> = Vec::with_capacity(n);
 
     for recipient in &upserted_recipients.recipients {
-        message_ids_to_insert.push(message_id);
         contact_ids_to_insert.push(recipient.contact_id);
         names_to_insert.push(recipient.name.clone());
         recipient_types_to_insert.push(recipient.recipient_type.clone());
     }
 
     // Delete existing recipients for the message_id that don't match the values we are about to
-    // insert, in case this is an upsert and some values got removed since the last insert (think drafts)
+    // insert, in case this is an upsert and some values got removed since the last insert (think
+    // drafts). An unchanged set deletes and inserts nothing.
     sqlx::query!(
         r#"
-        DELETE FROM email_message_recipients
-        WHERE message_id = $1
-          AND (contact_id, recipient_type) NOT IN (
-              SELECT contact_id, recipient_type
-              FROM unnest($2::uuid[], $3::email_recipient_type[])
-              AS t(contact_id, recipient_type)
-          )
-        "#,
-        message_id,
-        &contact_ids_to_insert,
-        &recipient_types_to_insert as &[db::address::EmailRecipientType]
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    sqlx::query!(
-        r#"
+        WITH incoming AS (
+            SELECT * FROM unnest($2::uuid[], $3::text[], $4::email_recipient_type[])
+            AS t(contact_id, name, recipient_type)
+        ), removed AS (
+            DELETE FROM email_message_recipients
+            WHERE message_id = $1::uuid
+              AND (contact_id, recipient_type) NOT IN (
+                  SELECT contact_id, recipient_type FROM incoming
+              )
+        )
         INSERT INTO email_message_recipients (message_id, contact_id, name, recipient_type)
-        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::email_recipient_type[])
+        SELECT $1, contact_id, name, recipient_type FROM incoming
         ON CONFLICT (message_id, contact_id, recipient_type) DO NOTHING
         "#,
-        &message_ids_to_insert,
+        message_id,
         &contact_ids_to_insert,
         &names_to_insert as &[Option<String>],
         &recipient_types_to_insert as &[db::address::EmailRecipientType]

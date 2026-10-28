@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages\n        SET\n            provider_id = $1,\n            provider_thread_id = $2,\n            is_draft = false,\n            is_sent = true,\n            internal_date_ts = COALESCE(internal_date_ts, NOW()),\n            updated_at = NOW()\n        WHERE\n            id = $3\n            AND link_id = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c498bd796ed728c8cc5331daaa41673682062bd8b88b803b88b000b22c6f1679"
+}

@@ -1,8 +1,8 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import LightningIcon from '@phosphor/lightning.svg';
-import XIcon from '@phosphor/x.svg';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { AnswerTitleField } from '../components/answer-title-field';
 import { QueryResults, ScalarValue } from '../components/query-results';
@@ -208,7 +208,7 @@ export function LiveQuestion(props: {
       <ScopedPortal scope="local">
         <Popover.Content
           ref={content}
-          class="z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto rounded-xl border border-edge-muted bg-panel text-ink shadow-xl"
+          class="menu-surface z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto"
           contentEditable={false}
           onOpenAutoFocus={(event) => {
             if (!props.editor) return;

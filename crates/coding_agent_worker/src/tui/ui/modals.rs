@@ -7,12 +7,40 @@ use ratatui::widgets::{Clear, Paragraph};
 use tui_input::Input;
 
 use super::layout::{centered, render_input};
-use super::theme::{ACCENT, DIM, ERR, SPINNER, THEME, WARN, modal};
+use super::theme::{ACCENT, DIM, ERR, SPINNER, THEME, WARN, modal, section};
 use crate::tui::agent_catalog::DetectedAgent;
 use crate::tui::app::App;
 
+/// Agent rows in catalog order, with herdr agents headed apart from
+/// headless ACP agents when both kinds are present.
+pub(super) fn agent_groups<'a>(
+    agents: &'a [DetectedAgent],
+    width: u16,
+    row: impl Fn(usize, &'a DetectedAgent) -> Line<'a>,
+) -> Vec<Line<'a>> {
+    let grouped = agents.iter().any(|agent| agent.kind.is_herdr());
+    let mut lines = Vec::new();
+    let mut previous = None;
+    for (index, agent) in agents.iter().enumerate() {
+        let herdr = agent.kind.is_herdr();
+        if grouped && previous != Some(herdr) {
+            if previous.is_some() {
+                lines.push(Line::raw(""));
+            }
+            lines.push(if herdr {
+                section("Herdr", "each session in its own tab", width)
+            } else {
+                section("ACP", "headless, driven by macrod", width)
+            });
+            previous = Some(herdr);
+        }
+        lines.push(row(index, agent));
+    }
+    lines
+}
+
 pub(super) fn render_agent_picker(frame: &mut Frame, agents: &[DetectedAgent], selected: usize) {
-    let height = (agents.len() as u16 + 11).clamp(11, 20);
+    let height = (agents.len() as u16 + 14).clamp(11, 24);
     let area = centered(62, height, frame.area());
     frame.render_widget(Clear, area);
     let mut lines = vec![
@@ -25,19 +53,24 @@ pub(super) fn render_agent_picker(frame: &mut Frame, agents: &[DetectedAgent], s
             Style::new().fg(WARN),
         ));
     } else {
-        lines.extend(agents.iter().enumerate().map(|(index, agent)| {
-            let marker = if index == selected { "▸ " } else { "  " };
-            let style = if index == selected {
-                Style::new().fg(ACCENT).bold()
-            } else {
-                Style::new()
-            };
-            let detail = agent.note.unwrap_or("");
-            Line::from(vec![
-                Span::styled(format!("{marker}{:<20}", agent.name), style),
-                Span::styled(detail, Style::new().fg(DIM)),
-            ])
-        }));
+        lines.extend(agent_groups(
+            agents,
+            area.width.saturating_sub(4),
+            |index, agent| {
+                let marker = if index == selected { "▸ " } else { "  " };
+                let style = if index == selected {
+                    Style::new().fg(ACCENT).bold()
+                } else {
+                    Style::new()
+                };
+                let detail = agent.note.unwrap_or("");
+                Line::from(vec![
+                    Span::styled(format!("{marker}{:<20}", agent.short_name()), style),
+                    Span::styled(detail, Style::new().fg(DIM)),
+                ])
+            },
+        ));
+        lines.push(Line::raw(""));
     }
     let custom_style = if selected == agents.len() {
         Style::new().fg(ACCENT).bold()

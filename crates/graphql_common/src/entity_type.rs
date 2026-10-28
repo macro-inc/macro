@@ -22,12 +22,12 @@ pub enum GraphqlSoupEntityType {
     Call,
     /// CRM company entity.
     CrmCompany,
+    /// CRM contact entity.
+    CrmContact,
     /// Foreign entity.
     ForeignEntity,
     /// Calendar event entity.
     CalendarEvent,
-    /// Reminder entity.
-    Reminder,
     /// AI coding agent session entity.
     AgentSession,
     /// Row of a Macro database table.
@@ -37,6 +37,8 @@ pub enum GraphqlSoupEntityType {
 /// Canonical entity types accepted by cross-entity APIs.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum GraphqlEntityType {
+    /// CRM pipeline entity.
+    CrmPipeline,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -79,6 +81,17 @@ pub enum GraphqlEntityType {
     Database,
     /// Row of a Macro Database table.
     DatabaseRow,
+    /// Macro Form entity (a questionnaire answered into a database table).
+    Form,
+    /// Independently shared external chat.
+    #[graphql(name = "EXTERNAL_CHAT")]
+    ExternalChat,
+    /// Schema-only stub for clients released with this value before external
+    /// chats replaced WhatsApp groups. Never returned; rejected as input.
+    #[graphql(
+        deprecation = "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30."
+    )]
+    WhatsappGroup,
 }
 
 impl GraphqlSoupEntityType {
@@ -101,19 +114,22 @@ impl GraphqlSoupEntityType {
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
+            EntityType::CrmContact => Self::CrmContact,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
-            EntityType::Reminder => Self::Reminder,
             EntityType::AgentSession => Self::AgentSession,
             EntityType::Initiative => Self::Initiative,
             EntityType::DatabaseRow => Self::DatabaseRow,
             EntityType::User
+            | EntityType::Reminder
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ScheduledAction
-            | EntityType::Database => return None,
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::ExternalChat
+            | EntityType::Form => return None,
         })
     }
 
@@ -128,9 +144,9 @@ impl GraphqlSoupEntityType {
             Self::ChannelMessage => EntityType::ChannelMessage,
             Self::Call => EntityType::Call,
             Self::CrmCompany => EntityType::CrmCompany,
+            Self::CrmContact => EntityType::CrmContact,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
-            Self::Reminder => EntityType::Reminder,
             Self::AgentSession => EntityType::AgentSession,
             Self::Initiative => EntityType::Initiative,
             Self::DatabaseRow => EntityType::DatabaseRow,
@@ -161,8 +177,11 @@ impl GraphqlEntityType {
             EntityType::AgentSession => Self::AgentSession,
             EntityType::ScheduledAction => Self::ScheduledAction,
             EntityType::Initiative => Self::Initiative,
+            EntityType::CrmPipeline => Self::CrmPipeline,
             EntityType::Database => Self::Database,
             EntityType::DatabaseRow => Self::DatabaseRow,
+            EntityType::Form => Self::Form,
+            EntityType::ExternalChat => Self::ExternalChat,
         }
     }
 
@@ -172,8 +191,9 @@ impl GraphqlEntityType {
     }
 
     /// Convert this GraphQL entity type into the canonical model type.
-    pub fn into_model(self) -> EntityType {
-        match self {
+    /// Errors for the schema-only `WHATSAPP_GROUP` stub.
+    pub fn into_model(self) -> async_graphql::Result<EntityType> {
+        Ok(match self {
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Document => EntityType::Document,
             Self::Chat => EntityType::Chat,
@@ -193,9 +213,17 @@ impl GraphqlEntityType {
             Self::AgentSession => EntityType::AgentSession,
             Self::ScheduledAction => EntityType::ScheduledAction,
             Self::Initiative => EntityType::Initiative,
+            Self::CrmPipeline => EntityType::CrmPipeline,
             Self::Database => EntityType::Database,
             Self::DatabaseRow => EntityType::DatabaseRow,
-        }
+            Self::Form => EntityType::Form,
+            Self::ExternalChat => EntityType::ExternalChat,
+            Self::WhatsappGroup => {
+                return Err(async_graphql::Error::new(
+                    "WHATSAPP_GROUP is no longer an entity type; use EXTERNAL_CHAT",
+                ));
+            }
+        })
     }
 }
 
@@ -243,7 +271,10 @@ mod test {
     fn scheduled_action_round_trips_through_graphql_entity_type() {
         let graphql = GraphqlEntityType::new(EntityType::ScheduledAction);
         assert!(matches!(graphql, GraphqlEntityType::ScheduledAction));
-        assert!(matches!(graphql.into_model(), EntityType::ScheduledAction));
+        assert!(matches!(
+            graphql.into_model().ok(),
+            Some(EntityType::ScheduledAction)
+        ));
     }
 
     #[test]
@@ -255,7 +286,10 @@ mod test {
     fn initiative_round_trips_through_graphql_entity_type() {
         let graphql = GraphqlEntityType::new(EntityType::Initiative);
         assert!(matches!(graphql, GraphqlEntityType::Initiative));
-        assert!(matches!(graphql.into_model(), EntityType::Initiative));
+        assert!(matches!(
+            graphql.into_model().ok(),
+            Some(EntityType::Initiative)
+        ));
     }
 
     #[test]
@@ -269,7 +303,10 @@ mod test {
     fn database_row_round_trips_through_graphql_entity_type() {
         let graphql = GraphqlEntityType::new(EntityType::DatabaseRow);
         assert!(matches!(graphql, GraphqlEntityType::DatabaseRow));
-        assert!(matches!(graphql.into_model(), EntityType::DatabaseRow));
+        assert!(matches!(
+            graphql.into_model().ok(),
+            Some(EntityType::DatabaseRow)
+        ));
     }
 
     #[test]
@@ -277,5 +314,22 @@ mod test {
         let graphql = GraphqlSoupEntityType::try_new(EntityType::DatabaseRow).unwrap();
         assert!(matches!(graphql, GraphqlSoupEntityType::DatabaseRow));
         assert_eq!(graphql.into_model(), EntityType::DatabaseRow);
+    }
+
+    #[test]
+    fn form_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::Form);
+        assert!(matches!(graphql, GraphqlEntityType::Form));
+        assert!(matches!(graphql.into_model().ok(), Some(EntityType::Form)));
+    }
+
+    #[test]
+    fn whatsapp_group_stub_is_rejected_as_input() {
+        assert!(GraphqlEntityType::WhatsappGroup.into_model().is_err());
+    }
+
+    #[test]
+    fn form_is_not_a_soup_entity_type() {
+        assert!(GraphqlSoupEntityType::try_new(EntityType::Form).is_none());
     }
 }

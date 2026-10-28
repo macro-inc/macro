@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use agent_api_keys::domain::UsableAgentKey;
 use ai_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
@@ -34,6 +35,8 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
+    /// Whether the turn answers the user or condenses their conversation.
+    pub purpose: TurnPurpose,
     /// The session the turn belongs to.
     pub session_id: agent_session::domain::model::AgentSessionId,
     /// Counts what the turn is waiting on a person for - a question, or a
@@ -48,12 +51,15 @@ pub struct TurnRequest {
     pub model: String,
     /// Provider-independent effort selected for this session.
     pub reasoning_effort: ReasoningEffort,
+    /// Inference speed applied without changing model or reasoning effort.
+    pub speed: agent::ModelSpeed,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.
     pub identity: Option<AgentIdentity>,
     /// The session's instructions, appended to the engine's own system
-    /// prompt. `None` runs the engine's default prompt unchanged.
+    /// prompt. `None` runs the engine's default prompt unchanged. For a
+    /// [`TurnPurpose::Summary`] call, the whole system prompt.
     pub instructions: Option<String>,
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
@@ -72,6 +78,21 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
+    /// The agent's own key the turn's model calls run on instead of Macro's,
+    /// with their usage recorded against it rather than the owner's
+    /// allowance. `None` runs on Macro.
+    pub agent_key: Option<UsableAgentKey>,
+}
+
+/// Whether a model call answers the user or condenses their conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnPurpose {
+    /// A turn of the conversation, with the agent's tools.
+    Conversation,
+    /// A call that condenses the conversation for its continuation - its
+    /// summary, or an image read for it. No tools, no memory, no opening
+    /// line, and `instructions` as its whole system prompt.
+    Summary,
 }
 
 /// How many things a turn currently waits on a person for. Shared between

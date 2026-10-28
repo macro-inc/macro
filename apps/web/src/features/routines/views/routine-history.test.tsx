@@ -288,3 +288,77 @@ describe('routine history', () => {
     expect(screen.queryByText('Load more runs')).toBeNull();
   });
 });
+
+describe('skipped runs', () => {
+  function skip(id: string, condition: unknown) {
+    return record('agent', id, {
+      id: `skip-${id}`,
+      resource_id: null,
+      result: { version: 1, resource: null, error: null, condition },
+    });
+  }
+
+  it('shows why a lone run was skipped without loading a resource', () => {
+    const source = sources();
+    render(() => (
+      <RoutineHistory
+        {...source}
+        isPending={false}
+        records={[
+          skip('a', { status: 'not_met', probability: 0.12 }),
+          record('agent', 'ran'),
+          skip('b', { status: 'unavailable' }),
+        ]}
+      />
+    ));
+    const unmet = screen.getByText('Condition not met').closest('[role]')!;
+    expect(unmet.getAttribute('title')).toBe('12% likely yes');
+    expect(
+      within(unmet as HTMLElement)
+        .getByText('Skipped')
+        .classList.contains('text-failure')
+    ).toBe(false);
+    const unavailable = screen
+      .getByText('Condition couldn’t be checked')
+      .closest('[role]')!;
+    expect(
+      within(unavailable as HTMLElement)
+        .getByText('Skipped')
+        .classList.contains('text-failure')
+    ).toBe(true);
+    expect(source.createAgentMetadata.mock.calls).toEqual([['ran']]);
+  });
+
+  it('collapses consecutive skips between runs', () => {
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        isPending={false}
+        records={[
+          record('agent', 'newest'),
+          skip('a', { status: 'not_met', probability: 0.1 }),
+          skip('b', { status: 'not_met', probability: 0.2 }),
+          skip('c', { status: 'not_met', probability: 0.3 }),
+          record('agent', 'oldest'),
+        ]}
+      />
+    ));
+    expect(screen.queryByText('Condition not met')).toBeNull();
+    const group = screen.getByRole('button', {
+      name: /3 events skipped by the condition/,
+    });
+    expect(group.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(group);
+    expect(screen.getAllByText('Condition not met')).toHaveLength(3);
+    expect(
+      screen.getAllByRole('listitem').map((item) => item.textContent)
+    ).toEqual([
+      expect.stringContaining('Agent newest'),
+      expect.stringContaining('3 events skipped'),
+      expect.stringContaining('Condition not met'),
+      expect.stringContaining('Condition not met'),
+      expect.stringContaining('Condition not met'),
+      expect.stringContaining('Agent oldest'),
+    ]);
+  });
+});

@@ -94,9 +94,20 @@ export type LeaveGuardContext = {
   to?: Entry;
   cause: NavigationCause;
   signal: AbortSignal;
+  /**
+   * Runs a synchronous callback once after this router navigation commits.
+   * Cancelled, unchanged, and owner-activation results discard the callback.
+   * Register while this guard is active. Host-leave checks never run callbacks.
+   */
+  onCommit(callback: () => void): void;
 };
 
 export type LeaveGuard = (context: LeaveGuardContext) => MaybePromise<boolean>;
+
+export type LeaveGuardOptions = {
+  /** Also check changes to these search namespaces while the view stays mounted. */
+  search?: readonly string[];
+};
 
 export type RouteMatchInfo = {
   id: string;

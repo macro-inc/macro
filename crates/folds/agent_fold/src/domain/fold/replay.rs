@@ -23,6 +23,9 @@ pub(super) struct Replay {
     quarantined: bool,
     replay_session: Option<SessionId>,
     pending_open: Option<(RequestId, Opening)>,
+    /// Original trusted inputs survive load epochs; replay echoes have no metadata.
+    notification_prompts: Vec<AgentSessionLog>,
+    completed_noops: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,12 +90,84 @@ impl Replay {
             acp_session: Some(transaction.session),
             ..FoldState::default()
         };
+        let mut user_chunks = Vec::new();
+        let mut provenance = 0;
         for entry in transaction.entries {
+            if is_replay_user(&entry) {
+                user_chunks.push(entry);
+                continue;
+            }
+            self.replay_users(&mut state, &mut user_chunks, &mut provenance);
             state.step(entry);
+        }
+        self.replay_users(&mut state, &mut user_chunks, &mut provenance);
+        if state.turn.as_ref().is_some_and(|turn| {
+            turn.can_noop
+                && turn.noop_buffer == "<noop/>"
+                && turn
+                    .prompt_id
+                    .as_ref()
+                    .is_some_and(|id| self.completed_noops.contains(&id.to_string()))
+        }) {
+            state.close_turn(Some(crate::domain::model::StopReason::EndTurn));
+            state.refresh_turn_state();
         }
         state.replaying = false;
         *committed = state;
         Outcome::Replaced
+    }
+
+    fn replay_users(
+        &self,
+        state: &mut FoldState,
+        chunks: &mut Vec<AgentSessionLog>,
+        provenance: &mut usize,
+    ) {
+        if chunks.is_empty() {
+            return;
+        }
+        let echoed = content_signature(chunks.iter().filter_map(replay_user_content));
+        let matched = self
+            .notification_prompts
+            .iter()
+            .enumerate()
+            .skip(*provenance)
+            .find(|(_, original)| {
+                let (Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+                | Message::Notification(ToRuntimeMessage::Acp(acp))) = &original.content
+                else {
+                    return false;
+                };
+                let RawJsonRpcMessage::Request(request) = &acp.0 else {
+                    return false;
+                };
+                let Some(blocks) =
+                    param(request.params.as_ref(), "prompt").and_then(|prompt| prompt.as_array())
+                else {
+                    return false;
+                };
+                // Compare the complete input, including attachments, rather than
+                // recognizing an envelope copied into an unrelated user prompt.
+                content_signature(blocks.iter()) == echoed
+            });
+        // User chunks separated by agent activity start another replayed turn,
+        // including when the prior system turn buffered a silent response.
+        if state
+            .turn
+            .as_ref()
+            .is_some_and(|turn| turn.notification || turn.agent.is_some())
+        {
+            state.close_turn(Some(crate::domain::model::StopReason::EndTurn));
+        }
+        if let Some((index, original)) = matched {
+            *provenance = index + 1;
+            state.step(original.clone());
+            chunks.clear();
+        } else {
+            for entry in chunks.drain(..) {
+                state.step(entry);
+            }
+        }
     }
 
     pub(super) fn step(&mut self, committed: &mut FoldState, entry: AgentSessionLog) -> Outcome {
@@ -105,6 +180,26 @@ impl Replay {
             return Outcome::Staged;
         }
         self.session = Some(entry.agent_session_id);
+        if let Some(noop_turn) = committed.metadata.noop_turn {
+            self.completed_noops.extend(
+                committed
+                    .metadata
+                    .notifications
+                    .iter()
+                    .filter(|event| event.turn == noop_turn && event.system_turn)
+                    .map(|event| event.action_id.clone()),
+            );
+        }
+        if !self.loading()
+            && let Message::ToRuntime(message) | Message::Notification(message) = &entry.content
+            && agent_runtime_protocol::domain::notification::input_from_runtime(message).is_some()
+            && !self
+                .notification_prompts
+                .iter()
+                .any(|known| notification_request_id(known) == notification_request_id(&entry))
+        {
+            self.notification_prompts.push(entry.clone());
+        }
         if let Message::ToServer(ToServerMessage::Event { event }) = &entry.content {
             if matches!(event, SystemEvent::AcpReady | SystemEvent::Disconnected) {
                 self.quarantined |=
@@ -121,7 +216,8 @@ impl Replay {
             }
             return Outcome::Changes(committed.step(entry));
         }
-        if let Message::ToRuntime(ToRuntimeMessage::Acp(acp)) = &entry.content
+        if let Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+        | Message::Notification(ToRuntimeMessage::Acp(acp)) = &entry.content
             && let RawJsonRpcMessage::Request(request) = &acp.0
         {
             if InitializeRequest::matches_method(&request.method) {
@@ -279,4 +375,59 @@ impl Replay {
                     .is_none_or(|expected| session == expected.0.as_ref())
             })
     }
+}
+
+/// Contents echoed by a runtime while loading history. Only complete matches
+/// with trusted original inputs acquire notification semantics.
+fn replay_user_content(entry: &AgentSessionLog) -> Option<&serde_json::Value> {
+    let Message::ToServer(ToServerMessage::Acp(acp)) = &entry.content else {
+        return None;
+    };
+    let RawJsonRpcMessage::Notification(notification) = &acp.0 else {
+        return None;
+    };
+    if notification.method.as_ref() != "session/update" {
+        return None;
+    }
+    let update = param(notification.params.as_ref(), "update")?;
+    if update.get("sessionUpdate")?.as_str()? != "user_message_chunk" {
+        return None;
+    }
+    update.get("content")
+}
+
+fn content_signature<'a>(
+    blocks: impl Iterator<Item = &'a serde_json::Value>,
+) -> (String, Vec<serde_json::Value>) {
+    let mut text = String::new();
+    let mut attachments = Vec::new();
+    for block in blocks {
+        if block.get("type").and_then(|kind| kind.as_str()) == Some("text") {
+            text.push_str(
+                block
+                    .get("text")
+                    .and_then(|text| text.as_str())
+                    .unwrap_or_default(),
+            );
+        } else {
+            attachments.push(block.clone());
+        }
+    }
+    (text, attachments)
+}
+
+fn notification_request_id(entry: &AgentSessionLog) -> Option<&RequestId> {
+    let (Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+    | Message::Notification(ToRuntimeMessage::Acp(acp))) = &entry.content
+    else {
+        return None;
+    };
+    let RawJsonRpcMessage::Request(request) = &acp.0 else {
+        return None;
+    };
+    Some(&request.id)
+}
+
+fn is_replay_user(entry: &AgentSessionLog) -> bool {
+    replay_user_content(entry).is_some()
 }

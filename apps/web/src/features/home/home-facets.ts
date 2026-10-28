@@ -103,17 +103,15 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
       entity.type === 'channel_message' ||
       entity.type === 'channel_thread',
   },
-  chats: {
-    id: 'chats',
-    label: 'Chats',
-    clause: { cf: clause.not(clause.eq('chatId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'chat',
-  },
   agents: {
     id: 'agents',
     label: 'Agents',
-    clause: { asf: clause.not(clause.eq('agentSessionId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'agent_session',
+    clause: {
+      cf: clause.not(clause.eq('chatId', NIL_UUID)),
+      asf: clause.not(clause.eq('agentSessionId', NIL_UUID)),
+    },
+    predicate: (entity) =>
+      entity.type === 'agent_session' || entity.type === 'chat',
   },
   projects: {
     id: 'projects',
@@ -128,12 +126,6 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
       fef: clause.not(clause.eq('foreignEntityRecordId', NIL_UUID)),
     },
     predicate: isGithubPrEntity,
-  },
-  reminders: {
-    id: 'reminders',
-    label: 'Reminders',
-    clause: { remf: clause.not(clause.eq('reminderId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'reminder',
   },
   calendar: {
     id: 'calendar',

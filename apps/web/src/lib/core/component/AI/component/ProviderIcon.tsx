@@ -1,5 +1,5 @@
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
 import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

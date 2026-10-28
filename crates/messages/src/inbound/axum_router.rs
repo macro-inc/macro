@@ -56,6 +56,10 @@ where
             get(timeline::<A, Auth>).post(create::<A, Auth>),
         )
         .route(
+            "/{parent_type}/{parent_id}/timeline",
+            get(timeline_entries::<A, Auth>),
+        )
+        .route(
             "/{parent_type}/{parent_id}/items/{id}",
             get(get_message::<A, Auth>)
                 .patch(edit::<A, Auth>)
@@ -86,6 +90,17 @@ pub struct TimelineQuery {
     pub selection: Option<String>,
 }
 
+impl TimelineQuery {
+    fn selection(&self) -> Result<MessageTimelineQuery, MessageError> {
+        self.selection
+            .as_deref()
+            .map(serde_json::from_str::<MessageTimelineQuery>)
+            .transpose()
+            .map_err(|_| MessageError::Invalid("invalid timeline query"))
+            .map(Option::unwrap_or_default)
+    }
+}
+
 #[utoipa::path(operation_id = "message_timeline", get, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), TimelineQuery), responses((status = 200, body = MessagePage)))]
 /// Read a bounded timeline with lazy thread previews.
 pub async fn timeline<A: EntityAccessService, Auth: MacroAuthorizationService>(
@@ -94,17 +109,28 @@ pub async fn timeline<A: EntityAccessService, Auth: MacroAuthorizationService>(
     Path(path): Path<ParentPath>,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<MessagePage>, MessageHttpError> {
-    let query = query
-        .selection
-        .as_deref()
-        .map(serde_json::from_str::<MessageTimelineQuery>)
-        .transpose()
-        .map_err(|_| MessageError::Invalid("invalid timeline query"))?
-        .unwrap_or_default();
+    let query = query.selection()?;
     Ok(Json(
         state
             .service
             .timeline(receipt(state.access.as_ref(), &user, &path).await?, query)
+            .await?,
+    ))
+}
+
+#[utoipa::path(operation_id = "message_timeline_entries", get, path = "/messages/{parent_type}/{parent_id}/timeline", params(("parent_type" = String, Path), ("parent_id" = String, Path), TimelineQuery), responses((status = 200, body = MessageTimelinePage)))]
+/// Read a bounded window of messages and the parent's activity, ordered by the server.
+pub async fn timeline_entries<A: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    Path(path): Path<ParentPath>,
+    Query(query): Query<TimelineQuery>,
+) -> Result<Json<MessageTimelinePage>, MessageHttpError> {
+    let query = query.selection()?;
+    Ok(Json(
+        state
+            .service
+            .timeline_entries(receipt(state.access.as_ref(), &user, &path).await?, query)
             .await?,
     ))
 }
@@ -123,6 +149,8 @@ pub struct ParentPath {
 }
 
 /// HTTP failure mapping; business decisions are made by the domain service.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
 pub struct MessageHttpError(MessageError);
 impl From<MessageError> for MessageHttpError {
     fn from(value: MessageError) -> Self {
@@ -153,6 +181,19 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
     user: &MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     path: &ParentPath,
 ) -> Result<EntityAccessReceipt<P>, MessageHttpError> {
+    receipt_with_sender(access, user, path, false).await
+}
+
+async fn receipt_with_sender<
+    P: RequiredPermission,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: &A,
+    user: &MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    path: &ParentPath,
+    as_sender: bool,
+) -> Result<EntityAccessReceipt<P>, MessageHttpError> {
     let parent = MessageParent::parse(&path.parent_type, &path.parent_id)
         .map_err(|_| MessageError::Invalid("invalid message parent"))?;
     let kind = match parent {
@@ -163,14 +204,22 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
         MessageParent::CrmContact(_) => EntityType::CrmContact,
         MessageParent::Call(_) => EntityType::Call,
     };
-    entity_access::inbound::axum_extractors::principal_entity_access_receipt::<P>(
-        access,
-        &user.authorization,
-        &path.parent_id,
-        kind,
-    )
-    .await
-    .map_err(|error| match error {
+    use entity_access::inbound::axum_extractors::{
+        message_sender_entity_access_receipt, principal_entity_access_receipt,
+    };
+    let receipt = if as_sender {
+        message_sender_entity_access_receipt::<P>(
+            access,
+            &user.authorization,
+            &path.parent_id,
+            kind,
+        )
+        .await
+    } else {
+        principal_entity_access_receipt::<P>(access, &user.authorization, &path.parent_id, kind)
+            .await
+    };
+    receipt.map_err(|error| match error {
         entity_access::domain::models::AccessError::Unavailable(error)
         | entity_access::domain::models::AccessError::Internal(error) => {
             MessageError::Repository(error).into()
@@ -199,7 +248,10 @@ where
     Ok(Json(
         state
             .service
-            .post(receipt(state.access.as_ref(), &user, &path).await?, input)
+            .post(
+                receipt_with_sender(state.access.as_ref(), &user, &path, true).await?,
+                input,
+            )
             .await?,
     ))
 }

@@ -17,6 +17,7 @@ import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
@@ -29,7 +30,6 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
-  ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsSortGroup,
   ChannelsTab,
@@ -59,7 +59,6 @@ export type ChannelsViewContext = {
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
   setTab: (tab: ChannelsTab) => void;
-  setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   /** Per-user collapse state of a team channel label. */
@@ -73,8 +72,6 @@ function createInitialState(
 ): ChannelsViewState {
   return {
     tab: initial.tab ?? 'browse',
-    mobileTab:
-      initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
@@ -125,10 +122,9 @@ export const [ChannelsViewProvider, useChannelsView] =
 
       createEffect(
         on(
-          () => [search.tab, search.mobileTab] as const,
-          ([tab, mobileTab]) => {
+          () => search.tab,
+          (tab) => {
             if (state.tab !== tab) setState('tab', tab);
-            if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
           }
         )
       );
@@ -156,7 +152,6 @@ export const [ChannelsViewProvider, useChannelsView] =
         return channelsSearchCodec.serialize({
           ...channelsSearch.defaults,
           tab: state.tab,
-          mobileTab: state.mobileTab,
           messageId: target?.kind === 'message' ? target.messageId : '',
           threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
         });
@@ -165,24 +160,30 @@ export const [ChannelsViewProvider, useChannelsView] =
         channel: ChannelPreviewSelection,
         replace = false
       ) => {
-        navigate(
-          {
-            route: channelDetailRoute,
-            params: { channelId: channelIdForPreviewNavigation(channel) },
-          },
-          {
-            replace,
-            search: { [channelsSearch.namespace]: routeSearch(channel) },
-          }
+        fireAndForget(
+          navigate(
+            {
+              route: channelDetailRoute,
+              params: { channelId: channelIdForPreviewNavigation(channel) },
+            },
+            {
+              replace,
+              search: { [channelsSearch.namespace]: routeSearch(channel) },
+            }
+          ),
+          'channels-view'
         );
       };
       const setSelectedChannel = (
         channel: ChannelPreviewSelection | undefined
       ) => {
         if (!channel) {
-          navigate(
-            { route: channelsSplitRoute, params: {} },
-            { search: { [channelsSearch.namespace]: routeSearch() } }
+          fireAndForget(
+            navigate(
+              { route: channelsSplitRoute, params: {} },
+              { search: { [channelsSearch.namespace]: routeSearch() } }
+            ),
+            'channels-view'
           );
           return true;
         }
@@ -196,12 +197,15 @@ export const [ChannelsViewProvider, useChannelsView] =
           if (!selectPreview(channel)) {
             if (previous) navigateToChannel(previous, true);
             else
-              navigate(
-                { route: channelsSplitRoute, params: {} },
-                {
-                  replace: true,
-                  search: { [channelsSearch.namespace]: routeSearch() },
-                }
+              fireAndForget(
+                navigate(
+                  { route: channelsSplitRoute, params: {} },
+                  {
+                    replace: true,
+                    search: { [channelsSearch.namespace]: routeSearch() },
+                  }
+                ),
+                'channels-view'
               );
           }
         })
@@ -222,11 +226,6 @@ export const [ChannelsViewProvider, useChannelsView] =
           if (state.tab === tab) return;
           setState('tab', tab);
           setSearch({ tab });
-        },
-        setMobileTab: (mobileTab) => {
-          if (state.mobileTab === mobileTab) return;
-          setState('mobileTab', mobileTab);
-          setSearch({ mobileTab });
         },
         setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),

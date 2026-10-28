@@ -22,8 +22,11 @@ use harness_id::HarnessId;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
+use rootcause::Report;
 
-use crate::{MacroAuthorization, MacroUserAuthentication};
+use crate::{
+    CredentialOrigin, MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication,
+};
 
 pub use bot::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
@@ -133,6 +136,7 @@ impl<Svc> Clone for MacroAuthorizationState<Svc> {
 
 pub(super) fn authenticated_user(
     user_context: UserContext,
+    origin: CredentialOrigin,
 ) -> Result<MacroUserAuthentication, MacroAuthorizationRejection> {
     let macro_user_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
         .map(CowLike::into_owned)
@@ -142,9 +146,29 @@ pub(super) fn authenticated_user(
         })?;
 
     Ok(MacroUserAuthentication {
+        origin,
+        agent_id: None,
         macro_user_id,
         user_context,
     })
+}
+
+/// Logs a failed authorization at a level matching its cause: rejected
+/// credentials are routine client traffic, while an unavailable dependency is
+/// a server fault.
+pub(super) fn log_authorization_failure(
+    error: &Report<MacroAuthorizationError>,
+    message: &'static str,
+) {
+    match error.current_context() {
+        MacroAuthorizationError::CredentialsExpired => tracing::info!(error=?error, "{message}"),
+        MacroAuthorizationError::InvalidCredentials
+        | MacroAuthorizationError::ActingUserNotAuthorized
+        | MacroAuthorizationError::BotScopeNotAuthorized => {
+            tracing::warn!(error=?error, "{message}")
+        }
+        MacroAuthorizationError::Unavailable => tracing::error!(error=?error, "{message}"),
+    }
 }
 
 pub(super) fn rejection(message: &'static str) -> MacroAuthorizationRejection {

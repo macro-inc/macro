@@ -7,6 +7,7 @@
  */
 
 import type { EditOp, EditResult } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -220,7 +221,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = undefined;
-      void sync();
+      fireAndForget(sync(), 'pptx-editor');
     }, delay);
   }
 
@@ -286,7 +287,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
     text = '',
     asDisplay = where.kind === 'box'
   ) {
-    void flush();
+    fireAndForget(flush(), 'pptx-editor');
     setFresh({ where, text, display: asDisplay });
     queueMicrotask(() => focusInput(text.length));
   }
@@ -352,7 +353,7 @@ export function createEquationEditor(options: EquationEditorOptions) {
 
   /** Closes the editor; the equation stays selected. */
   function close() {
-    void flush();
+    fireAndForget(flush(), 'pptx-editor');
     if (fresh()) setFresh(undefined);
     else setDismissed(selectedKey());
     options.onClose();
@@ -410,7 +411,10 @@ export function createEquationEditor(options: EquationEditorOptions) {
     const picture = preview();
     if (picture) URL.revokeObjectURL(picture.url);
     for (const p of thumbnails.values())
-      void p.then((picture) => picture && URL.revokeObjectURL(picture.url));
+      fireAndForget(
+        p.then((picture) => picture && URL.revokeObjectURL(picture.url)),
+        'pptx-editor'
+      );
   });
 
   return {

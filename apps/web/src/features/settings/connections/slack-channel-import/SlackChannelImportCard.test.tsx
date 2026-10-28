@@ -8,10 +8,14 @@ const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
   importChannels: vi.fn(),
   failure: vi.fn(),
+  hidePromotion: vi.fn(),
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
+vi.mock('@app/features/connector-import/primitives/promotion', () => ({
+  hideImportPromotion: mocks.hidePromotion,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
@@ -33,12 +37,13 @@ vi.mock('@queries/import', async (importOriginal) => ({
   }),
 }));
 // Test the card's controls without unrelated app theme/layout dependencies.
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  ...(await vi.importActual('@app/components/ui/components/Input')),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
 }));
-vi.mock('../primitives', () => ({
+vi.mock('../../primitives', () => ({
   SettingsSection: (props: { title: string; children: JSX.Element }) => (
     <section aria-label={props.title}>{props.children}</section>
   ),
@@ -55,6 +60,7 @@ function channel(
     id,
     foreign_id: `C${id}`,
     source: 'slack',
+    kind: 'channel',
     status: 'staged',
     initiator: 'manual',
     user_id: 'me',
@@ -85,7 +91,6 @@ describe('Slack channel import card', () => {
         {
           source: 'slack',
           status: 'running',
-          auto_import: false,
           updated_at: '',
         },
       ],
@@ -144,11 +149,15 @@ describe('Slack channel import card', () => {
     setState({ runs: [], entities: [channel('general')] });
     render(() => <SlackChannelImportCard />);
     fireEvent.click(checkbox('Select general'));
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 channel' }));
+    mocks.importChannels.mock.calls[0][1].onSuccess();
+    expect(mocks.hidePromotion).not.toHaveBeenCalled();
     setState({
       runs: [],
       entities: [channel('general', { status: 'importing' })],
     });
     expect(screen.getByText('Importing…')).toBeTruthy();
+    expect(mocks.hidePromotion).not.toHaveBeenCalled();
     expect(
       screen.queryByRole('checkbox', { name: 'Select general' })
     ).toBeNull();
@@ -176,6 +185,7 @@ describe('Slack channel import card', () => {
         .getAttribute('href')
     ).toContain('/app/channel/macro-channel');
     expect(screen.getByText('by a teammate', { exact: false })).toBeTruthy();
+    expect(mocks.hidePromotion).toHaveBeenCalledWith('me', 'channels');
   });
 
   it('shows empty and failed discoveries with retry', () => {
@@ -184,7 +194,6 @@ describe('Slack channel import card', () => {
         {
           source: 'slack',
           status: 'ready',
-          auto_import: false,
           updated_at: '',
         },
       ],
@@ -198,7 +207,6 @@ describe('Slack channel import card', () => {
           source: 'slack',
           status: 'failed',
           error: 'Slack is not connected',
-          auto_import: false,
           updated_at: '',
         },
       ],

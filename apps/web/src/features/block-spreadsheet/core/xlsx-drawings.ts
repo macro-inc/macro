@@ -1127,9 +1127,11 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
             }`
           : `<c:val>${reference(value.values, 'numRef')}</c:val>`;
         const marker =
-          plot.kind === 'line' || plot.kind === 'stock'
+          plot.kind === 'stock'
             ? '<c:marker><c:symbol val="none"/></c:marker>'
-            : plot.kind === 'scatter' || (plot.kind === 'radar' && !plot.filled)
+            : plot.kind === 'line' ||
+                plot.kind === 'scatter' ||
+                (plot.kind === 'radar' && !plot.filled)
               ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>'
               : '';
         const inverted =
@@ -1176,7 +1178,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
       .with(
         'scatter',
         () =>
-          `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${series}${axisIds}</c:scatterChart>`
+          `<c:scatterChart><c:scatterStyle val="${plot.series.every((value) => value.noLine) ? 'marker' : 'lineMarker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:scatterChart>`
       )
       .with(
         'radar',

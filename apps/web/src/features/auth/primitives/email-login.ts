@@ -1,8 +1,19 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
-import type { AuthContext, AuthIntent } from '../context/auth-context';
+import type {
+  AuthContext,
+  AuthIntent,
+  VerifyCodeResult,
+} from '../context/auth-context';
 import { isCompleteCode, RESEND_AFTER_SECONDS } from '../core/email-code';
 
 export type LoginStep = 'choose' | 'email' | 'verify';
+
+const VERIFY_ERRORS = {
+  'invalid-code': 'Invalid code.',
+  'rate-limited': 'Too many attempts. Wait a minute, then try again.',
+  failed: 'Unable to perform verification.',
+} satisfies Record<Exclude<VerifyCodeResult['t'], 'verified'>, string>;
 
 type EmailLoginCapabilities = Pick<
   AuthContext,
@@ -77,11 +88,10 @@ export function createEmailLogin(
       return;
     }
     setVerifying(false);
-    setVerifyError(
-      result.t === 'invalid-code'
-        ? 'Invalid code.'
-        : 'Unable to perform verification.'
-    );
+    // The auth service allows only a few attempts a minute per address, and
+    // a rejected code left in the boxes would spend another on Verify.
+    if (result.t === 'invalid-code') setCode('');
+    setVerifyError(VERIFY_ERRORS[result.t]);
   };
 
   /** Send (or resend) the code; reports whether a code went out. */
@@ -103,7 +113,7 @@ export function createEmailLogin(
           startResendCountdown();
           if (result.autoCode) {
             setCode(result.autoCode);
-            void verify(result.autoCode);
+            fireAndForget(verify(result.autoCode), 'email-login');
           }
           return true;
         case 'password-required':
@@ -123,7 +133,8 @@ export function createEmailLogin(
     }
   };
 
-  if (options.autoStart && options.initialEmail) void send();
+  if (options.autoStart && options.initialEmail)
+    fireAndForget(send(), 'email-login');
 
   return {
     step,
@@ -145,8 +156,8 @@ export function createEmailLogin(
         context.track('sign_up_click', { method: 'email' });
       setStep('email');
     },
-    submitEmail: () => void send(),
-    verify: (value?: string) => void verify(value),
+    submitEmail: () => fireAndForget(send(), 'email-login'),
+    verify: (value?: string) => fireAndForget(verify(value), 'email-login'),
     resend: async () => {
       setVerifyError();
       // A failed resend may be retried at once; a sent one restarts the wait.

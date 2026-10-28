@@ -137,6 +137,12 @@ pub enum ResolveError {
         /// The column.
         column: String,
     },
+    /// An `INSERT` or `UPDATE` writes a derived column, whose cells its
+    /// formula computes.
+    DerivedColumn {
+        /// The column.
+        column: String,
+    },
     /// Two tables of a `SELECT` share an alias.
     DuplicateAlias {
         /// The alias.
@@ -327,6 +333,10 @@ impl fmt::Display for ResolveError {
             Self::DuplicateColumn { column } => {
                 write!(f, "\"{column}\" is listed twice")
             }
+            Self::DerivedColumn { column } => write!(
+                f,
+                "\"{column}\" is computed by its formula and can't be written; write the columns it reads instead"
+            ),
             Self::DuplicateAlias { alias, table } => write!(
                 f,
                 "\"{alias}\" already names {table}; give the other table an alias, like JOIN crm.people p"

@@ -4,6 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
+    <script>
+      // First-paint palette for every public website route.
+      // Mirrors src/features/setup/sitePalette.ts.
+      (function () {
+        var theme = new URLSearchParams(location.search).get('theme');
+        var cream = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        if (!cream) return;
+        var root = document.documentElement;
+        root.dataset.palette = 'cream';
+        root.dataset.themeLight = 'true';
+        document.querySelector('meta[name="theme-color"]').content = '#f5f1e8';
+      })();
+    </script>
     <title>Macro — The Unified System for Work</title>
     <!-- Default SEO tags. Tags marked data-seo are replaced per-route by the
          prerender step (scripts/prerender.ts) and updated at runtime by
@@ -13,7 +26,13 @@
     <meta data-seo property="og:title" content="Macro — The Unified System for Work" />
     <meta data-seo property="og:description" content="Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email." />
     <meta data-seo property="og:type" content="website" />
-    <meta data-seo property="og:image" content="https://macro.com/og/home-2026-10.png" />
+    <meta data-seo property="og:image" content="https://macro.com/og/home-unified-2026-10-27.png" />
+    <meta data-seo property="og:video" content="https://macro.com/og/home-unified-2026-10-27.mp4" />
+    <meta data-seo property="og:video:secure_url" content="https://macro.com/og/home-unified-2026-10-27.mp4" />
+    <meta data-seo property="og:video:type" content="video/mp4" />
+    <meta data-seo property="og:video:width" content="1200" />
+    <meta data-seo property="og:video:height" content="630" />
+    <meta data-seo name="twitter:image" content="https://macro.com/og/home-unified-2026-10-27.png" />
     <meta data-seo name="twitter:card" content="summary_large_image" />
     <meta data-seo name="twitter:site" content="@macrodotcom" />
     <!-- First-paint fonts download in parallel with the JS bundle instead of

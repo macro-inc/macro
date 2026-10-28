@@ -16,8 +16,8 @@ use chrono::{DateTime, Utc};
 use models_databases::position::Position;
 use models_databases::views::{CardPosition, DatabaseView, ViewId};
 use models_databases::{
-    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityRef, OptionId,
-    OptionRef, RowId, TableId, TableVersion,
+    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, DateRange, EntityRef,
+    OptionId, OptionRef, RowId, TableId, TableVersion,
 };
 use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
@@ -132,6 +132,12 @@ pub struct RestoredColumn {
     pub kind: Option<ColumnKind>,
     /// Whether the first value should still infer a type.
     pub infer_type: bool,
+    /// Whether this column permits absent values.
+    #[serde(default = "super::models::column_nullable_default")]
+    pub nullable: bool,
+    /// A derived column's formula.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula: Option<models_databases::Formula>,
 }
 
 /// A row a delete removed: its id and place.
@@ -189,6 +195,8 @@ pub enum ColumnChangeKind {
     Rename,
     /// Its type changed, and its cells with it.
     ChangeType,
+    /// Its formula changed.
+    SetFormula,
     /// It was removed.
     Delete,
     /// It gained options.
@@ -369,6 +377,8 @@ pub struct TableImage {
 pub struct ColumnImage {
     /// Whether a first value still determines the column's type.
     pub infer_type: bool,
+    /// Whether this column permits absent values.
+    pub nullable: bool,
     /// The column.
     pub id: ColumnId,
     /// Its table.
@@ -383,6 +393,8 @@ pub struct ColumnImage {
     pub kind: Option<ColumnKind>,
     /// Its options, in order.
     pub options: Vec<OptionImage>,
+    /// A derived column's formula.
+    pub formula: Option<models_databases::Formula>,
 }
 
 /// An option as the planner read it.
@@ -443,6 +455,10 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
         PropertyValue::Num(number) => CellValue::Number(*number),
         PropertyValue::Bool(checked) => CellValue::Boolean(*checked),
         PropertyValue::Date(date) => CellValue::Date(*date),
+        PropertyValue::DateRange(range) => CellValue::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         PropertyValue::Link(urls) => CellValue::Link(urls.clone()),
         PropertyValue::SelectOption(options) => CellValue::Options(
             options
@@ -518,13 +534,14 @@ pub fn settled_column(
 
 /// The entry of a table made whole, by an import or a new database's
 /// starter: its columns and rows, created together. Undoing it removes the
-/// table.
+/// table. The written cells also describe each row's initial history.
 pub fn created_table(
     database_id: DatabaseId,
     table: TableId,
     version: TableVersion,
     columns: &[ColumnId],
     rows: &[RowId],
+    after: CellImage,
 ) -> JournalEntry {
     JournalEntry {
         database_id,
@@ -536,6 +553,7 @@ pub fn created_table(
                 table,
                 change: models_databases::TableChange::Delete,
             }],
+            after,
             ..ChangeInverse::default()
         },
         rows: rows

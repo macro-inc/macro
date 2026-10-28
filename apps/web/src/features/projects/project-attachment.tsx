@@ -27,7 +27,7 @@ function ProjectAttachmentContent(props: { id: string }) {
     >
       <ProjectChip
         reference={
-          !query.isError && query.isSuccess
+          !query.isError && query.isSuccess && query.data
             ? { state: 'visible', id: query.data.id, name: query.data.name }
             : { state: 'unavailable' }
         }

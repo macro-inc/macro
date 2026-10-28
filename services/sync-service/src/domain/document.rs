@@ -145,8 +145,24 @@ pub fn snapshot(
     _access: &DocumentAccess,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(doc, ExportMode::Snapshot)
+}
+
+/// Current state without prior history, at the same editable revision. This
+/// bounds readers' work by live content rather than the document's age.
+pub fn shallow_snapshot(
+    _access: &DocumentAccess,
+    doc: &LoroDoc,
+) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(
+        doc,
+        ExportMode::ShallowSnapshot(Cow::Owned(doc.state_frontiers())),
+    )
+}
+
+fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
     let snapshot = doc
-        .export(ExportMode::Snapshot)
+        .export(mode)
         .map_err(|_| DocumentError::Invalid("The document snapshot could not be exported."))?;
     if snapshot.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);
@@ -156,6 +172,22 @@ pub fn snapshot(
         return Err(DocumentError::TooLarge);
     }
     Ok((snapshot, revision))
+}
+
+/// Peers that authored operations carried by an update or snapshot, so they
+/// can be mapped to the writer. Read from the blob, not the import result, so a
+/// retried write that changes nothing still registers its peers.
+pub fn writing_peers(blob: &[u8]) -> Result<Vec<u64>, DocumentError> {
+    let meta = LoroDoc::decode_import_blob_meta(blob, false)
+        .map_err(|_| DocumentError::Invalid("Invalid Loro update."))?;
+    let mut peers: Vec<u64> = meta
+        .partial_end_vv
+        .iter()
+        .filter(|(peer, end)| **end > meta.partial_start_vv.get(peer).copied().unwrap_or(0))
+        .map(|(peer, _)| *peer)
+        .collect();
+    peers.sort_unstable();
+    Ok(peers)
 }
 
 /// Synchronous preflight. The caller must apply the returned delta before its

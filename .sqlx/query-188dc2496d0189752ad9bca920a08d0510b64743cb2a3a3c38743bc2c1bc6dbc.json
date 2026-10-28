@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_code_execution SET record = $3 WHERE id = $1 AND agent_session_id = $2 AND record->>'status' = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "188dc2496d0189752ad9bca920a08d0510b64743cb2a3a3c38743bc2c1bc6dbc"
+}

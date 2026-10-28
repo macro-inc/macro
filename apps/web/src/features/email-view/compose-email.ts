@@ -2,10 +2,11 @@ import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/cons
 import type { useSplitLayout } from '@components/app/split-layout/layout';
 import { triggerFocusInput } from '@core/directive/focusInput';
 
-/** Opens a new email from the current inbox scope, focusing the To field. */
+/** Opens a new email from an inbox scope, optionally addressed to known recipients. */
 export function composeEmail(
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
-  inboxIds?: string[]
+  inboxIds?: string[],
+  recipients?: string[]
 ) {
   triggerFocusInput(() => document.getElementById(EMAIL_COMPOSE_TO_INPUT_ID));
   openWithSplit(
@@ -14,9 +15,12 @@ export function composeEmail(
       id: 'email-compose',
       params: {
         initialInboxId: inboxIds?.length === 1 ? inboxIds[0] : undefined,
+        ...(recipients?.length ? { initialTo: recipients } : {}),
       },
       preserveParams: true,
     },
-    { preferNewSplit: false }
+    recipients?.length
+      ? { preferNewSplit: true, allowDuplicate: true }
+      : { preferNewSplit: false }
   );
 }

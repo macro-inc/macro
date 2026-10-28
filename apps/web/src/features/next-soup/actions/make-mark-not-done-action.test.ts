@@ -114,19 +114,6 @@ describe('makeMarkNotDoneAction', () => {
     });
   });
 
-  it('never sends generic reopening for an email-follow-up mirror', async () => {
-    const mirror = {
-      type: 'reminder',
-      id: 'mirror',
-      completedAt: '2026-10-01T12:00:00Z',
-      emailFollowup: { threadId: 'email' },
-    } as EntityData;
-    const action = createAction();
-    expect(action.canExecute(mirror)).toBe(false);
-    await action.execute([mirror]);
-    expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
-  });
-
   it('unarchives a thread and restores only its notifications', async () => {
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
       'committed'
@@ -154,30 +141,6 @@ describe('makeMarkNotDoneAction', () => {
     );
     expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
     expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-  });
-
-  it('still skips threads rejected by the legacy eligibility preflight', async () => {
-    mocks.graphql = false;
-    mocks.threadCanBeMarkedNotDone.mockResolvedValue(false);
-    await createAction().execute([doneEmail('sent-only')]);
-    expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
-    expect(mocks.alert).toHaveBeenCalledOnce();
-  });
-
-  it('unarchives only eligible threads in a legacy mixed selection', async () => {
-    mocks.graphql = false;
-    mocks.threadCanBeMarkedNotDone.mockImplementation(
-      async (id) => id === 'inbound'
-    );
-    await createAction().execute([
-      doneEmail('inbound'),
-      doneEmail('sent-only'),
-    ]);
-    expect(mocks.executeMarkEntitiesUndone).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ emailIds: ['inbound'] })
-    );
-    expect(mocks.alert).not.toHaveBeenCalled();
   });
 
   it.each(['committed', 'queued'] as const)(
@@ -333,32 +296,6 @@ describe('makeMarkNotDoneAction', () => {
     expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('a', 'emailThread');
     expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('b', 'emailThread');
     expect(mocks.invalidateAllSoup).toHaveBeenCalledOnce();
-  });
-
-  it('preserves the legacy REST whole-batch rollback on a rejected sibling', async () => {
-    mocks.graphql = false;
-    const error = new Error('failed');
-    mocks.outcomes.set('b', error);
-    await expect(
-      createAction().execute([doneEmail('a'), doneEmail('b')])
-    ).rejects.toBe(error);
-    expect(mocks.applyOptimistic).toHaveBeenCalledOnce();
-    expect(
-      mocks.applyOptimistic.mock.results[0].value.rollback
-    ).toHaveBeenCalledOnce();
-    expect(mocks.failure).toHaveBeenCalledWith('Failed to mark as not done');
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-  });
-
-  it('preserves legacy REST rollback when its post-write refetch fails', async () => {
-    mocks.graphql = false;
-    mocks.refetchSoupEntity.mockRejectedValueOnce(new Error('refresh failed'));
-    await expect(createAction().execute([doneEmail('a')])).rejects.toThrow(
-      'refresh failed'
-    );
-    expect(
-      mocks.applyOptimistic.mock.results[0].value.rollback
-    ).toHaveBeenCalledOnce();
   });
 
   it('does not resolve threads when nothing is done', async () => {

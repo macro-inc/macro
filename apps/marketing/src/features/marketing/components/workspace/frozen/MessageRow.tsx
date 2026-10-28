@@ -3,9 +3,8 @@ import CursorIcon from '@icon/wide-cursor-ide.svg';
 import Reply from '@phosphor/arrow-bend-up-left.svg';
 import LinkIcon from '@phosphor/link.svg';
 import ListChecks from '@phosphor/list-checks.svg';
-import Smiley from '@phosphor/smiley.svg';
 import Sparkle from '@phosphor/sparkle.svg';
-import { For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { WorkspaceComment } from '../../../core/dummy-workspace';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import { DemoMentionText } from '../../DemoMention';
@@ -18,16 +17,40 @@ const QUICK_REACTIONS = ['❤️', '👍', '😂'] as const;
 export function MessageRow(props: {
   message: WorkspaceComment;
   children?: JSX.Element;
+  /** The same message body with interactive, locally resolved mention chips. */
+  bodyContent?: JSX.Element;
   hovered?: boolean;
   onReply?: () => void;
   onTask?: () => void;
-  onReact?: () => void;
+  onReact?: (emoji?: string) => void;
   onChat?: () => void;
 }) {
+  let row!: HTMLElement;
+  const [dismissed, setDismissed] = createSignal(false);
+  const reactions = () =>
+    props.message.emojiReactions ??
+    (props.message.reactions?.length
+      ? [{ emoji: '👍', users: props.message.reactions }]
+      : []);
+  const react = (emoji: string, event: MouseEvent) => {
+    props.onReact?.(emoji);
+    if (event.detail === 0) row.focus({ preventScroll: true });
+    else (event.currentTarget as HTMLButtonElement).blur();
+    setDismissed(true);
+  };
   const hasActions = () =>
     !!(props.onReact || props.onTask || props.onReply || props.onChat);
   return (
     <article
+      ref={row}
+      tabIndex={-1}
+      data-actions-dismissed={dismissed()}
+      onPointerLeave={() => setDismissed(false)}
+      onPointerEnter={() => setDismissed(false)}
+      onFocusOut={(event) => {
+        if (!row.contains(event.relatedTarget as Node | null))
+          setDismissed(false);
+      }}
       class="sample-message-row"
       data-reply={!!props.message.replyTo}
       data-hovered={props.hovered ? 'true' : undefined}
@@ -67,19 +90,36 @@ export function MessageRow(props: {
           >
             <span class="sample-agent-badge">Agent</span>
           </Show>
-          <span class="text-xs text-ink-extra-muted tabular-nums">
-            {props.message.time}
-          </span>
+          <Show when={props.message.time}>
+            <span class="text-xs text-ink-extra-muted tabular-nums">
+              {props.message.time}
+            </span>
+          </Show>
         </div>
-        <p class="mt-1 text-base whitespace-pre-wrap break-words">
-          <DemoMentionText text={props.message.body} />
-        </p>
-        {props.children}
-        <Show when={props.message.reactions?.length}>
-          <button class="sample-reaction" type="button" onClick={props.onReact}>
-            👍 {props.message.reactions?.length}
-          </button>
+        <Show
+          when={props.bodyContent}
+          fallback={
+            <p class="mt-1 text-base whitespace-pre-wrap break-words">
+              <DemoMentionText text={props.message.body} />
+            </p>
+          }
+        >
+          {props.bodyContent}
         </Show>
+        {props.children}
+        <For each={reactions()}>
+          {(reaction) => (
+            <button
+              class="sample-reaction"
+              type="button"
+              aria-label={`${reaction.emoji} ${reaction.users.length}`}
+              aria-pressed={reaction.users.includes('jacob')}
+              onClick={(event) => react(reaction.emoji, event)}
+            >
+              {reaction.emoji} {reaction.users.length}
+            </button>
+          )}
+        </For>
       </div>
       <Show when={hasActions()}>
         <div class="sample-message-actions" role="toolbar">
@@ -89,19 +129,12 @@ export function MessageRow(props: {
                 <button
                   type="button"
                   aria-label={`React ${emoji}`}
-                  onClick={props.onReact}
+                  onClick={(event) => react(emoji, event)}
                 >
                   <span class="text-base leading-none">{emoji}</span>
                 </button>
               )}
             </For>
-            <button
-              type="button"
-              aria-label="More reactions"
-              onClick={props.onReact}
-            >
-              <Smiley class="size-4" />
-            </button>
             <span class="sample-message-actions-divider" />
           </Show>
           <Show when={props.onTask}>

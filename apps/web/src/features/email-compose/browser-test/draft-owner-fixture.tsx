@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import { executeGraphqlSaveEmailDraft } from '@queries/email/graphql/draft';
 import type { SaveEmailDraftMutation } from '@service-storage/graphql/generated/graphql';
@@ -77,7 +78,9 @@ export function DraftOwnerFixture() {
         />
         Inbox metadata available
       </label>
-      <button onClick={() => void save()}>Save offline draft</button>
+      <button onClick={() => fireAndForget(save(), 'email-compose')}>
+        Save offline draft
+      </button>
       <Show when={error()}>
         <p role="alert">{error()}</p>
       </Show>

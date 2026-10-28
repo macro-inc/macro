@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_preview_lease (id, session_id, user_id, metadata, status, expires_at) VALUES ($1, $2, $3, $4, 'starting', $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7054999052994b7c302cdf578ef4d06a197e3935780ba83277828156da09b35"
+}

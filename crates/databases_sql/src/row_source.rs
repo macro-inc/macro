@@ -30,7 +30,7 @@ use item_filters::ast::properties::{
 use item_filters::ast::{EmailFilterAst, EntityFilterAst};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::position::PositionError;
-use models_databases::{OptionId, RowId, TableId};
+use models_databases::{DateRange, OptionId, RowId, TableId};
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Base64SerdeErr, Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod, TypeEraseCursor,
@@ -366,6 +366,7 @@ fn rows_filter(
     }
     EntityFilterAst {
         favorites_only: None,
+        crm_association: None,
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil())))),
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(
@@ -382,11 +383,11 @@ fn rows_filter(
         )))),
         call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+        crm_contact_filter: None,
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
         github_pull_request_filter: None,
         // Reminders, agent sessions and initiatives are opt-in: left empty,
         // they are excluded.
-        reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
         database_row_filter: Some(Arc::new(rows)),
@@ -502,6 +503,10 @@ fn cell(value: PropertyValue) -> Cell {
         PropertyValue::Num(value) => Cell::Number(value),
         PropertyValue::Str(value) => Cell::Text(value),
         PropertyValue::Date(value) => Cell::Date(value),
+        PropertyValue::DateRange(range) => Cell::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         PropertyValue::SelectOption(ids) => {
             Cell::Options(ids.into_iter().map(OptionId::from_uuid).collect())
         }

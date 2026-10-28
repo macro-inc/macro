@@ -84,9 +84,11 @@ impl UsageRepo for PgUsageRepo {
                 price_per_million_in, price_per_million_out,
                 price_per_million_cache_read, price_per_million_cache_write,
                 price_per_audio_minute, total,
-                count_usage
+                count_usage, agent_api_key_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+            )
             "#,
             id,
             usage.feature.to_string(),
@@ -105,6 +107,7 @@ impl UsageRepo for PgUsageRepo {
             per_audio_minute,
             total,
             count_usage,
+            usage.agent_api_key_id,
         )
         .execute(&self.inner)
         .await?;
@@ -116,12 +119,12 @@ impl UsageRepo for PgUsageRepo {
         let row = sqlx::query!(
             r#"
             SELECT
-                price_per_million_in,
-                price_per_million_out,
+                price_per_million_in AS "price_per_million_in!",
+                price_per_million_out AS "price_per_million_out!",
                 price_per_million_cache_read,
                 price_per_million_cache_write,
                 price_per_audio_minute
-            FROM ai_pricing
+            FROM ai_effective_pricing
             WHERE model = $1
             "#,
             normalize_model_id(model),
@@ -178,33 +181,30 @@ impl UsageRepo for PgUsageRepo {
         .execute(&mut *tx)
         .await?;
 
-        // Recompute the price of every recorded row for this model.
+        // Recompute the price of every recorded row for this model, at its
+        // discounted rates.
         sqlx::query!(
             r#"
             UPDATE ai_usage
-            SET price_per_million_in = $2::real,
-                price_per_million_out = $3::real,
-                price_per_million_cache_read = $4::real,
-                price_per_million_cache_write = $5::real,
-                price_per_audio_minute = $6::real,
+            SET price_per_million_in = e.price_per_million_in,
+                price_per_million_out = e.price_per_million_out,
+                price_per_million_cache_read = e.price_per_million_cache_read,
+                price_per_million_cache_write = e.price_per_million_cache_write,
+                price_per_audio_minute = e.price_per_audio_minute,
                 total = CASE
-                    WHEN (audio_seconds IS NULL) <> ($6::real IS NULL) THEN NULL
-                    WHEN cache_read_input_tokens > 0 AND $4::real IS NULL THEN NULL
-                    WHEN cache_write_input_tokens > 0 AND $5::real IS NULL THEN NULL
-                    ELSE (input_tokens::real / 1000000.0::real) * $2::real
-                      + (output_tokens::real / 1000000.0::real) * $3::real
-                      + (cache_read_input_tokens::real / 1000000.0::real) * COALESCE($4::real, 0)
-                      + (cache_write_input_tokens::real / 1000000.0::real) * COALESCE($5::real, 0)
-                      + (COALESCE(audio_seconds, 0) / 60.0 * COALESCE($6::real, 0))::real
+                    WHEN (ai_usage.audio_seconds IS NULL) <> (e.price_per_audio_minute IS NULL) THEN NULL
+                    WHEN ai_usage.cache_read_input_tokens > 0 AND e.price_per_million_cache_read IS NULL THEN NULL
+                    WHEN ai_usage.cache_write_input_tokens > 0 AND e.price_per_million_cache_write IS NULL THEN NULL
+                    ELSE (ai_usage.input_tokens::real / 1000000.0::real) * e.price_per_million_in
+                      + (ai_usage.output_tokens::real / 1000000.0::real) * e.price_per_million_out
+                      + (ai_usage.cache_read_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_read, 0)
+                      + (ai_usage.cache_write_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_write, 0)
+                      + (COALESCE(ai_usage.audio_seconds, 0) / 60.0 * COALESCE(e.price_per_audio_minute, 0))::real
                 END
-            WHERE model = $1
+            FROM ai_effective_pricing e
+            WHERE ai_usage.model = $1 AND e.model = $1
             "#,
             model,
-            per_in,
-            per_out,
-            per_cache_read,
-            per_cache_write,
-            per_audio_minute,
         )
         .execute(&mut *tx)
         .await?;
@@ -227,6 +227,7 @@ impl UsageRepo for PgUsageRepo {
                 feature,
                 user_id,
                 entity,
+                agent_api_key_id,
                 model,
                 input_tokens,
                 output_tokens,
@@ -284,6 +285,7 @@ impl UsageRepo for PgUsageRepo {
                     feature,
                     user,
                     entity: r.entity,
+                    agent_api_key_id: r.agent_api_key_id,
                     cost: Usage {
                         amount: match r.audio_seconds {
                             Some(seconds) => UsageAmount::Audio {

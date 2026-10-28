@@ -101,6 +101,7 @@ export function projectSoupRows(
           id: item.id,
           name: item.displayName ?? 'Untitled project',
           updatedAt: item.metadata.updatedAt ?? '',
+          createdAt: item.metadata.createdAt ?? undefined,
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'
               ? accessLevels[permission.accessLevel]

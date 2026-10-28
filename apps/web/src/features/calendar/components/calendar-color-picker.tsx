@@ -1,8 +1,8 @@
+import ResetIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Slider } from '@kobalte/core/slider';
-import ResetIcon from '@phosphor/arrow-counter-clockwise.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { createSignal, For } from 'solid-js';
 import {
   type CalendarColor,
@@ -112,7 +112,7 @@ export function CalendarColorPicker(props: {
         />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu w-72 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-edge-muted bg-menu p-3 text-ink shadow-menu outline-none menu-open-animation">
+        <Popover.Content class="menu-surface z-action-menu w-72 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 outline-none menu-open-animation">
           <div class="mb-3 flex items-start justify-between gap-2 px-1">
             <div class="min-w-0">
               <Popover.Title class="text-sm font-medium">

@@ -1,0 +1,18 @@
+---
+title: CreateSkill
+description: >-
+  Create a skill: a markdown document of reusable instructions that AI reads and
+  follows when the skill is referenced, as Compose Skill in the app does.
+---
+
+# CreateSkill
+
+Create a skill: a markdown document of reusable instructions that AI reads and follows when the skill is referenced, as Compose Skill in the app does. Write the instructions as the markdown body. Edit an existing skill with EditDocument; find skills with ListSkills or SearchSkills.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skillName` | string | Yes | The skill's name. |
+| `markdown` | string | Yes | The skill's instructions, in markdown. |
+| `projectId` | string | No | The id of the project (shown as a folder in the app UI) to create the skill in. Requires edit access to the project. Omit to create it at the top level of the user's files. |

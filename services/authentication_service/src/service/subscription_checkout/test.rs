@@ -77,7 +77,7 @@ async fn canceled_subscription_does_not_get_another_trial_or_a_paid_fallback() {
     let service = CheckoutService::new(FakeGateway {
         history: SubscriptionHistory {
             has_previous_subscription: true,
-            has_active_subscription: false,
+            has_existing_subscription: false,
         },
         ..Default::default()
     });
@@ -93,7 +93,7 @@ async fn active_and_trialing_customers_cannot_buy_a_second_subscription() {
     let service = CheckoutService::new(FakeGateway {
         history: SubscriptionHistory {
             has_previous_subscription: true,
-            has_active_subscription: true,
+            has_existing_subscription: true,
         },
         ..Default::default()
     });
@@ -125,7 +125,7 @@ async fn ordinary_checkout_keeps_its_paid_terms_and_invite_promotion() {
         invite: true,
         history: SubscriptionHistory {
             has_previous_subscription: true,
-            has_active_subscription: false,
+            has_existing_subscription: false,
         },
         ..Default::default()
     });
@@ -211,4 +211,59 @@ async fn max_trial_never_creates_checkout_or_falls_back_to_paid() {
         Err(CheckoutError::TrialUnavailable)
     ));
     assert!(service.gateway.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn trial_eligibility_and_checkout_use_the_same_subscription_history() {
+    for history in [
+        SubscriptionHistory::default(),
+        SubscriptionHistory {
+            has_previous_subscription: true,
+            has_existing_subscription: false,
+        },
+        SubscriptionHistory {
+            has_previous_subscription: true,
+            has_existing_subscription: true,
+        },
+    ] {
+        let service = CheckoutService::new(FakeGateway {
+            history,
+            ..Default::default()
+        });
+        let eligibility = service
+            .trial_eligibility(&request(true).user_id)
+            .await
+            .unwrap();
+        assert_eq!(eligibility.eligible, !history.has_previous_subscription);
+        assert!(service.gateway.created.lock().unwrap().is_empty());
+        assert_eq!(
+            service.create(request(true)).await.is_ok(),
+            eligibility.eligible
+        );
+    }
+}
+
+#[tokio::test]
+async fn eligibility_lookup_failure_does_not_advertise_a_trial() {
+    let service = CheckoutService::new(FakeGateway {
+        history_failure: true,
+        ..Default::default()
+    });
+    assert!(matches!(
+        service.trial_eligibility(&request(true).user_id).await,
+        Err(CheckoutError::Gateway(_))
+    ));
+    assert!(service.gateway.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn missing_billing_customer_cannot_be_confirmed_trial_eligible() {
+    let service = CheckoutService::new(FakeGateway {
+        missing_customer: true,
+        ..Default::default()
+    });
+    assert!(matches!(
+        service.trial_eligibility(&request(true).user_id).await,
+        Err(CheckoutError::MissingCustomer)
+    ));
 }

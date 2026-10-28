@@ -1,5 +1,5 @@
 import type { EventContentArg } from '@fullcalendar/core';
-import ExclamationIcon from '@phosphor/exclamation-mark.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
@@ -52,7 +52,7 @@ export function EventContent(props: EventContentProps) {
 
     return (
       !props.event.allDay &&
-      duration > 0 &&
+      duration >= 0 &&
       duration <= SINGLE_LINE_EVENT_DURATION_MS
     );
   };

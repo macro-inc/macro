@@ -1,5 +1,6 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import type { AppEvents } from '@app/lib/analytics/app-events';
+import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { CheckoutTerms } from '../core/checkout';
@@ -53,6 +54,19 @@ type ToolCatalogSource = {
   retry(): void;
 };
 
+export type ToolConnectionState =
+  | 'loading'
+  | 'error'
+  | 'available'
+  | 'disabled'
+  | 'connected'
+  | 'account-linked';
+export type ConnectedToolsSource = {
+  connected: Accessor<ReadonlySet<string>>;
+  state(slug: string): ToolConnectionState;
+  retry(): void;
+};
+
 export type Team = { name: string };
 export type TeamInvite = { id: string; invitedBy: string };
 
@@ -92,14 +106,13 @@ export type OnboardingContext = {
   connectInbox(): Promise<void>;
   createToolCatalog(): ToolCatalogSource;
   /**
-   * Slugs of connected tools; undefined until known. `poll` keeps re-checking
-   * while the user may be connecting one.
+   * Independent provider states. `poll` re-checks while connections change.
    */
-  createConnectedTools(options: {
-    poll: boolean;
-  }): Accessor<ReadonlySet<string> | undefined>;
-  /** Resolves when the hosted connect flow closes; reports its own failures. */
+  createConnectedTools(options: { poll: boolean }): ConnectedToolsSource;
+  /** GitHub uses native account OAuth; other tools use hosted connect. Reports its own failures. */
   connectTool(tool: Tool): Promise<void>;
+  /** Opens the native GitHub App repository selection, after account linking. */
+  configureGithubRepositories(): void;
   createTeamDirectory(): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
   createTeam(input: { name: string; invites: string[] }): Promise<void>;
@@ -107,6 +120,17 @@ export type OnboardingContext = {
   joinTeam(inviteId: string): Promise<void>;
   /** The invite promotion the account holds; null when it has none. */
   createInviteOffer(): Accessor<Loadable<InviteOffer | null>>;
+  createTrialEligibility(): {
+    eligibility: Accessor<Loadable<boolean>>;
+    existingSubscription: Accessor<boolean>;
+    managing: Accessor<boolean>;
+    manage(): Promise<void>;
+    retry(): void;
+  };
+  createPlanCatalog(): {
+    catalog: Accessor<Loadable<AiPlanCatalog>>;
+    retry(): void;
+  };
   /** The hosted checkout URL; rejects with a message fit to show. */
   startCheckout(tier: PaidPlanTier, terms: CheckoutTerms): Promise<string>;
   /**

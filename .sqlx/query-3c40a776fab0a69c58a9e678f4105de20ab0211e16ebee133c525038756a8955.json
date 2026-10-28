@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_external_replies SET updated_at = now() WHERE session_id = $1 AND action_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3c40a776fab0a69c58a9e678f4105de20ab0211e16ebee133c525038756a8955"
+}

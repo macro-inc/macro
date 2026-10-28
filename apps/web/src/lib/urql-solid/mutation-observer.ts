@@ -153,10 +153,10 @@ export class MutationObserver<
       OnMutateResult
     > = {}
   ): Promise<OperationResult<MutationData, Variables>> => {
-    if (this.destroyed) {
-      throw new Error('cannot execute a destroyed mutation observer');
-    }
-
+    // Destroying only detaches reactive delivery. A save fired as its owner
+    // tears down — a property editor that closes before its write settles —
+    // still reaches the client and still runs its lifecycle callbacks; only
+    // the state updates below are skipped.
     const execution = {};
     const options = this.options;
     const client = this.client;

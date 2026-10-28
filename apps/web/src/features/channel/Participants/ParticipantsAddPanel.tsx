@@ -37,8 +37,8 @@ export function ParticipantsAddPanel(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="min-w-0 flex-1 basis-60">
+    <div class="flex flex-col gap-2 md:flex-row md:items-center">
+      <div class="min-w-0 flex-1">
         <RecipientSelector<'user'>
           setSelectedOptions={setSelectedUsers}
           selectedOptions={selectedUsers()}
@@ -52,7 +52,7 @@ export function ParticipantsAddPanel(props: {
         />
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         disabled={selectedUsers().length === 0}
         onClick={handleAddParticipants}
       >

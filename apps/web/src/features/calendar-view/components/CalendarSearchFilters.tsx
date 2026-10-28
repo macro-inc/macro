@@ -1,6 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -70,11 +70,11 @@ export function CalendarSearchFilters(props: {
   return (
     <Dropdown placement="bottom-end" onOpenChange={setOpen}>
       <Dropdown.Trigger
+        aria-label={hasFilters() ? 'Filter events (active)' : 'Filter events'}
+        tooltip={hasFilters() ? 'Filter events (active)' : 'Filter events'}
         type="button"
         variant="ghost"
         size="icon-sm"
-        square
-        label={hasFilters() ? 'Filter events (active)' : 'Filter events'}
         classList={{ 'text-accent': hasFilters() }}
       >
         <FilterIcon class="size-4" />
@@ -148,7 +148,7 @@ export function CalendarSearchFilters(props: {
                 <For each={STATUSES}>
                   {(option) => (
                     <Dropdown.CheckboxItem
-                      closeOnSelect={false}
+                      closeOnSelect="unless-shift"
                       checked={props.value.statuses.includes(option.value)}
                       onChange={(checked) =>
                         updateFilters({

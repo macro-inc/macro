@@ -30,12 +30,14 @@ pub fn virtual_columns(table: TableId) -> [Column; 2] {
                 multi: false,
                 target: EntityKind::Row,
             },
+            formula: None,
         },
         Column {
             id: row_position_key(table),
             placement: ColumnId::from_uuid(row_position_key(table)),
             name: ROW_POSITION.into(),
             kind: ColumnKind::Text,
+            formula: None,
         },
     ]
 }

@@ -6,11 +6,14 @@ export {
 } from '@core/context/user';
 export {
   invalidateAiBillingSummary,
+  invalidateSubscriptionStatus,
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  useSubscriptionStatusQuery,
+  useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
 } from './ai-billing';
 export {
@@ -30,8 +33,13 @@ export {
   type CreateCheckoutSessionArgs,
   useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
+  useTrialEligibilityQuery,
 } from './stripe-checkout';
 export type { UserInfoData } from './user-info';
+export {
+  useSetUserLanguageMutation,
+  useUserLanguageQuery,
+} from './user-language';
 export {
   normalizeUserNameQueryId,
   userNameQueryOptions,

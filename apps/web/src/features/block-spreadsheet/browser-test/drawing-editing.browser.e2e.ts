@@ -14,7 +14,10 @@ const drawings = async (page: Page) =>
 
 async function insertChart(page: Page, type: string) {
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page.getByRole('menuitem', { name: type, exact: true }).click();
 }

@@ -1,3 +1,4 @@
+import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
@@ -6,7 +7,6 @@ import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { type EntityData, isGithubPrEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
-import { ReminderTitle } from './reminder-title';
 
 function extractRawTitle(entity: EntityData): JSX.Element {
   return match<EntityData, JSX.Element>(entity)
@@ -20,7 +20,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
     .with({ type: 'channel' }, (e) => e.name)
     .with({ type: 'channel_message' }, (e) => e.channelName)
     .with({ type: 'channel_thread' }, (e) => e.name)
-    .with({ type: 'email' }, (e) => e.name || '(No Subject)')
+    .with({ type: 'email' }, (e) => displaySubject(e.name))
     .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
     .with({ type: 'chat' }, (e) => e.name)
     .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
@@ -42,13 +42,16 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       { type: 'crm_contact' },
       (e) => e.name || e.email || 'Unknown Contact'
     )
-    .with({ type: 'reminder' }, (e) => e.name || 'Reminder')
     .with({ type: 'calendar_event' }, (e) => e.name || '(No title)')
     .with(
       { type: 'database' },
       (entity) => entity.name || blockNameToDefaultFile('database')
     )
-    .otherwise(() => 'Unknown');
+    .with(
+      { type: 'form' },
+      (entity) => entity.name || blockNameToDefaultFile('form')
+    )
+    .exhaustive(() => 'Untitled');
 }
 
 function extractSearchHighlight(entity: EntityData): string | undefined {
@@ -57,19 +60,6 @@ function extractSearchHighlight(entity: EntityData): string | undefined {
 }
 
 export function EntityTitle(props: { entity: EntityData }) {
-  const reminder = () =>
-    props.entity.type === 'reminder' ? props.entity : undefined;
-  return (
-    <Show
-      when={reminder()}
-      fallback={<OrdinaryEntityTitle entity={props.entity} />}
-    >
-      {(entity) => <ReminderTitle entity={entity()} showNote />}
-    </Show>
-  );
-}
-
-function OrdinaryEntityTitle(props: { entity: EntityData }) {
   const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
     if (searchHighlight) {

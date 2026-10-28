@@ -1,16 +1,12 @@
 use crate::api::context::ApiContext;
 use crate::api::context::{AuthorizationService, EntityAccessService};
-use crate::api::util::count_occurrences;
-use crate::service::document_event_publisher::publish_document_purged_event;
 use axum::Json;
 use axum::extract::State;
 use axum::response::Response;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use documents_hex::domain::purge::DocumentPurgeService as _;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-#[allow(unused_imports)]
-use futures::stream::TryStreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::document::DocumentBasic;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -19,7 +15,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {
-    pub document_id: String,
+    pub document_id: uuid::Uuid,
 }
 
 /// Permanently deletes a document.
@@ -43,104 +39,24 @@ pub async fn permanently_delete_document_handler(
     _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-    document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("permanently_delete_document");
 
-    // Decrement sha counts for docx files
-    if let Some(file_type) = document_context.file_type.as_deref()
-        && file_type == "docx"
-    {
-        let bom_parts = macro_db_client::document::get_bom_parts(&state.db, &document_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get bom parts");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to get bom parts".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-
-        // Transform bom parts into Vec<(sha, count)>
-        let sha_counts = count_occurrences(
-            bom_parts
-                .iter()
-                .map(|bp| bp.sha.clone())
-                .collect::<Vec<String>>(),
-        );
-
-        tracing::trace!("decrementing sha ref count");
-        state
-            .redis_client
-            .decrement_counts(&sha_counts)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to decrement sha ref counts");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to decrement sha ref counts".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-    }
-
-    // Delete document info from db
-    macro_db_client::document::delete_document(&state.db, &document_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to delete document");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to delete document".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-    // Delete entity mentions where this doc is the source
-    if let Err(e) = comms_db_client::entity_mentions::delete_entity_mentions_by_source(
-        &state.db,
-        vec![document_id.clone()],
-    )
-    .await
-    {
-        tracing::error!(error=?e, "unable to delete entity mentions");
-    }
-
-    // Queue document for deletion
-    let owner = document_context.owner.principal_id();
     state
-        .sqs_client
-        .enqueue_document_delete(&owner, &document_id)
+        .document_purger
+        .purge(document_id)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "unable to enqueue document delete");
+            tracing::error!(error=?e, "unable to permanently delete document");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to enqueue document delete".into(),
+                    message: "unable to permanently delete document".into(),
                 }),
             )
                 .into_response()
         })?;
-
-    publish_document_purged_event(&state.macro_event_broker, &document_id).map_err(|e| {
-        tracing::error!(error=?e, "unable to publish document purged event");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to publish document purged event".into(),
-            }),
-        )
-            .into_response()
-    })?;
 
     let response_data = GenericSuccessResponse { success: true };
 

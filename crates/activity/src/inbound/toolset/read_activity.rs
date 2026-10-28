@@ -60,6 +60,8 @@ pub enum ToolActivityAction {
     Messaged,
     /// An email message was sent on the thread.
     Sent,
+    /// Someone submitted a response to the entity (form).
+    Responded,
     /// A property value changed on the entity.
     PropertyChanged {
         /// The property definition id.
@@ -122,6 +124,7 @@ impl ToolActivityAction {
             RecordedAction::Known(Action::Deleted) => Self::Deleted,
             RecordedAction::Known(Action::Messaged) => Self::Messaged,
             RecordedAction::Known(Action::Sent) => Self::Sent,
+            RecordedAction::Known(Action::Responded) => Self::Responded,
             RecordedAction::Known(Action::PropertyChanged(change)) => {
                 let metadata = properties.get(&change.property);
                 let from_labels = option_labels(change.from.as_ref(), metadata);
@@ -147,6 +150,15 @@ impl ToolActivityAction {
             },
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded,
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
+            RecordedAction::Known(
+                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown {
+                    tag: tag.to_owned(),
+                    payload,
+                }
+            }
             RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
         }
     }

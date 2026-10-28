@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { DatabaseColumnCasts } from '../core/column-schema';
+import type { DatabaseColumnCasts } from '../../database/core/column-schema';
 import { createColumnCasts } from './column-casts';
 
 const transport = vi.hoisted(() => ({
@@ -134,4 +134,56 @@ it('reads the dry run only once the menu opens, in the menu’s terms', async ()
     tableId: 'tasks',
     columnId: 'price',
   });
+});
+
+it('offers a cast verdict from a newer server as never instead of throwing', async () => {
+  transport.columnCasts.mockResolvedValue(
+    ok([
+      {
+        data_type: 'NUMBER',
+        is_multi_select: false,
+        specific_entity_type: null,
+        relation: false,
+        cast: JSON.parse('"lossy"'),
+        reason: null,
+        failures: 0,
+        summary: null,
+        examples: [],
+      },
+    ])
+  );
+  let casts!: () => DatabaseColumnCasts;
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(() => (
+    <QueryClientProvider client={client}>
+      {(() => {
+        casts = createColumnCasts({
+          databaseId: 'db',
+          tableId: 'tasks',
+          version: () => 4,
+        })('price', () => true);
+        return null;
+      })()}
+    </QueryClientProvider>
+  ));
+
+  await waitFor(() =>
+    expect(casts()).toEqual({
+      status: 'ready',
+      version: 4,
+      casts: [
+        {
+          target: {
+            dataType: 'NUMBER',
+            isMultiSelect: false,
+            specificEntityType: undefined,
+            relation: false,
+          },
+          cast: { verdict: 'never', reason: '' },
+        },
+      ],
+    })
+  );
 });

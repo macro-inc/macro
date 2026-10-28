@@ -39,6 +39,10 @@ impl IntoResponse for GithubLinkError {
                 StatusCode::PRECONDITION_REQUIRED,
                 REAUTHENTICATION_REQUIRED_MESSAGE,
             ),
+            GithubLinkError::GithubServiceError(GithubError::AccountMismatch) => (
+                StatusCode::CONFLICT,
+                "Disconnect the current GitHub account before linking a different account.",
+            ),
             GithubLinkError::InternalError(error) => {
                 tracing::error!(error=?error, "internal error occurred while linking github account");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")

@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
 import { queryClient } from '@queries/client';
@@ -13,7 +14,7 @@ import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { CreateChannelRequest } from '@service-storage/generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { invalidateChannelParticipants } from './channel-participants';
 import {
@@ -45,11 +46,28 @@ export async function fetchAllChannels(
   return channels;
 }
 
-export function useListChannelsQuery() {
-  return useQuery(() => ({
-    queryKey: channelKeys.listChannels.queryKey,
-    queryFn: ({ signal }) => fetchAllChannels(signal),
-  }));
+const listChannelsQueryOptions = queryOptions({
+  queryKey: channelKeys.listChannels.queryKey,
+  queryFn: ({ signal }) => fetchAllChannels(signal),
+});
+
+export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
+  return useQuery(() => ({ ...listChannelsQueryOptions, enabled: enabled() }));
+}
+
+// The host is an app-level cache service, not component state; the key
+// already namespaces on its client id.
+function cachedGraphqlChannelsQueryOptions(cacheHost: CacheHost | undefined) {
+  return queryOptions({
+    queryKey: channelKeys.quickAccessGraphql(cacheHost?.clientId ?? 'disabled')
+      .queryKey,
+    queryFn: async (): Promise<CachedGraphqlChannel[]> => {
+      if (!cacheHost) return [];
+      return await readCachedGraphqlChannels(cacheHost);
+    },
+    enabled: cacheHost !== undefined,
+    staleTime: Infinity,
+  });
 }
 
 /** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
@@ -58,18 +76,7 @@ export function useCachedGraphqlChannelsQuery(
 ) {
   return useQuery(() => {
     const host = cacheHost();
-    const enabledCacheHost = host?.disabled ? undefined : host;
-    return {
-      queryKey: channelKeys.quickAccessGraphql(
-        enabledCacheHost?.clientId ?? 'disabled'
-      ).queryKey,
-      queryFn: async (): Promise<CachedGraphqlChannel[]> => {
-        if (!enabledCacheHost) return [];
-        return await readCachedGraphqlChannels(enabledCacheHost);
-      },
-      enabled: enabledCacheHost !== undefined,
-      staleTime: Infinity,
-    };
+    return cachedGraphqlChannelsQueryOptions(host?.disabled ? undefined : host);
   });
 }
 
@@ -113,7 +120,8 @@ export function useCreateChannelMutation(
             entityId: data.id,
           });
         },
-        onSettled: () => void invalidateListChannels(),
+        onSettled: () =>
+          fireAndForget(invalidateListChannels(), 'channel-list'),
       },
       callbacks
     ),
@@ -181,7 +189,8 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
           console.error('failed to update channel settings', error);
           toast.failure('Failed to update channel settings');
         },
-        onSettled: () => void invalidateListChannels(),
+        onSettled: () =>
+          fireAndForget(invalidateListChannels(), 'channel-list'),
       },
       callbacks
     ),

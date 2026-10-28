@@ -1,4 +1,4 @@
-/** Carry the feature bubbles into a grainy color field, then open the workspace. */
+/** Carry the feature bubbles into the existing sample workspace. */
 export function animateDemoEntrance(
   section: HTMLElement,
   scroller: HTMLElement
@@ -120,7 +120,7 @@ export function animateDemoEntrance(
         animate(
           ghost,
           [
-            { transform: 'translate(0, 0) scale(1)', opacity: 0, offset: 0 },
+            { transform: 'translate(0, 0) scale(1)', opacity: 1, offset: 0 },
             { opacity: 0.75, offset: 0.12 },
             { opacity: 0.45, offset: 0.55 },
             {
@@ -202,10 +202,14 @@ export function animateDemoEntrance(
       viewport.top +
       scroller.scrollTop +
       target.offsetHeight / 2;
-    // Hold the readable constellation for 100px longer before it leaves.
-    start = top - scroller.clientHeight * 0.82;
-    // Keep the travel length: the reveal also finishes 100px later.
-    distance = Math.max(1, center - scroller.clientHeight * 0.5 - 150 - start);
+    // Give readers another 50–100px before the bubbles leave. Shift both
+    // endpoints equally so the existing motion keeps its speed and path.
+    const delay = Math.min(100, Math.max(50, scroller.clientWidth / 16));
+    start = top - scroller.clientHeight * 0.82 + delay;
+    distance = Math.max(
+      1,
+      center - scroller.clientHeight * 0.5 - 150 + delay - start
+    );
     update();
   };
   // Once somebody uses the workspace, scrolling must never hide their work.

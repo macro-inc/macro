@@ -212,8 +212,8 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
       viewport.top +
       scroller.scrollTop +
       target.offsetHeight / 2;
-    // Hold the readable constellation for 100px longer before it leaves.
-    const delay = 100;
+    // Preserve the existing hold, then add 50–100px of reading room.
+    const delay = 100 + Math.min(100, Math.max(50, scroller.clientWidth / 16));
     start = top - scroller.clientHeight * 0.82 + delay;
     // Shift the whole transition, preserving its travel length and speed.
     distance = Math.max(

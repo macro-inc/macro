@@ -24,6 +24,11 @@ vi.mock('./macroLinkInterceptor', () => ({
   registerMacroLinkInterceptor: () => () => {},
 }));
 
+import { registerPipedreamCallback } from '@core/pipedream/connect-callback';
+import {
+  pendingNotificationNavigationId,
+  setPendingNotificationNavigationId,
+} from '@notifications/notification-navigation-intent';
 import { useTauriNavigationEffect } from './navigation';
 
 let dispose: (() => void) | undefined;
@@ -31,6 +36,7 @@ let receive: (event: { payload: { path: string; query: string } }) => void;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setPendingNotificationNavigationId(undefined);
   mocks.platform = 'android';
   mocks.invoke.mockResolvedValue(undefined);
   mocks.listen.mockImplementation(async (_name, handler) => {
@@ -46,6 +52,68 @@ beforeEach(() => {
 afterEach(() => dispose?.());
 
 describe('native link session routing', () => {
+  it('queues a desktop notification click for navigation when the layout is ready', () => {
+    mocks.platform = 'macos';
+    receive({
+      payload: {
+        path: '/notification',
+        query:
+          'notificationId=01a1561c-62b1-7ee4-99d5-1fa5988dbf5d&deliveryId=delivery',
+      },
+    });
+    expect(pendingNotificationNavigationId()).toBe(
+      '01a1561c-62b1-7ee4-99d5-1fa5988dbf5d'
+    );
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('uses the clicked notification rather than the most recently received one', () => {
+    setPendingNotificationNavigationId('newer-notification');
+    receive({
+      payload: {
+        path: '/notification',
+        query: 'notificationId=older-notification',
+      },
+    });
+    expect(pendingNotificationNavigationId()).toBe('older-notification');
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it.each(['', 'notificationId='])(
+    'ignores notification links without a target (%s)',
+    (query) => {
+      receive({ payload: { path: '/notification', query } });
+      expect(pendingNotificationNavigationId()).toBeUndefined();
+      expect(mocks.navigate).not.toHaveBeenCalled();
+    }
+  );
+
+  it('completes a connector callback without navigating away from the active chat', () => {
+    const onEvent = vi.fn();
+    const { state } = registerPipedreamCallback(onEvent);
+    receive({
+      payload: {
+        path: '/pipedream-connect-callback',
+        query: `state=${state}&outcome=success&account_id=apn_test`,
+      },
+    });
+    expect(onEvent).toHaveBeenCalledExactlyOnceWith({
+      type: 'success',
+      accountId: 'apn_test',
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.setPostLoginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale connector callbacks without routing to a missing page', () => {
+    receive({
+      payload: {
+        path: '/pipedream-connect-callback',
+        query: 'state=expired&outcome=closed',
+      },
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
   it('preserves query parameters on Android root links', () => {
     receive({
       payload: { path: '/', query: 'subscriptionSuccess=true&type=pro' },

@@ -20,11 +20,13 @@ export type XlsxCellStyle = {
   };
   alignment: {
     horizontal?: 'left' | 'center' | 'right';
+    indent?: number;
     vertical: 'top' | 'center' | 'bottom';
     wrapText: boolean;
   };
   fill?: string;
   border: Partial<Record<Edge, { style: string; color: string }>>;
+  checkbox: boolean;
 };
 
 const FONT_NAMES = { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' };
@@ -37,6 +39,8 @@ function numberFormatCode(style: Required<SpreadsheetCellStyle>) {
     general: style.decimals < 0 ? 'General' : `0${fraction}`,
     number: `#,##0${fraction}`,
     currency: `$#,##0${fraction}`,
+    // Excel's built-in accounting formats 42 and 44 at 0 and 2 decimals.
+    accounting: `_("$"* #,##0${fraction}_);_("$"* \\(#,##0${fraction}\\);_("$"* "-"${'?'.repeat(digits)}_);_(@_)`,
     percent: `0${style.decimals < 0 ? '.##' : fraction}%`,
     date: 'm/d/yyyy',
     time: 'h:mm:ss AM/PM',
@@ -69,7 +73,14 @@ export function readNumberFormat(format: string): SpreadsheetCellStyle {
   else if (tokens.includes('%'))
     style = { format: 'percent', decimals: tokens === '0.##%' ? -1 : decimals };
   else if (/E[+-]?0/i.test(tokens)) style = { format: 'scientific', decimals };
-  else if (/\$/.test(format)) style = { format: 'currency', decimals };
+  else if (/\$/.test(format))
+    style = {
+      // A repeated fill character spreads the symbol and amount apart.
+      format: tokens.replace(/_./g, '').includes('*')
+        ? 'accounting'
+        : 'currency',
+      decimals,
+    };
   else if (/[0#]/.test(tokens))
     style = { format: tokens.includes(',') ? 'number' : 'general', decimals };
   else style = {};
@@ -83,6 +94,25 @@ export function readNumberFormat(format: string): SpreadsheetCellStyle {
   if (numberFormatCode({ ...SPREADSHEET_DEFAULT_STYLE, ...style }) !== format)
     style.numberFormat = format;
   return style;
+}
+
+function xlsxAlignment(
+  style: Required<SpreadsheetCellStyle>
+): XlsxCellStyle['alignment'] {
+  // Excel indents only left- and right-aligned text.
+  const horizontal =
+    style.horizontalAlign !== 'auto'
+      ? style.horizontalAlign
+      : style.indent > 0
+        ? 'left'
+        : undefined;
+  return {
+    ...(horizontal && { horizontal }),
+    ...(style.indent > 0 &&
+      horizontal !== 'center' && { indent: style.indent }),
+    vertical: style.verticalAlign === 'middle' ? 'center' : style.verticalAlign,
+    wrapText: style.wrap,
+  };
 }
 
 /** Excel style parts for a cell. Font properties the cell does not set come
@@ -122,15 +152,9 @@ export function xlsxCellStyle(
         color: style.textColor.slice(1).toUpperCase(),
       }),
     },
-    alignment: {
-      ...(style.horizontalAlign !== 'auto' && {
-        horizontal: style.horizontalAlign,
-      }),
-      vertical:
-        style.verticalAlign === 'middle' ? 'center' : style.verticalAlign,
-      wrapText: style.wrap,
-    },
+    alignment: xlsxAlignment(style),
     ...(style.fillColor && { fill: style.fillColor.slice(1).toUpperCase() }),
     border,
+    checkbox: style.checkbox,
   };
 }

@@ -6,13 +6,13 @@ use crate::domain::{
         ChannelAttachmentType, ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant,
         ChannelPreview, ChannelPreviewData, ChannelType, CreateEntityMentionOptions, EntityMention,
         GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest, ReferencedShareItem,
-        RemoveParticipantsRequest, Sender, WithChannelId,
+        GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest, ReferenceShareResult,
+        ReferencedShareItem, RemoveParticipantsRequest, Sender, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr, ChannelMutationErr,
-        ChannelPictureFile, ChannelPictureFiles, ChannelReferenceSharePermissions, ChannelRepo,
-        ChannelService,
+        ChannelPictureAccess, ChannelPictureFile, ChannelPictureFiles,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService, CommentParentAccess,
     },
 };
 use bot_id::{BotId, cowlike::CowLike};
@@ -22,6 +22,8 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use uuid::Uuid;
 
 mod import;
@@ -41,6 +43,9 @@ pub struct ChannelServiceImpl<
     events: E,
     reference_share_permissions: P,
     picture_files: F,
+    agent_direct_messages: Option<Arc<dyn super::agent_dm::AgentDirectMessages>>,
+    /// Fail-closed when unset: comment references are withheld.
+    comment_parent_access: Option<Arc<dyn CommentParentAccess>>,
 }
 
 /// Fail-closed picture metadata source for contexts that do not wire uploads.
@@ -72,9 +77,16 @@ impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
         &self,
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
-        _items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
-        Ok(())
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, Self::Err> {
+        Ok(items
+            .into_iter()
+            .map(|item| ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: crate::domain::models::ReferenceShareOutcome::NotPermitted,
+            })
+            .collect())
     }
 }
 
@@ -89,6 +101,8 @@ where
             events: NoopChannelEventDispatcher,
             reference_share_permissions: NoopChannelReferenceSharePermissions,
             picture_files: UnavailableChannelPictureFiles,
+            agent_direct_messages: None,
+            comment_parent_access: None,
         }
     }
 }
@@ -101,11 +115,28 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             events,
             reference_share_permissions,
             picture_files: UnavailableChannelPictureFiles,
+            agent_direct_messages: None,
+            comment_parent_access: None,
         }
     }
 }
 
 impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
+    /// Enable private conversations with authorized agent personas.
+    pub fn with_agent_direct_messages(
+        mut self,
+        service: Arc<dyn super::agent_dm::AgentDirectMessages>,
+    ) -> Self {
+        self.agent_direct_messages = Some(service);
+        self
+    }
+
+    /// Authorize comment references through the commented entity's permissions.
+    pub fn with_comment_parent_access(mut self, access: Arc<dyn CommentParentAccess>) -> Self {
+        self.comment_parent_access = Some(access);
+        self
+    }
+
     /// Wire the static-file metadata source used to authorize channel pictures.
     pub fn with_picture_files<F2: ChannelPictureFiles>(
         self,
@@ -116,6 +147,8 @@ impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
             events: self.events,
             reference_share_permissions: self.reference_share_permissions,
             picture_files,
+            agent_direct_messages: self.agent_direct_messages,
+            comment_parent_access: self.comment_parent_access,
         }
     }
 }
@@ -272,6 +305,15 @@ where
         GetOrCreateDmRequest { recipient_id }: GetOrCreateDmRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        if let Some(bot) = recipient_id.as_bot() {
+            let service = self.agent_direct_messages.as_ref().ok_or_else(|| {
+                ChannelMutationErr::BadRequest("Agent direct messages are unavailable".to_owned())
+            })?;
+            return service.get_or_create(actor, bot.bot_id()).await;
+        }
+        let recipient_id = recipient_id.into_user().ok_or_else(|| {
+            ChannelMutationErr::BadRequest("Invalid direct message recipient".to_owned())
+        })?;
         let pair = DmPair::new(actor.clone(), recipient_id).map_err(|_| {
             ChannelMutationErr::BadRequest(
                 "recipient_id cannot be the same as the user_id".to_string(),
@@ -364,6 +406,19 @@ where
 
         let converting_to_team =
             req.convert_to_team_channel == Some(true) && info.channel_type != ChannelType::Team;
+        // An agent DM is its owner's alone. A team channel is open to their
+        // team, and to the team scope of the personas their team owns.
+        if converting_to_team
+            && self
+                .repo
+                .is_direct_agent_conversation(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        {
+            return Err(ChannelMutationErr::BadRequest(
+                "an agent DM cannot become a team channel".to_string(),
+            ));
+        }
         let converting_to_private =
             req.convert_to_team_channel == Some(false) && info.channel_type == ChannelType::Team;
         let team_id = if converting_to_team {
@@ -800,7 +855,7 @@ where
     #[tracing::instrument(err, skip(self, access))]
     async fn set_channel_picture(
         &self,
-        access: EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>,
+        access: ChannelPictureAccess,
         picture_id: Option<Uuid>,
     ) -> Result<(), ChannelMutationErr> {
         if access.entity().entity_type != EntityType::Channel {
@@ -854,14 +909,18 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
-        self.repo
+        let changed = self
+            .repo
             .set_channel_picture(channel_id, picture_id)
             .await
             .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
-        self.events.dispatch(ChannelEvent::PictureChanged {
-            channel_id,
-            recipients: participant_ids(&participants),
-        });
+        if changed {
+            self.events.dispatch(ChannelEvent::PictureChanged {
+                actor: actor.clone(),
+                channel_id,
+                recipients: participant_ids(&participants),
+            });
+        }
         Ok(())
     }
 
@@ -902,6 +961,20 @@ where
             .map_err(anyhow::Error::from)?;
 
         Ok(participants)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(user_count = user_ids.len()))]
+    async fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr> {
+        let names = self
+            .repo
+            .get_user_display_names(&user_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(names)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1000,18 +1073,61 @@ where
         Ok(activity)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(
+        err,
+        skip(self, user_id),
+        fields(comment_parents = tracing::field::Empty, references = tracing::field::Empty)
+    )]
     async fn get_attachment_references(
         &self,
         entity_type: String,
         entity_id: String,
         user_id: String,
     ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
-        self.repo
+        let mut references = self
+            .repo
             .get_attachment_references(&entity_type, &entity_id, &user_id)
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)
+            .map_err(ChannelMessagesErr::Repo)?;
+
+        // Channel rows are scoped to the viewer's channels in the repo; comment
+        // rows come back for every parent and are authorized here.
+        let parents: HashSet<(String, String)> = references
+            .iter()
+            .filter_map(|reference| match reference {
+                AttachmentEntityReference::Comment(comment) => Some((
+                    comment.parent_entity_type.clone(),
+                    comment.parent_entity_id.clone(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let span = tracing::Span::current();
+        span.record("comment_parents", parents.len());
+
+        let mut viewable_parents = HashSet::new();
+        if let Some(access) = &self.comment_parent_access {
+            for (parent_type, parent_id) in parents {
+                if access
+                    .can_view_parent(&user_id, &parent_type, &parent_id)
+                    .await
+                    .map_err(ChannelMessagesErr::Repo)?
+                {
+                    viewable_parents.insert((parent_type, parent_id));
+                }
+            }
+        }
+        references.retain(|reference| match reference {
+            AttachmentEntityReference::Comment(comment) => viewable_parents.contains(&(
+                comment.parent_entity_type.clone(),
+                comment.parent_entity_id.clone(),
+            )),
+            _ => true,
+        });
+        span.record("references", references.len());
+
+        Ok(references)
     }
 
     async fn create_channel(
@@ -1094,6 +1210,18 @@ where
         req: GetOrCreatePrivateRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::get_or_create_private(self, actor, req).await
+    }
+
+    async fn share_referenced_items_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        self.reference_share_permissions
+            .update_channel_share_permissions_for_referenced_items(actor, channel_id, items)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))
     }
 
     async fn patch_channel(

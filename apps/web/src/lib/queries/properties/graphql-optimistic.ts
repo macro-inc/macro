@@ -5,6 +5,7 @@
  * property record referenced by soup query results.
  */
 
+import { timeRangeToInstants } from '@app/features/database/core/cell-date-range';
 import type {
   Property,
   PropertyApiValues,
@@ -54,6 +55,15 @@ export function apiValuesToGraphqlPropertyValue(
             dateValue: apiValues.value.toISOString(),
           }
         : null;
+    case 'DATE_RANGE': {
+      if (apiValues.value == null) return null;
+      const { start, end } = timeRangeToInstants(apiValues.value);
+      return {
+        __typename: 'GraphqlDateRangePropertyValue',
+        rangeStart: start,
+        rangeEnd: end,
+      };
+    }
     case 'SELECT_STRING':
     case 'SELECT_NUMBER':
       return apiValues.values != null && apiValues.values.length > 0
@@ -122,21 +132,31 @@ export function isTemporaryGraphqlProperty(id: string): boolean {
   return id.startsWith(TEMPORARY_PROPERTY_PREFIX);
 }
 
-function hasPersistedAssignment(
-  property: Property | PropertyDefinitionDomain
-): property is Property {
-  return (
-    isInstantiatedProperty(property) &&
-    isPersistedAssignmentId(property.propertyId, property.propertyDefinitionId)
-  );
-}
-
 function isPersistedAssignmentId(id: string, definitionId: string): boolean {
   return (
     id !== definitionId &&
     !id.startsWith('pending:') &&
     !isTemporaryGraphqlProperty(id)
   );
+}
+
+type PropertyTarget = { entityType: string; entityId: string };
+
+function optimisticPropertyId(
+  property: Property | PropertyDefinitionDomain,
+  target?: PropertyTarget,
+  assignmentId?: string
+): string | undefined {
+  const definitionId = isInstantiatedProperty(property)
+    ? property.propertyDefinitionId
+    : property.id;
+  const id =
+    assignmentId ??
+    (isInstantiatedProperty(property) ? property.propertyId : undefined);
+  if (id && isPersistedAssignmentId(id, definitionId)) return id;
+  return target
+    ? `${TEMPORARY_PROPERTY_PREFIX}${target.entityType}:${target.entityId}:${definitionId}`
+    : undefined;
 }
 
 /**
@@ -147,16 +167,9 @@ function isPersistedAssignmentId(id: string, definitionId: string): boolean {
 export function buildOptimisticSetEntityProperty(
   property: Property | PropertyDefinitionDomain,
   apiValues: PropertyApiValues,
-  target?: { entityType: string; entityId: string }
+  target?: PropertyTarget
 ): SoupPropertyFieldsFragment | undefined {
-  const definitionId = isInstantiatedProperty(property)
-    ? property.propertyDefinitionId
-    : property.id;
-  const id = hasPersistedAssignment(property)
-    ? property.propertyId
-    : target
-      ? `${TEMPORARY_PROPERTY_PREFIX}${target.entityType}:${target.entityId}:${definitionId}`
-      : undefined;
+  const id = optimisticPropertyId(property, target);
   if (!id) return undefined;
   return optimisticPropertyRecord(
     property,
@@ -166,23 +179,18 @@ export function buildOptimisticSetEntityProperty(
 }
 
 /**
- * Optimistic payload for a multi-select property reaching `optionIds`, or
- * `undefined` when the entity has no assignment for the definition yet (the
- * first tag from a set): that record's id is only known once the server
- * responds, so the write waits for the commit instead of inventing one.
+ * Optimistic payload for a multi-select property reaching `optionIds`.
+ * First assignments use the same target-scoped identity and require the same
+ * response-derived parent link as a full-value property save.
  */
 export function buildOptimisticEntityPropertyOptions(
   property: Property | PropertyDefinitionDomain,
   optionIds: readonly string[],
-  assignmentId?: string
+  assignmentId?: string,
+  target?: PropertyTarget
 ): SoupPropertyFieldsFragment | undefined {
-  const definitionId = isInstantiatedProperty(property)
-    ? property.propertyDefinitionId
-    : property.id;
-  const id =
-    assignmentId ??
-    (isInstantiatedProperty(property) ? property.propertyId : undefined);
-  if (!id || !isPersistedAssignmentId(id, definitionId)) return undefined;
+  const id = optimisticPropertyId(property, target, assignmentId);
+  if (!id) return undefined;
   return optimisticPropertyRecord(
     property,
     optionIds.length > 0

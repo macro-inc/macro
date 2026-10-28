@@ -1,4 +1,4 @@
-//! Stable import identities, commands and receipts. See `docs/SLACK_ARCHIVE_IMPORT_CONTRACT.md`.
+//! Stable import identities, commands and receipts. See `docs/runbooks/slack-archive-import-contract.md`.
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 

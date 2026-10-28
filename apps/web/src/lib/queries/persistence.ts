@@ -2,9 +2,15 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from '@core/util/dateSearch/dateParser';
-import type { Query, QueryClient, QueryKey } from '@tanstack/query-core';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  notifyManager,
+  type Query,
+  type QueryClient,
+  type QueryKey,
+} from '@tanstack/query-core';
 import type {
-  PerQueryPersistence,
+  ClearablePerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
 
@@ -19,7 +25,7 @@ export function createPersistenceKey(
 }
 
 export type PersistScope = Readonly<{
-  store: PerQueryPersistence;
+  store: ClearablePerQueryPersistence;
   /** Omit to retain same-buster entries regardless of their age. */
   maxAge?: ParsedDuration;
   buster: string;
@@ -32,6 +38,10 @@ export type PersistScope = Readonly<{
 export type QueryPersistence = {
   /** Restore this query without starting or waiting for its network request. */
   restoreQuery: (queryKey: QueryKey) => Promise<void>;
+  /** Clear every durable scope and fence pending hydration on account changes. */
+  clear: () => Promise<void>;
+  /** Await pending local writes before restarting the native app. */
+  flush: () => Promise<void>;
   dispose: () => void;
 };
 
@@ -104,6 +114,63 @@ async function handleRestore(
 }
 
 /**
+ * Drops account data and rebinds mounted observers to fresh queries. Resetting
+ * a query would restore its old initialData; removing it alone would strand
+ * observers on the retired query instead of delivering the next account's data.
+ */
+function clearQueryMemory(queryClient: QueryClient): void {
+  const queryCache = queryClient.getQueryCache();
+  notifyManager.batch(() => {
+    for (const query of queryCache.getAll()) {
+      const observers = query.observers.map((observer) => ({
+        observer,
+        options: {
+          ...observer.options,
+          initialData: undefined,
+          initialDataUpdatedAt: undefined,
+          placeholderData: undefined,
+        },
+      }));
+      for (const { observer, options } of observers) {
+        observer.setOptions(options);
+      }
+      // Observers also retain the last query with data for keepPreviousData.
+      // Empty that retired object, and fence its in-flight response first.
+      fireAndForget(query.cancel({ silent: true }), 'query-persistence');
+      query.setState({
+        data: undefined,
+        dataUpdatedAt: 0,
+        error: null,
+        errorUpdatedAt: 0,
+        status: 'pending',
+        fetchStatus: 'idle',
+      });
+      queryCache.remove(query);
+
+      let rebinding = true;
+      for (const { observer, options } of observers) {
+        observer.setOptions({
+          ...options,
+          enabled: (current) =>
+            !rebinding &&
+            (typeof options.enabled === 'function'
+              ? options.enabled(current)
+              : options.enabled !== false),
+        });
+      }
+      // Restore the original enabled policy without starting a fetch while
+      // auth is being cleared. The prior callback now resolves the same way.
+      rebinding = false;
+      for (const { observer, options } of observers) {
+        observer.setOptions(options);
+        observer.onQueryUpdate();
+      }
+    }
+  });
+  queryClient.getMutationCache().clear();
+}
+
+/**
  * Persists a query's current data to IDB when the query updates successfully.
  */
 function handleUpdate(scope: PersistScope, query: Query): void {
@@ -137,13 +204,16 @@ export function setupQueryPersistence(
   }>
 ): QueryPersistence {
   const { queryClient, scopes } = params;
-  const restores = new WeakMap<Query, Promise<void>>();
+  let restores = new WeakMap<Query, Promise<void>>();
+  let generation = 0;
+  let clearing = false;
   let disposed = false;
 
   const findScope = (queryKey: QueryKey) =>
     scopes.find((s) => s.shouldPersist(queryKey));
 
   async function restoreFromStore(query: Query, scope: PersistScope) {
+    const capturedGeneration = generation;
     try {
       await handleRestore(
         queryClient,
@@ -151,6 +221,8 @@ export function setupQueryPersistence(
         query,
         () =>
           !disposed &&
+          !clearing &&
+          capturedGeneration === generation &&
           queryClient.getQueryCache().get(query.queryHash) === query
       );
     } catch {
@@ -166,14 +238,13 @@ export function setupQueryPersistence(
     return pending;
   };
 
-  const flushAll = () => {
-    for (const scope of scopes) {
-      void scope.store.flush();
-    }
+  const flushAll = async () => {
+    await Promise.all(scopes.map((scope) => scope.store.flush()));
   };
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') flushAll();
+    if (document.visibilityState === 'hidden')
+      fireAndForget(flushAll(), 'query-persistence');
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -185,8 +256,10 @@ export function setupQueryPersistence(
     const scope = findScope(query.queryKey);
     if (!scope) return;
 
+    if (disposed || clearing) return;
+
     if (type === 'added') {
-      void restore(query, scope);
+      fireAndForget(restore(query, scope), 'query-persistence');
     } else if (type === 'updated') {
       handleUpdate(scope, query);
     } else {
@@ -197,13 +270,38 @@ export function setupQueryPersistence(
   return {
     restoreQuery(queryKey) {
       const scope = findScope(queryKey);
-      if (disposed || !scope) return Promise.resolve();
+      if (disposed || clearing || !scope) return Promise.resolve();
       // Building a missing query emits `added`, starting the same restore that
       // an observer would start, without issuing a request or needing a queryFn.
       const query = queryClient
         .getQueryCache()
         .build(queryClient, { queryKey });
       return restore(query, scope);
+    },
+    async clear() {
+      generation += 1;
+      clearing = true;
+      restores = new WeakMap();
+      // Clear memory synchronously; removed-query events cannot race the reset.
+      clearQueryMemory(queryClient);
+      try {
+        const results = await Promise.allSettled(
+          scopes.map((scope) => scope.store.clear())
+        );
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed?.status === 'rejected') {
+          // Quarantine this session; logout rotates the disk namespace for restart.
+          disposed = true;
+          throw failed.reason;
+        }
+      } finally {
+        clearing = false;
+      }
+    },
+    flush: async () => {
+      await Promise.all(
+        scopes.map((scope) => scope.store.flush({ throwOnError: true }))
+      );
     },
     dispose() {
       disposed = true;

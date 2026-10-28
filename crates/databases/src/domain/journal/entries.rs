@@ -427,6 +427,7 @@ fn column_touches(planned: &[Planned<'_>]) -> Vec<ColumnTouch> {
                     ColumnChange::Create { .. } => ColumnChangeKind::Create,
                     ColumnChange::Rename { .. } => ColumnChangeKind::Rename,
                     ColumnChange::ChangeType { .. } => ColumnChangeKind::ChangeType,
+                    ColumnChange::SetFormula { .. } => ColumnChangeKind::SetFormula,
                     ColumnChange::Delete => ColumnChangeKind::Delete,
                     ColumnChange::AddOptions { .. } => ColumnChangeKind::AddOptions,
                     ColumnChange::UpdateOption { .. } => ColumnChangeKind::UpdateOption,

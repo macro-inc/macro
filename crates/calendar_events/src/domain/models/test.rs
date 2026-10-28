@@ -1,6 +1,38 @@
 use super::*;
 use chrono::TimeZone;
 
+#[test]
+fn timed_points_are_valid_and_use_start_inclusive_end_exclusive_membership() {
+    let start = Utc.with_ymd_and_hms(2026, 10, 8, 9, 0, 0).unwrap();
+    let window = range(start, start + chrono::Duration::hours(1));
+    for (offset, included) in [(-1, false), (0, true), (30, true), (60, false)] {
+        let point = start + chrono::Duration::minutes(offset);
+        let time = EventTime::Timed {
+            starts_at: point,
+            ends_at: point,
+            time_zone: None,
+        };
+        assert!(time.is_valid());
+        assert!(!time.has_positive_duration());
+        assert_eq!(time.overlaps(&window), included);
+    }
+    assert!(
+        !EventTime::Timed {
+            starts_at: start,
+            ends_at: start - chrono::Duration::seconds(1),
+            time_zone: None
+        }
+        .is_valid()
+    );
+    assert!(
+        !EventTime::AllDay {
+            start_date: start.date_naive(),
+            end_date: start.date_naive()
+        }
+        .is_valid()
+    );
+}
+
 fn range(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> OccurrenceRange {
     OccurrenceRange {
         starts_at,
@@ -43,6 +75,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
     let materialized = OccurrenceRange::historical_sync(now);
     let stored = StoredGoogleCalendar {
         id: Uuid::now_v7(),
+        team_ooo_changed: false,
         sync_token: Some("token".to_string()),
         materialized_range: Some(materialized.clone()),
         synced_at: None,
@@ -75,6 +108,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
 
     let uninitialized = StoredGoogleCalendar {
         id: Uuid::now_v7(),
+        team_ooo_changed: false,
         sync_token: None,
         materialized_range: Some(materialized.clone()),
         synced_at: None,
@@ -88,6 +122,7 @@ fn sync_plan_extends_only_the_uncovered_tail() {
 
     let unmaterialized = StoredGoogleCalendar {
         id: Uuid::now_v7(),
+        team_ooo_changed: false,
         sync_token: Some("token".to_string()),
         materialized_range: None,
         synced_at: None,
@@ -105,6 +140,7 @@ fn watch_renewal_skips_calendars_that_recently_refused_push() {
     let now = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
     let calendar = StoredGoogleCalendar {
         id: Uuid::now_v7(),
+        team_ooo_changed: false,
         sync_token: None,
         materialized_range: None,
         synced_at: None,
@@ -213,6 +249,9 @@ fn default_reminders_stay_out_of_serialized_projections() {
         is_read_only: false,
         attendees: Vec::new(),
         reminders: EventReminders::default(),
+        guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
+        viewer_can: ViewerCapabilities::NONE,
         created_at: starts_at,
         updated_at: starts_at,
     };
@@ -227,9 +266,26 @@ fn default_reminders_stay_out_of_serialized_projections() {
     assert!(serialized.get("creatorName").is_none());
     assert!(serialized.get("eventType").is_none());
     assert!(serialized.get("sources").is_none());
-    let legacy: CalendarEvent = serde_json::from_value(serialized).unwrap();
+    // Every event response carries the guest policy and the viewer's
+    // capabilities, defaults included; source projections strip both.
+    assert_eq!(
+        serialized["guestPolicy"],
+        serde_json::json!({
+            "canModify": false,
+            "canInviteOthers": true,
+            "canSeeOtherGuests": true
+        })
+    );
+    assert_eq!(serialized["viewerCan"]["inviteGuests"], false);
+    let mut legacy = serialized;
+    let fields = legacy.as_object_mut().unwrap();
+    fields.remove("guestPolicy");
+    fields.remove("viewerCan");
+    let legacy: CalendarEvent = serde_json::from_value(legacy).unwrap();
     assert_eq!(legacy.reminders, EventReminders::default());
     assert_eq!(legacy.event_type, EventType::Default);
+    assert_eq!(legacy.guest_policy, GuestPolicy::default());
+    assert_eq!(legacy.viewer_can, ViewerCapabilities::NONE);
 
     event.event_type = EventType::WorkingLocation;
     let serialized = serde_json::to_value(&event).unwrap();
@@ -293,4 +349,24 @@ fn popup_minutes_resolve_defaults_and_deduplicate() {
         Vec::<u32>::new(),
         "explicitly no reminders resolves to nothing even with defaults"
     );
+}
+
+#[test]
+fn a_mentioned_copy_reads_as_a_snapshot_an_invitation_or_an_event() {
+    use CalendarMentionViewerCopy::{Event, Invitation, Snapshot};
+    // (is_snapshot, inbox organizes, inbox attends)
+    for (facts, expected) in [
+        ((true, false, true), Snapshot),
+        ((true, true, true), Snapshot),
+        ((false, false, true), Invitation),
+        ((false, true, true), Event),
+        ((false, true, false), Event),
+        ((false, false, false), Event),
+    ] {
+        assert_eq!(
+            CalendarMentionViewerCopy::classify(facts.0, facts.1, facts.2),
+            expected,
+            "{facts:?}"
+        );
+    }
 }

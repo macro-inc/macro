@@ -53,9 +53,16 @@ fn an_open_tool_is_forgotten_once_it_reports() {
     let mut open = None;
     track_open_tool(
         &mut open,
-        &json!({"sessionUpdate": "tool_call", "toolCallId": "t", "title": "Bash ls"}),
+        &json!({"sessionUpdate": "tool_call", "toolCallId": "t", "title": "Bash ls", "_meta": {"claudeCode": {"toolName": "Bash"}}}),
     );
-    assert_eq!(open, Some(("t".to_owned(), "Bash ls".to_owned())));
+    assert_eq!(
+        open,
+        Some(OpenTool {
+            id: "t".to_owned(),
+            title: "Bash ls".to_owned(),
+            name: Some("Bash".to_owned()),
+        })
+    );
     track_open_tool(
         &mut open,
         &json!({"sessionUpdate": "tool_call_update", "toolCallId": "other"}),
@@ -499,5 +506,48 @@ async fn check_control_delivery(kind: TuiAgent, command: &str, reject: bool) {
     );
     assert!(lock(&session.cancel).is_none());
     assert_eq!(adapter.store.load(&id).unwrap().native_id, Some(id));
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn an_agent_waits_for_a_shell_still_loading_its_environment() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("herdr");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+cd {}
+case "$1:$2" in
+  tab:create) printf '{{"result":{{"root_pane":{{"tab_id":"w1:t1","pane_id":"w1:p1"}}}}}}\n' ;;
+  agent:start)
+    printf x >> starts
+    [ "$(wc -c < starts)" -ge 3 ] && exit 0
+    printf '{{"error":{{"code":"agent_pane_busy","message":"agent target pane w1:p1 is not an available shell"}}}}\n' >&2
+    exit 1 ;;
+  *) exit 1 ;;
+esac
+"#,
+            shell_words::quote(&root.path().to_string_lossy())
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (adapter, _) = test_adapter(root.path());
+    let created = adapter.new_session(&json!({"cwd":root.path()})).unwrap();
+    let session = adapter
+        .session(&json!({"sessionId":created["sessionId"]}))
+        .unwrap();
+
+    adapter
+        .launch(&HerdrCli::new(script, None), &session, "hello")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("starts")).unwrap(),
+        "xxx"
+    );
     adapter.shutdown.cancel();
 }

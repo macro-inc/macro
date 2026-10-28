@@ -61,6 +61,7 @@ macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 mockall.workspace = true
+postcard = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
@@ -83,7 +84,6 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 tracing-opentelemetry = { workspace = true }
-tungstenite = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }

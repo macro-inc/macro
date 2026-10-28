@@ -1,9 +1,15 @@
-use async_graphql::{Enum, ID, SimpleObject};
+use std::sync::Arc;
+
+use async_graphql::{ComplexObject, Enum, ErrorExtensions, ID, SimpleObject};
 use email::domain::models::{
     EmailSyncStatus, LabelListVisibility, LabelType, LinkLabel, MessageListVisibility,
     UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
+use email::domain::ports::EmailUserService;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
+
+mod senders;
 
 /// Canonical normalized GraphQL email label used by both email threads and
 /// the authenticated user's label catalog.
@@ -85,12 +91,15 @@ impl From<LinkLabel> for GraphqlEmailLabel {
 pub enum GraphqlEmailProvider {
     /// Google Gmail.
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 impl From<UserProvider> for GraphqlEmailProvider {
     fn from(provider: UserProvider) -> Self {
         match provider {
             UserProvider::Gmail => Self::Gmail,
+            UserProvider::Outlook => Self::Outlook,
         }
     }
 }
@@ -142,7 +151,14 @@ impl From<UserEmailLinkSettings> for GraphqlEmailLinkSettings {
 
 /// Enriched email link accessible to the authenticated user.
 #[derive(SimpleObject)]
-pub struct GraphqlEmailLink {
+#[graphql(name = "GraphqlEmailLink", complex)]
+pub struct GraphqlEmailLink<S: EmailUserService> {
+    #[graphql(skip)]
+    service: Arc<S>,
+    #[graphql(skip)]
+    viewer: MacroUserIdStr<'static>,
+    #[graphql(skip)]
+    link_id: Uuid,
     /// Whether drafts from this account's own sender are classified as Signal.
     draft_is_signal: bool,
     /// Stable email link identifier.
@@ -165,15 +181,25 @@ pub struct GraphqlEmailLink {
     settings: GraphqlEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    has_calendar_data: bool,
     /// Link creation timestamp in RFC 3339 format.
     created_at: String,
     /// Link last-updated timestamp in RFC 3339 format.
     updated_at: String,
 }
 
-impl From<UserEmailLink> for GraphqlEmailLink {
-    fn from(link: UserEmailLink) -> Self {
+impl<S: EmailUserService> GraphqlEmailLink<S> {
+    /// Attach the authenticated identity for lazy sender discovery.
+    pub fn new(link: UserEmailLink, service: Arc<S>, viewer: MacroUserIdStr<'static>) -> Self {
         Self {
+            service,
+            viewer,
+            link_id: link.id,
             draft_is_signal: link.draft_is_signal,
             id: ID(link.id.to_string()),
             macro_id: link.macro_id.to_string(),
@@ -185,6 +211,9 @@ impl From<UserEmailLink> for GraphqlEmailLink {
             needs_reauth: link.needs_reauth,
             settings: link.settings.into(),
             is_primary: link.is_primary,
+            needs_calendar_permission: link.needs_calendar_permission,
+            calendar_disabled: link.calendar_disabled,
+            has_calendar_data: link.has_calendar_data,
             created_at: link.created_at.to_rfc3339(),
             updated_at: link.updated_at.to_rfc3339(),
         }

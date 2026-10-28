@@ -6,15 +6,19 @@ use uuid::Uuid;
 mod test;
 
 /// The provider of this email
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum UserProvider {
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }
@@ -107,6 +111,12 @@ pub struct EmailInboxDetails {
     pub is_primary: bool,
     /// Latest initial backfill status, when one exists.
     pub latest_backfill_status: Option<EmailBackfillStatus>,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
@@ -141,6 +151,12 @@ pub struct UserEmailLink {
     pub settings: UserEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     pub is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
@@ -167,6 +183,9 @@ impl UserEmailLink {
             needs_reauth: details.needs_reauth,
             settings: details.settings,
             is_primary: details.is_primary,
+            needs_calendar_permission: details.needs_calendar_permission,
+            calendar_disabled: details.calendar_disabled,
+            has_calendar_data: details.has_calendar_data,
             created_at: details.created_at,
             updated_at: details.updated_at,
         }
@@ -184,4 +203,26 @@ pub struct Link {
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// What a composed email knows about where it should be sent from.
+///
+/// Both fields come from the caller and name an inbox by value, so neither is
+/// trusted: resolution only ever settles on an inbox the caller can reach.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SendingInboxRequest<'a> {
+    /// The inbox address the caller chose, when they chose one.
+    pub requested_address: Option<&'a str>,
+    /// The message this email replies to, when it is a reply.
+    pub replying_to_id: Option<Uuid>,
+}
+
+/// The inbox a composed email is sent from, with the set it came out of.
+#[derive(Clone)]
+pub struct ResolvedSendingInbox {
+    /// The sending inbox.
+    pub link: Link,
+    /// Every inbox the caller can reach. A reply target may live in any of
+    /// them, so a send has to be given the whole set rather than just `link`.
+    pub accessible_inboxes: Vec<Link>,
 }

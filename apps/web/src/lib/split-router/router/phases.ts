@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Cleanup, MachineScopes } from '@macro-inc/machine';
 import type { SplitRoutesManifest } from '../routes/manifest';
 import { firstChangedDepth } from '../routes/queries';
@@ -23,6 +24,7 @@ import {
 import { runMiddleware, type SplitRouterMiddleware } from './middleware';
 import { preloadLocation, withinBudget } from './preload';
 import type { Event as RunEvent, Running, State as RunState } from './run';
+import type { RegisterCommitCallback } from './runner';
 import type { Navigation, PaneTarget } from './types';
 
 type Report = (event: RunEvent) => void;
@@ -93,7 +95,7 @@ function perform<T>(
 
     if (isPromise(result)) {
       waiting();
-      void reportLater(result);
+      fireAndForget(reportLater(result), 'split-router');
     } else {
       report(toEvent(result));
     }
@@ -114,20 +116,33 @@ export function createPhaseScopes(
     current(pane: PaneId): Entry | undefined;
     preloadBudgetMs: number;
   },
-  waiting: (state: Running) => void
+  waiting: (state: Running) => void,
+  registerCommit: RegisterCommitCallback
 ): PhaseScopes {
   const { routes, guards } = options;
+
+  const onCommit =
+    ({ navigation, signal }: RunContext) =>
+    (callback: () => void) => {
+      if (!signal.aborted) registerCommit(navigation, callback);
+    };
 
   const targetChecks = ({ navigation, signal }: RunContext): Check[] =>
     navigation.targets.flatMap(({ pane, from, to }) => {
       if (!from) return [];
 
       const depth = firstChangedDepth(routes, from, to);
-      if (depth === undefined) return [];
 
-      const context = { pane, from, to, cause: navigation.cause, signal };
+      const context = {
+        pane,
+        from,
+        to,
+        cause: navigation.cause,
+        signal,
+        onCommit: onCommit({ navigation, signal }),
+      };
 
-      return checksFor(guards.select(pane, depth), context);
+      return checksFor(guards.select(pane, depth, context), context);
     });
 
   const removalChecks = ({ navigation, signal }: RunContext): Check[] => {
@@ -137,7 +152,13 @@ export function createPhaseScopes(
       const from = options.current(pane);
       if (!from) return [];
 
-      const context = { pane, from, cause: navigation.cause, signal };
+      const context = {
+        pane,
+        from,
+        cause: navigation.cause,
+        signal,
+        onCommit: onCommit({ navigation, signal }),
+      };
 
       return checksFor(guards.select(pane, PANE_LEVEL), context);
     });

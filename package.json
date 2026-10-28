@@ -34,7 +34,6 @@
 	},
 	"packageManager": "bun@1.3.5",
 	"patchedDependencies": {
-		"solid-gesture@0.0.3": "apps/web/patches/solid-gesture@0.0.3.patch",
 		"@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
 		"@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
 		"@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
@@ -42,7 +41,10 @@
 		"@tanstack/solid-query@5.90.3": "apps/web/patches/@tanstack%2Fsolid-query@5.90.3.patch",
 		"@lexical/table@0.45.0": "apps/web/patches/@lexical%2Ftable@0.45.0.patch",
 		"ai-fallback@2.0.1": "apps/web/patches/ai-fallback@2.0.1.patch",
-		"@tanstack/virtual-core@3.17.8": "apps/web/patches/@tanstack%2Fvirtual-core@3.17.8.patch"
+		"@tanstack/virtual-core@3.17.8": "apps/web/patches/@tanstack%2Fvirtual-core@3.17.8.patch",
+		"@tauri-apps/plugin-http@2.5.9": "apps/web/patches/@tauri-apps%2Fplugin-http@2.5.9.patch",
+		"@kobalte/utils@0.9.2": "apps/web/patches/@kobalte%2Futils@0.9.2.patch",
+		"graphql-ws@6.2.0": "apps/web/patches/graphql-ws@6.2.0.patch"
 	},
 	"private": true,
 	"scripts": {
@@ -50,7 +52,7 @@
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
 		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
-		"lint:oxlint": "cd apps/web && bunx --yes oxlint@1.73.0",
+		"lint:oxlint": "cd apps/web && npm exec --yes --package=oxlint@1.73.0 --package=oxlint-tsgolint@7.0.2004 -- oxlint --type-aware",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
 	},
 	"trustedDependencies": [
@@ -67,9 +69,11 @@
 			"apps/web",
 			"apps/marketing",
 			"packages/observability",
+			"packages/code-mode-sdk",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
+			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
@@ -77,7 +81,8 @@
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
 			"packages/spreadsheet",
-			"vendor/ironcalc/pkg"
+			"vendor/ironcalc/pkg",
+			"packages/sdk-docs"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

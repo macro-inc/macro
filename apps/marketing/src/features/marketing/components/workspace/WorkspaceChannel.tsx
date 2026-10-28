@@ -1,18 +1,28 @@
 import CaretRight from '@phosphor/caret-right.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
 import Hash from '@phosphor/hash.svg';
 import Phone from '@phosphor/phone.svg';
 import Plus from '@phosphor/plus.svg';
 import Sparkle from '@phosphor/sparkle.svg';
 import { Button } from '@ui';
-import { createEffect, createSignal, For, on, Show } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  For,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { plainDemoMentions } from '../../core/demo-mentions';
 import type { WorkspaceComment } from '../../core/dummy-workspace';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { DemoMention, DemoMentionText } from '../DemoMention';
 import { ViewShell } from '../DemoWorkspaceChrome';
-import { ChannelComposer } from '../email/frozen/ChannelComposer';
+import {
+  ChannelComposer,
+  type ChannelComposerHandle,
+} from '../email/frozen/ChannelComposer';
 import { Segments } from './frozen/DetailPanel';
 import { MessageRow } from './frozen/MessageRow';
 import { TaskMention } from './frozen/TaskMention';
@@ -24,8 +34,16 @@ export function WorkspaceChannel(props: {
   workspace: DummyWorkspace;
   /** A walkthrough can show one message's hover toolbar. */
   hoveredMessage?: string;
+  renderMessageBody?: (message: WorkspaceComment) => JSX.Element;
+  renderMessageDetails?: (message: WorkspaceComment) => JSX.Element;
   /** Replaces the default Task action, e.g. to open the task composer. */
   onTaskMessage?: (message: WorkspaceComment) => void;
+  scriptedReply?: Accessor<string | undefined>;
+  stableComposer?: boolean;
+  onComposerReady?: (
+    handle: ChannelComposerHandle | undefined,
+    thread?: string
+  ) => void;
 }) {
   const w = props.workspace;
   const channel = () => w.data.channels.find((c) => c.id === w.channel());
@@ -74,20 +92,101 @@ export function WorkspaceChannel(props: {
     setReply(id);
     setExpanded((ids) => (ids.includes(id) ? ids : [...ids, id]));
   };
-  const react = (id: string) =>
+  if (props.scriptedReply)
+    createEffect(() => {
+      const id = props.scriptedReply?.();
+      if (id) startReply(id);
+      else setReply(undefined);
+    });
+  const react = (id: string, emoji = '👍') => {
     w.setData(
       'channels',
       (c) => c.id === w.channel(),
       'messages',
       (m) => m.id === id,
-      'reactions',
-      (r) => (r?.length ? [] : ['jacob'])
+      (message) => {
+        const reactions =
+          message.emojiReactions ??
+          (message.reactions?.length
+            ? [{ emoji: '👍', users: message.reactions }]
+            : []);
+        const existing = reactions.find((reaction) => reaction.emoji === emoji);
+        const users = existing?.users.includes('jacob')
+          ? existing.users.filter((user) => user !== 'jacob')
+          : [...(existing?.users ?? []), 'jacob'];
+        return {
+          ...message,
+          emojiReactions: [
+            ...reactions.filter((reaction) => reaction.emoji !== emoji),
+            ...(users.length ? [{ emoji, users }] : []),
+          ],
+        };
+      }
     );
+  };
+  const renderReference = (id: string) => {
+    // Person names and entity ids can overlap in these local fixtures.
+    if (id in homepagePeople) return;
+    const doc = () => w.data.documents.find((item) => item.id === id);
+    const email = () => w.data.emails.find((item) => item.id === id);
+    const task = () => w.data.tasks.find((item) => item.id === id);
+    if (doc())
+      return (
+        <button
+          type="button"
+          class="sample-inline-reference"
+          onClick={() => w.openItem('documents', id)}
+        >
+          <DemoMention item={{ id, kind: 'document', label: doc()!.title }} />
+        </button>
+      );
+    if (email())
+      return (
+        <button
+          type="button"
+          class="sample-inline-reference"
+          onClick={() => w.openItem('email', id)}
+        >
+          <DemoMention item={{ id, kind: 'email', label: email()!.subject }} />
+        </button>
+      );
+    if (task())
+      return (
+        <TaskMention
+          task={task()!}
+          inline
+          onOpen={() => w.openItem('tasks', id)}
+        />
+      );
+  };
   const row = (message: WorkspaceComment, rootId = message.id) => (
     <MessageRow
       message={message}
+      bodyContent={
+        props.renderMessageBody?.(message) ?? (
+          <p class="mt-1 text-base whitespace-pre-wrap break-words">
+            <DemoMentionText
+              text={message.body}
+              renderMention={renderReference}
+            />
+            <For
+              each={[
+                message.emailId,
+                message.documentId,
+                message.taskId,
+                ...(message.taskIds ?? []),
+              ].filter(
+                (id): id is string =>
+                  !!id && !message.body.includes(`(demo-mention:${id})`)
+              )}
+            >
+              {(id) => <> {renderReference(id)}</>}
+            </For>
+          </p>
+        )
+      }
       hovered={props.hoveredMessage === message.id}
-      onReact={() => react(message.id)}
+      onReact={(emoji) => react(message.id, emoji)}
       onReply={() => startReply(rootId)}
       onChat={() => w.openItem('agents')}
       onTask={
@@ -112,49 +211,7 @@ export function WorkspaceChannel(props: {
             : undefined
       }
     >
-      <Show when={message.emailId}>
-        {(id) => (
-          <button
-            type="button"
-            class="dummy-entity-link"
-            onClick={() => w.openItem('email', id())}
-          >
-            <Envelope class="size-4" />
-            {w.data.emails.find((e) => e.id === id())?.subject}
-          </button>
-        )}
-      </Show>
-      <Show when={message.documentId}>
-        {(id) => (
-          <button
-            type="button"
-            class="dummy-entity-link"
-            onClick={() => w.openItem('documents', id())}
-          >
-            <File class="size-4 text-note" />
-            {w.data.documents.find((d) => d.id === id())?.title}
-          </button>
-        )}
-      </Show>
-      <For
-        each={[
-          ...(message.taskId ? [message.taskId] : []),
-          ...(message.taskIds ?? []),
-        ]}
-      >
-        {(id) => (
-          <Show when={w.data.tasks.find((t) => t.id === id)}>
-            {(task) => (
-              <div>
-                <TaskMention
-                  task={task()}
-                  onOpen={() => w.openItem('tasks', id)}
-                />
-              </div>
-            )}
-          </Show>
-        )}
-      </For>
+      {props.renderMessageDetails?.(message)}
     </MessageRow>
   );
   return (
@@ -338,6 +395,10 @@ export function WorkspaceChannel(props: {
                         <ChannelComposer
                           richMentions
                           label="Thread reply"
+                          compact={props.stableComposer ? true : undefined}
+                          onReady={(handle) =>
+                            props.onComposerReady?.(handle, message.id)
+                          }
                           placeholder="Send a reply"
                           onSend={(body) => {
                             w.post(
@@ -371,6 +432,8 @@ export function WorkspaceChannel(props: {
           <ChannelComposer
             richMentions
             label={`Message #${w.channel()}`}
+            compact={props.stableComposer ? true : undefined}
+            onReady={(handle) => props.onComposerReady?.(handle)}
             placeholder={`Type @ to share with ${channel()?.person ? homepagePeople[channel()!.person!].shortName : `#${name()}`}`}
             onSend={(body) => {
               w.post(body);

@@ -48,4 +48,5 @@ serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true, features = ["util"] }
+tracing-subscriber = { workspace = true }
 urlencoding = { workspace = true }

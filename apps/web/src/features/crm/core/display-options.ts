@@ -6,7 +6,7 @@ export type CrmDisplayOptions = {
 };
 
 export const DEFAULT_CRM_DISPLAY_OPTIONS: CrmDisplayOptions = {
-  listColumns: { stage: true, owner: true, revenue: true },
+  listColumns: { stage: false, owner: true, revenue: true },
 };
 
 export const CRM_LIST_COLUMN_LABELS: Record<CrmListColumnId, string> = {

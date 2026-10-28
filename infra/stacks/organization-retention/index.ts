@@ -7,7 +7,7 @@ import { OrganizationRetentionTrigger } from './organization-retention-trigger';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'organization-retention',
 };
 

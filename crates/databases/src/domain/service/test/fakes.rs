@@ -25,11 +25,19 @@ pub(super) struct World {
     pub(super) cells: HashMap<RowId, HashMap<Uuid, PropertyValue>>,
     pub(super) grants: HashMap<String, Vec<(DatabaseId, AccessLevel)>>,
     pub(super) published: Vec<(TableId, TableVersion)>,
+    pub(super) metadata_changes: Vec<DatabaseId>,
     /// Every awareness relay the service asked for.
     pub(super) awareness: Vec<(DatabaseId, String, Awareness)>,
     /// Simulate the gateway refusing an awareness relay.
     pub(super) awareness_relay_fails: bool,
     pub(super) share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
+    /// The owner's team, which a team share goes to.
+    pub(super) owner_team: Option<Uuid>,
+    /// The team share and its revision.
+    pub(super) team_share: Option<models_permissions::share_permission::team_share::TeamShareGrant>,
+    pub(super) team_share_revision: i64,
+    /// Simulate the team facts changing between authorization and the write.
+    pub(super) team_share_goes_stale: bool,
     /// Every `macro.databases` envelope the service handed the broker.
     pub(super) broker_events: Vec<serde_json::Value>,
     /// Every `settle_inference` call, newest last.
@@ -115,6 +123,8 @@ impl DatabasesRepo for FakeRepo {
         let mut world = self.0.lock().unwrap();
         world.databases.push(database.clone());
         world.columns.push(Column {
+            protections: vec![],
+            nullable: true,
             id: ColumnId::new(),
             table_id: table.id,
             property_definition_id: title.definition.id,
@@ -641,6 +651,10 @@ impl ColumnDefinitionStore for FakeDefinitions {
 
 impl TableEventPublisher for FakeEvents {
     type Error = FakeError;
+    async fn database_changed(&self, database_id: DatabaseId) -> Result<(), FakeError> {
+        self.0.lock().unwrap().metadata_changes.push(database_id);
+        Ok(())
+    }
     async fn table_changed(
         &self,
         _database_id: DatabaseId,

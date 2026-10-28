@@ -2,6 +2,7 @@ import type {
   EntityActionListState,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
+import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import { cleanup, render } from '@solidjs/testing-library';
 import { type JSX, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,12 @@ type TestGroup = {
 
 const actions = vi.hoisted(() => ({
   groups: [] as TestGroup[],
+  context: undefined as
+    | { viewedProjectId?: string; createActionNavigationHandler?: unknown }
+    | undefined,
+  options: undefined as
+    | { markDoneDelegate?: () => MarkDoneDelegate | undefined }
+    | undefined,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -21,9 +28,19 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('./createSoupEntityActions', () => ({
-  createSoupEntityActions: () => ({
-    buildActionGroups: () => actions.groups,
-  }),
+  createSoupEntityActions: (options?: typeof actions.options) => {
+    actions.options = options;
+    return {
+      buildActionGroups: (
+        _list: unknown,
+        _entities: unknown,
+        context: typeof actions.context
+      ) => {
+        actions.context = context;
+        return actions.groups;
+      },
+    };
+  },
   viewedProjectIdFromContent: () => undefined,
 }));
 vi.mock('@core/component/ContextMenu', () => ({
@@ -39,6 +56,7 @@ const group = (...labels: string[]): TestGroup => ({
 
 const viewContext: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
   senderBucket: undefined,
 };
 
@@ -54,6 +72,43 @@ const renderMenu = (extraItems?: () => JSX.Element) =>
 
 beforeEach(() => {
   actions.groups = [group('Favorite'), group('Delete')];
+  actions.options = undefined;
+});
+
+describe('SoupEntityActionsMenu mark done', () => {
+  it('completes rows through the list that owns them', () => {
+    const delegate = {
+      canComplete: () => true,
+      prepare: () => undefined,
+    } satisfies MarkDoneDelegate;
+    render(() => (
+      <SoupEntityActionsMenu
+        entities={[]}
+        list={{} as EntityActionListState}
+        viewContext={viewContext}
+        markDoneDelegate={() => delegate}
+      />
+    ));
+
+    expect(actions.options?.markDoneDelegate?.()).toBe(delegate);
+  });
+});
+describe('SoupEntityActionsMenu view context', () => {
+  it("uses the host's folder when the split content doesn't name one", () => {
+    const navigate = () => undefined;
+    render(() => (
+      <SoupEntityActionsMenu
+        entities={[]}
+        list={{} as EntityActionListState}
+        viewContext={viewContext}
+        viewedProjectId="folder-1"
+        createActionNavigationHandler={navigate}
+      />
+    ));
+
+    expect(actions.context?.viewedProjectId).toBe('folder-1');
+    expect(actions.context?.createActionNavigationHandler).toBe(navigate);
+  });
 });
 afterEach(cleanup);
 

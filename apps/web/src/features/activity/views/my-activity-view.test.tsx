@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
+import type { ActivityScope } from '../core/event';
 import { placeholderOverview } from '../core/placeholder-overview';
 import {
   createdEvent,
@@ -30,6 +31,7 @@ const virtual = vi.hoisted(() => {
       viewportSize: 800,
       scrollOffset: 0,
       findItemIndex: (offset: number) => Math.floor(offset / rowPx),
+      scrollTo: vi.fn(),
     },
   };
 });
@@ -97,15 +99,21 @@ afterEach(cleanup);
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-function renderView() {
+function renderView(initialScope: ActivityScope = 'mine') {
   const context = createMockActivityContext();
   const onOpen = vi.fn();
+  const [scope, setScope] = createSignal<ActivityScope>(initialScope);
+  const onScopeChange = vi.fn(setScope);
   const result = render(() => (
     <ActivityContextProvider value={context}>
-      <MyActivityView onOpen={onOpen} />
+      <MyActivityView
+        scope={scope()}
+        onScopeChange={onScopeChange}
+        onOpen={onOpen}
+      />
     </ActivityContextProvider>
   ));
-  return { ...result, onOpen, graphql: context.graphqlMock };
+  return { ...result, onOpen, onScopeChange, graphql: context.graphqlMock };
 }
 
 const rows = () => document.querySelectorAll('[data-activity-row]');
@@ -338,6 +346,69 @@ describe('MyActivityView', () => {
     const { container, graphql } = renderView();
     graphql.latest('MyActivity').resolve(feedPage([]));
     expect(container.textContent).toContain('No activity yet.');
+  });
+
+  it('switches to the team feed from the header tabs', () => {
+    const { container, graphql, onScopeChange } = renderView();
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent]));
+    graphql.latest('MyActivityOverview').resolve(overviewPage());
+    expect(container.querySelector('[data-activity-day]')).not.toBeNull();
+    expect(screen.getByText('sarah')).toBeTruthy();
+    virtual.handle.scrollTo.mockClear();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
+
+    expect(onScopeChange).toHaveBeenLastCalledWith('team');
+    expect(virtual.handle.scrollTo).toHaveBeenCalledWith(0);
+    expect(graphql.latest('MyActivity').variables).toEqual({
+      input: { limit: 50, cursor: null, scope: 'TEAM' },
+    });
+    // The overview is the viewer's own, so the team feed has no graph.
+    expect(container.querySelector('[data-activity-day]')).toBeNull();
+    expect(screen.queryByText('sarah')).toBeNull();
+
+    graphql.latest('MyActivity').resolve(
+      feedPage([
+        {
+          ...editedEvent,
+          id: 'evt-team',
+          actorId: 'macro|priya@example.com',
+          subjectId: 'macro|priya@example.com',
+        },
+      ])
+    );
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('priya')).toBeTruthy();
+  });
+
+  it('pins no day header over the team feed until it scrolls', () => {
+    const { container, graphql } = renderView('team');
+    graphql.latest('MyActivity').resolve(
+      feedPage([
+        {
+          ...createdEvent,
+          id: 't-today',
+          occurredAt: new Date().toISOString(),
+        },
+      ])
+    );
+    const pinned = () => container.querySelector('[data-activity-pinned-day]');
+    const scroll = virtual.onScroll;
+    if (!scroll) throw new Error('virtualizer did not register onScroll');
+
+    expect(pinned()).toBeNull();
+
+    scroll(virtual.rowPx);
+    expect(pinned()?.textContent).toBe('Today');
+
+    scroll(0);
+    expect(pinned()).toBeNull();
+  });
+
+  it('shows team empty copy when teammates have no activity', () => {
+    const { container, graphql } = renderView('team');
+    graphql.latest('MyActivity').resolve(feedPage([]));
+    expect(container.textContent).toContain('No activity from your team yet.');
   });
 
   it('renders the most active entities as chips under the graph and opens them', () => {

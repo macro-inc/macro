@@ -1,9 +1,10 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, InputGroup, Surface } from '@ui';
 import { createUniqueId, For, Show } from 'solid-js';
 import { formatCreditBalance } from '../core/usage';
 
 export function CreditPurchaseDialog(props: {
+  sharedWithTeam?: boolean;
   selection: number | 'other';
   customAmount: string;
   amountCents: number | undefined;
@@ -41,7 +42,9 @@ export function CreditPurchaseDialog(props: {
               Need more usage?
             </Dialog.Title>
             <Dialog.Description class="mt-1 text-sm text-ink-muted">
-              Choose an amount to start. You can always buy more later.
+              {props.sharedWithTeam
+                ? 'These credits are shared by your entire team.'
+                : 'Choose an amount to start. You can always buy more later.'}
             </Dialog.Description>
           </header>
           <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -81,7 +84,9 @@ export function CreditPurchaseDialog(props: {
           </Show>
           <div class="rounded-xl border border-edge-muted p-4 text-sm text-ink">
             <div class="flex justify-between gap-4">
-              <span>Usage credits</span>
+              <span>
+                {props.sharedWithTeam ? 'Team usage credits' : 'Usage credits'}
+              </span>
               <span>{formatCreditBalance(props.amountCents ?? 0)}</span>
             </div>
             <div class="mt-4 flex justify-between gap-4 border-t border-edge-muted pt-4">
@@ -106,15 +111,14 @@ export function CreditPurchaseDialog(props: {
             </p>
           </Show>
           <div class="flex justify-end gap-2">
-            <Button variant="ghost" depth={3} onClick={props.onClose}>
+            <Button variant="ghost" onClick={props.onClose}>
               Cancel
             </Button>
             <Show
               when={props.onViewPlans}
               fallback={
                 <Button
-                  variant="accent"
-                  depth={3}
+                  variant="primary"
                   disabled={props.disabled || props.pending}
                   onClick={props.onCheckout}
                 >
@@ -123,7 +127,7 @@ export function CreditPurchaseDialog(props: {
               }
             >
               {(viewPlans) => (
-                <Button variant="accent" depth={3} onClick={viewPlans()}>
+                <Button variant="primary" onClick={viewPlans()}>
                   View plans
                 </Button>
               )}
@@ -131,11 +135,11 @@ export function CreditPurchaseDialog(props: {
           </div>
         </div>
         <Button
+          aria-label="Close credit purchase"
+          tooltip="Close credit purchase"
           class="absolute right-4 top-4"
           size="icon-sm"
           variant="ghost"
-          depth={3}
-          label="Close credit purchase"
           onClick={props.onClose}
         >
           <XIcon class="size-4" />

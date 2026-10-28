@@ -97,6 +97,10 @@ pub const MACRO_CHAT_FIRST_CHUNK_KIND: &str = "macro.genai.chat.first_chunk_kind
 pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";
 /// Macro-specific: the human-readable title the harness gave a tool call.
 pub const MACRO_TOOL_TITLE: &str = "macro.genai.tool.title";
+/// Macro-specific: the size of a tool's whole result in bytes (a string
+/// result's text, anything else's JSON), recorded whether or not content is,
+/// so an oversized result shows without the result itself.
+pub const MACRO_TOOL_RESULT_BYTES: &str = "macro.genai.tool.result_bytes";
 /// Macro-specific: the MCP server a tool was reached through, when it was.
 pub const MACRO_MCP_SERVER: &str = "macro.genai.mcp.server";
 

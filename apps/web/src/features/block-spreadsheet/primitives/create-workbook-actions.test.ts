@@ -191,7 +191,7 @@ describe('workbook import and export actions', () => {
 
   it.each([
     'budget.xls',
-    'budget.xlsm',
+    'budget.xltm',
     'budget.xlsx.exe',
     'budget.csv',
     'budget',
@@ -221,6 +221,24 @@ describe('workbook import and export actions', () => {
     expect(arrayBuffer).not.toHaveBeenCalled();
     expect(actions.notice()).toContain('50 MB');
   });
+
+  it.each(['budget.xlsm', 'BUDGET.XLSM'])(
+    'previews macro-enabled workbook %s like an .xlsx',
+    async (name) => {
+      const { actions } = setup();
+      vi.mocked(importWorkbookFile).mockResolvedValue({
+        ...imported,
+        warnings: ['VBA macros are not imported.'],
+      });
+      await actions.importExcel({ ...file, name });
+      expect(importWorkbookFile).toHaveBeenCalled();
+      expect(actions.preview()?.name).toBe(name);
+      expect(actions.preview()?.data.warnings).toContain(
+        'VBA macros are not imported.'
+      );
+      expect(actions.notice()).toBe('');
+    }
+  );
 
   it('replaces an old preview immediately and ignores stale decoder results from superseded requests', async () => {
     const { actions, store } = setup();

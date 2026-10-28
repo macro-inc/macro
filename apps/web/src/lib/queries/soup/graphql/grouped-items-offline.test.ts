@@ -17,20 +17,14 @@ vi.mock('@macro-inc/observability', () => ({
 vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: () => undefined,
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({}),
-}));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: () => undefined,
   getGraphqlSoupClient: mocks.client,
-  mapGraphqlGroupedSoupPage: (data: {
-    user: {
-      groupSoup: { items: Record<string, unknown>; groups: unknown[] };
-    };
-  }) => data.user.groupSoup,
+  mapGraphqlSoupItem: (item: unknown) => item,
 }));
 vi.mock('./items', () => ({ createGraphqlSoupAstItemsQuery: mocks.local }));
 vi.mock('./active-queries', () => ({
@@ -106,15 +100,20 @@ function fixture() {
           user: {
             id: 'viewer',
             groupSoup: {
-              items: empty ? {} : { task: { id: 'task', type: 'document' } },
-              groups: empty
+              bins: empty
                 ? []
                 : [
                     {
                       key: 'high',
                       totalCount: 1,
                       nextCursor: null,
-                      itemIds: ['task'],
+                      items: [
+                        {
+                          __typename: 'GraphqlSoupDocument',
+                          id: 'task',
+                          type: 'document',
+                        },
+                      ],
                     },
                   ],
             },

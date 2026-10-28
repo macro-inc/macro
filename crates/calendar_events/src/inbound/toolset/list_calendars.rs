@@ -8,12 +8,18 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, mutation_tool_error};
-use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
+use crate::domain::ports::{
+    CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider,
+};
 
 /// A calendar surfaced to the AI.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendar {
+    /// Provider hosting this calendar.
+    pub provider: crate::domain::models::CalendarProvider,
+    /// Supported conference, recurrence, reminder, and RSVP operations.
+    pub capabilities: crate::domain::models::CalendarCapabilities,
     /// Calendar id; pass as `calendarId` to CreateCalendarEvent to target
     /// this calendar. Not a mentionable entity: never put it in a mention
     /// tag — only individual calendar events can be mentioned.
@@ -45,12 +51,14 @@ pub struct ListCalendarsToolResponse {
     title = "ListCalendars",
     description = "\
 List the calendars the user can see across their connected inboxes, with each calendar's \
-`calendarId`, display name, owning inbox address, and whether it is primary and writable.\n\
+`calendarId`, display name, owning inbox address, provider, capabilities, and whether it is primary and writable.\n\
 \n\
 Use this before CreateCalendarEvent when the user wants an event on a specific non-default \
 calendar (e.g. \"add it to my work calendar\") so you can pass the exact `calendarId`. Most \
 users have a single primary calendar, in which case CreateCalendarEvent targets it by default \
-and you do not need this tool. An empty result means no calendar is connected."
+and you do not need this tool unless choosing conference or other provider-dependent behavior. \
+Check `capabilities` before requesting a conference, removing one, or using custom recurrence. \
+An empty result means no calendar is connected."
 )]
 pub struct ListCalendars {}
 
@@ -59,17 +67,18 @@ impl ToolAnnotated for ListCalendars {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for ListCalendars
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for ListCalendars
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ListCalendarsToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!("List calendars");
@@ -84,6 +93,8 @@ where
         let calendars: Vec<ToolCalendar> = calendars
             .into_iter()
             .map(|calendar| ToolCalendar {
+                provider: calendar.provider,
+                capabilities: calendar.capabilities,
                 calendar_id: calendar.id,
                 name: calendar.name,
                 email_address: calendar.email_address,

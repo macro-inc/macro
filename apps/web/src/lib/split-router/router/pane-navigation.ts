@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import {
@@ -484,17 +485,23 @@ export function createPaneNavigation(options: {
 
     /** Carries the search `destination` asked for to `pane`, which already shows it. */
     carrySearch(pane: PaneId, destination: Entry, mode: WriteMode): void {
-      void withCurrent(pane, undefined, (from) => {
-        const location = mergeDestinationSearch(routes, from, destination);
-        if (!location) return;
+      fireAndForget(
+        withCurrent(pane, undefined, (from) => {
+          const location = mergeDestinationSearch(routes, from, destination);
+          if (!location) return;
 
-        const to = searchVisitEntry(from, location, mode);
-        void visit({
-          history: mode,
-          target: { pane, from, to },
-          cause: 'search',
-        });
-      });
+          const to = searchVisitEntry(from, location, mode);
+          fireAndForget(
+            visit({
+              history: mode,
+              target: { pane, from, to },
+              cause: 'search',
+            }),
+            'split-router'
+          );
+        }),
+        'split-router'
+      );
     },
 
     resolve,

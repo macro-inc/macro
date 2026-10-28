@@ -18,8 +18,9 @@ The control inset is derived from that center and the control's size. Never
 align trailing controls by their outer edges or offset an individual icon.
 
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
-- `ViewSidebar.CloseButton` shows split close only in docked navigation, never
-  inside a narrow navigation overlay. Keep split-close controls out of overlays.
+- `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
+  narrow navigation overlays. Its visibility follows the split controller, not
+  the sidebar breakpoint; the last remaining list split still has no close action.
 - `ViewSidebar.Toolbar` aligns its final `Control` with the right rail.
 - `ViewSidebar.Content` owns outer gutters, 16px top/bottom padding, and section gaps.
 - `Item` and `Action` own row spacing; use `Icon` for leading glyphs and
@@ -28,3 +29,5 @@ align trailing controls by their outer edges or offset an individual icon.
 - `TreeItem` and `Branch` own disclosure positioning and the nested rail.
 - Use `--sidebar-action-inset` for a trailing control beside a separate selectable
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
+
+Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.

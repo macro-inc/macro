@@ -17,7 +17,26 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
   )
 );
 
+const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
+const createChannelDetailQuery = vi.hoisted(() =>
+  vi.fn((_channelId: () => string | undefined, enabled: () => boolean) => ({
+    get isEnabled() {
+      return enabled();
+    },
+    isPending: false,
+    isLoading: false,
+    isFetching: false,
+    error: null,
+    data: { entities: [] },
+    refresh: async () => {},
+  }))
+);
+
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
+vi.mock('@queries/channel/detail', () => ({ createChannelDetailQuery }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => graphqlSoup,
+}));
 vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
   isChannelThreadEntity: (entity: { type: string }) =>
@@ -25,11 +44,8 @@ vi.mock('@entity', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
-import {
-  resolveReferencedChannels,
-  useChannelByIdQuery,
-  useChannelsSources,
-} from './queries';
+import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { resolveReferencedChannels, useChannelsSources } from './queries';
 
 const channelEntity = (id: string) =>
   ({
@@ -71,7 +87,7 @@ describe('channel list query selection', () => {
       dispose();
     }
   });
-  it('bounds every list but keeps the selected conversation notification edge complete', () => {
+  it('bounds every list and the selected conversation notification edge', () => {
     useSoupAstItemsQuery.mockClear();
     const dispose = createRoot((dispose) => {
       useChannelsSources(
@@ -95,11 +111,44 @@ describe('channel list query selection', () => {
       for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(4, 6)) {
         expect(options?.().staleTime).toBe(30_000);
       }
-      const [, selectionOptions] = useSoupAstItemsQuery.mock.calls[6];
+      // The Threads rail's channels, fetched by id, are rail rows too.
+      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[5];
+      expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
+      const [selectionArgs, selectionOptions] =
+        useSoupAstItemsQuery.mock.calls[6];
+      expect(selectionArgs().transport).toBe('rest');
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);
     } finally {
       dispose();
+    }
+  });
+
+  it.each([
+    [true, 'the unread-only detail query'],
+    [false, 'the REST lookup'],
+  ])('opens a conversation with GraphQL Soup %s through %s', (enabled) => {
+    graphqlSoup.enabled = enabled;
+    useSoupAstItemsQuery.mockClear();
+    createChannelDetailQuery.mockClear();
+    const { dispose, query } = createRoot((dispose) => ({
+      dispose,
+      query: useChannelByIdQuery(
+        () => 'channel-id',
+        () => true
+      ),
+    }));
+    try {
+      const [channelId, graphqlEnabled] =
+        createChannelDetailQuery.mock.calls[0];
+      expect(channelId()).toBe('channel-id');
+      expect(graphqlEnabled()).toBe(enabled);
+      const [, restOptions] = useSoupAstItemsQuery.mock.calls[0];
+      expect(restOptions?.().enabled).toBe(!enabled);
+      expect(query.isEnabled).toBe(true);
+    } finally {
+      dispose();
+      graphqlSoup.enabled = false;
     }
   });
 });

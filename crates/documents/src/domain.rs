@@ -5,10 +5,13 @@ pub mod activity;
 #[cfg(feature = "ai_tools")]
 pub mod ai_editing;
 pub mod branch_name;
+#[cfg(feature = "ai_tools")]
+pub mod canvas;
 /// A document's comment threads, read through the shared message service.
 #[cfg(feature = "ai_tools")]
 pub mod comments;
 pub mod content;
+pub mod docx_export;
 /// Unified entity-mutation capability impls.
 #[cfg(feature = "service")]
 pub mod entity_mutation;
@@ -25,7 +28,13 @@ pub mod starter;
 #[cfg(feature = "ports")]
 pub mod upload_finalize;
 
+/// Legacy Office (.doc/.ppt/.xls) upgrades to OpenXML.
+#[cfg(feature = "ports")]
+pub mod legacy_office_upgrade;
+
 pub mod models;
+/// Notion page bodies a document can be created from.
+pub mod notion_markdown;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
@@ -46,6 +55,14 @@ pub mod presentation;
 #[cfg(feature = "ai_tools")]
 pub mod design;
 
+/// Reading Photoshop documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod photoshop;
+
+/// Reading Illustrator documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod illustrator;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 
@@ -54,3 +71,7 @@ pub mod service;
 
 #[cfg(feature = "ports")]
 pub mod purge;
+
+/// Current Markdown and extracted text, authorized by document view capability.
+#[cfg(feature = "ports")]
+pub mod text;

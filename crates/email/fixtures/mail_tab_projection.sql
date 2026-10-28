@@ -22,4 +22,7 @@ INSERT INTO comms_channel_participants (channel_id,user_id,role,joined_at,left_a
 INSERT INTO entity_access (entity_id,entity_type,source_id,source_type,access_level) VALUES
  ('20000103-0000-0000-0000-000000000103','email_thread','77771111-0000-0000-0000-000000007777','team','view'),
  ('20000008-0000-0000-0000-000000000008','email_thread','00000000-0000-0000-0000-000000000c11','channel','view'),
- ('20000009-0000-0000-0000-000000000009','email_thread','00000000-0000-0000-0000-000000000c12','channel','view');
+ ('20000009-0000-0000-0000-000000000009','email_thread','00000000-0000-0000-0000-000000000c12','channel','view'),
+ ('20000001-0000-0000-0000-000000000001','document','macro|user1@test.com','user','view'),
+ ('20000001-0000-0000-0000-000000000001','document','77771111-0000-0000-0000-000000007777','team','view'),
+ ('20000001-0000-0000-0000-000000000001','document','00000000-0000-0000-0000-000000000c11','channel','view');

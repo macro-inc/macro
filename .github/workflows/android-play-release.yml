@@ -1,0 +1,433 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_play_release.rs
+name: Android Play Release
+'on':
+  pull_request:
+    types:
+    - labeled
+jobs:
+  release:
+    if: github.event.label.name == 'android-update' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Android Play Release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: read
+      statuses: read
+      id-token: write
+    env:
+      CI: 'true'
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    timeout-minutes: 90
+    steps:
+    - name: Checkout PR head
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - id: preconditions
+      name: Require the PR to be ready to merge
+      run: |
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # here don't persist credentials, so authenticate the way actions/checkout
+        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # The android-update label means "release this and merge it when it is live",
+        # so refuse to start unless the PR is in a mergeable state: not a draft, the
+        # Android native code actually changed with a version code bump, and every
+        # other check on the head commit passing (pending ones are waited on). Our own
+        # checks are excluded: the native check is expected to be red until the
+        # release is live.
+        pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid,baseRefOid)
+        if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
+          echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding android-update." >&2
+          exit 1
+        fi
+        head_sha=$(jq -r '.headRefOid' <<<"$pr_json")
+        base_sha=$(jq -r '.baseRefOid' <<<"$pr_json")
+        if [[ "$head_sha" != "$HEAD_SHA" ]]; then
+          # Pushed since the label event. Web-only commits are fine (they ship over
+          # the air after the merge); native ones would make this build stale.
+          gh_fetch "$head_sha"
+          if [[ "$(bun scripts/android-native.mjs hash "$head_sha")" != "$(bun scripts/android-native.mjs hash HEAD)" ]]; then
+            echo "PR #${PR_NUMBER} got Android native changes since this run started (${HEAD_SHA:0:10} → ${head_sha:0:10});" \
+              "re-add android-update on the current head." >&2
+            exit 1
+          fi
+          echo "PR #${PR_NUMBER} moved to ${head_sha:0:10} since this run started, but its Android native code is unchanged; continuing."
+        fi
+
+        # The version code must be bumped against the base, and something native
+        # must actually have changed — there is nothing to release otherwise.
+        gh_fetch "$base_sha"
+        outputs=$(mktemp)
+        GITHUB_OUTPUT="$outputs" bun scripts/android-version-check.mjs "$base_sha"
+        if [[ "$(sed -n 's/^changed=//p' "$outputs")" != "true" ]]; then
+          echo "PR #${PR_NUMBER} has no Android native changes against its base; nothing to release (remove the android-update label)." >&2
+          exit 1
+        fi
+        version_code=$(sed -n 's/^version_code=//p' "$outputs")
+
+        # The gate compares the release stamp with the native hash of the PR's merge
+        # result, not of its head. A head that lacks Android native code main gained
+        # since the PR branched would be released but could never pass the gate — and
+        # a Play release cannot be withdrawn. Refuse before the build instead.
+        merge=$(pr_merge_commit)
+        gh_fetch "$merge"
+        if [[ "$(bun scripts/android-native.mjs hash "$merge")" != "$(bun scripts/android-native.mjs hash HEAD)" ]]; then
+          echo "PR #${PR_NUMBER}'s merge result (${merge:0:10}) has Android native code this head lacks: main changed native code since the PR branched." \
+            "Merge main into the PR, bump (cd apps/web && just android-bump), commit, and re-add android-update." >&2
+          exit 1
+        fi
+        echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+        echo "Releasing Android version code ${version_code} (native hash matches the merge result ${merge:0:10})."
+
+        # (`gh pr checks` names are job names, not workflow names.)
+        ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check)'
+        deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
+        while true; do
+          checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \
+            | jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]')
+          failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
+          pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
+          if [[ -n "$failing" ]]; then
+            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add android-update." >&2
+            exit 1
+          fi
+          if [[ -z "$pending" ]]; then
+            echo "All other checks on ${head_sha:0:10} pass ($(jq 'length' <<<"$checks") checks)."
+            exit 0
+          fi
+          if (( $(date +%s) > deadline )); then
+            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add android-update once they pass." >&2
+            exit 1
+          fi
+          echo "Waiting for: ${pending}"
+          sleep 60
+        done
+      shell: bash
+      env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        WAIT_MINUTES: '30'
+      working-directory: apps/web
+    - name: Install Android SDK components
+      run: |
+        set -euo pipefail
+        export JAVA_HOME="$JAVA_HOME_21_X64"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+          'platforms;android-36' 'build-tools;36.0.0' 'ndk;30.0.16248370'
+        echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+        echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+      shell: bash
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup prerequisites
+      uses: './.github/actions/setup-reqs-web'
+    - id: metadata
+      name: Prepare version and signing
+      run: |
+        set -euo pipefail
+        filename=$(bun scripts/android-release.ts metadata "vc${VERSION_CODE}" "$RUNNER_TEMP/android-release.json")
+        echo "filename=$filename" >> "$GITHUB_OUTPUT"
+        echo "release_name=$(jq -r .version tauri/src-tauri/tauri.android.conf.json) (${VERSION_CODE})" >> "$GITHUB_OUTPUT"
+        bun scripts/android-release.ts signing "$RUNNER_TEMP/android-signing" \
+          tauri/src-tauri/gen/android/keystore.properties
+        bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
+      shell: bash
+      env:
+        VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
+        DOPPLER_TOKEN: ${{ secrets.ANDROID_RELEASE_DOPPLER_TOKEN }}
+      working-directory: apps/web
+    - name: Build production App Bundle
+      run: |
+        set -euo pipefail
+        # The Nix environment is already loaded. Do not reload it in nested
+        # bash processes and re-enable its local-development sccache wrapper.
+        # This ephemeral runner has no compiler cache/server to reuse.
+        unset BASH_ENV
+        export RUSTC_WRAPPER=""
+        cargo tauri --version
+        # Tauri has shipped both switch-only and value-taking APK/AAB flags.
+        # Nix and local installations can differ; build only the AAB with either CLI.
+        android_help=$(cargo tauri android build --help)
+        artifact_args=(--aab)
+        if [[ "$android_help" == *'--apk <APK>'* ]]; then
+          artifact_args=(--apk false --aab true)
+        fi
+        just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
+          "${artifact_args[@]}" --ci --config "$RUNNER_TEMP/android-release.json" \
+          2>&1 | tee "$RUNNER_TEMP/android-build.log"
+      shell: bash
+      env:
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+        VITE_OTEL_ENV: prod
+      working-directory: apps/web
+    - name: Preserve Android build log
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-build-log
+        path: ${{ runner.temp }}/android-build.log
+        if-no-files-found: ignore
+        retention-days: '7'
+    - id: artifact
+      name: Verify and collect App Bundle
+      run: |
+        set -euo pipefail
+        curl --fail --location --retry 3 \
+          https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+          --output "$RUNNER_TEMP/bundletool.jar"
+        echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
+        mapfile -t bundles < <(find tauri/src-tauri/gen/android/app/build/outputs/bundle -type f -name '*-release.aab')
+        if [ "${#bundles[@]}" -ne 1 ]; then
+          echo "Expected exactly one signed release AAB, found ${#bundles[@]}" >&2
+          exit 1
+        fi
+        bun scripts/android-bundle.ts "vc${VERSION_CODE}" "${bundles[0]}" \
+          "$RUNNER_TEMP/bundletool.jar" "$RUNNER_TEMP/android-signing/certificate-sha256"
+        bundle_filename="${RELEASE_FILENAME%.*}.aab"
+        mkdir -p "$GITHUB_WORKSPACE/android-artifacts"
+        cp "${bundles[0]}" "$GITHUB_WORKSPACE/android-artifacts/$bundle_filename"
+        # R8 mapping belongs to this exact binary; preserve it for Play crash reports.
+        bundle_variant=$(basename "$(dirname "${bundles[0]}")")
+        mapping="tauri/src-tauri/gen/android/app/build/outputs/mapping/$bundle_variant/mapping.txt"
+        if [[ ! -s "$mapping" ]]; then
+          echo "Missing R8 mapping for bundle variant $bundle_variant" >&2
+          exit 1
+        fi
+        mapping_filename="${bundle_filename%.aab}-mapping.txt"
+        cp "$mapping" "$GITHUB_WORKSPACE/android-artifacts/$mapping_filename"
+        \cd "$GITHUB_WORKSPACE/android-artifacts"
+        sha256sum "$bundle_filename" > "$bundle_filename.sha256"
+        sha256sum "$mapping_filename" > "$mapping_filename.sha256"
+        echo "bundle=$GITHUB_WORKSPACE/android-artifacts/$bundle_filename" >> "$GITHUB_OUTPUT"
+        echo "mapping=$GITHUB_WORKSPACE/android-artifacts/$mapping_filename" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
+        RELEASE_FILENAME: ${{ steps.metadata.outputs.filename }}
+      working-directory: apps/web
+    - name: Require the PR's Android native code to be unchanged since the build
+      run: |
+        # --- authenticated fetch ------------------------------------------------------
+        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+        # here don't persist credentials, so authenticate the way actions/checkout
+        # does. Fails if the commit is unreachable (a force-pushed-away head).
+        gh_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ------------------------------------------------------------------------------
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # Last check before uploading: the bundle must still describe the native code
+        # the merge gate will hash — that of the PR's merge result — or it could never
+        # pass the gate, and a promoted Play release cannot be withdrawn. Two things
+        # can move while a build runs: the PR head (a native push; the drift workflow
+        # cancels runs after the fact, but better not to upload at all) and main
+        # (another Android PR merged).
+        built=$(bun scripts/android-native.mjs hash HEAD)
+        head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
+        if [[ "$head_sha" == "$(git rev-parse HEAD)" ]]; then
+          echo "PR head unchanged (${head_sha:0:10}); native hash ${built:0:10} is current."
+        else
+          gh_fetch "$head_sha"
+          current=$(bun scripts/android-native.mjs hash "$head_sha")
+          if [[ "$current" != "$built" ]]; then
+            echo "Android native code changed on PR #${PR_NUMBER} while this release was building" \
+              "(${built:0:10} → ${current:0:10}). Not uploading the stale bundle." >&2
+            echo "Re-add the android-update label to release the current head." >&2
+            exit 1
+          fi
+          echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
+        fi
+        merge=$(pr_merge_commit)
+        gh_fetch "$merge"
+        merged=$(bun scripts/android-native.mjs hash "$merge")
+        if [[ "$merged" != "$built" ]]; then
+          echo "Android native code landed on main while this release was building: the merge result" \
+            "(${merge:0:10}) hashes ${merged:0:10}, the bundle ${built:0:10}. Not uploading a bundle the merge gate could never accept." >&2
+          echo "Merge main into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
+          exit 1
+        fi
+        echo "Merge result ${merge:0:10} matches the built native code (${built:0:10}); uploading."
+      shell: bash
+      working-directory: apps/web
+    - name: Write the provenance stamp as release notes
+      run: |
+        set -euo pipefail
+        hash=$(bun scripts/android-native.mjs hash HEAD)
+        mkdir -p "$RUNNER_TEMP/whatsnew"
+        printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
+        echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
+      shell: bash
+      working-directory: apps/web
+    - name: Upload verified Android artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-release
+        path: android-artifacts/
+        if-no-files-found: error
+        retention-days: '90'
+    - id: auth
+      name: Authenticate to Google Play
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+      with:
+        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+        export_environment_variables: 'false'
+    - name: Upload to internal testing
+      uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5
+      with:
+        serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+        packageName: com.macro.workspace.mobile
+        releaseFiles: ${{ steps.artifact.outputs.bundle }}
+        mappingFile: ${{ steps.artifact.outputs.mapping }}
+        releaseName: ${{ steps.metadata.outputs.release_name }}
+        track: internal
+        status: completed
+        whatsNewDirectory: ${{ runner.temp }}/whatsnew
+    - name: Promote to production
+      run: |
+        set -euo pipefail
+        for attempt in 1 2 3 4 5; do
+          if node scripts/android-play-promote.mjs; then
+            exit 0
+          fi
+          echo "Promotion attempt ${attempt} failed; retrying in 30s."
+          sleep 30
+        done
+        echo "Could not promote version code ${VERSION_CODE} to production; promote it by hand with publish-android-play.yml (operation=promote-production)." >&2
+        exit 1
+      shell: bash
+      env:
+        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
+        CHANGES_NOT_SENT_FOR_REVIEW: 'false'
+      working-directory: apps/web
+    - name: Remove signing material
+      if: always()
+      run: |
+        rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/android-release.json" \
+          "$RUNNER_TEMP/android-google-services.json" "$RUNNER_TEMP/whatsnew" || true
+        rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
+      shell: bash
+    - name: Comment on the PR
+      if: success() || failure()
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const versionCode = '${{ steps.preconditions.outputs.version_code }}' || '?';
+          const releaseName = '${{ steps.metadata.outputs.release_name }}' || `version code ${versionCode}`;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+          const success = '${{ job.status }}' === 'success';
+          const body = success
+            ? [
+                `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
+                '',
+                'When Google approves it, the version goes live, the **Android Release Watch** workflow',
+                're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
+                'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
+                'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
+                '',
+                `[Workflow run](${runUrl})`,
+              ].join('\n')
+            : [
+                `🤖 Android Play release for ${releaseName} **failed** — see the [workflow run](${runUrl}).`,
+                '',
+                'Fix the problem, then remove and re-add the `android-update` label to retry.',
+              ].join('\n');
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body,
+          });
+concurrency:
+  group: android-play-release-${{ github.event.pull_request.number }}

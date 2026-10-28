@@ -14,6 +14,7 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor,
 };
 use serde::{Deserialize, de::DeserializeOwned};
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -54,7 +55,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(req, state))]
+    #[tracing::instrument(err(level = Level::INFO), skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let authorization = req
             .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>, _>(
@@ -97,21 +98,32 @@ where
             });
         }
 
-        let user = match authorization {
+        let (user, user_org_id) = match authorization {
             MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
-                user.macro_user_id
+                let org_id = user.user_context.organization_id.map(i64::from);
+                (user.macro_user_id, org_id)
             }
             MacroAuthorization::Harness(_) => return Err(ExtractorError::Unauthorized),
             MacroAuthorization::Bot(_) | MacroAuthorization::Internal(None) => {
                 unreachable!("bot and identity-less internal access returned above")
             }
         };
-        let access_level = service
-            .get_access_level(Some(&user), &entity_id, entity_type)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?;
-        let entity_permission = EntityPermission::AccessLevel { access_level };
+        // Channels require `get_entity_permission` with user_org_id for proper
+        // access checks on public/organization/team channels. Other entity
+        // types use the simpler `get_access_level`.
+        let entity_permission = if entity_type == EntityType::Channel {
+            service
+                .get_entity_permission(Some(&user), &entity_id, entity_type, user_org_id)
+                .await
+                .map_err(ExtractorError::from)?
+        } else {
+            let access_level = service
+                .get_access_level(Some(&user), &entity_id, entity_type)
+                .await
+                .map_err(ExtractorError::from)?
+                .ok_or(ExtractorError::Unauthorized)?;
+            EntityPermission::AccessLevel { access_level }
+        };
         if !entity_permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }

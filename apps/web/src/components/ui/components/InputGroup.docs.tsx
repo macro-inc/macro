@@ -1,10 +1,9 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal } from 'solid-js';
-import { Button } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { InputGroup } from './InputGroup';
 
@@ -54,7 +53,7 @@ function AddonsDemo() {
         <InputGroup.Addon align="inline-start">https://</InputGroup.Addon>
         <InputGroup.Input placeholder="macro.com" aria-label="Website" />
         <InputGroup.Addon align="inline-end">
-          <InputGroup.Button aria-label="Open website" square>
+          <InputGroup.Button size="icon-md" aria-label="Open website">
             <ArrowRightIcon />
           </InputGroup.Button>
         </InputGroup.Addon>
@@ -68,7 +67,8 @@ function AddonsDemo() {
 function ButtonGroupDemo() {
   return (
     <ButtonGroup
-      variant="outline"
+      finish="raised"
+      variant="secondary"
       size="md"
       class="w-full max-w-sm"
       aria-label="Search documents"
@@ -83,9 +83,9 @@ function ButtonGroupDemo() {
         </InputGroup.Addon>
       </InputGroup>
       <ButtonGroup.Divider />
-      <Button aria-label="Submit search" square>
-        <ArrowRightIcon />
-      </Button>
+      <ButtonGroup.Button size="icon-md" aria-label="Submit search">
+        <ArrowRightIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      </ButtonGroup.Button>
     </ButtonGroup>
   );
 }

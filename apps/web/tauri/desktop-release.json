@@ -1,0 +1,8 @@
+{
+  "version": "2.5.0",
+  "nativeBuild": 0,
+  "bundleBuild": 1,
+  "enabled": false,
+  "endpoint": "https://github.com/macro-inc/macro/releases/download/desktop-stable/latest.json",
+  "publicKey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2NDc2RUVGRUJDMjgyOTUKUldTVmdzTHI3MjVIRmtPWVJtT0cya0djY2xEc3JqR0VOVU9yNHN3akNtZ0N6RThHbkpUVUVMd0gK"
+}

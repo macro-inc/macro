@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::calendar_event::CalendarEventSearchScope;
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
 use crate::channel::{ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem};
 use crate::chat::ChatSearchResponseItemWithMetadata;
@@ -107,6 +108,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub include_crm: bool,
 
+    /// Which calendar events to search. Defaults to `own`: events on the
+    /// caller's own and delegated calendars. `shared_with_you` searches only
+    /// events shared with a channel the caller belongs to that are on none of
+    /// their calendars.
+    #[serde(default)]
+    pub calendar_event_scope: CalendarEventSearchScope,
+
     #[schemars(skip)]
     pub collapse: Option<bool>,
 }
@@ -124,10 +132,14 @@ pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
 }
 
 /// Whether documents of a file type have their content indexed by the search
-/// processing service: the searchable associations, and Figma designs (whose
-/// pages are indexed, while other vector files are not).
+/// processing service: the searchable associations, and the design files the
+/// native engines read - Figma designs, Photoshop documents, and Illustrator
+/// documents - while other vector files are not.
 pub fn is_searchable_file_type(file_type: &FileType) -> bool {
-    *file_type == FileType::Fig || is_searchable_association(&file_type.macro_app_path())
+    matches!(
+        file_type,
+        FileType::Fig | FileType::Psd | FileType::Psb | FileType::Ai
+    ) || is_searchable_association(&file_type.macro_app_path())
 }
 
 /// Converted entity filters for the search service.

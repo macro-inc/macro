@@ -23,7 +23,10 @@ pub(in crate::service::db) async fn get_sha_count(
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("shas")))]
+    #[sqlx::test(
+        migrations = false,
+        fixtures(path = "../../../fixtures", scripts("schema", "shas"))
+    )]
     async fn test_get_sha_count(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         let result = get_sha_count(pool.clone(), "sha-1").await?;
         assert_eq!(result, 2);

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   autoUpdate,
   computePosition,
@@ -9,9 +10,9 @@ import {
   size,
   type VirtualElement,
 } from '@floating-ui/dom';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   type Accessor,
   createContext,
@@ -300,39 +301,42 @@ function PopoverCard(props: TourPopoverProps) {
       : 'bottom-end';
     const reference = target ?? restingPoint(boundary);
     follow(reference, element, () => {
-      void computePosition(reference, element, {
-        strategy: 'fixed',
-        placement,
-        middleware: [
-          offset(target ? (props.gutter ?? EDGE) : 0),
-          flip({
-            boundary: clip,
-            padding: EDGE,
-            fallbackPlacements: ['left-start', 'bottom-start', 'top-start'],
-          }),
-          shift({ boundary: clip, padding: EDGE, crossAxis: true }),
-          size({
-            boundary: clip,
-            padding: EDGE,
-            apply: ({ availableWidth, availableHeight }) => {
-              setPosition((p) => ({
-                ...p,
-                maxWidth: availableWidth,
-                maxHeight: availableHeight,
-              }));
-            },
-          }),
-          // Only an anchored card follows its target out of view.
-          ...(target ? [hide({ boundary: clip })] : []),
-        ],
-      }).then(({ x, y, middlewareData }) =>
-        setPosition((p) => ({
-          ...p,
-          x,
-          y,
-          placed: true,
-          hidden: !!middlewareData.hide?.referenceHidden,
-        }))
+      fireAndForget(
+        computePosition(reference, element, {
+          strategy: 'fixed',
+          placement,
+          middleware: [
+            offset(target ? (props.gutter ?? EDGE) : 0),
+            flip({
+              boundary: clip,
+              padding: EDGE,
+              fallbackPlacements: ['left-start', 'bottom-start', 'top-start'],
+            }),
+            shift({ boundary: clip, padding: EDGE, crossAxis: true }),
+            size({
+              boundary: clip,
+              padding: EDGE,
+              apply: ({ availableWidth, availableHeight }) => {
+                setPosition((p) => ({
+                  ...p,
+                  maxWidth: availableWidth,
+                  maxHeight: availableHeight,
+                }));
+              },
+            }),
+            // Only an anchored card follows its target out of view.
+            ...(target ? [hide({ boundary: clip })] : []),
+          ],
+        }).then(({ x, y, middlewareData }) =>
+          setPosition((p) => ({
+            ...p,
+            x,
+            y,
+            placed: true,
+            hidden: !!middlewareData.hide?.referenceHidden,
+          }))
+        ),
+        'tour'
       );
     });
   });
@@ -515,15 +519,18 @@ function TourHint(props: TourHintProps) {
     const entry = tour.entry();
     if (!element || !entry) return;
     follow(entry, element, () => {
-      void computePosition(entry, element, {
-        strategy: 'fixed',
-        placement: props.placement ?? 'right',
-        middleware: [
-          offset(12),
-          flip({ padding: EDGE, fallbackPlacements: ['bottom', 'top'] }),
-          shift({ padding: EDGE }),
-        ],
-      }).then(({ x, y }) => setPosition({ x, y }));
+      fireAndForget(
+        computePosition(entry, element, {
+          strategy: 'fixed',
+          placement: props.placement ?? 'right',
+          middleware: [
+            offset(12),
+            flip({ padding: EDGE, fallbackPlacements: ['bottom', 'top'] }),
+            shift({ padding: EDGE }),
+          ],
+        }).then(({ x, y }) => setPosition({ x, y })),
+        'tour'
+      );
     });
   });
   return (
@@ -579,13 +586,17 @@ function TourPrevious(props: TourButtonProps) {
   const [local, others] = splitProps(props, ['children']);
   return (
     <Button
+      variant="ghost"
+      aria-label="Previous step"
+      tooltip="Previous step"
       size="icon-sm"
-      label="Previous step"
       disabled={tour.isFirst()}
       {...others}
       onClick={tour.previous}
     >
-      {local.children ?? <CaretLeftIcon />}
+      {local.children ?? (
+        <CaretLeftIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      )}
     </Button>
   );
 }
@@ -599,14 +610,20 @@ function TourNext(props: TourButtonProps & { doneLabel?: JSX.Element }) {
     local.children === undefined && !(tour.isLast() && local.doneLabel);
   return (
     <Button
+      variant="primary"
+      aria-label={iconOnly() ? 'Next step' : undefined}
+      tooltip={iconOnly() ? 'Next step' : undefined}
       size="icon-sm"
-      label={iconOnly() ? 'Next step' : undefined}
       {...others}
       onClick={tour.next}
     >
       <Show
         when={tour.isLast() && local.doneLabel}
-        fallback={local.children ?? <CaretRightIcon />}
+        fallback={
+          local.children ?? (
+            <CaretRightIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          )
+        }
       >
         {local.doneLabel}
       </Show>
@@ -620,12 +637,16 @@ function TourClose(props: TourButtonProps) {
   // Text children name the button; only the icon form needs a label.
   return (
     <Button
+      variant="ghost"
+      aria-label={local.children === undefined ? 'Dismiss tour' : undefined}
+      tooltip={local.children === undefined ? 'Dismiss tour' : undefined}
       size="icon-sm"
-      label={local.children === undefined ? 'Dismiss tour' : undefined}
       {...others}
       onClick={tour.dismiss}
     >
-      {local.children ?? <XIcon />}
+      {local.children ?? (
+        <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      )}
     </Button>
   );
 }

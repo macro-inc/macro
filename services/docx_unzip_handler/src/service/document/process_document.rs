@@ -59,6 +59,8 @@ pub async fn process(
                 &document_key_parts.document_id,
             ),
             to_bucket: ctx.config.document_storage_bucket.clone(),
+            from_file_type: None,
+            to_file_type: None,
         })
         .await
     {

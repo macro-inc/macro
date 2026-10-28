@@ -21,6 +21,7 @@ import {
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
@@ -32,27 +33,40 @@ import {
   type TaskViewContext,
   taskMatchesView,
 } from '../filters/task-predicates';
-import type { TaskReferenceScope, TasksViewState } from '../types';
+import type {
+  TaskCrmScope,
+  TaskReferenceScope,
+  TasksViewState,
+} from '../types';
 import { createAutomaticTaskPagination } from './automatic-task-pagination';
+import { createScopedTaskSearch } from './scoped-task-search';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
 export type TasksDataSourceInput = Pick<
   TasksViewState,
-  'tab' | 'search' | 'groupBy' | 'sort' | 'facets'
+  'tab' | 'search' | 'groupBy' | 'sort' | 'facets' | 'savedViewActive'
 >;
 
 export type UseTasksDataSourceOptions = {
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
+  /** Saved definitions supply stable tag bindings and viewer-relative people. */
+  facetContext?: Accessor<TaskFacetContext>;
   isGroupExpanded: (groupId: string) => boolean;
   /** Only tasks whose property references this entity. */
   reference?: Accessor<TaskReferenceScope>;
+  /**
+   * Only tasks associated with this CRM record. The server resolves the
+   * membership, so fetched rows are not re-filtered by their properties.
+   */
+  crm?: Accessor<TaskCrmScope>;
   enabled?: Accessor<boolean>;
   networkPaused?: Accessor<boolean>;
   /** Project lists drain all cursors instead of requiring per-group Load More. */
   loadAll?: boolean;
+  board?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -61,6 +75,11 @@ export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
   paginationError?: Accessor<unknown>;
   retryPagination?: () => void;
+  /** Uncollapsed rows for alternative layouts; the query owner is shared. */
+  boardRows?: Accessor<TasksDataSourceItem[]>;
+  boardSearching?: Accessor<boolean>;
+  boardLoading?: Accessor<boolean>;
+  groupError?: (groupId: string) => unknown;
 };
 
 type TaskGroupContinuationReader = {
@@ -80,6 +99,21 @@ function referencesEntity(
   ).includes(reference.entityId);
 }
 
+/**
+ * Whether a task known only locally (an optimistic insert) is associated with
+ * the record through its own property. Mention and contact-company matches
+ * are known only to the server and arrive with the next fetch.
+ */
+function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
+  if (crm.type === 'activity') return false;
+  return getTaskReferencedEntityIds(
+    task,
+    crm.type === 'company'
+      ? SYSTEM_PROPERTY_IDS.COMPANIES
+      : SYSTEM_PROPERTY_IDS.CONTACTS
+  ).includes(crm.id);
+}
+
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
   state: TasksDataSourceInput,
@@ -90,14 +124,20 @@ export function useTasksDataSource(
     withEntityNotifications(entity, notificationSource);
 
   const facetContext = createMemo(
-    (): TaskFacetContext => createTagFacetContext(options.tagSets())
+    (): TaskFacetContext =>
+      options.facetContext?.() ?? {
+        ...createTagFacetContext(options.tagSets()),
+        viewerId: options.userId(),
+      }
   );
   const facetOptionsReady = () =>
     (options.enabled?.() ?? true) &&
     state.tab !== 'projects' &&
-    tagFacetReady(state.facets, options.tagSetsReady());
+    (state.savedViewActive
+      ? Boolean(options.userId())
+      : tagFacetReady(state.facets, options.tagSetsReady()));
 
-  const queryArgs = () =>
+  const queryArgsFor = (nameContains?: string) =>
     buildTaskQuery({
       tab: state.tab,
       userId: options.userId(),
@@ -106,9 +146,13 @@ export function useTasksDataSource(
       groupBy: state.groupBy,
       sort: state.sort,
       reference: options.reference?.(),
+      crm: options.crm?.(),
+      nameContains,
+      board: options.board?.(),
     });
+  const queryArgs = () => queryArgsFor();
 
-  const scoped = Boolean(options.reference);
+  const scoped = Boolean(options.reference || options.crm);
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: facetOptionsReady(),
     networkPaused: options.networkPaused?.(),
@@ -119,10 +163,12 @@ export function useTasksDataSource(
           insertFilter: (item) => {
             const entity = mapApiSoupItemToEntity(item);
             const reference = options.reference?.();
+            const crm = options.crm?.();
             return (
               isTaskEntity(entity) &&
               taskMatchesView(entity, viewContext()) &&
-              (!reference || referencesEntity(entity, reference))
+              (!reference || referencesEntity(entity, reference)) &&
+              (!crm || namesCrmRecord(entity, crm))
             );
           },
         }
@@ -173,23 +219,33 @@ export function useTasksDataSource(
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
 
-  const search = createSearchState({
-    text: () => state.search,
-    localPool,
-    enabled: facetOptionsReady,
-    buildRequest: ({ query, matchType }) =>
-      buildTaskSearchRequest({
-        query,
-        matchType,
-        tab: state.tab,
-        userId: options.userId(),
-        facets: state.facets,
-        facetContext: facetContext(),
-        reference: options.reference?.(),
-      }),
-  });
+  // CRM membership includes references and a company's contacts, which the
+  // search service cannot express: search the scoped Soup query by name.
+  const search = options.crm
+    ? createScopedTaskSearch({
+        text: () => state.search,
+        args: queryArgsFor,
+        enabled: facetOptionsReady,
+      })
+    : createSearchState({
+        surface: () => 'tasks',
+        text: () => state.search,
+        localPool,
+        enabled: facetOptionsReady,
+        buildRequest: ({ query, matchType }) =>
+          buildTaskSearchRequest({
+            query,
+            matchType,
+            tab: state.tab,
+            userId: options.userId(),
+            facets: state.facets,
+            facetContext: facetContext(),
+            reference: options.reference?.(),
+          }),
+      });
 
   const groupedQueries = createGroupedSoupQueries({
+    groupedPaging: () => query.groupedPaging,
     initialPage: createMemo(() => {
       if (search.isSearching() || query.isLoading || query.isPlaceholderData) {
         return;
@@ -403,12 +459,44 @@ export function useTasksDataSource(
       await search.refetch();
       return;
     }
-    groupedQueries.resetToInitialPage();
+    if (query.transport !== 'graphql') groupedQueries.resetToInitialPage();
     await query.refresh();
+  };
+
+  const boardRows = () => {
+    if (options.enabled?.() === false) {
+      return [];
+    }
+
+    if (search.isSearching()) {
+      return rows();
+    }
+
+    if (query.isPending || query.isPlaceholderData) {
+      return [];
+    }
+
+    return rows();
+  };
+
+  const boardLoading = () => {
+    if (search.isSearching()) {
+      return isLoading();
+    }
+
+    if (options.enabled?.() === false) {
+      return false;
+    }
+
+    return query.isPending || !facetOptionsReady();
   };
 
   return {
     items,
+    boardRows,
+    boardLoading,
+    groupError: (id) => groupQueryFor(id)?.error(),
+    boardSearching: search.isSearching,
     isLoading,
     isFetching,
     error,
