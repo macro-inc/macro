@@ -1,5 +1,7 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
@@ -170,9 +172,18 @@ export function ChannelCallTab(props: {
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
         <div class="size-full min-h-0">
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
+              <ActiveCallLink />
+            </SplitHeaderRight>
+          </Show>
           <CallOverlay
             onLeave={handleLeave}
-            footerLeading={<ActiveCallLink />}
+            footerLeading={
+              <Show when={!isMobile()}>
+                <ActiveCallLink />
+              </Show>
+            }
           />
         </div>
       </Match>

@@ -21,10 +21,18 @@ function MediaSplitButton(props: {
   onToggle: () => void;
   icon: JSX.Element;
   children: JSX.Element;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Dropdown placement="top-start" open={open()} onOpenChange={setOpen}>
+    <Dropdown
+      placement="top-start"
+      open={open()}
+      onOpenChange={(open) => {
+        setOpen(open);
+        props.onOpenChange?.(open);
+      }}
+    >
       <ButtonGroup size="icon-lg" label={props.label}>
         <Button
           label={props.toggleLabel}
@@ -71,12 +79,19 @@ export function CallControlBar(props: {
   /** Dropdown items for the camera and its background effect. */
   videoMenu: JSX.Element;
   error?: string;
+  onSettingsOpenChange?: (open: boolean) => void;
 }) {
+  let audioOpen = false;
+  let videoOpen = false;
   return (
     <div data-call-controls class="@container relative z-20 w-full max-w-xl">
       <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-menu-glass p-1.5 text-ink glass @max-3xs:gap-0 @max-3xs:px-0 @sm:gap-2">
         <MediaSplitButton
           label="Microphone"
+          onOpenChange={(open) => {
+            audioOpen = open;
+            props.onSettingsOpenChange?.(audioOpen || videoOpen);
+          }}
           toggleLabel={
             props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
           }
@@ -94,6 +109,10 @@ export function CallControlBar(props: {
         </MediaSplitButton>
         <MediaSplitButton
           label="Camera"
+          onOpenChange={(open) => {
+            videoOpen = open;
+            props.onSettingsOpenChange?.(audioOpen || videoOpen);
+          }}
           toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
           menuLabel="Video settings"
           on={!props.videoMuted}
@@ -131,7 +150,7 @@ export function CallControlBar(props: {
       <Show when={props.error}>
         <p
           role="alert"
-          class="absolute inset-x-0 top-full rounded-lg bg-panel p-2 text-center text-xs text-failure"
+          class="absolute inset-x-0 top-full rounded-lg bg-panel p-2 text-center text-xs text-failure mobile:top-auto mobile:bottom-full mobile:mb-2"
         >
           {props.error}
         </p>

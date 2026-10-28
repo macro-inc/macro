@@ -190,8 +190,9 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. During a call, the gray `Copy Meeting Url` button sits at the bottom-left;
-narrow panes and phones show only its copy icon.
+button. During a desktop or tablet call, `Copy Meeting Url` sits at the
+bottom-left; narrow panes show only its copy icon. Active phone calls fill the
+available viewport, retaining header islands for Back and Copy Meeting Url.
 The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
@@ -207,12 +208,24 @@ Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 The floating mobile **New** action is hidden while the call view is open and
-returns when you leave the call view.
+returns when you leave the call view. Phone calls also hide the app's bottom
+navigation, but keep the channel header island visible. Setup screens and tablets
+stay unchanged. Back returns to the app without hanging up; only **Leave call**
+ends participation.
 
-Open live chat with **Open chat** at the bottom-right, beside Copy Meeting Url.
-Both actions use inset 48px tap targets with larger icons on phones. The footer
-keeps one row when space allows; the smallest phones put the media controls above
-the copy and chat actions, preserving side padding and separate device menus.
+Click or tap a participant, including your own tile, to focus them. Click or tap
+the focused tile again (**Back to grid**) to restore the grid. If that participant
+leaves, the grid returns automatically. Focus does not replace the video tracks.
+A talking participant has an accent-colored border above their video or avatar.
+
+Open live chat with **Open chat** at the bottom-right, alongside the media controls.
+On desktop, Copy Meeting Url stays at the bottom-left. On phones it uses the same
+header island style as the channel header, while chat keeps its 48px tap target.
+Media controls and chat occupy a separate row below the video, never over it.
+The phone's bottom controls hide after four idle seconds and return when the call
+is tapped, reserving their row so the video does not resize. Header islands stay
+visible. Chat, settings menus, keyboard navigation, and text entry keep controls
+visible. Check 320px phones, safe-area insets, and rotation.
 Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
 the participant tiles. Narrow desktop panes overlay chat instead; phones use the

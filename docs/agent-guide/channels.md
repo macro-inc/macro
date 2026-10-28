@@ -1149,9 +1149,14 @@ away and return while connected to check that the call and its controls remain
 usable.
 
 The **Open chat** button at the bottom-right opens chat beside the video.
-**Copy Meeting Url** sits at the bottom-left and becomes icon-only in narrow panes.
-Phones inset both actions from the edges. The smallest phones put the media
-controls in a separate row above these actions; wider panes keep one row.
+**Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
+Active phone calls keep the channel header island and place Copy Meeting Url
+in a matching header island. Media controls and chat sit below the video with
+side insets, not over the participant tiles. Back keeps the call running; tapping
+the call restores bottom controls after four idle seconds without resizing the
+video. Header islands stay visible. Chat and settings keep controls visible.
+Phone calls hide the app's bottom navigation. Tap or click a participant to
+focus them and tap again to return to the grid; speakers have an accent border.
 The panel has a **Call chat** heading and
 spans the full call content height, including the media controls row. The controls
 stay centered under the video on wide panes. In narrow desktop panes, chat overlays

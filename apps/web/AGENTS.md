@@ -303,6 +303,10 @@ the user's newest account for that app from the last fifteen minutes.
   open their record; ongoing channel and scheduled calls return to the channel
   and Calendar. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Keep active phone calls viewport-filling with visible header islands and idle
+  controls below the video; Back dismisses without leaving, while setup and
+  tablet/desktop chrome stay unchanged.
+  See [Calls](../../docs/agent-guide/calls.md).
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).

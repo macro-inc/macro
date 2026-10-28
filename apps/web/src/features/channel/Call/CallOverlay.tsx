@@ -4,10 +4,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
@@ -21,10 +21,8 @@ import {
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import {
-  CALL_PANEL_MEDIUM_NARROW_PX,
-  CALL_PANEL_VERY_NARROW_PX,
-} from './call-panel-breakpoints';
+import { CALL_PANEL_MEDIUM_NARROW_PX } from './call-panel-breakpoints';
+import { createControlsVisibility } from './create-controls-visibility';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -56,18 +54,43 @@ function ParticipantTileWrapper(props: {
   isSpeaking: boolean;
   children: JSXElement;
   isConnecting?: boolean;
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
+  focusLabel?: string;
+  hidden?: boolean;
   class?: string;
 }) {
   return (
     <div
+      hidden={props.hidden}
       class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
-        props.isSpeaking && 'ring-inset ring-2 ring-accent',
+        'relative isolate flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-0 border border-edge-muted',
         props.isConnecting && 'animate-pulse',
         props.class
       )}
     >
       {props.children}
+      <Show when={props.isSpeaking}>
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-accent"
+        />
+      </Show>
+      <Show when={props.onToggleFocus}>
+        <button
+          type="button"
+          class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
+          aria-label={props.focusLabel}
+          aria-pressed={props.isFocused ?? false}
+          onClick={props.onToggleFocus}
+        >
+          <Show when={props.isFocused}>
+            <span class="absolute right-2 top-2 rounded bg-surface/80 px-2 py-1 text-xs text-ink">
+              Back to grid
+            </span>
+          </Show>
+        </button>
+      </Show>
     </div>
   );
 }
@@ -132,12 +155,17 @@ function LocalParticipantTile(props: {
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
   class?: string;
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
 }) {
   return (
     <ParticipantTileWrapper
       isSpeaking={props.isSpeaking}
       isConnecting={props.isConnecting}
       class={props.class}
+      isFocused={props.isFocused}
+      onToggleFocus={props.onToggleFocus}
+      focusLabel={props.isFocused ? 'Unfocus yourself' : 'Focus yourself'}
     >
       <Show
         when={!props.isConnecting && !props.isVideoMuted}
@@ -163,7 +191,12 @@ function LocalParticipantTile(props: {
   );
 }
 
-function ParticipantTile(props: { participant: RemoteParticipant }) {
+function ParticipantTile(props: {
+  participant: RemoteParticipant;
+  isFocused: boolean;
+  hidden: boolean;
+  onToggleFocus: () => void;
+}) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
   const displayName = () =>
@@ -187,7 +220,14 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
 
   return (
-    <ParticipantTileWrapper isSpeaking={isSpeaking()}>
+    <ParticipantTileWrapper
+      isSpeaking={isSpeaking()}
+      isFocused={props.isFocused}
+      onToggleFocus={props.onToggleFocus}
+      focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
+      hidden={props.hidden}
+      class={cn('min-w-0', props.hidden && 'hidden')}
+    >
       <Show
         when={cameraTrack()}
         fallback={
@@ -249,8 +289,17 @@ export function CallOverlay(props: {
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   const [chatOpen, setChatOpen] = createSignal(false);
   const [chatMounted, setChatMounted] = createSignal(false);
-  const [controlsFooter, setControlsFooter] = createSignal<HTMLDivElement>();
-  const footerSize = createElementSize(controlsFooter);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [keyboardFocus, setKeyboardFocus] = createSignal(false);
+  const controls = createControlsVisibility({
+    enabled: isMobile,
+    keepVisible: () =>
+      chatOpen() ||
+      settingsOpen() ||
+      keyboardFocus() ||
+      virtualKeyboardVisible(),
+  });
+  const controlsHidden = () => isMobile() && !controls.visible();
   const chatId = createUniqueId();
   let chatButton: HTMLButtonElement | undefined;
   const closeChat = () => {
@@ -269,10 +318,24 @@ export function CallOverlay(props: {
   const splitPanel = useSplitPanel();
   const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
   const isMediumNarrow = () => panelWidth() < CALL_PANEL_MEDIUM_NARROW_PX;
-  const isVeryNarrow = () => panelWidth() < CALL_PANEL_VERY_NARROW_PX;
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
+
+  const [selectedParticipant, setSelectedParticipant] = createSignal<
+    RemoteParticipant | 'local'
+  >();
+  const focusedParticipant = () => {
+    const selected = selectedParticipant();
+    return selected === 'local' ||
+      (selected && participants().includes(selected))
+      ? selected
+      : undefined;
+  };
+  const toggleParticipantFocus = (participant: RemoteParticipant | 'local') =>
+    setSelectedParticipant((selected) =>
+      selected === participant ? undefined : participant
+    );
 
   const isLocalSpeaking = () => callCtx.isLocalSpeaking();
 
@@ -314,6 +377,7 @@ export function CallOverlay(props: {
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
   const gridCols = () => {
+    if (focusedParticipant()) return 'grid-cols-1';
     const count = participants().length;
     if (count <= 1) return 'grid-cols-1';
     if (count <= 4) return 'grid-cols-2';
@@ -322,16 +386,43 @@ export function CallOverlay(props: {
 
   return (
     <div
-      class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)"
-      style={{ '--call-footer-height': `${footerSize.height ?? 0}px` }}
+      class="relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0"
+      data-call-fullscreen={isMobile() ? '' : undefined}
+      onPointerDown={() => {
+        setKeyboardFocus(false);
+        controls.reveal();
+      }}
+      onKeyDown={() => {
+        setKeyboardFocus(true);
+        controls.reveal();
+      }}
+      onFocusIn={(event) => {
+        if (
+          event.target instanceof HTMLElement &&
+          event.target.matches(':focus-visible')
+        ) {
+          setKeyboardFocus(true);
+        }
+      }}
+      onFocusOut={(event) => {
+        if (
+          !(event.relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(event.relatedTarget)
+        )
+          setKeyboardFocus(false);
+      }}
     >
       {/* The call owns its controls instead of the mobile New action. */}
       <FloatRegion region="accessory" />
+      <FloatRegion region="dock" priority={100} active={isMobile} />
       <div class="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col @container/call-stage">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>
-            <div class="flex-1 min-h-0 pt-2">
+            <div
+              class="flex-1 min-h-0 pt-2"
+              classList={{ hidden: !!focusedParticipant() }}
+            >
               <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
                 <Show when={callCtx.isScreenSharing()}>
                   <div class="relative size-full">
@@ -351,7 +442,7 @@ export function CallOverlay(props: {
 
           {/* Participants area */}
           <div
-            class={`${hasAnyScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2`}
+            class={`${hasAnyScreenShare() && !focusedParticipant() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
           >
             <Show
               when={participants().length > 0}
@@ -369,22 +460,43 @@ export function CallOverlay(props: {
                     callCtx.room()?.localParticipant.name ||
                     currentUserName()
                   }
+                  isFocused={focusedParticipant() === 'local'}
+                  onToggleFocus={() => toggleParticipantFocus('local')}
                 />
               }
             >
               {/* Remote participants grid */}
               <div
-                class={`size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`}
+                class={cn(
+                  `size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                  focusedParticipant() === 'local' && 'hidden'
+                )}
+                hidden={focusedParticipant() === 'local'}
               >
                 <For each={participants()}>
                   {(participant) => (
-                    <ParticipantTile participant={participant} />
+                    <ParticipantTile
+                      participant={participant}
+                      isFocused={focusedParticipant() === participant}
+                      hidden={
+                        !!focusedParticipant() &&
+                        focusedParticipant() !== participant
+                      }
+                      onToggleFocus={() => toggleParticipantFocus(participant)}
+                    />
                   )}
                 </For>
               </div>
 
               {/* Local participant PIP (Google Meet style: small, bottom-right) */}
-              <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
+              <div
+                class={cn(
+                  'absolute z-10',
+                  focusedParticipant() === 'local'
+                    ? 'inset-0'
+                    : 'bottom-4 right-4 w-40 aspect-video shadow-lg sm:w-48'
+                )}
+              >
                 <LocalParticipantTile
                   class="size-full min-h-0"
                   isSpeaking={isLocalSpeaking()}
@@ -399,21 +511,25 @@ export function CallOverlay(props: {
                     currentUserName()
                   }
                   avatarSize="sm"
+                  isFocused={focusedParticipant() === 'local'}
+                  onToggleFocus={() => toggleParticipantFocus('local')}
                 />
               </div>
             </Show>
           </div>
           {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
           <div
-            ref={setControlsFooter}
-            class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+            class="relative flex shrink-0 flex-col items-center gap-2 py-3 mobile:pb-[calc(var(--safe-bottom,0px)+12px)] transition-opacity duration-200 motion-reduce:transition-none"
+            classList={{
+              'opacity-0 invisible pointer-events-none': controlsHidden(),
+            }}
+            inert={controlsHidden()}
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
             <Show
               when={
                 callCtx.activeChannelId() !== null &&
-                props.showTeamSharing !== false &&
-                !isVeryNarrow()
+                props.showTeamSharing !== false
               }
             >
               <Tooltip
@@ -431,6 +547,7 @@ export function CallOverlay(props: {
                   }
                   disabled={teamShareLocked()}
                   role="checkbox"
+                  aria-label="Share with team"
                   aria-checked={sharedWithTeam()}
                   class={cn(
                     'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
@@ -447,14 +564,17 @@ export function CallOverlay(props: {
                 </button>
               </Tooltip>
             </Show>
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:gap-y-3 mobile:@max-[22rem]/call:grid-cols-2 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
-              <div class="min-w-0 max-w-48 mobile:@max-[22rem]/call:row-start-2">
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+              <div class="min-w-0 max-w-48 mobile:hidden">
                 {props.footerLeading}
               </div>
-              <div class="flex min-w-0 justify-center mobile:@max-[22rem]/call:col-span-2 mobile:@max-[22rem]/call:row-start-1">
-                <CallControls onLeave={props.onLeave} />
+              <div class="flex min-w-0 justify-center">
+                <CallControls
+                  onLeave={props.onLeave}
+                  onSettingsOpenChange={setSettingsOpen}
+                />
               </div>
-              <div class="flex justify-end mobile:@max-[22rem]/call:row-start-2">
+              <div class="flex justify-end">
                 <Show when={canChat()}>
                   <Button
                     ref={chatButton}
