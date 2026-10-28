@@ -67,13 +67,14 @@ export function ActiveCallMessage(props: { channelId: string }) {
               }}
             >
               <div
-                class="shrink-0 size-(--user-icon-width) rounded-full bg-success/15 text-success flex items-center justify-center"
+                class="relative shrink-0 size-(--user-icon-width) rounded-full bg-success text-surface flex items-center justify-center"
                 style={{ 'grid-area': 'icon' }}
               >
-                <PhoneIcon class="size-5" />
+                <span class="absolute inset-0 rounded-full bg-success opacity-40 motion-safe:animate-ping" />
+                <PhoneIcon class="relative size-5" />
               </div>
               <div
-                class="min-w-0 rounded-md border border-edge-muted bg-surface px-3 py-2 text-sm text-ink"
+                class="min-w-0 rounded-md border border-success/40 bg-success-bg px-3 py-2 text-sm text-ink"
                 style={{ 'grid-area': 'content' }}
               >
                 <div class="flex min-w-0 items-center gap-2">
@@ -93,7 +94,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
                   <Button
                     variant="success"
                     size="sm"
-                    class="shrink-0"
+                    class="shrink-0 border-transparent bg-success text-surface"
                     onClick={() => fireAndForget(handleJoin(), 'channel-call')}
                   >
                     <PhoneIcon class="size-3.5" />

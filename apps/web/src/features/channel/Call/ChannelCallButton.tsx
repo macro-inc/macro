@@ -11,7 +11,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   const call = useStartChannelCall(() => props.channelId);
 
   const tooltip = () => (call.isCallInProgress() ? 'Join Call' : 'Start Call');
-  const label = () => (call.isCallInProgress() ? 'Join' : 'Call');
+  const label = () => (call.isCallInProgress() ? 'Join call' : 'Call');
 
   return (
     <Show when={!call.isInThisChannel()}>
@@ -21,7 +21,10 @@ export function ChannelCallButton(props: { channelId: string }) {
         tooltip={tooltip()}
         label={label()}
         icon={<PhoneIcon />}
-        class={cn(call.isCallInProgress() && 'text-success')}
+        class={cn(
+          call.isCallInProgress() &&
+            'bg-success text-surface not-touch:not-disabled:hover:text-surface'
+        )}
       />
     </Show>
   );
