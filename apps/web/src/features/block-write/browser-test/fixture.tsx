@@ -571,7 +571,30 @@ function LocalFixture() {
                   peers={() => []}
                   displayName={shortName}
                   onReady={index() === 0 ? setEditor : undefined}
-                  onDownload={() => {}}
+                  actions={(download) => (
+                    <Dropdown>
+                      <Dropdown.Trigger label="Document options">
+                        …
+                      </Dropdown.Trigger>
+                      <Dropdown.Content>
+                        <Dropdown.Item onSelect={download}>
+                          Download .docx
+                        </Dropdown.Item>
+                      </Dropdown.Content>
+                    </Dropdown>
+                  )}
+                  onDownload={(bytes) => {
+                    const url = URL.createObjectURL(
+                      new Blob([bytes.slice().buffer], {
+                        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                      })
+                    );
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = 'fixture.docx';
+                    anchor.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+                  }}
                   onError={(error) => console.error('[docx-fixture]', error)}
                 />
               </div>
