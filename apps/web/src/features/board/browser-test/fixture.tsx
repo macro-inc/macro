@@ -44,11 +44,10 @@ function FixtureAvatar(props: { author: BoardAuthor; size: number }) {
   return (
     <span
       aria-hidden="true"
-      class="flex shrink-0 items-center justify-center rounded-full font-semibold text-[color-mix(in_oklch,var(--avatar-hue)_35%,white)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--avatar-hue)_40%,transparent)]"
+      class="flex shrink-0 items-center justify-center rounded-full font-semibold text-[color-mix(in_oklch,var(--avatar-hue)_15%,white)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--avatar-hue)_40%,transparent)]"
       style={{
         '--avatar-hue': `var(--color-${props.author.kind === 'agent' ? 'purple' : hue(props.author.id)})`,
-        background:
-          'color-mix(in oklch, var(--avatar-hue) 55%, var(--color-surface-0))',
+        background: 'color-mix(in oklch, var(--avatar-hue) 70%, black)',
         width: `${props.size}px`,
         height: `${props.size}px`,
         'font-size': `${Math.max(8, Math.round(props.size * 0.38))}px`,
