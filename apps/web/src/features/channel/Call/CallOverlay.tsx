@@ -5,7 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import { cn, InlineCheckbox, Tooltip } from '@ui';
+import { Button, cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
   createSignal,
@@ -314,9 +314,25 @@ export function CallOverlay(props: {
   };
 
   return (
-    <div class="flex flex-col h-full min-h-0 @container/call touch:pb-(--mobile-content-inset-bottom)">
+    <div class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)">
+      <Show when={canChat()}>
+        <div class="absolute right-3 top-3 z-30">
+          <Button
+            ref={chatButton}
+            variant="outline"
+            size="icon-md"
+            label={chatOpen() ? 'Close chat' : 'Open chat'}
+            aria-pressed={chatOpen()}
+            aria-expanded={chatOpen()}
+            aria-controls={chatId}
+            onClick={toggleChat}
+          >
+            <ChatIcon class="size-4" />
+          </Button>
+        </div>
+      </Show>
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
-        <div class="flex min-w-0 flex-1 flex-col">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Screen share area */}
           <Show when={hasAnyScreenShare()}>
             <div class="flex-1 min-h-0 pt-2">
@@ -391,6 +407,53 @@ export function CallOverlay(props: {
               </div>
             </Show>
           </div>
+          {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
+          <div
+            class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+            data-holds-prompts={isTouchDevice() ? undefined : ''}
+          >
+            <Show
+              when={
+                callCtx.activeChannelId() !== null &&
+                props.showTeamSharing !== false &&
+                !isVeryNarrow()
+              }
+            >
+              <Tooltip
+                placement="top"
+                label={
+                  sharedWithTeam()
+                    ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
+                    : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    fireAndForget(teamShare.toggle(), 'channel-call')
+                  }
+                  disabled={teamShareLocked()}
+                  role="checkbox"
+                  aria-checked={sharedWithTeam()}
+                  class={cn(
+                    'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
+                    'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
+                    'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
+                    sharedWithTeam() && 'text-ink',
+                    teamShareLocked() && 'pointer-events-none opacity-50'
+                  )}
+                >
+                  <InlineCheckbox checked={sharedWithTeam()} />
+                  <Show when={!isMediumNarrow()}>
+                    <span class="whitespace-nowrap">Share with team</span>
+                  </Show>
+                </button>
+              </Tooltip>
+            </Show>
+            <div class="flex w-full justify-center px-2">
+              <CallControls onLeave={props.onLeave} />
+            </div>
+          </div>
         </div>
         <Show when={canChat() && chatMounted()}>
           <Show when={callCtx.activeCallId()} keyed>
@@ -422,87 +485,6 @@ export function CallOverlay(props: {
             )}
           </Show>
         </Show>
-      </div>
-      {/* Settings expand over the tiles; sharing stays clear of the controls.
-          On desktop the bar (and the chat composer beside it) is the call's
-          last row, where the corner prompt sits, so the prompt waits. */}
-      <div
-        class="relative flex shrink-0 flex-col items-center gap-2 py-3"
-        data-holds-prompts={isTouchDevice() ? undefined : ''}
-        classList={{
-          '@min-[800px]/call:mr-90': canChat() && chatOpen(),
-        }}
-      >
-        <Show
-          when={
-            callCtx.activeChannelId() !== null &&
-            props.showTeamSharing !== false &&
-            !isVeryNarrow()
-          }
-        >
-          <Tooltip
-            placement="top"
-            label={
-              sharedWithTeam()
-                ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
-                : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
-            }
-          >
-            <button
-              type="button"
-              onClick={() => fireAndForget(teamShare.toggle(), 'channel-call')}
-              disabled={teamShareLocked()}
-              role="checkbox"
-              aria-checked={sharedWithTeam()}
-              class={cn(
-                'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
-                'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
-                'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                sharedWithTeam() && 'text-ink',
-                teamShareLocked() && 'pointer-events-none opacity-50'
-              )}
-            >
-              <InlineCheckbox checked={sharedWithTeam()} />
-              <Show when={!isMediumNarrow()}>
-                <span class="whitespace-nowrap">Share with team</span>
-              </Show>
-            </button>
-          </Tooltip>
-        </Show>
-        <div
-          class="grid w-full items-center gap-2 px-2"
-          classList={{
-            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)] @max-[500px]/call:grid-cols-[minmax(0,1fr)_auto]':
-              canChat(),
-            'grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]':
-              !canChat(),
-          }}
-        >
-          <div
-            class="col-start-2 flex min-w-0 justify-center"
-            classList={{ '@max-[500px]/call:col-start-1': canChat() }}
-          >
-            <CallControls onLeave={props.onLeave} />
-          </div>
-          <Show when={canChat()}>
-            <div class="justify-self-end rounded-xl border border-edge-muted bg-panel p-1.5 shadow-sm">
-              <Tooltip label={chatOpen() ? 'Close chat' : 'Open chat'}>
-                <button
-                  ref={chatButton}
-                  type="button"
-                  aria-label={chatOpen() ? 'Close chat' : 'Open chat'}
-                  aria-expanded={chatOpen()}
-                  aria-controls={chatId}
-                  onClick={toggleChat}
-                  class="flex size-10 items-center justify-center rounded-lg hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent @min-[500px]/call:size-12"
-                  classList={{ 'bg-hover text-accent': chatOpen() }}
-                >
-                  <ChatIcon class="size-5" />
-                </button>
-              </Tooltip>
-            </div>
-          </Show>
-        </div>
       </div>
     </div>
   );

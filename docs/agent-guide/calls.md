@@ -205,6 +205,13 @@ Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
+Open live chat with **Open chat** at the top-right of the call. Desktop chat
+fills the call content height alongside both the video and its media controls;
+narrow desktop panes overlay chat instead. Phones use the shared bottom sheet.
+Dismiss the sheet with its handle, backdrop, or Escape; desktop chat closes with
+**Close chat** or Escape. Closing returns focus to the toggle and preserves the
+message draft and scroll position. Check both signed-in and guest calls.
+
 ### Browser call diagnostics
 
 Browser OpenTelemetry requires `enable-browser-otel` (or

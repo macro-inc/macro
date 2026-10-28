@@ -37,7 +37,8 @@ vi.mock('@core/user', () => ({
     mocks.displayNames.get(identity) ?? identity,
 }));
 
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  Button: (await import('@ui/components/Button')).Button,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
   InlineCheckbox: () => null,
