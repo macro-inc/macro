@@ -26,6 +26,7 @@ import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
+import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   type BackfillProgress,
@@ -96,17 +97,21 @@ export function EmailCard(props: { class?: string } = {}) {
   });
 
   // Without a provider, the flow asks which one.
-  const connectEmail = async (provider?: EmailProvider) => {
-    try {
-      if (provider === 'OUTLOOK' && !(await outlookAvailable())) {
-        toast.failure('New Outlook connections are temporarily unavailable.');
-        return;
+  const connectEmail = (provider?: EmailProvider) =>
+    Telemetry.span('email.link.connect', async (span) => {
+      span.setAttr('email.link.provider', provider ?? 'choose');
+      try {
+        if (provider === 'OUTLOOK' && !(await outlookAvailable())) {
+          span.setAttr('email.link.outcome', 'outlook_unavailable');
+          toast.failure('New Outlook connections are temporarily unavailable.');
+          return;
+        }
+        await startAddInbox({ provider });
+        span.setAttr('email.link.outcome', 'started');
+      } finally {
+        addingInbox = false;
       }
-      await startAddInbox({ provider });
-    } finally {
-      addingInbox = false;
-    }
-  };
+    });
   const onConnectEmail = (provider?: EmailProvider) => {
     if (addingInbox) return;
     addingInbox = true;

@@ -1,6 +1,7 @@
 import { importSourceFor } from '@app/features/connector-import/core/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
@@ -35,7 +36,13 @@ export function ImportAction(props: { appSlug: string; name: string }) {
             onClick={() => {
               const active = document.activeElement;
               setOpener(active instanceof HTMLElement ? active : undefined);
-              fireAndForget(loadDialog(), 'connections-settings');
+              fireAndForget(
+                Telemetry.span('connector_import.open', async (span) => {
+                  span.setAttr('connector.app_slug', props.appSlug);
+                  await loadDialog();
+                }),
+                'connections-settings'
+              );
               setOpened(true);
               setOpen(true);
             }}
