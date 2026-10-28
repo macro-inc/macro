@@ -24,7 +24,9 @@ pub(crate) fn render_quickstart(
         frame.area(),
     );
     frame.render_widget(Clear, area);
-    let block = modal("Quickstart", ACCENT).padding(Padding::new(2, 2, 1, 1));
+    let vertical_padding = u16::from(area.height >= 24);
+    let block =
+        modal("Quickstart", ACCENT).padding(Padding::new(2, 2, vertical_padding, vertical_padding));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let intro_height = if setup.status.is_some() { 3 } else { 2 };

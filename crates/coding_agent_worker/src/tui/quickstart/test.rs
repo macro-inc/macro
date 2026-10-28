@@ -187,6 +187,10 @@ fn quickstart_renders_permission_consent_and_warning() {
         (80, 26, true, false),
         (80, 26, false, true),
         (80, 26, true, true),
+        (80, 24, false, false),
+        (80, 24, true, false),
+        (80, 24, false, true),
+        (80, 24, true, true),
     ] {
         setup.allow_permission_bypass = allowed;
         setup.status = status.then(|| ("Pairing failed".to_owned(), true));
