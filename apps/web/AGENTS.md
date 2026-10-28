@@ -36,7 +36,9 @@ sheet that must still press its own controls:
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
-phone screen and below one near the top, have a backend-free browser regression:
+phone screen and below one near the top, and the floating format menu staying
+beside a scrolling editor whose selection runs past its visible bottom
+(`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
 Event details placement has a backend-free browser regression: the desktop

@@ -68,6 +68,10 @@ already in that call, which returns to the channel's Call tab. To see the sectio
 without starting a real call, answer `/call/active` and `/call/<channelId>/active`
 with a fake call through CDP `Fetch` interception.
 
+While you are in a call, a green phone button (`Return to call`,
+`data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
+above Settings. It opens the channel's Call tab, or the meeting page for a quick call.
+
 In the native iOS call drawer, the horizontal participant row excludes the person
 shown in the large video. While holding or scrolling the row (including momentum),
 the displayed primary and row membership stay fixed; speaking indicators still

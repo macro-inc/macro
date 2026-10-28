@@ -374,6 +374,7 @@ export function FloatingFormatMenu(props: {
             reactiveOnContainer: editor.getRootElement(),
             useBlockBoundary: true,
             moveWithSelection: true,
+            clipToVisible: true,
           }}
         >
           <Toolbar>
