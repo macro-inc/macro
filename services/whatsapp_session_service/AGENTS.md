@@ -140,7 +140,9 @@ JIDs, phone numbers, QR codes or message text.
 
 - **Stop all WhatsApp traffic**: scale the ECS service to 0 tasks. Accounts
   stay `connected` and are picked up again when it scales back; sends recorded
-  meanwhile expire unsent after ten minutes. The web flag
+  meanwhile expire unsent after ten minutes. A deploy resets the count to
+  `desired_count` in `infra/stacks/whatsapp-session-service/Pulumi.<stack>.yaml`
+  (2 in dev and prod); set it to 0 there to keep the service off. The web flag
   `enable-whatsapp-linked` only hides the UI; the API keeps answering.
 - **Stuck lease** (an account no replica runs, `accounts_unowned` > 0): find
   the holder with `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND

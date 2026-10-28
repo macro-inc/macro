@@ -47,15 +47,20 @@ From `infra/`: `bun run check`, `bunx biome check stacks/whatsapp-session-servic
 - No ECS container health check: the runtime image has no HTTP client. A
   replica that loses its lock connection must exit non-zero so ECS replaces it.
 - No autoscaling: replicas own accounts, so scaling in forces takeovers. Change
-  `desired_count` in `Pulumi.<stack>.yaml`.
+  `desired_count` in `Pulumi.<stack>.yaml`. Dev and prod both run 2, so a
+  deploy hands leases to a running replica instead of dropping them. Prod
+  deploys with each published release (`release-production.yml` →
+  `deploy_all_services.yml`, after the MacroDB migrations); dev on merge.
 - The KMS key only answers calls whose encryption context has
   `macro:purpose = whatsapp-session` (`crates/whatsapp_store_pg/src/kms.rs`).
   Changing that string strands every stored session.
 - Deploys need the `doppler-projects` stack applied first: `DopplerEcsEnvironment`
   reads `/doppler-sync/whatsapp-session-service/<stack>`, which its sync writes.
-- To stop all WhatsApp traffic, set `desired_count: 0` (or scale the ECS
-  service to 0); see the service runbook. Prod ships at 0 until it is turned
-  on deliberately.
+- To stop all WhatsApp traffic now, scale the ECS service to 0
+  (`aws ecs update-service --cluster cloud-storage-cluster-<stack> --service
+  <whatsapp-session-service-…> --desired-count 0`); the next deploy restores
+  `desired_count`, so also set `desired_count: 0` here to keep it off. See the
+  service runbook.
 
 ## Related
 
