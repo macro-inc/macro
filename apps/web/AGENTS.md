@@ -184,6 +184,9 @@ The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
 
+Route database row rename and delete through `renameDatabase` and
+`trashDatabase`; use the row grant for rename, delete, and sharing permissions.
+
 Shared diff and Changes views expand files with at most 40 additions + deletions
 by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
